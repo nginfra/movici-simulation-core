@@ -1,0 +1,22 @@
+[MESSAGES CONTROL]
+disable=missing-docstring,
+        format,
+        logging-fstring-interpolation,
+        logging-format-interpolation,
+        duplicate-code,
+        too-many-instance-attributes,
+        too-many-arguments,
+        too-many-local-variables,
+        invalid-name,
+        too-few-public-methods,
+        raise-missing-from,
+        no-self-use,
+
+
+[TYPECHECK]
+generated-members=zmq.[A-Z]+
+
+
+[REPORTS]
+msg-template='{path}:{line}: [{msg_id}({symbol}), {obj}] {msg}'
+

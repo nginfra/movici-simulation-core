@@ -1,0 +1,35 @@
+/build/
+/dist/
+/*.egg-info/
+pip-wheel-metadata/
+
+# ide project settings
+/.idea
+.vscode
+
+# Created by GitEye
+/.project
+
+# virtualenv
+/venv/
+/ENV/
+
+# pytest cache
+.cache
+.pytest_cache
+__pycache__/
+
+# mypy
+.mypy_cache/
+
+# Coverage report
+.coverage
+coverage.xml
+
+# pylint
+pylint.txt
+
+# bandit
+bandit-report.json
+
+secrets.yaml

@@ -1,0 +1,34 @@
+repos:
+- repo: https://github.com/ambv/black
+  rev: 19.10b0
+  hooks:
+  - id: black
+    language_version: python3.8
+    exclude: property_definition.py
+
+- repo: https://gitlab.com/pycqa/flake8
+  rev: 3.8.3
+  hooks:
+  - id: flake8
+    language_version: python3.8
+
+- repo: local
+  hooks:
+  - id: bandit
+    name: Bandit
+    files: '.+\.py'
+    exclude: 'tests/.*'
+    entry: bandit
+    language: python
+  - id: pytest
+    name: Pytest
+    pass_filenames: false
+    entry: pytest
+    language: python
+    args: ["tests"]
+  - id: python-safety-dependencies-check
+    entry: safety
+    name: Safety
+    args: [check, --full-report]
+    language: system
+    pass_filenames: false

@@ -1,0 +1,68 @@
+image: eu.gcr.io/movici-develop/cicd-build-env:latest
+
+stages:
+  - verify
+  - test
+  - report
+  - package
+
+check_version_upgrade:
+  stage: verify
+  image: alpine/git
+  only:
+    refs:
+      - merge_requests
+  variables:
+    VERSION_FILES: "VERSION"
+  script:
+    - git fetch origin master
+    - |-
+      if [[ -z $(git diff origin/master --name-only ${VERSION_FILES}) ]]; then
+        echo "All merge requests require a version upgrade. Please update your version"
+        exit 1
+      fi
+
+test:
+  stage: test
+  retry: 1
+  only:
+    refs:
+      - merge_requests
+      - master
+  artifacts:
+    untracked: true
+  script:
+    - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install -e . --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - make test-all
+  coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
+
+report:
+  stage: report
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [ "" ]
+  only:
+    refs:
+      - merge_requests
+      - master
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+    GIT_DEPTH: "0"
+    KUBERNETES_MEMORY_REQUEST: 1536Mi
+    KUBERNETES_MEMORY_LIMIT: 1536Mi
+    KUBERNETES_CPU_REQUEST: 400m
+    KUBERNETES_CPU_LIMIT: 800m
+  dependencies:
+    - test
+  script:
+    - sonar-scanner -Dsonar.branch.name="${CI_COMMIT_REF_NAME}" -Dsonar.projectVersion=$(cat VERSION)
+
+package:
+  stage: package
+  only:
+    - master
+    - /^testci-.*$/
+  script:
+    - pip wheel --no-deps --wheel-dir dist .
+    - twine upload --repository-url $PYPI_SERVER dist/*.whl
