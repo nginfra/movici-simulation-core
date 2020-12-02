@@ -21,7 +21,7 @@ pylint:
 	pylint $(MODULE_NAME) --exit-zero -r n | tee pylint.txt
 
 mypy:
-	mypy $(MODULE_NAME)
+	- mypy $(MODULE_NAME)
 
 clean:
 	rm -rf dist/
