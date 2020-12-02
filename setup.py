@@ -31,9 +31,7 @@ setup(
     author_email="pelle.koster@nginfra.nl",
     url="http://www.movici.nl",
     license=LICENSE,
-    scripts=[
-        "bin/run_movici_tape_player.py",
-    ],
+    scripts=["bin/run_time_window_status.py"],
     packages=find_packages(),
     install_requires=REQUIREMENTS,
 )
