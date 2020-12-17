@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/ambv/black
-  rev: 19.10b0
+  rev: 20.8b1
   hooks:
   - id: black
     language_version: python3.8
@@ -20,12 +20,6 @@ repos:
     exclude: 'tests/.*'
     entry: bandit
     language: python
-  - id: pytest
-    name: Pytest
-    pass_filenames: false
-    entry: pytest
-    language: python
-    args: ["tests"]
   - id: python-safety-dependencies-check
     entry: safety
     name: Safety

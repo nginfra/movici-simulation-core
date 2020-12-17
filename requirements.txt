@@ -1,1 +1,2 @@
-model_engine
+numpy>=1.19.1
+numba>=0.51.2

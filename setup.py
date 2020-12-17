@@ -22,6 +22,8 @@ README = read_file_or_empty_str("README.md")
 LICENSE = read_file_or_empty_str("LICENSE")
 VERSION = read_file_or_empty_str("VERSION")
 
+EXTRA_REQUIREMENTS = {"models": ["model-engine"]}
+
 setup(
     name="movici-simulation-core",
     version=VERSION,
@@ -34,4 +36,5 @@ setup(
     scripts=["bin/run_time_window_status.py"],
     packages=find_packages(),
     install_requires=REQUIREMENTS,
+    extras_require=EXTRA_REQUIREMENTS,
 )

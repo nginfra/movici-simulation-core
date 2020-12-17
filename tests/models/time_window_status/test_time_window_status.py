@@ -19,9 +19,7 @@ def maintenance_agenda_dataset_name():
 
 
 @pytest.fixture
-def config(
-    model_config, init_data, time_scale,
-):
+def config(model_config, init_data, time_scale):
     return {
         "config": {
             "version": 4,
@@ -144,7 +142,10 @@ class TestTimeWindowStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model, name=model_name, scenario=scenario, atol=0.01,
+            model=Model,
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
         )
 
 
@@ -211,7 +212,7 @@ class TestTimeWindowStatusSameEntity:
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
-                                [1], properties=[False], key_name="maintenance.under_maintenance",
+                                [1], properties=[False], key_name="maintenance.under_maintenance"
                             )
                         }
                     },
@@ -221,5 +222,5 @@ class TestTimeWindowStatusSameEntity:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model, name=model_name, scenario=scenario, atol=0.01,
+            model=Model, name=model_name, scenario=scenario, atol=0.01
         )

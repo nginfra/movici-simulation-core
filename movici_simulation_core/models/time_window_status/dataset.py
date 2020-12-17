@@ -25,7 +25,9 @@ class TimeWindowEntity(DataEntityHandler):
 
 
 def get_status_entity_cls(
-    entity_name: str, status_property: str, status_component: Optional[str] = None,
+    entity_name: str,
+    status_property: str,
+    status_component: Optional[str] = None,
 ) -> Type[TimeWindowStatusEntity]:
 
     return cast(
@@ -53,7 +55,11 @@ def get_status_dataset_cls(
 
     return cast(
         Type[DataSet],
-        type(class_name, (DataSet,), {"dataset_type": "", "data_entity_types": [entity_cls]},),
+        type(
+            class_name,
+            (DataSet,),
+            {"dataset_type": "", "data_entity_types": [entity_cls]},
+        ),
     )
 
 
