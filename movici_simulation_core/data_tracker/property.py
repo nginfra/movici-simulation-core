@@ -79,6 +79,21 @@ class PropertySpec(t.Generic[T]):
     enum: t.Optional[t.List[str]] = None
 
 
+UNDEFINED = {
+    bool: np.iinfo(np.dtype("i1")).min,
+    int: np.iinfo(np.dtype("i4")).min,
+    float: np.nan,
+    str: "_udf_",
+}
+
+NP_TYPES = {
+    bool: np.dtype("<i1"),
+    int: np.dtype("<i4"),
+    float: np.dtype("f8"),
+    str: np.dtype("<U8"),
+}
+
+
 @dataclass
 class DataType(t.Generic[T]):
     py_type: t.Type[T]
@@ -87,21 +102,11 @@ class DataType(t.Generic[T]):
 
     @property
     def undefined(self):
-        return {
-            bool: np.iinfo(np.dtype("i1")).min,
-            int: np.iinfo(np.dtype("i4")).min,
-            float: np.nan,
-            str: "_udf_",
-        }[self.py_type]
+        return UNDEFINED[self.py_type]
 
     @property
     def np_type(self):
-        return {
-            bool: np.dtype("<i1"),
-            int: np.dtype("<i4"),
-            float: np.dtype("f8"),
-            str: np.dtype("<U8"),
-        }[self.py_type]
+        return NP_TYPES[self.py_type]
 
 
 class Property(abc.ABC):
@@ -134,6 +139,10 @@ class Property(abc.ABC):
     def is_undefined(self):
         pass
 
+    @abc.abstractmethod
+    def to_dict(self):
+        pass
+
 
 class UniformProperty(Property):
     """
@@ -162,6 +171,7 @@ class UniformProperty(Property):
 
     def __setitem__(self, key, value):
         if self.array.dtype.type is np.str_:
+            # TODO: maybe exponentially grow itemsize
             if isinstance(value, str) and len(value) > (self.array.dtype.itemsize / 4):
                 self.array = self.array.astype(f"<U{len(value)}")
             if (
@@ -197,6 +207,9 @@ class UniformProperty(Property):
             atol=self.array.atol,
             equal_nan=self.array.equal_nan,
         )
+
+    def to_dict(self):
+        return {"data": self.array}
 
 
 class CSRProperty(Property):
@@ -235,6 +248,9 @@ class CSRProperty(Property):
             atol=self.csr.atol,
             equal_nan=self.csr.equal_nan,
         )
+
+    def to_dict(self):
+        return {"data": self.csr.data, "indptr": self.csr.row_ptr}
 
 
 def get_undefined_array(
