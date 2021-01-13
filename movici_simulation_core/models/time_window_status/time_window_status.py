@@ -74,8 +74,6 @@ class TimeWindowStatus:
         if not self._schedule:
             return
 
-        # TODO store unix time here?
-
         while self._schedule and time_stamp.time >= self._schedule[0].time_step:
             self._update_statuses(self._schedule.popleft())
 

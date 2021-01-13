@@ -71,10 +71,6 @@ def get_time_window_entity_cls(
     time_window_end_component: Optional[str] = None,
 ) -> Type[TimeWindowEntity]:
 
-    # TODO class MyEntity(TimeWindowEntity):
-    #     pass
-    # return MyEntity
-
     return cast(
         Type[TimeWindowEntity],
         type(
