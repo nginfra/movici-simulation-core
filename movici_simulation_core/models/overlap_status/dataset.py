@@ -1,8 +1,9 @@
 from abc import abstractmethod
 from collections import Iterable
-from typing import Type, Optional, cast
+from typing import Type, Optional, cast, List
 
 import numpy as np
+from model_engine.dataset_manager.property import PropertyData
 
 import model_engine.dataset_manager.dataset_definition as dd
 import model_engine.dataset_manager.entity_definition as ed
@@ -43,12 +44,12 @@ class OverlapDataset(DataSet):
 
 
 class GeometryEntity(DataEntityHandler):
-    entity_group_name: str = None
+    entity_group_name: str = ""
     init = True
     calc = True
     reference = Reference(init=True)
     overlap_active = Overlap_Active(init=False, pub=True)
-    active_status: Property = None
+    active_status: Optional[PropertyData] = None
 
 
 class PointEntity(GeometryEntity):
@@ -63,7 +64,7 @@ class Line3dEntity(GeometryEntity):
 class GeometryDataset(DataSet):
     dataset_type = ""
     geometry: GeometryCollection
-    data_entity_types = []
+    data_entity_types: List[Type[DataEntityHandler]] = []
 
     @abstractmethod
     def get_geometry(self, indices=None) -> GeometryCollection:
@@ -95,11 +96,10 @@ class LineDataset(GeometryDataset):
         line3d = line_entity.line3d
         line2d_data = line3d.data[:, 0:2]
         indptr = line3d.indptr
-        if indices is not None:
-            if not isinstance(indices, Iterable):
-                indices = [indices]
-                data, ptr = slice_compressed_data(line2d_data, indptr, np.array(indices), (2,))
-                return LineStringCollection(coord_seq=data, indptr=ptr)
+        if indices is not None and not isinstance(indices, Iterable):
+            indices = [indices]
+            data, ptr = slice_compressed_data(line2d_data, indptr, np.array(indices), (2,))
+            return LineStringCollection(coord_seq=data, indptr=ptr)
         return LineStringCollection(coord_seq=line2d_data, indptr=indptr)
 
 
@@ -119,7 +119,9 @@ def get_geometry_entity_cls(
                 "entity_group_name": entity_name,
                 "active_status": get_dynamic_property(active_property, active_component)(
                     init=False, sub=True
-                ),
+                )
+                if active_property
+                else None,
             },
         ),
     )

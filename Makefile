@@ -2,13 +2,13 @@ MODULE_NAME = movici_simulation_core
 PYPI_SERVER = https://pypi.movici.nl
 
 unittest:
-	pytest -v tests/
+	pytest -v --benchmark-skip tests/
 
 flake8:
 	flake8
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term --cov-report=xml tests/
+	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term --cov-report=xml --benchmark-skip tests/
 
 bandit:
 	bandit --recursive $(MODULE_NAME) bin

@@ -23,6 +23,7 @@ class Model(BaseModelVDataManager):
         "check_overlapping_from",
         "check_overlapping_to",
         "distance_threshold",
+        "display_name_template",
     ]
 
     def __init__(self, name: str, config: Config) -> None:
@@ -50,6 +51,7 @@ class Model(BaseModelVDataManager):
             overlap_dataset=overlap_dataset,
             logger=self.logger,
             distance_threshold=self.custom_variables.get("distance_threshold"),
+            display_name_template=self.custom_variables.get("display_name_template"),
         )
 
     def update_model(self, time_stamp: TimeStamp) -> Optional[TimeStamp]:
@@ -84,9 +86,11 @@ class Model(BaseModelVDataManager):
         self.managed_datasets = {output_dataset: output_dataset}
         self.netcdf_datasets = {}
 
-        from_active_status_component, from_active_status_property = self.custom_variables.get(
-            "check_overlapping_from"
+        from_component_property = self.custom_variables.get("check_overlapping_from")
+        from_active_status_component, from_active_status_property = (
+            from_component_property if from_component_property else (None, None)
         )
+
         self.parse_from_dataset(
             from_dataset,
             from_dataset_geometry,
@@ -94,8 +98,10 @@ class Model(BaseModelVDataManager):
             from_active_status_property,
         )
 
-        to_active_status_component, to_active_status_property = self.custom_variables.get(
-            "check_overlapping_to"
+        to_component_property = self.custom_variables.get("check_overlapping_to")
+
+        to_active_status_component, to_active_status_property = (
+            to_component_property if to_component_property else (None, None)
         )
         self.parse_to_datasets(
             to_points_datasets,

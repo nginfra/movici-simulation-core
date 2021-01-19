@@ -1,6 +1,3 @@
-import collections
-from typing import Dict, Iterable, Optional
-
 import pytest
 
 
@@ -116,37 +113,3 @@ def overlap_dataset(overlap_dataset_name):
         "general": None,
         "data": {"overlap_entities": {"id": list(range(1, 1000))}},
     }
-
-
-@pytest.fixture
-def get_entity_update():
-    def _factory(
-        ids: Iterable, properties: Iterable, key_name: str, component_name: Optional[str] = None
-    ) -> Dict:
-        if not isinstance(ids, collections.Iterable):
-            ids = [ids]
-        entities = {"id": list(ids)}
-        for key, prop, component in [
-            (key_name, properties, component_name),
-        ]:
-            if prop is not None:
-                if not isinstance(prop, collections.Iterable):
-                    prop = [prop for _ in ids]
-                if component is None:
-                    entities[key] = prop
-                else:
-                    if component not in entities:
-                        entities[component] = {}
-                    entities[component][key] = prop
-
-        return entities
-
-    return _factory
-
-
-@pytest.fixture
-def get_overlap_update(get_entity_update):
-    def _factory(ids: Iterable, properties: Iterable) -> Dict:
-        return get_entity_update(ids, properties, component_name=None, key_name="overlap.active")
-
-    return _factory
