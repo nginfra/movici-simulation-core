@@ -5,7 +5,7 @@
 set -e
 
 DIR=${PWD}
-REPO_VERSION = $(tail -1 VERSION)
+REPO_VERSION=$(tail -1 VERSION)
 
 cd /
 
