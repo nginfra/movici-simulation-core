@@ -19,9 +19,9 @@ git config user.name "${PIPELINE_RUNNER_NAME}"
 
 # if already in version file, replace
 if grep -q $CI_PROJECT_NAME $REQUIREMENTS_FILE_NAME; then
-  sed -i "s/.*$CI_PROJECT_NAME.*/export $CI_PROJECT_NAME>=$REPO_VERSION/g" $REQUIREMENTS_FILE_NAME
+  sed -i "s/.*$CI_PROJECT_NAME.*/$CI_PROJECT_NAME>=$REPO_VERSION/g" $REQUIREMENTS_FILE_NAME
 else # else add
-  echo "export $CI_PROJECT_NAME>=$REPO_VERSION" >> $REQUIREMENTS_FILE_NAME
+  echo "$CI_PROJECT_NAME>=$REPO_VERSION" >> $REQUIREMENTS_FILE_NAME
 fi
 
 # Git commit without any changes returns exit status 1
