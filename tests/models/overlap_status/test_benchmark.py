@@ -9,7 +9,7 @@ from movici_simulation_core.models.overlap_status.model import Model
 
 np.random.seed(4002)
 entity_count = 1000
-update_count = 100
+update_count = 1
 active_chance = 0.1
 
 
@@ -121,7 +121,7 @@ def model_config(
         "type": "overlap_status",
         "from_dataset": [(from_network_name, "water_pipe_entities")],
         "from_dataset_geometry": "lines",
-        "to_points_datasets": [],
+        "to_points_datasets": None,
         "to_lines_datasets": [
             (to_network_name1, "water_pipe_entities"),
             (to_network_name2, "water_pipe_entities"),
@@ -172,7 +172,6 @@ def run_model(model_name, scenario):
 class TestBenchmark:
     def test_benchmark(
         self,
-        benchmark,
         config,
         model_name,
         overlap_dataset_name,
@@ -204,7 +203,9 @@ class TestBenchmark:
 
         scenario.update(config)
 
-        benchmark(run_model, model_name, scenario)
+        run_model(model_name, scenario)
+
+        # benchmark(run_model, model_name, scenario)
 
 
 def get_entity_update(

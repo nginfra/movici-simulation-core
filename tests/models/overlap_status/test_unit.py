@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.models.overlap_status.overlap_status import OverlapStatus
+from movici_simulation_core.models.overlap_status.overlap_status import (
+    OverlapStatus,
+    OverlapPropertiesToPublish,
+)
 from spatial_mapper.geometry import PointCollection, LineStringCollection
 
 
@@ -85,6 +88,7 @@ def test_can_calculate_overlap_point(
         "to_entities_active_status",
         "connection_from_indices",
         "connection_to_indices",
+        "undefined_value",
         "expected_status",
     ],
     [
@@ -93,6 +97,7 @@ def test_can_calculate_overlap_point(
             np.array([1, 0, 0, 0], dtype=np.bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
+            -128,
             np.array([1, 1, 0], dtype=np.bool),
         ),
         (
@@ -100,6 +105,7 @@ def test_can_calculate_overlap_point(
             np.array([1, 0, 0, 0], dtype=np.bool),
             np.array([], dtype=np.int),
             np.array([], dtype=np.int),
+            -128,
             np.array([], dtype=np.bool),
         ),
         (
@@ -107,6 +113,7 @@ def test_can_calculate_overlap_point(
             np.array([1, 0, 0, 0], dtype=np.bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
+            -128,
             np.array([1, 1, 0], dtype=np.bool),
         ),
         (
@@ -114,6 +121,7 @@ def test_can_calculate_overlap_point(
             None,
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
+            -128,
             np.array([1, 0, 0], dtype=np.bool),
         ),
         (
@@ -121,6 +129,7 @@ def test_can_calculate_overlap_point(
             None,
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
+            -128,
             np.array([1, 1, 1], dtype=np.bool),
         ),
         (
@@ -128,7 +137,16 @@ def test_can_calculate_overlap_point(
             None,
             np.array([], dtype=np.int),
             np.array([], dtype=np.int),
+            -128,
             np.array([], dtype=np.bool),
+        ),
+        (
+            np.array([-128, 1, 1, 1], dtype=np.int8),
+            np.array([1, -128, 0, 0], dtype=np.int8),
+            np.array([0, 0, 1, 1]),
+            np.array([0, 1, 0, 1]),
+            -128,
+            np.array([-128, -128, 1, -128], dtype=np.int8),
         ),
     ],
     ids=[
@@ -138,6 +156,7 @@ def test_can_calculate_overlap_point(
         "Works without to overlap info",
         "Works without any overlap info",
         "Works without any overlap info or connections",
+        "Works with undefined bools",
     ],
 )
 def test_can_calculate_overlap_status(
@@ -145,6 +164,7 @@ def test_can_calculate_overlap_status(
     to_entities_active_status,
     connection_from_indices,
     connection_to_indices,
+    undefined_value,
     expected_status,
 ):
     assert np.all(
@@ -153,6 +173,7 @@ def test_can_calculate_overlap_status(
             connection_from_indices=connection_from_indices,
             to_active_status=to_entities_active_status,
             connection_to_indices=connection_to_indices,
+            undefined_value=undefined_value,
         )
         == expected_status
     )
@@ -229,3 +250,11 @@ def test_can_generate_display_name(
         )
         == expected
     )
+
+
+@pytest.mark.parametrize(
+    ["n", "expected"],
+    [(0, 1), (1, 2), (2, 4), (3, 4), (4, 8), (6, 8), (7, 8), (8, 16), (789, 1024)],
+)
+def test_nearest_power_of_two(n, expected):
+    assert OverlapPropertiesToPublish._get_next_power_of_two(n) == expected

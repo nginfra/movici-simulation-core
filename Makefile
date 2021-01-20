@@ -2,13 +2,13 @@ MODULE_NAME = movici_simulation_core
 PYPI_SERVER = https://pypi.movici.nl
 
 unittest:
-	pytest -v --benchmark-skip tests/
+	pytest -v tests/
 
 flake8:
 	flake8
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term --cov-report=xml --benchmark-skip tests/
+	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term --cov-report=xml tests/
 
 bandit:
 	bandit --recursive $(MODULE_NAME) bin
@@ -28,5 +28,8 @@ clean:
 
 docker:
 	docker build -t model-engine .
+
+benchmark:
+	pytest --benchmark-only tests/
 
 test-all: unittest flake8 coverage bandit safety pylint mypy

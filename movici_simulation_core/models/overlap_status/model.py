@@ -42,7 +42,7 @@ class Model(BaseModelVDataManager):
         )
         to_datasets = []
         for datasets in ["to_points_datasets", "to_lines_datasets"]:
-            for dataset in self.custom_variables.get(datasets):
+            for dataset in self.custom_variables.get(datasets) or []:
                 to_datasets.append(cast(GeometryDataset, self.datasets[dataset[0]]))
 
         self.overlap_status = OverlapStatus(
@@ -69,8 +69,8 @@ class Model(BaseModelVDataManager):
             self.custom_variables.get("output_dataset")[0],
             self.custom_variables.get("from_dataset")[0],
             self.custom_variables.get("from_dataset_geometry"),
-            self.custom_variables.get("to_points_datasets"),
-            self.custom_variables.get("to_lines_datasets"),
+            self.custom_variables.get("to_points_datasets") or [],
+            self.custom_variables.get("to_lines_datasets") or [],
         )
         self.set_filters()
 

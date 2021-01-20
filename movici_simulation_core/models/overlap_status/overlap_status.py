@@ -57,7 +57,8 @@ class OverlapPropertiesToPublish:
     ) -> None:
         array = cast(np.ndarray, getattr(self, prop))
         if updated_array.dtype.itemsize > array.dtype.itemsize:
-            array = array.astype(updated_array.dtype)
+            new_dtype = f"<U{self._get_next_power_of_two(updated_array.itemsize//4)}"
+            array = array.astype(new_dtype)
             setattr(self, prop, array)
         array[updated_indices] = updated_array
 
@@ -72,6 +73,17 @@ class OverlapPropertiesToPublish:
         overlap_entities.x = self.position_x
         overlap_entities.y = self.position_y
         overlap_entities.overlap_active = self.overlap_active
+
+    @staticmethod
+    def _get_next_power_of_two(n):
+        if n == 0:
+            return 1
+
+        log = np.log2(n)
+        if int(log) == log:
+            return n * 2
+
+        return 1 << (n - 1).bit_length()
 
 
 class OverlapStatus:
@@ -164,6 +176,11 @@ class OverlapStatus:
             self._next_overlap_index, self._next_overlap_index + len(new_overlaps)
         )
 
+        if new_overlap_indices[-1] >= len(to_publish.to_id):
+            raise IndexError(
+                f"Not enough overlap entities in {self._overlap_dataset.name} for this model."
+            )
+
         from_indices = connections.from_indices[new_overlaps]
         to_indices = connections.to_indices[new_overlaps]
 
@@ -192,7 +209,7 @@ class OverlapStatus:
 
         to_publish.from_id[new_overlap_indices] = from_ids
         to_publish.to_id[new_overlap_indices] = to_ids
-        to_publish.overlap_active[from_indices] = True
+        to_publish.overlap_active[new_overlap_indices] = True
         connections.overlap_published[new_overlaps] = True
         connections.overlap_indices[new_overlaps] = new_overlap_indices
 
@@ -259,11 +276,19 @@ class OverlapStatus:
         to_publish = OverlapPropertiesToPublish.create(overlap_entities)
 
         from_entities = self._from_dataset.entity
-        from_entity_overlaps = np.zeros_like(from_entities.ids, dtype=np.bool)
+        from_entity_overlaps = from_entities.overlap_active.data.copy()
+        from_entity_overlaps[
+            from_entity_overlaps != overlap_entities.overlap_active.undefined
+        ] = False
 
         for to_entities, connections in self._connections.items():
             self._publish_active_overlaps_for_connections(
-                from_entities, to_entities, connections, from_entity_overlaps, to_publish
+                from_entities,
+                to_entities,
+                connections,
+                from_entity_overlaps,
+                overlap_entities,
+                to_publish,
             )
 
         from_entities.overlap_active = from_entity_overlaps
@@ -276,6 +301,7 @@ class OverlapStatus:
         to_entities: GeometryEntity,
         connections: Connections,
         from_entity_overlaps: np.ndarray,
+        overlap_entities: OverlapEntity,
         to_publish: OverlapPropertiesToPublish,
     ) -> None:
         from_active_status = (
@@ -283,20 +309,27 @@ class OverlapStatus:
         )
         to_active_status = to_entities.active_status.data if to_entities.active_status else None
 
+        overlap_undefined_value = overlap_entities.overlap_active.undefined
+
         overlap_active = self._calculate_active_overlaps(
             from_active_status=from_active_status,
             connection_from_indices=connections.from_indices,
             to_active_status=to_active_status,
             connection_to_indices=connections.to_indices,
+            undefined_value=overlap_undefined_value,
         )
 
-        from_entity_overlaps[connections.from_indices] = np.logical_or(
-            from_entity_overlaps[connections.from_indices], overlap_active
+        defined = overlap_active != overlap_undefined_value
+        from_defined = connections.from_indices[defined]
+        from_entity_overlaps[from_entity_overlaps == overlap_undefined_value] = False
+
+        from_entity_overlaps[from_defined] = np.logical_or(
+            from_entity_overlaps[from_defined], overlap_active[defined]
         )
 
         new_overlaps = np.logical_and(
             overlap_active, np.logical_not(connections.overlap_published)
-        )
+        )[defined]
 
         self._publish_connections(
             from_entities,
@@ -317,7 +350,9 @@ class OverlapStatus:
         connection_from_indices: np.ndarray,
         to_active_status: Optional[np.ndarray],
         connection_to_indices: np.ndarray,
+        undefined_value: int,
     ) -> np.ndarray:
+        overlap_active = np.full_like(connection_from_indices, undefined_value, dtype=np.int8)
         if from_active_status is None:
             connection_from_active = np.ones_like(connection_from_indices, dtype=np.bool)
         else:
@@ -327,7 +362,13 @@ class OverlapStatus:
         else:
             connection_to_active = to_active_status[connection_to_indices]
 
-        overlap_active = np.logical_and(connection_from_active, connection_to_active)
+        from_active_defined = connection_from_active != undefined_value
+        to_active_defined = connection_to_active != undefined_value
+        defined = np.logical_and(from_active_defined, to_active_defined)
+
+        overlap_active[defined] = np.logical_and(connection_from_active, connection_to_active)[
+            defined
+        ]
         return overlap_active
 
     @staticmethod
