@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import Dict, List, Optional, Tuple, Iterable, cast
 
+import numba
 import numpy as np
 from shapely.geometry import LineString, Point
 from shapely.geometry.base import BaseGeometry
@@ -319,14 +320,14 @@ class OverlapStatus:
             undefined_value=overlap_undefined_value,
         )
 
-        defined = overlap_active != overlap_undefined_value
-        from_defined = connections.from_indices[defined]
-        from_entity_overlaps[from_entity_overlaps == overlap_undefined_value] = False
-
-        from_entity_overlaps[from_defined] = np.logical_or(
-            from_entity_overlaps[from_defined], overlap_active[defined]
+        self._calculate_from_entities_overlap_status(
+            overlap_active,
+            connections.from_indices,
+            overlap_undefined_value,
+            from_entity_overlaps,
         )
 
+        defined = overlap_active != overlap_undefined_value
         new_overlaps = np.logical_and(
             overlap_active, np.logical_not(connections.overlap_published)
         )[defined]
@@ -372,6 +373,17 @@ class OverlapStatus:
         return overlap_active
 
     @staticmethod
+    def _calculate_from_entities_overlap_status(
+        overlap_active, from_indices, overlap_undefined_value, from_entities_overlap_status
+    ):
+        from_entities_overlap_status[
+            from_entities_overlap_status == overlap_undefined_value
+        ] = False
+        _logical_or_on_group(
+            from_indices, overlap_active, overlap_undefined_value, from_entities_overlap_status
+        )
+
+    @staticmethod
     def _check_init_ready(dataset: DataSet) -> None:
         if not dataset.is_complete_for_init(check_undefined=False):
             raise IncompleteInitializationData()
@@ -405,3 +417,15 @@ class OverlapStatus:
             ],
             dtype=np.str,
         )
+
+
+@numba.njit(cache=True)
+def _logical_or_on_group(
+    from_group_indices: np.ndarray,
+    from_values: np.ndarray,
+    overlap_undefined_value: int,
+    target: np.ndarray,
+) -> None:
+    for index, value in zip(from_group_indices, from_values):
+        if value != overlap_undefined_value:
+            target[index] |= value
