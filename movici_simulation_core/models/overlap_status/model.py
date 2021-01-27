@@ -20,6 +20,7 @@ class Model(BaseModelVDataManager):
         "from_dataset_geometry",
         "to_points_datasets",
         "to_lines_datasets",
+        "to_polygons_datasets",
         "check_overlapping_from",
         "check_overlapping_to",
         "distance_threshold",
@@ -41,7 +42,7 @@ class Model(BaseModelVDataManager):
             GeometryDataset, self.datasets[self.custom_variables.get("from_dataset")[0][0]]
         )
         to_datasets = []
-        for datasets in ["to_points_datasets", "to_lines_datasets"]:
+        for datasets in ["to_points_datasets", "to_lines_datasets", "to_polygons_datasets"]:
             for dataset in self.custom_variables.get(datasets) or []:
                 to_datasets.append(cast(GeometryDataset, self.datasets[dataset[0]]))
 
@@ -71,6 +72,7 @@ class Model(BaseModelVDataManager):
             self.custom_variables.get("from_dataset_geometry"),
             self.custom_variables.get("to_points_datasets") or [],
             self.custom_variables.get("to_lines_datasets") or [],
+            self.custom_variables.get("to_polygons_datasets") or [],
         )
         self.set_filters()
 
@@ -81,6 +83,7 @@ class Model(BaseModelVDataManager):
         from_dataset_geometry: str,
         to_points_datasets: List[Tuple[str, str]],
         to_lines_datasets: List[Tuple[str, str]],
+        to_polygons_datasets: List[Tuple[str, str]],
     ) -> None:
         self.data_handler_types = {output_dataset: DataHandlerType(dataset_cls=OverlapDataset)}
         self.managed_datasets = {output_dataset: output_dataset}
@@ -106,6 +109,7 @@ class Model(BaseModelVDataManager):
         self.parse_to_datasets(
             to_points_datasets,
             to_lines_datasets,
+            to_polygons_datasets,
             to_active_status_component,
             to_active_status_property,
         )
@@ -133,12 +137,14 @@ class Model(BaseModelVDataManager):
         self,
         to_points_datasets: List[Tuple[str, str]],
         to_lines_datasets: List[Tuple[str, str]],
+        to_polygons_datasets: List[Tuple[str, str]],
         active_status_component: Optional[str],
         active_status_property: str,
     ) -> None:
         for geometry_type, datasets in [
             ("lines", to_lines_datasets),
             ("points", to_points_datasets),
+            ("polygons", to_polygons_datasets),
         ]:
             for i, (dataset_name, entity_name) in enumerate(datasets):
                 self.managed_datasets[dataset_name] = dataset_name

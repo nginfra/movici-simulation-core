@@ -3,7 +3,6 @@ from collections import Iterable
 from typing import Type, Optional, cast, List
 
 import numpy as np
-from model_engine.dataset_manager.property import PropertyData
 
 import model_engine.dataset_manager.dataset_definition as dd
 import model_engine.dataset_manager.entity_definition as ed
@@ -11,6 +10,7 @@ import model_engine.dataset_manager.property_definition as pd
 from model_engine.dataset_manager import Property
 from model_engine.dataset_manager.dataset_handler import DataSet, DataEntityHandler
 from model_engine.dataset_manager.numba_functions import slice_compressed_data
+from model_engine.dataset_manager.property import PropertyData
 from model_engine.dataset_manager.property_definition import (
     DisplayName,
     ConnectionProperties,
@@ -19,7 +19,12 @@ from model_engine.dataset_manager.property_definition import (
     PointProperties,
     ShapeProperties,
 )
-from spatial_mapper.geometry import PointCollection, LineStringCollection, GeometryCollection
+from spatial_mapper.geometry import (
+    PointCollection,
+    LineStringCollection,
+    GeometryCollection,
+    ClosedPolygonCollection,
+)
 
 
 class OverlapEntity(DataEntityHandler):
@@ -59,6 +64,10 @@ class PointEntity(GeometryEntity):
 
 class Line3dEntity(GeometryEntity):
     line3d = ShapeProperties.Linestring3d(sub=True)
+
+
+class PolygonEntity(GeometryEntity):
+    polygon = ShapeProperties.Polygon(sub=True)
 
 
 class GeometryDataset(DataSet):
@@ -103,6 +112,20 @@ class LineDataset(GeometryDataset):
         return LineStringCollection(coord_seq=line2d_data, indptr=indptr)
 
 
+class PolygonDataset(GeometryDataset):
+    def get_geometry(self, indices=None):
+        entity_cls = self.data_entity_types[0]
+        line_entity = cast(PolygonEntity, self.data[entity_cls])
+        polygon = line_entity.polygon
+        polygon2d_data = polygon.data[:, 0:2]
+        indptr = polygon.indptr
+        if indices is not None and not isinstance(indices, Iterable):
+            indices = [indices]
+            data, ptr = slice_compressed_data(polygon2d_data, indptr, np.array(indices), (2,))
+            return ClosedPolygonCollection(coord_seq=data, indptr=ptr)
+        return ClosedPolygonCollection(coord_seq=polygon2d_data, indptr=indptr)
+
+
 def get_geometry_entity_cls(
     entity_name: str,
     entity_base: Type[GeometryEntity],
@@ -138,6 +161,7 @@ def get_geometry_dataset_cls(
     base_classes = {
         "points": (PointDataset, PointEntity),
         "lines": (LineDataset, Line3dEntity),
+        "polygons": (PolygonDataset, PolygonEntity),
     }
     dataset_base, entity_base = base_classes[geom_type]
     entity_cls = get_geometry_entity_cls(

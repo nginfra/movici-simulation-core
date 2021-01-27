@@ -174,6 +174,7 @@ class TestBenchmark:
         self,
         config,
         model_name,
+        benchmark,
         overlap_dataset_name,
         from_network_name,
         to_network_name1,
@@ -203,9 +204,7 @@ class TestBenchmark:
 
         scenario.update(config)
 
-        run_model(model_name, scenario)
-
-        # benchmark(run_model, model_name, scenario)
+        benchmark.pedantic(run_model, args=(model_name, scenario))
 
 
 def get_entity_update(

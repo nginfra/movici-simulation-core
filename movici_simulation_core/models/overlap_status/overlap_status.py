@@ -4,14 +4,20 @@ from typing import Dict, List, Optional, Tuple, Iterable, cast
 
 import numba
 import numpy as np
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import nearest_points
 
 from model_engine import TimeStamp
 from model_engine.dataset_manager.dataset_handler import DataSet
 from model_engine.dataset_manager.exception import IncompleteInitializationData
-from spatial_mapper.geometry import GeometryCollection, LineStringCollection, PointCollection
+from spatial_mapper.geometry import (
+    GeometryCollection,
+    LineStringCollection,
+    PointCollection,
+    OpenPolygonCollection,
+    ClosedPolygonCollection,
+)
 from spatial_mapper.mapper import Mapper
 from .dataset import GeometryDataset, OverlapDataset, OverlapEntity, GeometryEntity
 
@@ -270,6 +276,21 @@ class OverlapStatus:
                 ]
             ]
             return LineString(coords)
+        if isinstance(geometry_collection, OpenPolygonCollection):
+            coords = geometry_collection.coord_seq[
+                geometry_collection.indptr[entity_index] : geometry_collection.indptr[
+                    entity_index + 1
+                ]
+            ]
+            return Polygon(coords)
+        if isinstance(geometry_collection, ClosedPolygonCollection):
+            coords = geometry_collection.coord_seq[
+                geometry_collection.indptr[entity_index] : geometry_collection.indptr[
+                    entity_index + 1
+                ]
+                - 1
+            ]
+            return Polygon(coords)
         raise TypeError(f"Type {type(geometry_collection)} is not supported.")
 
     def _publish_active_overlaps(self):

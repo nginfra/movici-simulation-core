@@ -113,3 +113,49 @@ def overlap_dataset(overlap_dataset_name):
         "general": None,
         "data": {"overlap_entities": {"id": list(range(1, 1000))}},
     }
+
+
+@pytest.fixture
+def knotweed_dataset_name():
+    return "a_knotweed_dataset"
+
+
+@pytest.fixture
+def knotweed_dataset(knotweed_dataset_name):
+    return {
+        "version": 3,
+        "name": knotweed_dataset_name,
+        "type": "knotweed",
+        "display_name": "",
+        "epsg_code": 28992,
+        "data": {
+            "knotweed_entities": {
+                "point_properties": {
+                    "position_x": [0, 1],
+                    "position_y": [0, 1],
+                    "position_z": [1.2, 1.2],
+                },
+                "shape_properties": {
+                    "polygon": [
+                        [
+                            [0, 0],
+                            [0, 1],
+                            [1, 1],
+                            [1, 0],
+                            [0, 0],
+                        ],
+                        [
+                            [1, 1],
+                            [1, 2],
+                            [2, 2],
+                            [2, 1],
+                            [1, 1],
+                        ],
+                    ]
+                },
+                "id": [0, 1],
+                "knotweed.stem_density": [80.0, 100.0],
+                "reference": ["Knotweed1", "Knotweed2"],
+            }
+        },
+    }

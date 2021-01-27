@@ -46,6 +46,8 @@ def init_data(
     road_network,
     mv_network_name,
     mv_network,
+    knotweed_dataset_name,
+    knotweed_dataset,
     overlap_dataset_name,
     overlap_dataset,
 ):
@@ -53,6 +55,7 @@ def init_data(
         {"name": water_network_name, "data": water_network},
         {"name": road_network_name, "data": road_network},
         {"name": mv_network_name, "data": mv_network},
+        {"name": knotweed_dataset_name, "data": knotweed_dataset},
         {"name": overlap_dataset_name, "data": overlap_dataset},
     ]
 
@@ -951,6 +954,143 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
+                                properties=[False],
+                            ),
+                        },
+                        water_network_name: {
+                            "water_pipe_entities": get_overlap_update(
+                                [1],
+                                properties=[False],
+                            ),
+                        },
+                    },
+                },
+            ],
+        }
+
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=Model,
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
+        )
+
+    def test_overlap_with_polygons(
+        self,
+        config,
+        model_name,
+        overlap_dataset_name,
+        water_network_name,
+        knotweed_dataset_name,
+        time_scale,
+    ):
+
+        del config["config"]["models"][0]["check_overlapping_to"]
+        del config["config"]["models"][0]["to_points_datasets"]
+        del config["config"]["models"][0]["to_lines_datasets"]
+        config["config"]["models"][0]["to_polygons_datasets"] = [
+            (knotweed_dataset_name, "knotweed_entities"),
+        ]
+
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1, 2, 3],
+                                properties=[False, False, False],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 1,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1],
+                                properties=[True],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1],
+                                properties=[False],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+            ],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_overlap_update(
+                                [1, 2, 3],
+                                properties=[False, False, False],
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 1,
+                    "data": {
+                        overlap_dataset_name: {
+                            "overlap_entities": {
+                                "id": [1],
+                                "overlap.active": [True],
+                                "point_properties": {
+                                    "position_x": [0.0],
+                                    "position_y": [0.0],
+                                },
+                                "display_name": [
+                                    f"Overlap from {water_network_name} reference Water1 to {knotweed_dataset_name} reference Knotweed1",  # noqa: E501
+                                ],
+                                "connection_properties": {
+                                    "from_id": [1],
+                                    "to_id": [0],
+                                    "from_reference": [
+                                        "Water1",
+                                    ],
+                                    "to_reference": ["Knotweed1"],
+                                    "from_dataset": [
+                                        water_network_name,
+                                    ],
+                                    "to_dataset": [
+                                        knotweed_dataset_name,
+                                    ],
+                                },
+                            }
+                        },
+                        water_network_name: {
+                            "water_pipe_entities": get_overlap_update(
+                                [1],
+                                properties=[True],
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        overlap_dataset_name: {
+                            "overlap_entities": get_overlap_update(
+                                [1],
                                 properties=[False],
                             ),
                         },

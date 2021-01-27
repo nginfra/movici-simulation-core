@@ -5,7 +5,12 @@ from movici_simulation_core.models.overlap_status.overlap_status import (
     OverlapStatus,
     OverlapPropertiesToPublish,
 )
-from spatial_mapper.geometry import PointCollection, LineStringCollection
+from spatial_mapper.geometry import (
+    PointCollection,
+    LineStringCollection,
+    OpenPolygonCollection,
+    ClosedPolygonCollection,
+)
 
 
 @pytest.mark.parametrize(
@@ -60,6 +65,36 @@ from spatial_mapper.geometry import PointCollection, LineStringCollection
             0,
             (0.2, 0.5),
         ),
+        (
+            PointCollection([[0.5, 2]]),
+            ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], indptr=[0, 5]),
+            0,
+            0,
+            (0.5, 1.5),
+        ),
+        (
+            ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], indptr=[0, 5]),
+            ClosedPolygonCollection(
+                [[-10, -10], [-10, 10], [10, 10], [10, -10], [-10, -10]], indptr=[0, 5]
+            ),
+            0,
+            0,
+            (0, 0),
+        ),
+        (
+            ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [0, 0]], indptr=[0, 4]),
+            ClosedPolygonCollection([[10, 0], [10, 1], [11, 1], [10, 0]], indptr=[0, 4]),
+            0,
+            0,
+            (5.5, 1),
+        ),
+        (
+            OpenPolygonCollection([[0, 0], [0, 1], [1, 1]], indptr=[0, 3]),
+            OpenPolygonCollection([[10, 0], [10, 1], [11, 1]], indptr=[0, 3]),
+            0,
+            0,
+            (5.5, 1),
+        ),
     ],
     ids=[
         "Two points at same position",
@@ -69,6 +104,10 @@ from spatial_mapper.geometry import PointCollection, LineStringCollection
         "Point near line",
         "Intersecting lines",
         "Line near line",
+        "Point near polygon",
+        "Point inside polygon",
+        "Polygon to polygon",
+        "Open polygon works same as closed polygon",
     ],
 )
 def test_can_calculate_overlap_point(
