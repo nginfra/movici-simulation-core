@@ -67,23 +67,24 @@ def model_config(
     return {
         "name": model_name,
         "type": "overlap_status",
-        "from_dataset": [(water_network_name, "water_pipe_entities")],
-        "from_dataset_geometry": "lines",
-        "to_points_datasets": [
-            (mv_network_name, "electrical_node_entities"),
+        "from_entity_group": [
+            (water_network_name, "water_pipe_entities"),
         ],
-        "to_lines_datasets": [
+        "from_geometry_type": "line",
+        "from_check_status_property": ("operation_status_properties", "is_working_properly"),
+        "to_entity_groups": [
+            (mv_network_name, "electrical_node_entities"),
             (road_network_name, "road_segment_entities"),
         ],
+        "to_geometry_types": [
+            "point",
+            "line",
+        ],
+        "to_check_status_properties": [
+            ("operation_status_properties", "is_working_properly"),
+            ("operation_status_properties", "is_working_properly"),
+        ],
         "output_dataset": [overlap_dataset_name],
-        "check_overlapping_from": (
-            "operation_status_properties",
-            "is_working_properly",
-        ),  # optional
-        "check_overlapping_to": (
-            "operation_status_properties",
-            "is_working_properly",
-        ),  # optional
         "distance_threshold": 0.1,
     }
 
@@ -557,7 +558,7 @@ class TestOverlapStatus:
             atol=0.01,
         )
 
-    def test_overlap_without_overlap_property(
+    def test_overlap_without_status_property(
         self,
         config,
         model_name,
@@ -567,8 +568,9 @@ class TestOverlapStatus:
         road_network_name,
         time_scale,
     ):
-        del config["config"]["models"][0]["check_overlapping_from"]
-        del config["config"]["models"][0]["check_overlapping_to"]
+        del config["config"]["models"][0]["from_check_status_property"]
+        config["config"]["models"][0]["to_check_status_properties"][0] = None
+        config["config"]["models"][0]["to_check_status_properties"][1] = (None, None)
 
         scenario = {
             "updates": [
@@ -986,12 +988,11 @@ class TestOverlapStatus:
         time_scale,
     ):
 
-        del config["config"]["models"][0]["check_overlapping_to"]
-        del config["config"]["models"][0]["to_points_datasets"]
-        del config["config"]["models"][0]["to_lines_datasets"]
-        config["config"]["models"][0]["to_polygons_datasets"] = [
-            (knotweed_dataset_name, "knotweed_entities"),
+        config["config"]["models"][0]["to_entity_groups"] = [
+            (knotweed_dataset_name, "knotweed_entities")
         ]
+        config["config"]["models"][0]["to_geometry_types"] = ["polygon"]
+        del config["config"]["models"][0]["to_check_status_properties"]
 
         scenario = {
             "updates": [

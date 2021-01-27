@@ -159,9 +159,9 @@ def get_geometry_dataset_cls(
 ) -> Type[DataSet]:
 
     base_classes = {
-        "points": (PointDataset, PointEntity),
-        "lines": (LineDataset, Line3dEntity),
-        "polygons": (PolygonDataset, PolygonEntity),
+        "point": (PointDataset, PointEntity),
+        "line": (LineDataset, Line3dEntity),
+        "polygon": (PolygonDataset, PolygonEntity),
     }
     dataset_base, entity_base = base_classes[geom_type]
     entity_cls = get_geometry_entity_cls(

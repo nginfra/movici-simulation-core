@@ -6,6 +6,8 @@ from model_engine.model_driver.data_handlers import DataHandlerType, DType
 from .dataset import get_geometry_dataset_cls, OverlapDataset, GeometryDataset
 from .overlap_status import OverlapStatus
 
+ComponentPropertyTuple = Optional[Tuple[Optional[str], Optional[str]]]
+
 
 class Model(BaseModelVDataManager):
     """
@@ -16,13 +18,12 @@ class Model(BaseModelVDataManager):
     type = "overlap_status"
     custom_variable_names = [
         "output_dataset",
-        "from_dataset",
-        "from_dataset_geometry",
-        "to_points_datasets",
-        "to_lines_datasets",
-        "to_polygons_datasets",
-        "check_overlapping_from",
-        "check_overlapping_to",
+        "from_entity_group",
+        "from_geometry_type",
+        "from_check_status_property",
+        "to_entity_groups",
+        "to_geometry_types",
+        "to_check_status_properties",
         "distance_threshold",
         "display_name_template",
     ]
@@ -39,12 +40,11 @@ class Model(BaseModelVDataManager):
             OverlapDataset, self.datasets[self.custom_variables.get("output_dataset")[0]]
         )
         from_dataset = cast(
-            GeometryDataset, self.datasets[self.custom_variables.get("from_dataset")[0][0]]
+            GeometryDataset, self.datasets[self.custom_variables.get("from_entity_group")[0][0]]
         )
         to_datasets = []
-        for datasets in ["to_points_datasets", "to_lines_datasets", "to_polygons_datasets"]:
-            for dataset in self.custom_variables.get(datasets) or []:
-                to_datasets.append(cast(GeometryDataset, self.datasets[dataset[0]]))
+        for dataset in self.custom_variables.get("to_entity_groups") or []:
+            to_datasets.append(cast(GeometryDataset, self.datasets[dataset[0]]))
 
         self.overlap_status = OverlapStatus(
             from_dataset=from_dataset,
@@ -68,95 +68,85 @@ class Model(BaseModelVDataManager):
         self.set_custom_variables(custom_variable_names)
         self.parse_datasets(
             self.custom_variables.get("output_dataset")[0],
-            self.custom_variables.get("from_dataset")[0],
-            self.custom_variables.get("from_dataset_geometry"),
-            self.custom_variables.get("to_points_datasets") or [],
-            self.custom_variables.get("to_lines_datasets") or [],
-            self.custom_variables.get("to_polygons_datasets") or [],
+            self.custom_variables.get("from_entity_group")[0],
+            self.custom_variables.get("from_geometry_type"),
+            self.custom_variables.get("from_check_status_property"),
+            self.custom_variables.get("to_entity_groups"),
+            self.custom_variables.get("to_geometry_types"),
+            self.custom_variables.get("to_check_status_properties"),
         )
         self.set_filters()
 
     def parse_datasets(
         self,
         output_dataset: str,
-        from_dataset: Tuple[str, str],
-        from_dataset_geometry: str,
-        to_points_datasets: List[Tuple[str, str]],
-        to_lines_datasets: List[Tuple[str, str]],
-        to_polygons_datasets: List[Tuple[str, str]],
+        from_entity_group: Tuple[str, str],
+        from_geometry_type: str,
+        from_check_status_property: ComponentPropertyTuple,
+        to_entity_groups: List[Tuple[str, str]],
+        to_geometry_types: List[str],
+        to_check_status_properties: Optional[List[ComponentPropertyTuple]],
     ) -> None:
         self.data_handler_types = {output_dataset: DataHandlerType(dataset_cls=OverlapDataset)}
         self.managed_datasets = {output_dataset: output_dataset}
         self.netcdf_datasets = {}
 
-        from_component_property = self.custom_variables.get("check_overlapping_from")
         from_active_status_component, from_active_status_property = (
-            from_component_property if from_component_property else (None, None)
+            from_check_status_property if from_check_status_property else (None, None)
         )
 
-        self.parse_from_dataset(
-            from_dataset,
-            from_dataset_geometry,
+        self.parse_dataset(
+            from_entity_group,
+            from_geometry_type,
             from_active_status_component,
             from_active_status_property,
+            "FromDataset",
         )
 
-        to_component_property = self.custom_variables.get("check_overlapping_to")
+        if to_check_status_properties is None:
+            to_check_status_properties = [(None, None)] * len(to_geometry_types)
+        for i, elem in enumerate(to_check_status_properties):
+            if elem is None:
+                to_check_status_properties[i] = (None, None)
 
-        to_active_status_component, to_active_status_property = (
-            to_component_property if to_component_property else (None, None)
-        )
-        self.parse_to_datasets(
-            to_points_datasets,
-            to_lines_datasets,
-            to_polygons_datasets,
-            to_active_status_component,
-            to_active_status_property,
-        )
+        if len(to_entity_groups) != len(to_geometry_types) or len(to_entity_groups) != len(
+            to_check_status_properties
+        ):
+            raise IndexError(
+                "Arrays to_entity_groups, to_geometry_types"
+                " and to_check_status_properties must have the same lengths"
+            )
 
-    def parse_from_dataset(
+        for entity_group, geometry_type, to_check_status_property in zip(
+            to_entity_groups, to_geometry_types, to_check_status_properties
+        ):
+            self.parse_dataset(
+                entity_group,
+                geometry_type,
+                to_check_status_property[0],
+                to_check_status_property[1],
+                "ToDataset",
+            )
+
+    def parse_dataset(
         self,
-        from_dataset: Tuple[str, str],
-        from_dataset_geometry: str,
+        entity_group: Tuple[str, str],
+        geometry_type: str,
         active_status_component: Optional[str],
-        active_status_property: str,
+        active_status_property: Optional[str],
+        dataset_name_prefix: str,
     ) -> None:
-        dataset_name, entity_name = from_dataset
+        dataset_name, entity_name = entity_group
         self.managed_datasets[dataset_name] = dataset_name
         self.data_handler_types[dataset_name] = DataHandlerType(
             dataset_cls=get_geometry_dataset_cls(
-                f"FromDataset_{from_dataset_geometry}",
+                f"{dataset_name_prefix}_{geometry_type}",
                 entity_name=entity_name,
-                geom_type=from_dataset_geometry,
+                geom_type=geometry_type,
                 active_component=active_status_component,
                 active_property=active_status_property,
             )
         )
-
-    def parse_to_datasets(
-        self,
-        to_points_datasets: List[Tuple[str, str]],
-        to_lines_datasets: List[Tuple[str, str]],
-        to_polygons_datasets: List[Tuple[str, str]],
-        active_status_component: Optional[str],
-        active_status_property: str,
-    ) -> None:
-        for geometry_type, datasets in [
-            ("lines", to_lines_datasets),
-            ("points", to_points_datasets),
-            ("polygons", to_polygons_datasets),
-        ]:
-            for i, (dataset_name, entity_name) in enumerate(datasets):
-                self.managed_datasets[dataset_name] = dataset_name
-                self.data_handler_types[dataset_name] = DataHandlerType(
-                    dataset_cls=get_geometry_dataset_cls(
-                        f"ToDataset_{geometry_type}{i}",
-                        entity_name=entity_name,
-                        geom_type=geometry_type,
-                        active_component=active_status_component,
-                        active_property=active_status_property,
-                    )
-                )
 
     def read_managed_data(self, data_fetcher: DataFetcher) -> None:
         """
