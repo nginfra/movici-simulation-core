@@ -74,6 +74,8 @@ class TimeWindowStatus:
         if not self._schedule:
             return
 
+        # TODO store unix time here?
+
         while self._schedule and time_stamp.time >= self._schedule[0].time_step:
             self._update_statuses(self._schedule.popleft())
 
@@ -110,6 +112,12 @@ class TimeWindowStatus:
                 time_window_entities.time_window_end.data,
             )
         ):
+            if (
+                time_window_begin == time_window_entities.time_window_begin.undefined
+                or time_window_end == time_window_entities.time_window_end.undefined
+            ):
+                continue
+
             begin = self._calculate_time_step(time_window_begin)
             end = self._calculate_time_step(time_window_end)
 

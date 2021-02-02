@@ -19,7 +19,11 @@ def maintenance_agenda_dataset_name():
 
 
 @pytest.fixture
-def config(model_config, init_data, time_scale):
+def config(
+    model_config,
+    init_data,
+    time_scale,
+):
     return {
         "config": {
             "version": 4,
@@ -186,7 +190,7 @@ class TestTimeWindowStatusSameEntity:
             },
         }
 
-    def test_multiple_maintence_same_entity(
+    def test_multiple_maintenance_same_entity(
         self, get_entity_update, config, model_name, mv_network_name, road_network_name, time_scale
     ):
         scenario = {
@@ -212,7 +216,9 @@ class TestTimeWindowStatusSameEntity:
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
-                                [1], properties=[False], key_name="maintenance.under_maintenance"
+                                [1],
+                                properties=[False],
+                                key_name="maintenance.under_maintenance",
                             )
                         }
                     },
@@ -222,5 +228,88 @@ class TestTimeWindowStatusSameEntity:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model, name=model_name, scenario=scenario, atol=0.01
+            model=Model,
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
+        )
+
+
+class TestTimeWindowUndefinedWindow:
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name, mv_network_name):
+        return {
+            "name": model_name,
+            "type": "time_window_status",
+            "time_window_dataset": [("a_maintenance_agenda", "maintenance_job_entities")],
+            "status_datasets": [(road_network_name, "road_segment_entities")],
+            "time_window_begin": (None, "maintenance.job_begin.date"),
+            "time_window_end": (None, "maintenance.job_end.date"),
+            "time_window_status": (None, "maintenance.under_maintenance"),
+        }
+
+    @pytest.fixture
+    def maintenance_agenda(self, maintenance_agenda_dataset_name):
+        return {
+            "version": 3,
+            "name": maintenance_agenda_dataset_name,
+            "type": "maintenance_agenda",
+            "display_name": "Test Maintenance Agenda",
+            "general": {"enum": {"maintenance_job_entities": {"type": ["replacement"]}}},
+            "data": {
+                "maintenance_job_entities": {
+                    "maintenance.job_begin.date": [None, "2019-01-01"],
+                    "maintenance.job_end.date": [None, "2020-02-10"],
+                    "maintenance.job_duration.days": [200, 40],
+                    "id": [0, 1],
+                    "type": [0, 0],
+                    "connection_properties": {
+                        "to_dataset_type": ["road_network", "road_network"],
+                        "to_dataset": ["a_road_network", "a_road_network"],
+                        "to_references": [["100"], ["101"]],
+                    },
+                }
+            },
+        }
+
+    def test_maintenance_with_undefined_window(
+        self, get_entity_update, config, model_name, mv_network_name, road_network_name, time_scale
+    ):
+        scenario = {
+            "updates": [{"time": 0, "data": {}}],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [1, 2, 3],
+                                properties=[False, True, False],
+                                key_name="maintenance.under_maintenance",
+                            ),
+                        },
+                    },
+                    "next_time": 40 * time_scale,
+                },
+                {
+                    "time": 40,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [2],
+                                properties=[False],
+                                key_name="maintenance.under_maintenance",
+                            )
+                        }
+                    },
+                },
+            ],
+        }
+
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=Model,
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
         )
