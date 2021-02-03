@@ -97,7 +97,7 @@ class TimeWindowStatus:
         if self._window_in_same_entities:
             for index, _ in enumerate(connection_entities.ids):
                 self._connections.append(Connection(connection_entities, [index]))
-                return
+            return
 
         for i, dataset_name in enumerate(connection_entities.connection_to_dataset.data):
             references = csr_item(
@@ -150,9 +150,9 @@ class TimeWindowStatus:
         status_dict = self._entity_statuses[connection.connected_entities]
         for i in connection.connected_indices:
             if event.is_start:
-                status_dict[i].add(i)
+                status_dict[i].add(event.connection_index)
             else:
-                status_dict[i].remove(i)
+                status_dict[i].remove(event.connection_index)
 
     def _publish_statuses(self):
         for entities, status_dict in self._entity_statuses.items():

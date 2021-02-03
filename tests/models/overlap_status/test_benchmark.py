@@ -175,6 +175,7 @@ class TestBenchmark:
         config,
         model_name,
         benchmark,
+        time_scale,
         overlap_dataset_name,
         from_network_name,
         to_network_name1,
@@ -184,7 +185,7 @@ class TestBenchmark:
         scenario = {
             "updates": [
                 {
-                    "time": i,
+                    "time": i * time_scale,
                     "data": {
                         from_network_name: get_random_update(entity_count, active_chance),
                         to_network_name1: get_random_update(entity_count, active_chance),
@@ -195,7 +196,7 @@ class TestBenchmark:
             ],
             "expected_results": [
                 {
-                    "time": i,
+                    "time": i * time_scale,
                     "data": {},
                 }
                 for i in range(update_count)

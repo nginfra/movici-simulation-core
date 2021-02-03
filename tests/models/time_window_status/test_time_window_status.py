@@ -76,7 +76,12 @@ class TestTimeWindowStatus:
         self, get_entity_update, config, model_name, mv_network_name, road_network_name, time_scale
     ):
         scenario = {
-            "updates": [{"time": 0, "data": {}}],
+            "updates": [
+                {"time": 0, "data": {}},
+                {"time": 9 * time_scale, "data": {}},
+                {"time": 31 * time_scale, "data": {}},
+                {"time": 40 * time_scale, "data": {}},
+            ],
             "expected_results": [
                 {
                     "time": 0,
@@ -101,7 +106,7 @@ class TestTimeWindowStatus:
                     "next_time": 9 * time_scale,
                 },
                 {
-                    "time": 9,
+                    "time": 9 * time_scale,
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
@@ -112,10 +117,10 @@ class TestTimeWindowStatus:
                             )
                         }
                     },
-                    "next_update": 30 * time_scale,
+                    "next_time": 31 * time_scale,
                 },
                 {
-                    "time": 31,
+                    "time": 31 * time_scale,
                     "data": {
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
@@ -126,10 +131,10 @@ class TestTimeWindowStatus:
                             ),
                         }
                     },
-                    "next_update": 39 * time_scale,
+                    "next_time": 40 * time_scale,
                 },
                 {
-                    "time": 40,
+                    "time": 40 * time_scale,
                     "data": {
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
@@ -194,7 +199,12 @@ class TestTimeWindowStatusSameEntity:
         self, get_entity_update, config, model_name, road_network_name, time_scale
     ):
         scenario = {
-            "updates": [{"time": 0, "data": {}}],
+            "updates": [
+                {"time": 0, "data": {}},
+                {"time": 1 * time_scale, "data": {}},
+                {"time": 9 * time_scale, "data": {}},
+                {"time": 40 * time_scale, "data": {}},
+            ],
             "expected_results": [
                 {
                     "time": 0,
@@ -209,10 +219,10 @@ class TestTimeWindowStatusSameEntity:
                     },
                     "next_time": 1 * time_scale,
                 },
-                {"time": 1, "data": {}, "next_time": 10 * time_scale},
-                {"time": 10, "data": {}, "next_time": 31 * time_scale},
+                {"time": 1 * time_scale, "data": {}, "next_time": 9 * time_scale},
+                {"time": 9 * time_scale, "data": {}, "next_time": 40 * time_scale},
                 {
-                    "time": 31,
+                    "time": 40 * time_scale,
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
@@ -276,7 +286,10 @@ class TestTimeWindowUndefinedWindow:
         self, get_entity_update, config, model_name, mv_network_name, road_network_name, time_scale
     ):
         scenario = {
-            "updates": [{"time": 0, "data": {}}],
+            "updates": [
+                {"time": 0, "data": {}},
+                {"time": 40 * time_scale, "data": {}},
+            ],
             "expected_results": [
                 {
                     "time": 0,
@@ -292,7 +305,7 @@ class TestTimeWindowUndefinedWindow:
                     "next_time": 40 * time_scale,
                 },
                 {
-                    "time": 40,
+                    "time": 40 * time_scale,
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
@@ -341,7 +354,7 @@ class TestTimeWindowInEntitiesDataset:
                 "road_segment_entities": {
                     "id": [1, 2, 3],
                     "reference": ["100", "101", "102"],
-                    "maintenance.window_begin.date": ["2019-12-01", None, "2020-01-11"],
+                    "maintenance.window_begin.date": ["2020-01-11", None, "2020-01-11"],
                     "maintenance.window_end.date": ["2020-01-21", None, "2020-02-01"],
                     "shape_properties": {
                         "linestring_3d": [
@@ -358,7 +371,12 @@ class TestTimeWindowInEntitiesDataset:
         self, get_entity_update, config, model_name, road_network_name, time_scale
     ):
         scenario = {
-            "updates": [{"time": 0, "data": {}}],
+            "updates": [
+                {"time": 0, "data": {}},
+                {"time": 10 * time_scale, "data": {}},
+                {"time": 20 * time_scale, "data": {}},
+                {"time": 31 * time_scale, "data": {}},
+            ],
             "expected_results": [
                 {
                     "time": 0,
@@ -366,7 +384,7 @@ class TestTimeWindowInEntitiesDataset:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[True, False, False],
+                                properties=[False, False, False],
                                 key_name="maintenance.in_window",
                             ),
                         },
@@ -374,7 +392,20 @@ class TestTimeWindowInEntitiesDataset:
                     "next_time": 10 * time_scale,
                 },
                 {
-                    "time": 10,
+                    "time": 10 * time_scale,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [1, 3],
+                                properties=[True, True],
+                                key_name="maintenance.in_window",
+                            ),
+                        },
+                    },
+                    "next_time": 20 * time_scale,
+                },
+                {
+                    "time": 20 * time_scale,
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
@@ -384,23 +415,10 @@ class TestTimeWindowInEntitiesDataset:
                             ),
                         },
                     },
-                    "next_time": 20 * time_scale,
-                },
-                {
-                    "time": 20,
-                    "data": {
-                        road_network_name: {
-                            "road_segment_entities": get_entity_update(
-                                [3],
-                                properties=[True],
-                                key_name="maintenance.in_window",
-                            ),
-                        },
-                    },
                     "next_time": 31 * time_scale,
                 },
                 {
-                    "time": 31,
+                    "time": 31 * time_scale,
                     "data": {
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
