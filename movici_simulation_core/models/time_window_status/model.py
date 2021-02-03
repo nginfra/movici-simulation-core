@@ -29,6 +29,7 @@ class Model(BaseModelVDataManager):
 
     def __init__(self, name: str, config: Config) -> None:
         super().__init__(name, config)
+        self._window_and_status_same_dataset = False
         self.parse_config(self.custom_variable_names)
 
     def initialize_model(self, data_fetcher: DataFetcher) -> None:
@@ -38,6 +39,10 @@ class Model(BaseModelVDataManager):
             if ds_name != window_dataset_name:
                 status_datasets.append(ds)
         time_window_dataset: DataSet = self.datasets.get(window_dataset_name)
+
+        if self._window_and_status_same_dataset:
+            status_datasets = [time_window_dataset]
+
         self.time_window_status = TimeWindowStatus(
             time_window_dataset,
             status_datasets,
@@ -54,17 +59,24 @@ class Model(BaseModelVDataManager):
         Parse scenario config
         Differs from base class in that we set the data_handler_types dataset_classes on the fly
         """
+        self.data_handler_types = {}
+        self.managed_datasets = {}
+        self.netcdf_datasets = {}
         scenario_config: Config = self.config
         self.check_config_version(scenario_config)
         self.set_custom_variables(custom_variable_names)
-        self.parse_status_datasets(self.custom_variables.get("status_datasets"))
+
+        window_dataset_name, _ = self.custom_variables.get("time_window_dataset")[0]
+        status_dataset_names = self.custom_variables.get("status_datasets")
+        if len(status_dataset_names) == 1 and status_dataset_names[0][0] == window_dataset_name:
+            self._window_and_status_same_dataset = True
+
+        if not self._window_and_status_same_dataset:
+            self.parse_status_datasets(self.custom_variables.get("status_datasets"))
         self.parse_time_window_dataset()
         self.set_filters()
 
     def parse_status_datasets(self, datasets: List[Tuple[str, str]]) -> None:
-        self.data_handler_types = {}
-        self.managed_datasets = {}
-        self.netcdf_datasets = {}
         time_window_status_component, time_window_status_property = self.custom_variables.get(
             "time_window_status"
         )
@@ -87,6 +99,9 @@ class Model(BaseModelVDataManager):
         time_window_end_component, time_window_end_property = self.custom_variables.get(
             "time_window_end"
         )
+        time_window_status_component, time_window_status_property = self.custom_variables.get(
+            "time_window_status"
+        )
         self.managed_datasets[dataset_name] = dataset_name
         self.data_handler_types[dataset_name] = DataHandlerType(
             dataset_cls=get_time_window_dataset_cls(
@@ -96,6 +111,8 @@ class Model(BaseModelVDataManager):
                 time_window_end_property=time_window_end_property,
                 time_window_begin_component=time_window_begin_component,
                 time_window_end_component=time_window_end_component,
+                status_component=time_window_status_component,
+                status_property=time_window_status_property,
             )
         )
 

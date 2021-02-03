@@ -155,7 +155,7 @@ class TestTimeWindowStatus:
 
 class TestTimeWindowStatusSameEntity:
     @pytest.fixture
-    def model_config(self, model_name, road_network_name, mv_network_name):
+    def model_config(self, model_name, road_network_name):
         return {
             "name": model_name,
             "type": "time_window_status",
@@ -191,7 +191,7 @@ class TestTimeWindowStatusSameEntity:
         }
 
     def test_multiple_maintenance_same_entity(
-        self, get_entity_update, config, model_name, mv_network_name, road_network_name, time_scale
+        self, get_entity_update, config, model_name, road_network_name, time_scale
     ):
         scenario = {
             "updates": [{"time": 0, "data": {}}],
@@ -299,6 +299,114 @@ class TestTimeWindowUndefinedWindow:
                                 [2],
                                 properties=[False],
                                 key_name="maintenance.under_maintenance",
+                            )
+                        }
+                    },
+                },
+            ],
+        }
+
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=Model,
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
+        )
+
+
+class TestTimeWindowInEntitiesDataset:
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name):
+        return {
+            "name": model_name,
+            "type": "time_window_status",
+            "time_window_dataset": [(road_network_name, "road_segment_entities")],
+            "status_datasets": [(road_network_name, "road_segment_entities")],
+            "time_window_begin": (None, "maintenance.window_begin.date"),
+            "time_window_end": (None, "maintenance.window_end.date"),
+            "time_window_status": (None, "maintenance.in_window"),
+        }
+
+    @pytest.fixture
+    def road_network(self, road_network_name):
+        return {
+            "version": 3,
+            "name": road_network_name,
+            "type": "random_type",
+            "display_name": "",
+            "epsg_code": 28992,
+            "general": None,
+            "data": {
+                "road_segment_entities": {
+                    "id": [1, 2, 3],
+                    "reference": ["100", "101", "102"],
+                    "maintenance.window_begin.date": ["2019-12-01", None, "2020-01-11"],
+                    "maintenance.window_end.date": ["2020-01-21", None, "2020-02-01"],
+                    "shape_properties": {
+                        "linestring_3d": [
+                            [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
+                            [[1.6, 0.5, 1.0], [1.5, 0.5, -1.0]],
+                            [[-0.5, 0.5, 0.0], [0.5, 0.5, -1.0], [1.5, 0.5, 1.0], [2.5, 0.5, 1.0]],
+                        ]
+                    },
+                }
+            },
+        }
+
+    def test_window_in_entities_dataset(
+        self, get_entity_update, config, model_name, road_network_name, time_scale
+    ):
+        scenario = {
+            "updates": [{"time": 0, "data": {}}],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [1, 2, 3],
+                                properties=[True, False, False],
+                                key_name="maintenance.in_window",
+                            ),
+                        },
+                    },
+                    "next_time": 10 * time_scale,
+                },
+                {
+                    "time": 10,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [1],
+                                properties=[False],
+                                key_name="maintenance.in_window",
+                            ),
+                        },
+                    },
+                    "next_time": 20 * time_scale,
+                },
+                {
+                    "time": 20,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [3],
+                                properties=[True],
+                                key_name="maintenance.in_window",
+                            ),
+                        },
+                    },
+                    "next_time": 31 * time_scale,
+                },
+                {
+                    "time": 31,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": get_entity_update(
+                                [3],
+                                properties=[False],
+                                key_name="maintenance.in_window",
                             )
                         }
                     },

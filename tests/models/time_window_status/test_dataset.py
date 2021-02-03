@@ -40,6 +40,8 @@ class TestDatasetClass:
             entity_name="maintenance_job_entities",
             time_window_begin_property="maintenance.window_begin.date",
             time_window_end_property="maintenance.window_end.date",
+            status_property="is_working_properly",
+            status_component="operation_status_properties",
         )
         assert isinstance(
             prop.data_entity_types_dict["maintenance_job_entities"].time_window_begin,

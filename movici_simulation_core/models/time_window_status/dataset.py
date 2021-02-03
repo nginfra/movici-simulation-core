@@ -20,6 +20,7 @@ class TimeWindowEntity(DataEntityHandler):
     calc = False
     time_window_begin: Property = None
     time_window_end: Property = None
+    time_window_status: Property = None
     connection_to_dataset = ConnectionProperties.ToDataset(init=True)
     connection_to_references = ConnectionProperties.ToReferences(init=True)
 
@@ -69,6 +70,8 @@ def get_time_window_entity_cls(
     time_window_end_property: str,
     time_window_begin_component: Optional[str] = None,
     time_window_end_component: Optional[str] = None,
+    status_property: str = None,
+    status_component: Optional[str] = None,
 ) -> Type[TimeWindowEntity]:
 
     return cast(
@@ -84,6 +87,9 @@ def get_time_window_entity_cls(
                 "time_window_end": get_dynamic_property(
                     time_window_end_property, time_window_end_component
                 )(init=True),
+                "time_window_status": get_dynamic_property(status_property, status_component)(
+                    pub=True
+                ),
             },
         ),
     )
@@ -96,6 +102,8 @@ def get_time_window_dataset_cls(
     time_window_end_property: str,
     time_window_begin_component: Optional[str] = None,
     time_window_end_component: Optional[str] = None,
+    status_property: str = None,
+    status_component: Optional[str] = None,
 ) -> Type[DataSet]:
     entity_cls = get_time_window_entity_cls(
         entity_name,
@@ -103,6 +111,8 @@ def get_time_window_dataset_cls(
         time_window_end_property,
         time_window_begin_component,
         time_window_end_component,
+        status_property,
+        status_component,
     )
 
     return cast(

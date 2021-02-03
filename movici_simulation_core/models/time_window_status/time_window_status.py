@@ -3,7 +3,7 @@ from collections import deque, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from logging import Logger
-from typing import Optional, List, Dict, cast, Deque, Set
+from typing import Optional, List, Dict, cast, Deque, Set, Union
 
 import numpy as np
 
@@ -20,7 +20,7 @@ from movici_simulation_core.models.time_window_status.dataset import (
 
 @dataclass
 class Connection:
-    connected_entities: TimeWindowStatusEntity
+    connected_entities: Union[TimeWindowStatusEntity, TimeWindowEntity]
     connected_indices: List[int]
 
 
@@ -52,9 +52,9 @@ class TimeWindowStatus:
         self._connections: List[Connection] = []
         self._full_schedule: List[ScheduleEvent] = []
         self._schedule: Deque[ScheduleEvent] = deque()
-        self._entity_statuses: Dict[TimeWindowStatusEntity, Dict[int, Set[int]]] = defaultdict(
-            dict
-        )
+        self._entity_statuses: Dict[
+            Union[TimeWindowStatusEntity, TimeWindowEntity], Dict[int, Set[int]]
+        ] = defaultdict(dict)
 
         self._first_update = True
 
@@ -62,6 +62,10 @@ class TimeWindowStatus:
             if not ds.is_complete_for_init():
                 raise IncompleteInitializationData()
             ds.reset_track_update()
+
+        self._window_in_same_entities = (
+            len(status_datasets) == 1 and status_datasets[0] == time_window_dataset
+        )
 
         self._resolve_connections()
         self._resolve_schedule()
@@ -73,8 +77,6 @@ class TimeWindowStatus:
 
         if not self._schedule:
             return
-
-        # TODO store unix time here?
 
         while self._schedule and time_stamp.time >= self._schedule[0].time_step:
             self._update_statuses(self._schedule.popleft())
@@ -91,6 +93,11 @@ class TimeWindowStatus:
             return
 
         connection_entities = cast(TimeWindowEntity, self._get_entity(self._time_window_dataset))
+
+        if self._window_in_same_entities:
+            for index, _ in enumerate(connection_entities.ids):
+                self._connections.append(Connection(connection_entities, [index]))
+                return
 
         for i, dataset_name in enumerate(connection_entities.connection_to_dataset.data):
             references = csr_item(
