@@ -298,22 +298,15 @@ class OverlapStatus:
         to_publish = OverlapPropertiesToPublish.create(overlap_entities)
 
         from_entities = self._from_dataset.entity
-        from_entity_overlaps = from_entities.overlap_active.data.copy()
-        from_entity_overlaps[
-            from_entity_overlaps != overlap_entities.overlap_active.undefined
-        ] = False
 
         for to_entities, connections in self._connections.items():
             self._publish_active_overlaps_for_connections(
                 from_entities,
                 to_entities,
                 connections,
-                from_entity_overlaps,
                 overlap_entities,
                 to_publish,
             )
-
-        from_entities.overlap_active = from_entity_overlaps
 
         to_publish.publish(overlap_entities)
 
@@ -322,7 +315,6 @@ class OverlapStatus:
         from_entities: GeometryEntity,
         to_entities: GeometryEntity,
         connections: Connections,
-        from_entity_overlaps: np.ndarray,
         overlap_entities: OverlapEntity,
         to_publish: OverlapPropertiesToPublish,
     ) -> None:
@@ -339,13 +331,6 @@ class OverlapStatus:
             to_active_status=to_active_status,
             connection_to_indices=connections.to_indices,
             undefined_value=overlap_undefined_value,
-        )
-
-        self._calculate_from_entities_overlap_status(
-            overlap_active,
-            connections.from_indices,
-            overlap_undefined_value,
-            from_entity_overlaps,
         )
 
         defined = overlap_active != overlap_undefined_value
@@ -392,17 +377,6 @@ class OverlapStatus:
             defined
         ]
         return overlap_active
-
-    @staticmethod
-    def _calculate_from_entities_overlap_status(
-        overlap_active, from_indices, overlap_undefined_value, from_entities_overlap_status
-    ):
-        from_entities_overlap_status[
-            from_entities_overlap_status == overlap_undefined_value
-        ] = False
-        _logical_or_on_group(
-            from_indices, overlap_active, overlap_undefined_value, from_entities_overlap_status
-        )
 
     @staticmethod
     def _check_init_ready(dataset: DataSet) -> None:

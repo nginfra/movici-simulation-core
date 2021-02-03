@@ -200,14 +200,7 @@ class TestOverlapStatus:
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1, 2, 3],
-                                properties=[False, False, False],
-                            ),
-                        },
-                    },
+                    "data": {},
                 },
                 {
                     "time": 1 * time_scale,
@@ -242,12 +235,6 @@ class TestOverlapStatus:
                                     ],
                                 },
                             }
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[True],
-                            ),
                         },
                     },
                 },
@@ -300,12 +287,6 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
-                                properties=[False],
-                            ),
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
                                 properties=[False],
                             ),
                         },
@@ -444,14 +425,7 @@ class TestOverlapStatus:
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1, 2, 3],
-                                properties=[False, False, False],
-                            ),
-                        },
-                    },
+                    "data": {},
                 },
                 {
                     "time": 1 * time_scale,
@@ -482,13 +456,7 @@ class TestOverlapStatus:
                                     ],
                                 },
                             }
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[True],
-                            ),
-                        },
+                        }
                     },
                 },
                 {
@@ -536,12 +504,6 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
-                                properties=[False],
-                            ),
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
                                 properties=[False],
                             ),
                         },
@@ -673,12 +635,6 @@ class TestOverlapStatus:
                 {
                     "time": 0,
                     "data": {
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1, 2, 3],
-                                properties=[True, True, False],
-                            ),
-                        },
                         overlap_dataset_name: {
                             "overlap_entities": {
                                 "id": [1, 2, 3, 4, 5],
@@ -854,17 +810,7 @@ class TestOverlapStatus:
                 },
             ],
             "expected_results": [
-                {
-                    "time": 0,
-                    "data": {
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1, 2, 3],
-                                properties=[False, False, False],
-                            ),
-                        },
-                    },
-                },
+                {"time": 0, "data": {}},
                 {
                     "time": 1 * time_scale,
                     "data": {},
@@ -898,12 +844,6 @@ class TestOverlapStatus:
                                     ],
                                 },
                             }
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[True],
-                            ),
                         },
                     },
                 },
@@ -958,13 +898,7 @@ class TestOverlapStatus:
                                 [2],
                                 properties=[False],
                             ),
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[False],
-                            ),
-                        },
+                        }
                     },
                 },
             ],
@@ -1037,17 +971,7 @@ class TestOverlapStatus:
                 },
             ],
             "expected_results": [
-                {
-                    "time": 0,
-                    "data": {
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1, 2, 3],
-                                properties=[False, False, False],
-                            ),
-                        },
-                    },
-                },
+                {"time": 0, "data": {}},
                 {
                     "time": 1 * time_scale,
                     "data": {
@@ -1077,13 +1001,7 @@ class TestOverlapStatus:
                                     ],
                                 },
                             }
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[True],
-                            ),
-                        },
+                        }
                     },
                 },
                 {
@@ -1094,13 +1012,7 @@ class TestOverlapStatus:
                                 [1],
                                 properties=[False],
                             ),
-                        },
-                        water_network_name: {
-                            "water_pipe_entities": get_overlap_update(
-                                [1],
-                                properties=[False],
-                            ),
-                        },
+                        }
                     },
                 },
             ],

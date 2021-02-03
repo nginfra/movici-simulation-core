@@ -220,68 +220,6 @@ def test_can_calculate_overlap_status(
 
 @pytest.mark.parametrize(
     [
-        "from_entities_overlap_status",
-        "overlap_active",
-        "from_indices",
-        "undefined_value",
-        "expected_status",
-    ],
-    [
-        (
-            np.array([0, 0, 0], dtype=np.bool),
-            np.array([1, 0, 0, 0, 0, 0, 0, 0, 1], dtype=np.bool),
-            np.array([0, 0, 0, 1, 1, 1, 2, 2, 2]),
-            -128,
-            np.array([1, 0, 1], dtype=np.bool),
-        ),
-        (
-            np.array([1, 1, 1], dtype=np.bool),
-            np.array([1, 0, 0, 0, 0, 0, 0, 0, 1], dtype=np.bool),
-            np.array([0, 0, 0, 1, 1, 1, 2, 2, 2]),
-            -128,
-            np.array([1, 1, 1], dtype=np.bool),
-        ),
-        (
-            np.array([-128, -128, -128], dtype=np.int8),
-            np.array([1, 0, 0, 0, 0, 0, 0, 0, 1], dtype=np.bool),
-            np.array([0, 0, 0, 1, 1, 1, 2, 2, 2]),
-            -128,
-            np.array([1, 0, 1], dtype=np.bool),
-        ),
-        (
-            np.array([-128, -128, -128], dtype=np.int8),
-            np.array([-128, -128, 0, -128, -128, -128, 0, 0, 1], dtype=np.int8),
-            np.array([0, 0, 0, 1, 1, 1, 2, 2, 2]),
-            -128,
-            np.array([0, 0, 1], dtype=np.int8),
-        ),
-    ],
-    ids=[
-        "Can calculate from entities overlap status",
-        "Doesn't override preexisting overlaps",
-        "Can calculate when initial from is undefined",
-        "Can calculate when both are undefined",
-    ],
-)
-def test_can_calculate_from_entities_overlap_status(
-    from_entities_overlap_status,
-    overlap_active,
-    from_indices,
-    undefined_value,
-    expected_status,
-):
-    OverlapStatus._calculate_from_entities_overlap_status(
-        overlap_active=overlap_active,
-        from_indices=from_indices,
-        overlap_undefined_value=undefined_value,
-        from_entities_overlap_status=from_entities_overlap_status,
-    )
-
-    assert np.all(from_entities_overlap_status == expected_status)
-
-
-@pytest.mark.parametrize(
-    [
         "from_dataset_name",
         "to_dataset_name",
         "from_reference",
