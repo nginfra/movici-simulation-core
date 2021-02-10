@@ -119,22 +119,31 @@ def model_config(
     return {
         "name": model_name,
         "type": "overlap_status",
-        "from_dataset": [(from_network_name, "water_pipe_entities")],
-        "from_dataset_geometry": "lines",
-        "to_points_datasets": None,
-        "to_lines_datasets": [
+        "from_entity_group": [(from_network_name, "water_pipe_entities")],
+        "from_geometry_type": "line",
+        "from_check_status_property": (
+            "operation_status_properties",
+            "is_working_properly",
+        ),
+        "to_entity_groups": [
             (to_network_name1, "water_pipe_entities"),
             (to_network_name2, "water_pipe_entities"),
         ],
+        "to_geometry_types": [
+            "line",
+            "line",
+        ],
         "output_dataset": [overlap_dataset_name],
-        "check_overlapping_from": (
-            "operation_status_properties",
-            "is_working_properly",
-        ),  # optional
-        "check_overlapping_to": (
-            "operation_status_properties",
-            "is_working_properly",
-        ),  # optional
+        "to_check_status_properties": [
+            (
+                "operation_status_properties",
+                "is_working_properly",
+            ),
+            (
+                "operation_status_properties",
+                "is_working_properly",
+            ),
+        ],
         "distance_threshold": 0.01,
     }
 
@@ -157,16 +166,12 @@ def get_random_update(entity_count, true_chance):
 
 
 def run_model(model_name, scenario):
-    try:
-        testing.ModelDriver.run_scenario(
-            model=Model,
-            name=model_name,
-            scenario=scenario,
-            atol=0.01,
-        )
-    except AssertionError:
-        # intended
-        pass
+    testing.ModelDriver.run_scenario(
+        model=Model,
+        name=model_name,
+        scenario=scenario,
+        atol=0.01,
+    )
 
 
 class TestBenchmark:
@@ -193,18 +198,10 @@ class TestBenchmark:
                     },
                 }
                 for i in range(update_count)
-            ],
-            "expected_results": [
-                {
-                    "time": i * time_scale,
-                    "data": {},
-                }
-                for i in range(update_count)
-            ],
+            ]
         }
 
         scenario.update(config)
-
         benchmark.pedantic(run_model, args=(model_name, scenario))
 
 

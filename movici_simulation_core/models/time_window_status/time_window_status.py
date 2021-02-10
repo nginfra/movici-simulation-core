@@ -1,9 +1,9 @@
 import math
-from collections import deque, defaultdict
+import time
+from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
 from logging import Logger
-from typing import Optional, List, Dict, cast, Deque, Set, Union
+from typing import Optional, List, Dict, cast, Deque, Union
 
 import numpy as np
 
@@ -52,9 +52,9 @@ class TimeWindowStatus:
         self._connections: List[Connection] = []
         self._full_schedule: List[ScheduleEvent] = []
         self._schedule: Deque[ScheduleEvent] = deque()
-        self._entity_statuses: Dict[
-            Union[TimeWindowStatusEntity, TimeWindowEntity], Dict[int, Set[int]]
-        ] = defaultdict(dict)
+        self._entity_event_counts: Dict[
+            Union[TimeWindowStatusEntity, TimeWindowEntity], np.ndarray
+        ] = {}
 
         self._first_update = True
 
@@ -136,36 +136,39 @@ class TimeWindowStatus:
             self._schedule.append(elem)
 
     def _initialize_statuses(self):
+        all_connection_entities = set()
         for connection in self._connections:
-            status_dict = self._entity_statuses[connection.connected_entities]
-            for i in connection.connected_indices:
-                status_dict[i] = set()
-            time_window_status = connection.connected_entities.time_window_status.data
-            connection.connected_entities.time_window_status = np.zeros(
-                len(time_window_status), dtype=bool
-            )
+            if connection.connected_entities not in self._entity_event_counts:
+                self._entity_event_counts[connection.connected_entities] = np.zeros_like(
+                    connection.connected_entities.ids, dtype=np.int16
+                )
+            all_connection_entities.add(connection.connected_entities)
+        for connected_entities in all_connection_entities:
+            time_window_status = connected_entities.time_window_status.data
+            connected_entities.time_window_status = np.zeros(len(time_window_status), dtype=bool)
 
     def _update_statuses(self, event: ScheduleEvent):
         connection = self._connections[event.connection_index]
-        status_dict = self._entity_statuses[connection.connected_entities]
-        for i in connection.connected_indices:
-            if event.is_start:
-                status_dict[i].add(event.connection_index)
-            else:
-                status_dict[i].remove(event.connection_index)
+        event_counts = self._entity_event_counts[connection.connected_entities]
+        event_counts[connection.connected_indices] += 1 if event.is_start else -1
 
     def _publish_statuses(self):
-        for entities, status_dict in self._entity_statuses.items():
-            time_window_status = entities.time_window_status.data.copy()
-            for entity_index, events in status_dict.items():
-                time_window_status[entity_index] = len(events) > 0
+        for entities, maintenance_counts in self._entity_event_counts.items():
+            time_window_status = maintenance_counts > 0
             entities.time_window_status = time_window_status
 
     def _calculate_time_step(self, date: str):
         return math.ceil(
-            (datetime.strptime(date, "%Y-%m-%d").timestamp() - self._time_reference)
-            / self._time_scale
+            (self._date_string_to_timestamp(date) - self._time_reference) / self._time_scale
         )
+
+    @staticmethod
+    def _date_string_to_timestamp(date: str) -> float:
+        # Another slower way would be:
+        # return (datetime.strptime(date, "%Y-%m-%d").timestamp()
+
+        year, month, day = date.split("-")
+        return time.mktime((int(year), int(month), int(day), 0, 0, 0, 0, 0, 0))
 
     @staticmethod
     def _get_entity(dataset: DataSet) -> DataEntityHandler:
