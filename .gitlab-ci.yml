@@ -37,6 +37,17 @@ test:
     - make test-all
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
 
+test-numba:
+  stage: test
+  retry: 1
+  only:
+    refs:
+      - master
+  script:
+    - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install -e .[models] --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - make test-numba
+
 report:
   stage: report
   image:
@@ -56,7 +67,7 @@ report:
   dependencies:
     - test
   script:
-    - sonar-scanner -Dsonar.branch.name="${CI_COMMIT_REF_NAME}" -Dsonar.projectVersion=$(cat VERSION)
+    - sonar-scanner -Dsonar.branch.name="${CI_COMMIT_REF_NAME}" -Dsonar.projectVersion=$(tail -1 VERSION)
 
 deploy:package:
   stage: deploy

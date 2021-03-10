@@ -9,9 +9,13 @@ def parse_requirements(file):
         return ""
 
 
-def read_file_or_empty_str(file):
+def read_file_or_empty_str(file, comment_tag=None):
     try:
         with open(file) as fh:
+            if comment_tag is not None:
+                return "\n".join(
+                    r.strip("\n") for r in fh.readlines() if not r.startswith(comment_tag)
+                )
             return fh.read()
     except FileNotFoundError:
         return ""
@@ -20,7 +24,7 @@ def read_file_or_empty_str(file):
 REQUIREMENTS = parse_requirements("requirements.txt")
 README = read_file_or_empty_str("README.md")
 LICENSE = read_file_or_empty_str("LICENSE")
-VERSION = read_file_or_empty_str("VERSION")
+VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
 EXTRA_REQUIREMENTS = {"models": ["model-engine"]}
 
