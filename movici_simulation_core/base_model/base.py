@@ -3,6 +3,7 @@ from abc import abstractmethod
 
 from model_engine import BaseModel, Config, TimeStamp, Result, DataFetcher
 from model_engine.model_driver.data_handlers import DType
+from movici_simulation_core.exceptions import NotReady
 
 from ..data_tracker.property import INIT, SUB, PUB
 from ..data_tracker.state import TrackedState
@@ -60,7 +61,10 @@ class TrackedBaseModelAdapter(BaseModel):
 
     def try_initialize(self):
         if not self.model_initialized and self.state.is_ready_for(INIT):
-            self.model.initialize(self.state)
+            try:
+                self.model.initialize(self.state)
+            except NotReady:
+                return
             self.model_initialized = True
 
     def new_time(self, time_stamp: TimeStamp):

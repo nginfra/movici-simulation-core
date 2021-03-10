@@ -16,6 +16,7 @@ from movici_simulation_core.data_tracker.property import (
     PUB,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.testing.helpers import dataset_data_to_numpy, dataset_dicts_equal
 
 
@@ -190,3 +191,11 @@ def test_full_run(model, adapter, update, data_fetcher, entity_group, config):
         adapter.update(TimeStamp(1), update).data,
         dataset_data_to_numpy({"dataset": {"my_entities": {"id": [1, 2], "pub_prop": [1, 1]}}}),
     )
+
+
+def test_handles_not_ready(adapter, model, data_fetcher):
+    model.initialize.side_effect = NotReady()
+    adapter.initialize(data_fetcher)
+
+    assert model.initialize.call_count == 1
+    assert not adapter.model_initialized
