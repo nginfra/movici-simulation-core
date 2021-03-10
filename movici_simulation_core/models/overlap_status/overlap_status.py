@@ -162,7 +162,7 @@ class OverlapStatus:
                 from_indices=np.array(from_indices),
                 to_indices=np.array(to_indices),
                 overlap_indices=np.full_like(from_indices, -1),
-                overlap_published=np.full_like(from_indices, False, dtype=np.bool),
+                overlap_published=np.full_like(from_indices, False, dtype=bool),
                 to_dataset_name=to_dataset.name,
             )
 
@@ -205,8 +205,8 @@ class OverlapStatus:
             to_ids,
             self.display_name_template,
         )
-        from_dataset = np.array([self._from_dataset.name], np.str)
-        to_dataset = np.array([connections.to_dataset_name], np.str)
+        from_dataset = np.array([self._from_dataset.name], str)
+        to_dataset = np.array([connections.to_dataset_name], str)
 
         to_publish.update_str_array("display_name", display_name, new_overlap_indices)
         to_publish.update_str_array("from_reference", from_reference, new_overlap_indices)
@@ -361,11 +361,11 @@ class OverlapStatus:
     ) -> np.ndarray:
         overlap_active = np.full_like(connection_from_indices, undefined_value, dtype=np.int8)
         if from_active_status is None:
-            connection_from_active = np.ones_like(connection_from_indices, dtype=np.bool)
+            connection_from_active = np.ones_like(connection_from_indices, dtype=bool)
         else:
             connection_from_active = from_active_status[connection_from_indices]
         if to_active_status is None:
-            connection_to_active = np.ones_like(connection_to_indices, dtype=np.bool)
+            connection_to_active = np.ones_like(connection_to_indices, dtype=bool)
         else:
             connection_to_active = to_active_status[connection_to_indices]
 
@@ -410,7 +410,7 @@ class OverlapStatus:
                 )
                 for fr, tr, fi, ti in zip(from_reference, to_reference, from_id, to_id)
             ],
-            dtype=np.str,
+            dtype=str,
         )
 
 
