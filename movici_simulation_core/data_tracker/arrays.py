@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Optional, Tuple, Union
 
 import numpy as np
@@ -10,6 +11,7 @@ from .csr_helpers import (
     rows_contain,
     rows_intersect,
 )
+from .unicode_helpers import equal_str_dtypes
 
 
 class TrackedArray(np.ndarray):
@@ -35,7 +37,7 @@ class TrackedArray(np.ndarray):
             self.equal_nan = getattr(obj, "equal_nan", False)
         self.reset()
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> TrackedArray:
         self._start_tracking()
         return super().__getitem__(item)
 
@@ -97,15 +99,14 @@ class TrackedCSRArray:
         self.equal_nan = equal_nan
         self.reset()
 
-    def update(self, updates: "TrackedCSRArray", indices: np.ndarray):
+    def update(self, updates: TrackedCSRArray, indices: np.ndarray, skip_value=None):
         """Update the CSRArray in place"""
-        if must_expand_str_dtype(self.data, updates.data):
-            self.data = self.data.astype(updates.data.dtype)
 
-        if must_expand_str_dtype(updates.data, self.data):
-            updates.data = updates.data.astype(self.data.dtype)
+        # Numba expects unicode dtypes to be of equal size, so we adjust the updates array
+        if not equal_str_dtypes(self.data, updates.data):
+            updates = updates.astype(self.data.dtype)
 
-        changes = np.zeros((self.row_ptr.size - 1,), dtype=np.bool_)
+        changes = np.zeros((self.row_ptr.size - 1,), dtype=np.bool)
 
         self.data, self.row_ptr = update_csr_array(
             data=self.data,
@@ -117,6 +118,7 @@ class TrackedCSRArray:
             rtol=self.rtol,
             atol=self.atol,
             equal_nan=self.equal_nan,
+            skip_value=skip_value,
         )
 
         self.changed += changes
@@ -125,15 +127,31 @@ class TrackedCSRArray:
         return get_row(self.data, self.row_ptr, index)
 
     def slice(self, indices):
+        indices = np.asarray(indices)
+        if indices.dtype.type == np.bool_:
+            indices = np.flatnonzero(indices)
         slice_data, slice_row_ptr = slice_csr_array(
             self.data, self.row_ptr, np.asarray(indices, dtype=int)
         )
         return TrackedCSRArray(slice_data, slice_row_ptr)
 
+    def astype(self, dtype, order="K", casting="unsafe", subok=True, copy=True):
+        data = self.data.astype(dtype, order=order, casting=casting, subok=subok, copy=copy)
+        rv = TrackedCSRArray(
+            data, self.row_ptr, rtol=self.rtol, atol=self.atol, equal_nan=self.equal_nan
+        )
+        rv.changed = self.changed
+        return rv
+
     def rows_equal(self, row):
         """return a boolean array where the rows of `csr` equal the `row` argument"""
         return rows_equal(
-            self.data, self.row_ptr, row, rtol=self.rtol, atol=self.atol, equal_nan=self.equal_nan
+            self.data,
+            self.row_ptr,
+            row.astype(self.data.dtype),
+            rtol=self.rtol,
+            atol=self.atol,
+            equal_nan=self.equal_nan,
         )
 
     def rows_contain(self, val):
@@ -154,9 +172,3 @@ class TrackedCSRArray:
 
 
 TrackedArrayType = Union[TrackedArray, TrackedCSRArray]
-
-
-def must_expand_str_dtype(a: np.ndarray, b: np.ndarray):
-    return (
-        np.issubdtype(a.dtype, np.unicode) or np.issubdtype(a.dtype, np.bytes_)
-    ) and b.dtype.itemsize > a.dtype.itemsize

@@ -8,7 +8,7 @@ flake8:
 	flake8
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term --cov-report=xml tests/
+	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
 
 bandit:
 	bandit --recursive $(MODULE_NAME) bin

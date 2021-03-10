@@ -6,6 +6,7 @@ from movici_simulation_core.data_tracker.csr_helpers import (
     rows_equal,
     rows_contain,
     rows_intersect,
+    generate_update,
 )
 
 
@@ -101,3 +102,58 @@ def test_rows_contain(data, row_ptr, val, equal_nan, expected):
 )
 def test_rows_intersect(data, row_ptr, row, equal_nan, expected):
     assert np.array_equal(rows_intersect(data, row_ptr, row, equal_nan=equal_nan), expected)
+
+
+@pytest.mark.parametrize(
+    "   data,       row_ptr,      mask,      changed,   exp_data, exp_row_ptr",
+    [
+        ([0, 1, 2], [0, 1, 2, 3], [0, 1, 1], [0, 0, 1], [-1, 2], [0, 1, 2]),
+        ([0, 1, 2], [0, 1, 2, 3], [1, 0, 1], [0, 0, 1], [-1, 2], [0, 1, 2]),
+        ([0, 1, 2], [0, 1, 2, 3], [1, 0, 1], [0, 0, 0], [-1, -1], [0, 1, 2]),
+        ([0, 1, 2], [0, 1, 2, 3], [1, 1, 0], [1, 1, 0], [0, 1], [0, 1, 2]),
+        ([0, 1, 2], [0, 1, 3], [0, 1], [0, 1], [1, 2], [0, 2]),
+        ([], [0, 0, 0], [1, 1], [1, 0], [-1], [0, 0, 1]),
+        ([], [0, 0, 0], [1, 1], [0, 1], [-1], [0, 1, 1]),
+        ([], [0, 0], [0], [0], [], [0]),
+        ([], [0, 0], [1], [0], [-1], [0, 1]),
+        ([], [0, 0], [1], [1], [], [0, 0]),
+        ([1], [0, 0, 1], [1, 1], [0, 1], [-1, 1], [0, 1, 2]),
+        ([1], [0, 0, 1], [1, 1], [1, 0], [-1], [0, 0, 1]),
+        ([0, 1, 2, 3, 4, 5, 6], [0, 2, 4, 7], [0, 1, 1], [0, 0, 1], [-1, 4, 5, 6], [0, 1, 4]),
+        ([0, 1, 2, 3, 4, 5, 6], [0, 2, 4, 7], [1, 0, 1], [0, 0, 1], [-1, 4, 5, 6], [0, 1, 4]),
+        ([0, 1, 2, 3, 4], [0, 2, 4, 5], [1, 1, 1], [1, 0, 1], [0, 1, -1, 4], [0, 2, 3, 4]),
+        ([[0, 1], [2, 3]], [0, 1, 2], [1, 1], [1, 0], [[0, 1], [-1, -1]], [0, 1, 2]),
+    ],
+)
+def test_generate_update(data, row_ptr, mask, changed, exp_data, exp_row_ptr):
+    res_data, res_row_ptr = generate_update(
+        np.asarray(data, dtype=int),
+        np.asarray(row_ptr, dtype=int),
+        np.asarray(mask, dtype=bool),
+        np.asarray(changed, dtype=bool),
+        undefined=-1,
+    )
+    assert np.array_equal(res_data, exp_data)
+    assert np.array_equal(res_row_ptr, exp_row_ptr)
+
+
+@pytest.mark.parametrize(
+    "   data,       row_ptr,      mask,      changed,   exp_data, exp_row_ptr",
+    [
+        (["bla"], [0, 1], [1], [0], ["_udf_"], [0, 1]),
+        ([], [0, 1], [1], [0], ["_udf_"], [0, 1]),
+        (["bla"], [0, 1], [1], [1], ["bla"], [0, 1]),
+        (["bla", "bli"], [0, 2], [1], [1], ["bla", "bli"], [0, 2]),
+        ([["bla", "bli"]], [0, 1], [1], [1], [["bla", "bli"]], [0, 1]),
+    ],
+)
+def test_generate_update_unicode(data, row_ptr, mask, changed, exp_data, exp_row_ptr):
+    res_data, res_row_ptr = generate_update(
+        np.asarray(data, dtype="<U8"),
+        np.asarray(row_ptr, dtype=int),
+        np.asarray(mask, dtype=bool),
+        np.asarray(changed, dtype=bool),
+        undefined="_udf_",
+    )
+    assert np.array_equal(res_data, exp_data)
+    assert np.array_equal(res_row_ptr, exp_row_ptr)

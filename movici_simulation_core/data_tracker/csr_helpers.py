@@ -1,8 +1,7 @@
 import numba
-from numba.core.types import number_domain
-from numba.np.numpy_support import type_can_asarray
-
 import numpy as np
+from numba.core.types import real_domain, complex_domain
+from numba.np.numpy_support import type_can_asarray
 
 from .numba_extensions import generated_jit
 
@@ -51,6 +50,7 @@ def update_csr_array(
     rtol=1e-05,
     atol=1e-08,
     equal_nan=False,
+    skip_value=None,
 ):
     """Update a csr array (`data` and `row_ptr`) in place with an update csr array (`upd_data`
     and `upd_row_ptr` at the locations `upd_indices`. `data` and `upd_data` must be of the same
@@ -58,6 +58,8 @@ def update_csr_array(
     `changes` output argument as an boolean array of zeros that has the length equal to the
     number of rows in of the data csr array ( `len( row_ptr)-1`). When tracking changes `rtol`,
     `atol` and `equal_nan` mean the same as in np.isclose
+
+    skip_value may be given to skip updating a row when the update row matches the skip_value
     """
     n_rows = row_ptr.size - 1
 
@@ -76,6 +78,10 @@ def update_csr_array(
     for upd_idx, pos in enumerate(upd_indices):
         old_row = get_row(data, row_ptr, pos)
         new_row = get_row(upd_data, upd_row_ptr, upd_idx)
+
+        if skip_value is not None and len(new_row) == 1 and new_row[0] == skip_value:
+            continue
+
         if changes is not None:
             is_equal = (old_row.shape == new_row.shape) and np.all(
                 isclose(old_row, new_row, rtol, atol, equal_nan)
@@ -117,6 +123,27 @@ def get_new_csr_array(row_lengths, dtype, secondary_shape):
     return data, row_ptr
 
 
+@numba.njit(cache=True)
+def generate_update(data, row_ptr, mask, changed, undefined):
+    undefined_indices = mask & ~changed
+    secondary_shape = data.shape[1:]
+    row_lengths = np.diff(row_ptr)
+    row_lengths[undefined_indices] = 1
+    upd_data, upd_row_ptr = get_new_csr_array(
+        row_lengths=row_lengths[mask],
+        dtype=data.dtype,
+        secondary_shape=secondary_shape,
+    )
+    for upd_idx, data_idx in enumerate(np.flatnonzero(mask)):
+        if changed[data_idx]:
+            val = get_row(data, row_ptr, data_idx)
+        else:
+            val = np.full((1, *secondary_shape), fill_value=undefined, dtype=data.dtype)
+        set_row(upd_data, upd_row_ptr, upd_idx, val)
+
+    return upd_data, upd_row_ptr
+
+
 @generated_jit(cache=True)
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Versatile function to determine whether two arrays, or an array and a value are close.
@@ -125,9 +152,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     this function may be slower than expected because numba may fall back to python
     mode
     """
-
-    if (getattr(a, "dtype", None) in number_domain or a in number_domain) and (
-        getattr(b, "dtype", None) in number_domain or b in number_domain
+    inexact_domain = real_domain | complex_domain
+    if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
+        getattr(b, "dtype", None) in inexact_domain or b in inexact_domain
     ):
 
         def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):

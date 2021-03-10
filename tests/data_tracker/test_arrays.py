@@ -1,7 +1,6 @@
 import numpy as np
 import pytest
 
-
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray, TrackedArray
 
 
@@ -89,18 +88,19 @@ def test_update_csr_array(array, updates, indices, expected):
             [0, 2],
             TrackedCSRArray(np.array([1, 3, 3, 3]), np.array([0, 1, 4])),
         ),
+        (
+            TrackedCSRArray(
+                np.array([1, 2, 3]),
+                np.array([0, 1, 3]),
+            ),
+            [False, True],
+            TrackedCSRArray(np.array([2, 3]), np.array([0, 2])),
+        ),
     ],
 )
 def test_slice_csr_array(csr, indices, expected):
     result = csr.slice(indices)
     assert_equal_csr_arrays(expected, result)
-
-
-def test_increase_string_dtype():
-    csr = TrackedCSRArray(np.array(["string"]), np.array([0, 1]))
-    upd = TrackedCSRArray(np.array(["longer_string"]), [0, 1])
-    csr.update(upd, np.array([0]))
-    assert_equal_csr_arrays(csr, upd)
 
 
 def test_update_with_smaller_string():
