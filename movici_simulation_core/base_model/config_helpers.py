@@ -9,13 +9,10 @@ from ..data_tracker.property import PropertySpec, DataType
 
 def to_spec(prop: t.Type[dm.Property]):
     dtype_map = {
-        np.bool: bool,
-        np.float64: float,
-        np.int32: int,
-        str: str,
-        bool: bool,
-        float: float,
-        int: int,
+        np.dtype("float64"): float,
+        np.dtype("int32"): int,
+        np.dtype("int8"): bool,
+        np.dtype("<U"): str,
     }
 
     return PropertySpec(
@@ -32,7 +29,7 @@ def _get_property_mapping(pd, rv=None) -> t.Dict:
         if isinstance(obj, type):
             if issubclass(obj, dm.Component):
                 _get_property_mapping(obj, rv)
-            if issubclass(obj, dm.Property):
+            if issubclass(obj, dm.Property) and obj is not dm.Property:
                 rv[(obj.component_name, obj.property_name)] = to_spec(obj)
     return rv
 
