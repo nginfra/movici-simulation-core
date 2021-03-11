@@ -212,6 +212,11 @@ class UniformProperty(Property):
         value = ensure_uniform_data(value)
         self._data = TrackedArray(value)
 
+    def __len__(self):
+        if self.array is not None:
+            return self.array.shape[0]
+        return 0
+
     def __getitem__(self, item):
         return self.array[item]
 
@@ -304,6 +309,11 @@ class CSRProperty(Property):
     @csr.setter
     def csr(self, value):
         self._data = ensure_csr_data(value)
+
+    def __len__(self):
+        if self.csr is not None:
+            return self.csr.row_ptr[-1]
+        return 0
 
     def update(
         self,

@@ -306,3 +306,17 @@ def test_doesnt_overwrite_unicode_csr_property_with_undefined():
     prop.csr = TrackedCSRArray(np.array(["bla"]), np.array([0, 1]))
     prop.update(TrackedCSRArray(np.array([str_undefined]), [0, 1]), [0])
     assert not any(prop.is_undefined())
+
+
+@pytest.mark.parametrize(
+    "prop,expected",
+    [
+        (create_empty_property(data_type=DataType(int, (), False), length=1), 1),
+        (create_empty_property(data_type=DataType(int, (), False), length=2), 2),
+        (create_empty_property(data_type=DataType(int, (2,), False), length=3), 3),
+        (create_empty_property(data_type=DataType(int, (2,), True), length=3), 3),
+        (create_empty_property(data_type=DataType(int, (), True), length=3), 3),
+    ],
+)
+def test_property_length(prop, expected):
+    assert len(prop) == expected
