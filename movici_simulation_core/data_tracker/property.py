@@ -210,7 +210,7 @@ class UniformProperty(Property):
     @array.setter
     def array(self, value):
         value = ensure_uniform_data(value)
-        self._data = TrackedArray(value)
+        self._data = value
 
     def __len__(self):
         if self.array is not None:
@@ -256,6 +256,8 @@ class UniformProperty(Property):
 
     def is_special(self):
         self.has_data_or_raise()
+        if self.options.special is None:
+            return np.zeros_like(self.array, dtype=np.bool)
         return np.isclose(
             self.array,
             self.options.special,
@@ -331,6 +333,8 @@ class CSRProperty(Property):
 
     def is_special(self):
         self.has_data_or_raise()
+        if self.options.special is None:
+            return np.zeros_like(self.csr.data, dtype=np.bool)
         return np.isclose(
             self.csr.data,
             self.options.special,
@@ -448,14 +452,14 @@ def convert_nested_list_to_csr(nested_list: t.List[t.List[object]], dtype: np.dt
 
 def ensure_uniform_data(
     value: t.Union[dict, np.ndarray, list], data_type: t.Optional[DataType] = None
-) -> np.ndarray:
+) -> TrackedArray:
     if isinstance(value, (np.ndarray, list)):
-        return np.asarray(value, dtype=getattr(data_type, "np_type", None))
+        return TrackedArray(np.asarray(value, dtype=getattr(data_type, "np_type", None)))
 
     if isinstance(value, dict) and "data" in value:
         if value.keys() & {"row_ptr", "indptr", "ind_ptr"}:
             raise TypeError("You're trying assign a CSR array to a uniform array property")
-        return value["data"]
+        return TrackedArray(value["data"])
 
     raise TypeError(f"Cannot read value of type {type(value)} as valid input")
 

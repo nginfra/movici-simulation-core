@@ -320,3 +320,44 @@ def test_doesnt_overwrite_unicode_csr_property_with_undefined():
 )
 def test_property_length(prop, expected):
     assert len(prop) == expected
+
+
+def test_uniform_property_has_tracked_array():
+    prop = UniformProperty([1, 2, 3], data_type=int_data_type)
+    assert isinstance(prop.array, TrackedArray)
+
+
+@pytest.mark.parametrize(
+    "prop",
+    [
+        (create_empty_property(data_type=DataType(int, (), False), length=1)),
+        (create_empty_property(data_type=DataType(int, (), False), length=2)),
+        (create_empty_property(data_type=DataType(int, (2,), False), length=3)),
+        (
+            create_empty_property(
+                data_type=DataType(
+                    int,
+                    (
+                        2,
+                        2,
+                    ),
+                    False,
+                ),
+                length=1,
+            )
+        ),
+    ],
+)
+def test_uniform_is_special_returns_false_if_not_set(prop):
+    assert np.array_equal(prop.is_special(), np.zeros(prop.array.shape))
+
+
+@pytest.mark.parametrize(
+    "prop",
+    [
+        (create_empty_property(data_type=DataType(int, (), True), length=3)),
+        (create_empty_property(data_type=DataType(int, (2,), True), length=3)),
+    ],
+)
+def test_csr_is_special_returns_false_if_not_set(prop):
+    assert np.array_equal(prop.is_special(), np.zeros(prop.csr.data.shape))

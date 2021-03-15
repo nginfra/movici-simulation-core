@@ -56,7 +56,7 @@ class TrackedArray(np.ndarray):
             return self._changed
 
         if self._curr is None:
-            rv = np.zeros_like(self.data)
+            rv = np.zeros_like(self.data, dtype=bool)
 
         elif np.issubdtype(self.dtype, np.floating):
             rv = ~np.isclose(
