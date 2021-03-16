@@ -72,7 +72,6 @@ class PolygonEntity(GeometryEntity):
 
 class GeometryDataset(DataSet):
     dataset_type = ""
-    geometry: GeometryCollection
     data_entity_types: List[Type[DataEntityHandler]] = []
 
     @abstractmethod

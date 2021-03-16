@@ -37,7 +37,11 @@ setup(
     author_email="pelle.koster@nginfra.nl",
     url="http://www.movici.nl",
     license=LICENSE,
-    scripts=["bin/run_time_window_status.py", "bin/run_overlap_status.py"],
+    scripts=[
+        "bin/run_time_window_status.py",
+        "bin/run_overlap_status.py",
+        "bin/run_area_aggregation.py",
+    ],
     packages=find_packages(),
     install_requires=REQUIREMENTS,
     extras_require=EXTRA_REQUIREMENTS,

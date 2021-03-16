@@ -1,7 +1,6 @@
-import collections
-from typing import Dict, Iterable, Optional
-
 import pytest
+
+from ..conftest import get_dataset
 
 
 @pytest.fixture
@@ -33,20 +32,12 @@ def maintenance_agenda(maintenance_agenda_dataset_name):
 
 
 @pytest.fixture
-def mv_network_name():
-    return "an_mv_network"
-
-
-@pytest.fixture
 def mv_network(mv_network_name):
-    return {
-        "version": 3,
-        "name": mv_network_name,
-        "type": "mv_network",
-        "display_name": "",
-        "epsg_code": 28992,
-        "general": {"enum": {"label": ["distribution", "industrial"]}},
-        "data": {
+    return get_dataset(
+        name=mv_network_name,
+        ds_type="mv_network",
+        general={"enum": {"label": ["distribution", "industrial"]}},
+        data={
             "electrical_node_entities": {
                 "id": [0, 2, 4, 6, 8],
                 "reference": ["499", "500", "501", "502", "503"],
@@ -65,24 +56,15 @@ def mv_network(mv_network_name):
                 },
             },
         },
-    }
-
-
-@pytest.fixture
-def road_network_name():
-    return "a_road_network"
+    )
 
 
 @pytest.fixture
 def road_network(road_network_name):
-    return {
-        "version": 3,
-        "name": road_network_name,
-        "type": "random_type",
-        "display_name": "",
-        "epsg_code": 28992,
-        "general": None,
-        "data": {
+    return get_dataset(
+        name=road_network_name,
+        ds_type="random_type",
+        data={
             "road_segment_entities": {
                 "id": [1, 2, 3],
                 "reference": ["100", "101", "102"],
@@ -95,30 +77,4 @@ def road_network(road_network_name):
                 },
             }
         },
-    }
-
-
-@pytest.fixture
-def get_entity_update():
-    def _factory(
-        ids: Iterable, properties: Iterable, key_name: str, component_name: Optional[str] = None
-    ) -> Dict:
-        if not isinstance(ids, collections.Iterable):
-            ids = [ids]
-        entities = {"id": list(ids)}
-        for key, prop, component in [
-            (key_name, properties, component_name),
-        ]:
-            if prop is not None:
-                if not isinstance(prop, collections.Iterable):
-                    prop = [prop for _ in ids]
-                if component is None:
-                    entities[key] = prop
-                else:
-                    if component not in entities:
-                        entities[component] = {}
-                    entities[component][key] = prop
-
-        return entities
-
-    return _factory
+    )

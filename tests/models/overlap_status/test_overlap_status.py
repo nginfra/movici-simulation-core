@@ -1,8 +1,6 @@
-import collections
-from typing import Iterable, Optional, Dict
+from typing import Iterable, Dict
 
 import pytest
-
 from model_engine import testing
 from movici_simulation_core.models.overlap_status.model import Model
 
@@ -13,42 +11,16 @@ def time_scale():
 
 
 @pytest.fixture
-def model_name():
-    return "test_overlap_status"
-
-
-@pytest.fixture
-def config(
-    model_config,
-    init_data,
-    time_scale,
-):
-    return {
-        "config": {
-            "version": 4,
-            "simulation_info": {
-                "reference_time": 1_577_833_200,
-                "start_time": 0,
-                "time_scale": time_scale,
-                "duration": 730,
-            },
-            "models": [model_config],
-        },
-        "init_data": init_data,
-    }
-
-
-@pytest.fixture
 def init_data(
     water_network_name,
-    water_network,
     road_network_name,
-    road_network,
     mv_network_name,
-    mv_network,
     knotweed_dataset_name,
-    knotweed_dataset,
     overlap_dataset_name,
+    water_network,
+    road_network,
+    mv_network,
+    knotweed_dataset,
     overlap_dataset,
 ):
     return [
@@ -99,6 +71,8 @@ class TestOverlapStatus:
         mv_network_name,
         road_network_name,
         time_scale,
+        get_entity_update,
+        get_overlap_update,
     ):
         scenario = {
             "updates": [
@@ -315,6 +289,8 @@ class TestOverlapStatus:
         mv_network,
         road_network,
         time_scale,
+        get_entity_update,
+        get_overlap_update,
     ):
 
         del water_network["data"]["water_pipe_entities"]["reference"]
@@ -529,6 +505,7 @@ class TestOverlapStatus:
         mv_network_name,
         road_network_name,
         time_scale,
+        get_entity_update,
     ):
         del config["config"]["models"][0]["from_check_status_property"]
         config["config"]["models"][0]["to_check_status_properties"][0] = None
@@ -720,6 +697,8 @@ class TestOverlapStatus:
         mv_network_name,
         road_network_name,
         time_scale,
+        get_entity_update,
+        get_overlap_update,
     ):
         scenario = {
             "updates": [
@@ -920,6 +899,8 @@ class TestOverlapStatus:
         water_network_name,
         knotweed_dataset_name,
         time_scale,
+        get_entity_update,
+        get_overlap_update,
     ):
 
         config["config"]["models"][0]["to_entity_groups"] = [
@@ -1027,27 +1008,12 @@ class TestOverlapStatus:
         )
 
 
-def get_entity_update(
-    ids: Iterable, properties: Iterable, key_name: str, component_name: Optional[str] = None
-) -> Dict:
-    if not isinstance(ids, collections.Iterable):
-        ids = [ids]
-    entities = {"id": list(ids)}
-    for key, prop, component in [
-        (key_name, properties, component_name),
-    ]:
-        if prop is not None:
-            if not isinstance(prop, collections.Iterable):
-                prop = [prop for _ in ids]
-            if component is None:
-                entities[key] = prop
-            else:
-                if component not in entities:
-                    entities[component] = {}
-                entities[component][key] = prop
+@pytest.fixture
+def get_overlap_update(get_entity_update):
+    def _factory(
+        ids: Iterable,
+        properties: Iterable,
+    ) -> Dict:
+        return get_entity_update(ids, properties, component_name=None, key_name="overlap.active")
 
-    return entities
-
-
-def get_overlap_update(ids: Iterable, properties: Iterable) -> Dict:
-    return get_entity_update(ids, properties, component_name=None, key_name="overlap.active")
+    return _factory
