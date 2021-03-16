@@ -106,7 +106,7 @@ class TrackedCSRArray:
         if not equal_str_dtypes(self.data, updates.data):
             updates = updates.astype(self.data.dtype)
 
-        changes = np.zeros((self.row_ptr.size - 1,), dtype=np.bool)
+        changes = np.zeros((self.row_ptr.size - 1,), dtype=bool)
 
         self.data, self.row_ptr = update_csr_array(
             data=self.data,
@@ -128,7 +128,7 @@ class TrackedCSRArray:
 
     def slice(self, indices):
         indices = np.asarray(indices)
-        if indices.dtype.type == np.bool_:
+        if indices.dtype.type in [bool, np.bool_]:
             indices = np.flatnonzero(indices)
         slice_data, slice_row_ptr = slice_csr_array(
             self.data, self.row_ptr, np.asarray(indices, dtype=int)
@@ -168,7 +168,7 @@ class TrackedCSRArray:
         )
 
     def reset(self):
-        self.changed = np.zeros((self.size,), dtype=np.bool_)
+        self.changed = np.zeros((self.size,), dtype=bool)
 
 
 TrackedArrayType = Union[TrackedArray, TrackedCSRArray]

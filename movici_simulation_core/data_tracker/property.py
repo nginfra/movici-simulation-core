@@ -257,7 +257,7 @@ class UniformProperty(Property):
     def is_special(self):
         self.has_data_or_raise()
         if self.options.special is None:
-            return np.zeros_like(self.array, dtype=np.bool)
+            return np.zeros_like(self.array, dtype=bool)
         return np.isclose(
             self.array,
             self.options.special,
@@ -334,7 +334,7 @@ class CSRProperty(Property):
     def is_special(self):
         self.has_data_or_raise()
         if self.options.special is None:
-            return np.zeros_like(self.csr.data, dtype=np.bool)
+            return np.zeros_like(self.csr.data, dtype=bool)
         return np.isclose(
             self.csr.data,
             self.options.special,

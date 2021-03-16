@@ -13,7 +13,7 @@ def determine_new_unicode_dtype(
     is the first power of 2 that fits the dtype of `b`
     """
     newsize = None
-    if not (np.issubdtype(a.dtype, np.unicode) or np.issubdtype(a.dtype, np.bytes_)):
+    if not (np.issubdtype(a.dtype, str) or np.issubdtype(a.dtype, bytes)):
         return newsize
     newsize = a.dtype.itemsize // 4
     if isinstance(b, str) and len(b) > (a.dtype.itemsize // 4):
@@ -30,5 +30,5 @@ def next_power_of_two(val, max_val=2 ** 8):
 
 def equal_str_dtypes(a: np.ndarray, b: np.ndarray):
     return (
-        np.issubdtype(a.dtype, np.unicode) or np.issubdtype(a.dtype, np.bytes_)
+        np.issubdtype(a.dtype, str) or np.issubdtype(a.dtype, bytes)
     ) and b.dtype.itemsize == a.dtype.itemsize
