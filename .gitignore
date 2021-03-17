@@ -33,3 +33,7 @@ pylint.txt
 bandit-report.json
 
 secrets.yaml
+
+# tests tmp
+tests/models/traffic_assignment_calculation/project_dir/
+

@@ -41,6 +41,7 @@ setup(
         "bin/run_time_window_status.py",
         "bin/run_overlap_status.py",
         "bin/run_area_aggregation.py",
+        "bin/run_traffic_assignment_calculation.py",
     ],
     packages=find_packages(),
     install_requires=REQUIREMENTS,
