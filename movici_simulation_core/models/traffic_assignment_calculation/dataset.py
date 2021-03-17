@@ -15,13 +15,14 @@ from model_engine.dataset_manager.property_definition import (
     Transport_PassengerDemand,
     Transport_CargoDemand,
 )
+from movici_simulation_core.base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import field, INIT, SUB, PUB
-from movici_simulation_core.base_model.config_helpers import to_spec
 
 
 class SegmentEntity(EntityGroup):
-    linestring = field(to_spec(ShapeProperties.Linestring3d), flags=INIT)
+    linestring = field(to_spec(ShapeProperties.Linestring2d), flags=INIT)
+
     from_node_id = field(to_spec(LineProperties.FromNodeId), flags=INIT)
     to_node_id = field(to_spec(LineProperties.ToNodeId), flags=INIT)
     direction = field(to_spec(Transport_Direction), flags=INIT)
