@@ -42,7 +42,7 @@ def init_data(
 
 @pytest.fixture
 def target_entity_group(area_dataset_name):
-    return [area_dataset_name, "area_entities"]
+    return [[area_dataset_name, "area_entities"]]
 
 
 def create_model_config(
@@ -452,7 +452,7 @@ def valid_prop():
 
 
 def valid_target_entity_group():
-    return ["bla", "area_entities"]
+    return [["bla", "area_entities"]]
 
 
 def valid_source_entity_group():
@@ -490,7 +490,13 @@ class TestModelInputChecking:
             (
                 valid_prop(),
                 valid_prop(),
-                ["more", "than", "two"],
+                [["more", "than", "two"]],
+                "exactly 1 dataset_name",
+            ),
+            (
+                valid_prop(),
+                valid_prop(),
+                ["single", "list"],
                 "exactly 1 dataset_name",
             ),
         ],

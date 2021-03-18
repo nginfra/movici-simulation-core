@@ -63,7 +63,7 @@ class Model(TrackedBaseModel):
         target_entity,
         target_props,
     ):
-        target_ds_name, target_entity_name = target_entity
+        target_ds_name, target_entity_name = target_entity[0]
         self.target_entity = state.register_entity_group(
             dataset_name=target_ds_name, entity=PolygonEntity(name=target_entity_name)
         )
@@ -118,9 +118,10 @@ class Model(TrackedBaseModel):
 
     @staticmethod
     def check_input_lengths(config):
-        if len(config["target_entity_group"]) != 2:
+        if len(config["target_entity_group"]) != 1 or len(config["target_entity_group"][0]) != 2:
             raise ValueError(
-                "target_entity_group should have exactly 1 dataset_name and entity_group pair"
+                "target_entity_group should have exactly 1 "
+                "dataset_name and entity_group pair in a list"
             )
         keys = [
             "source_properties",
