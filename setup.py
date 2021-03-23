@@ -26,7 +26,14 @@ README = read_file_or_empty_str("README.md")
 LICENSE = read_file_or_empty_str("LICENSE")
 VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
-EXTRA_REQUIREMENTS = {"models": ["model-engine>=1.1.8"]}
+EXTRA_REQUIREMENTS = {
+    "models": [
+        "model-engine>=1.1.8",
+        "shapely>=1.7.1",
+        "aequilibrae>=0.7.2",
+        "pyproj>=3.0.1",
+    ]
+}
 
 setup(
     name="movici-simulation-core",

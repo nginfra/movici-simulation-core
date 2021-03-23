@@ -77,7 +77,7 @@ class TrackedArray(np.ndarray):
 
     def astype(self, dtype, order="K", casting="unsafe", subok=True, copy=True):
         rv = super().astype(dtype, order=order, casting=casting, subok=subok, copy=copy)
-        if self._curr:
+        if self._curr is not None:
             rv._curr = self._curr.astype(
                 dtype, order=order, casting=casting, subok=subok, copy=copy
             )
