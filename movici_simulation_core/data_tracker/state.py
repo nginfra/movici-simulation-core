@@ -21,6 +21,7 @@ from .property import (
 from .types import PropertyIdentifier, EntityData, ComponentData, NumpyPropertyData, ValueType
 
 PropertyDict = t.Dict[PropertyIdentifier, PropertyObject]
+EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)
 
 
 class TrackedState:
@@ -44,13 +45,13 @@ class TrackedState:
         return [self.register_entity_group(dataset_name, entity) for entity in entities]
 
     def register_entity_group(
-        self, dataset_name, entity: t.Union[t.Type[EntityGroup], EntityGroup]
-    ) -> EntityGroup:
+        self, dataset_name, entity: t.Union[t.Type[EntityGroupT], EntityGroupT]
+    ) -> EntityGroupT:
         if isinstance(entity, type) and issubclass(entity, EntityGroup):
             entity = entity()
         if entity.__entity_name__ is None:
             raise ValueError("EntityGroup must have __entity_name__ defined")
-        for identifier, field in entity.properties.items():
+        for field in entity.all_properties().values():
             self.register_property(
                 dataset_name=dataset_name,
                 entity_name=entity.__entity_name__,
@@ -113,7 +114,7 @@ class TrackedState:
             )
 
     def all_properties(self):
-        return {identifier: prop for _, _, identifier, prop in self.iter_properties()}
+        return [prop for _, _, identifier, prop in self.iter_properties()]
 
     def iter_entities(self) -> t.Iterable[t.Tuple[str, str, PropertyDict]]:
         yield from (
@@ -260,7 +261,7 @@ class EntityUpdateHandler:
         for prop in self.properties.values():
             prop.initialize(len(self.index))
         self._apply_update(data)
-        reset_tracked_changes(self.properties)
+        reset_tracked_changes(self.properties.values())
 
     def _apply_update(self, entity_data: EntityData):
         ids = entity_data["id"]["data"]
@@ -299,14 +300,19 @@ class EntityUpdateHandler:
         return all_changes
 
 
-def filter_props(properties: PropertyDict, flags: int = 0) -> PropertyDict:
+FilterPropT = t.TypeVar("FilterPropT", t.Iterable[PropertyObject], PropertyDict)
+
+
+def filter_props(properties: FilterPropT, flags: int = 0) -> FilterPropT:
     """Return properties where any of the `flags` match one of the `Property.flags`"""
-    return {key: prop for key, prop in properties.items() if prop.flags & flags}
+    if isinstance(properties, dict):
+        return {key: prop for key, prop in properties.items() if prop.flags & flags}
+    return [prop for prop in properties if prop.flags & flags]
 
 
-def reset_tracked_changes(properties: PropertyDict, flags: t.Optional[int] = None):
+def reset_tracked_changes(properties: t.Iterable[PropertyObject], flags: t.Optional[int] = None):
     props = filter_props(properties, flags) if flags is not None else properties
-    for prop in props.values():
+    for prop in props:
         if prop.has_data():
             prop.reset()
 

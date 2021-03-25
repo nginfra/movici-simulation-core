@@ -223,8 +223,8 @@ def tracked_entity(state, dataset_name):
     state.receive_update(
         {dataset_name: {entity.__entity_name__: dataset_data_to_numpy({"id": [1, 2, 3]})}}
     )
-    for identifier in entity.properties:
-        prop = entity.get_property(identifier)
+    for field in entity.properties.values():
+        prop = entity.get_property(field.key)
         prop[0] = 1
         assert np.any(prop.changed)
 
@@ -528,3 +528,68 @@ def test_can_hash_entity_groups_with_state(
 )
 def test_can_hash_detached_entity_groups(e1, e2, length):
     assert len({e1, e2}) == length
+
+
+def test_resets_changes_with_recurring_properties():
+    state = TrackedState()
+    e1 = state.register_entity_group("dataset", MyEntity("e1"))
+    e2 = state.register_entity_group("dataset", MyEntity("e2"))
+    e1.prop.initialize(1)
+    e2.prop.initialize(1)
+    e1.prop[0] = 1
+    e2.prop[0] = 1
+    assert np.array_equal(e1.prop.changed, [True])
+    assert np.array_equal(e2.prop.changed, [True])
+    state.reset_tracked_changes(PUB)
+    assert np.array_equal(e1.prop.changed, [False])
+    assert np.array_equal(e2.prop.changed, [False])
+
+
+def test_can_inherit_properties():
+    class Derived(MyEntity):
+        also_prop = PropertyField(
+            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        )
+
+    assert {prop.key for prop in Derived.all_properties().values()} == {
+        (None, "prop"),
+        (None, "also_prop"),
+    }
+
+
+def test_can_override_properties():
+    class Derived(MyEntity):
+        prop = PropertyField(
+            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        )
+
+    assert [prop.key for prop in Derived.all_properties().values()] == [(None, "also_prop")]
+
+
+def test_cascading_inheritance():
+    class Derived(MyEntity):
+        prop = PropertyField(
+            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        )
+
+    class DoubleDerived(Derived):
+        other_prop = PropertyField(
+            spec=PropertySpec("other_prop", data_type=DataType(int, (), False)), flags=PUB
+        )
+
+    assert {prop.key for prop in DoubleDerived.all_properties().values()} == {
+        (None, "also_prop"),
+        (None, "other_prop"),
+    }
+
+
+def test_can_duplicate_prop():
+    class Derived(MyEntity):
+        prop_2 = PropertyField(
+            spec=PropertySpec("prop", data_type=DataType(int, (), False)), flags=PUB
+        )
+
+    assert [prop.key for prop in Derived.all_properties().values()] == [
+        (None, "prop"),
+        (None, "prop"),
+    ]

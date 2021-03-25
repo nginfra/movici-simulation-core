@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import itertools
 import typing as t
 
 import numpy as np
@@ -13,7 +15,7 @@ if t.TYPE_CHECKING:
 
 class EntityGroup:
     state: StateProxy = None
-    properties: t.Dict[PropertyIdentifier, PropertyField] = {}
+    properties: t.Dict[str, PropertyField] = {}
     __entity_name__: t.Optional[str] = None
 
     def __init__(self, name: str = None):
@@ -22,12 +24,9 @@ class EntityGroup:
 
     def __init_subclass__(cls, **kwargs):
         cls.__entity_name__ = kwargs.get("name", cls.__entity_name__)
-        fields = tuple(obj for obj in vars(cls).values() if isinstance(obj, PropertyField))
-        cls.properties = {}
-        for field in fields:
-            if field.key in cls.properties:
-                raise ValueError(f"Duplicate property for EntityGroup '{field.full_name}'")
-            cls.properties[field.key] = field
+        cls.properties = {
+            key: value for key, value in vars(cls).items() if isinstance(value, PropertyField)
+        }
 
     def __len__(self):
         return len(self.index)
@@ -53,6 +52,11 @@ class EntityGroup:
 
     def get_property(self, identifier: PropertyIdentifier):
         return self.state.get_property(identifier)
+
+    @classmethod
+    def all_properties(cls):
+        bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
+        return dict(itertools.chain.from_iterable(b.properties.items() for b in reversed(bases)))
 
     @property
     def index(self) -> Index:
