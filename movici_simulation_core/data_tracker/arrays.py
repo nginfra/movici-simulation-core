@@ -26,12 +26,14 @@ class TrackedArray(np.ndarray):
         arr.rtol = rtol
         arr.atol = atol
         arr.equal_nan = equal_nan
+        if isinstance(input_array, TrackedArray):
+            arr._curr = input_array._curr
         return arr
 
     def __array_finalize__(self, obj):
         # __array_finalize__ is the numpy version of __init__
-        self._curr = None
         if obj is not None:
+            self._curr = getattr(obj, "_curr", None)
             self.atol = getattr(obj, "atol", 1e-05)
             self.rtol = getattr(obj, "rtol", 1e-08)
             self.equal_nan = getattr(obj, "equal_nan", False)
@@ -48,7 +50,7 @@ class TrackedArray(np.ndarray):
     def _start_tracking(self):
         self._changed = None
         if self._curr is None:
-            self._curr = self.copy()
+            self._curr = np.array(self)
 
     @property
     def changed(self):

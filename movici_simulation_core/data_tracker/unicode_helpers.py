@@ -20,8 +20,10 @@ def determine_new_unicode_dtype(
         newsize = next_power_of_two(len(b), max_val)
     elif isinstance(b, np.ndarray) and b.dtype.itemsize > a.dtype.itemsize:
         newsize = next_power_of_two(b.dtype.itemsize // 4, max_val)
-
-    return np.dtype(f"<U{newsize}")
+    new_dtype = np.dtype(f"<U{newsize}")
+    if new_dtype != a.dtype:
+        return new_dtype
+    return None
 
 
 def next_power_of_two(val, max_val=2 ** 8):

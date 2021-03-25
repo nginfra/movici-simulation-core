@@ -453,8 +453,11 @@ def convert_nested_list_to_csr(nested_list: t.List[t.List[object]], dtype: np.dt
 def ensure_uniform_data(
     value: t.Union[dict, np.ndarray, list], data_type: t.Optional[DataType] = None
 ) -> TrackedArray:
+    if isinstance(value, TrackedArray):
+        return value
+
     if isinstance(value, (np.ndarray, list)):
-        return TrackedArray(np.asarray(value, dtype=getattr(data_type, "np_type", None)))
+        return TrackedArray(np.asanyarray(value, dtype=getattr(data_type, "np_type", None)))
 
     if isinstance(value, dict) and "data" in value:
         if value.keys() & {"row_ptr", "indptr", "ind_ptr"}:
