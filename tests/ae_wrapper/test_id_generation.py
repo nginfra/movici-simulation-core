@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from movici_simulation_core.models.traffic_assignment_calculation.id_generator import IdGenerator
+from movici_simulation_core.ae_wrapper.id_generator import IdGenerator
 
 
 @pytest.fixture

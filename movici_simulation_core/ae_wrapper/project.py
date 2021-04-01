@@ -3,14 +3,29 @@ from collections import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple, Dict, Optional
+from types import TracebackType
+from typing import Tuple, Dict, Optional, List, Type
 
 import numpy as np
-from aequilibrae import Project, Graph, AequilibraeMatrix, TrafficAssignment, TrafficClass
+from aequilibrae import (
+    Project,
+    Graph,
+    AequilibraeMatrix,
+    TrafficAssignment,
+    TrafficClass,
+    PathResults,
+    NetworkSkimming,
+)
 from pyproj import Transformer
 
-from .collections import NodeCollection, LinkCollection, AssignmentResultCollection
-from .id_generator import IdGenerator
+from movici_simulation_core.ae_wrapper.collections import (
+    NodeCollection,
+    LinkCollection,
+    AssignmentResultCollection,
+    GraphPath,
+)
+from movici_simulation_core.ae_wrapper.id_generator import IdGenerator
+from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
 
 EPSILON = 1e-12
 
@@ -37,9 +52,8 @@ class ProjectWrapper:
     This class wraps Aequilibrae methods with sensible methods and bugfixes
     """
 
-    # TODO(baris) maybe use contextmanager
     def __init__(self, project_dir: str, remove_existing: bool = False) -> None:
-        project_dir = Path(project_dir, "project_dir")
+        project_dir = Path(project_dir, "ae_project_dir")
         if remove_existing and project_dir.exists():
             shutil.rmtree(project_dir)
         self.project_dir = project_dir
@@ -54,9 +68,13 @@ class ProjectWrapper:
         #   so we have to map them to new ids.
         self._node_id_generator = IdGenerator()
         self._link_id_generator = IdGenerator()
+        self.point_generator = PointGenerator()
 
-    def __del__(self) -> None:
-        self.close()
+    def __enter__(self) -> "ProjectWrapper":
+        return self
+
+    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: TracebackType) -> None:
+        self._project.close()
 
     def close(self) -> None:
         try:
@@ -110,7 +128,7 @@ class ProjectWrapper:
                 self._get_linestring_string(linestring, from_node, to_node, transformer)
             )
 
-        directions = [1 if d else -1 for d in links.directions]
+        directions = links.directions.tolist()
         max_speeds = links.max_speeds.tolist()
         capacities = links.capacities.tolist()
 
@@ -144,7 +162,7 @@ class ProjectWrapper:
         if not results:
             return LinkCollection()
         link_id, a_node, b_node, direction = zip(*results)
-        direction = np.array([True if d == 1 else False for d in direction], dtype=bool)
+        direction = np.array(direction)
         link_id = self._link_id_generator.query_original_ids(link_id)
         a_node = self._node_id_generator.query_original_ids(a_node)
         b_node = self._node_id_generator.query_original_ids(b_node)
@@ -172,7 +190,7 @@ class ProjectWrapper:
         linestring_str = ",".join(linestring2d)
         return f"LINESTRING({linestring_str})"
 
-    def add_free_flow_times(self) -> np.ndarray:
+    def calculate_free_flow_times(self) -> np.ndarray:
         """
         Aequilibrae calculates distances automatically,
          but does not compute free flow time.
@@ -188,24 +206,35 @@ class ProjectWrapper:
             free_flow_times.append(time)
             ids.append(link_id)
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute(
-                "ALTER TABLE links ADD COLUMN free_flow_time REAL(32)"
-            )  # TODO(baris) add column only if not exists, need workaround for sqlite
-
-            cursor.executemany(
-                "UPDATE links SET free_flow_time=? WHERE link_id=?", zip(free_flow_times, ids)
-            )
         return np.array(free_flow_times)
 
-    def build_graph(self) -> Graph:
-        self.add_free_flow_times()
+    def add_column(self, column_name: str, values: Sequence) -> None:
+        with closing(self._db.cursor()) as cursor:
+            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32)")
+
+            cursor.execute("SELECT link_id FROM links")
+            ids = (row[0] for row in cursor.fetchall())
+
+            if isinstance(values, np.ndarray):
+                values = values.tolist()
+
+            cursor.executemany(
+                "UPDATE links SET free_flow_time=? WHERE link_id=?", zip(values, ids)
+            )
+
+    @property
+    def _graph(self) -> Graph:
+        return self._project.network.graphs[TransportMode.CAR]
+
+    def build_graph(
+        self, cost_field, skim_fields: Optional[List[str]] = None, block_centroid_flows=True
+    ) -> Graph:
         self._project.network.build_graphs(modes=[TransportMode.CAR])
-        graph = self._project.network.graphs[TransportMode.CAR]
-        graph.set_graph("free_flow_time")
-        graph.set_blocked_centroid_flows(
-            False
-        )  # TODO(baris) put this to True, needs changes in tests
+        graph = self._graph
+        graph.set_graph(cost_field)
+        if skim_fields:
+            graph.set_skimming(skim_fields)
+        graph.set_blocked_centroid_flows(block_centroid_flows)
         return graph
 
     def convert_od_matrix(self, od_matrix: np.ndarray, matrix_name: str) -> AequilibraeMatrix:
@@ -240,7 +269,7 @@ class ProjectWrapper:
         if parameters is None:
             parameters = AssignmentParameters()
 
-        graph = self._project.network.graphs[TransportMode.CAR]
+        graph = self._graph
 
         assignment = TrafficAssignment()
 
@@ -278,3 +307,39 @@ class ProjectWrapper:
             volume_to_capacity=results.VOC_max,
             passenger_car_unit=results.PCE_tot,
         )
+
+    def get_shortest_path(self, from_node, to_node) -> Optional[GraphPath]:
+        ae_from_node, ae_to_node = self._node_id_generator.query_new_ids(
+            [from_node, to_node]
+        ).tolist()
+
+        graph = self._graph
+        skim_fields = graph.skim_fields
+        graph.set_skimming([])
+
+        path_results = PathResults()
+        path_results.prepare(graph)
+
+        path_results.compute_path(ae_from_node, ae_from_node)
+        path_results.update_trace(ae_to_node)
+
+        ae_path_nodes, ae_path_links = path_results.path_nodes, path_results.path
+
+        graph.set_skimming(skim_fields)
+
+        if ae_path_nodes is None:
+            return None
+
+        path_nodes, path_links = (
+            self._node_id_generator.query_original_ids(ae_path_nodes),
+            self._link_id_generator.query_original_ids(ae_path_links),
+        )
+
+        return GraphPath(path_nodes, path_links)
+
+    def calculate_skims(self):
+        graph = self._graph
+        skimming = NetworkSkimming(graph)
+        skimming.execute()
+
+        return skimming.results.skims

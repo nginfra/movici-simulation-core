@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import Optional, cast, List, Sequence
+from typing import Optional, cast, List, Sequence, Union
 
 import numpy as np
 
-PointCollection = List[List[float]]
+PointCollection = Union[List[List[float]], List[np.ndarray]]
 LinestringCollection = List[List[List[float]]]
 
 
@@ -89,3 +89,9 @@ class AssignmentResultCollection:
         self.delay_factor = _get_numpy_array(delay_factor, len(self.ids))
         self.volume_to_capacity = _get_numpy_array(volume_to_capacity, len(self.ids))
         self.passenger_car_unit = _get_numpy_array(passenger_car_unit, len(self.ids))
+
+
+@dataclass
+class GraphPath:
+    nodes: np.ndarray
+    links: np.ndarray

@@ -7,6 +7,11 @@ from movici_simulation_core.data_tracker.index import Index
 
 
 class IdGenerator:
+    """
+    Since aequilibrae has a fixed structure for ids
+    we have to be able to convert between our ids and aequilibrae ids
+    """
+
     def __init__(self):
         self.index = Index()
 

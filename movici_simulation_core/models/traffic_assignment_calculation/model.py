@@ -3,16 +3,22 @@ import typing as t
 import numpy as np
 
 from model_engine import TimeStamp, Config, DataFetcher
+from movici_simulation_core.ae_wrapper.collections import (
+    NodeCollection,
+    LinkCollection,
+    AssignmentResultCollection,
+)
+from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.base_model.base import TrackedBaseModel
-from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from .collections import NodeCollection, LinkCollection, AssignmentResultCollection
+from movici_simulation_core.data_tracker.state import TrackedState
 from .dataset import (
     SegmentEntity,
     VertexEntity,
     VirtualNodeEntity,
 )
-from .project import ProjectWrapper
+from ...ae_wrapper.point_generator import PointGenerator
+from ...exceptions import NotReady
 
 
 class Model(TrackedBaseModel):
@@ -39,7 +45,7 @@ class Model(TrackedBaseModel):
             dataset_name, VertexEntity(name=entity_group_name)
         )
 
-        dataset_name, entity_group_name = config["virtual_nodes"][0]
+        dataset_name, entity_group_name = config["demand_nodes"][0]
         self.virtual_nodes = state.register_entity_group(
             dataset_name, VirtualNodeEntity(name=entity_group_name)
         )
@@ -47,19 +53,33 @@ class Model(TrackedBaseModel):
         self.project = ProjectWrapper(scenario_config.TEMP_DIR, remove_existing=True)
 
     def initialize(self, state: TrackedState):
+        self.ensure_ready()
         nodes = self._get_nodes(self.road_vertices)
+        self.project.point_generator.add_points(
+            np.stack([self.road_vertices.x.array, self.road_vertices.y.array]).T
+        )
         self.project.add_nodes(nodes)
 
         links = self._get_links(self.road_segments)
         self.project.add_links(links)
 
         virtual_nodes, virtual_links = self._get_virtual_nodes_links(
-            self.virtual_nodes, self.road_vertices, self.road_segments
+            self.virtual_nodes,
+            self.road_vertices,
+            self.road_segments,
+            self.project.point_generator,
         )
         self.project.add_nodes(virtual_nodes)
         self.project.add_links(virtual_links)
 
-        self.project.build_graph()
+        self.project.add_column("free_flow_time", self.project.calculate_free_flow_times())
+        self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
+
+    def ensure_ready(self) -> bool:
+        try:
+            return self.road_segments.linestring.is_initialized()
+        except RuntimeError as e:
+            raise NotReady(e)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
 
@@ -75,6 +95,7 @@ class Model(TrackedBaseModel):
     def shutdown(self):
         if self.project:
             self.project.close()
+            self.project = None
 
     @staticmethod
     def _get_nodes(vertices: VertexEntity) -> NodeCollection:
@@ -90,18 +111,40 @@ class Model(TrackedBaseModel):
         for i in range(len(segments.linestring.csr.row_ptr) - 1):
             geometries.append(segments.linestring.csr.get_row(i)[:2])
 
+        directions = []
+        for layout in segments.layout:
+            forward = layout[0] > 0
+            backward = layout[1] > 0
+            other = np.any(layout[2:] > 0)
+
+            direction = 0
+            if not other:
+                if forward and not backward:
+                    direction = 1
+                if backward and not forward:
+                    direction = -1
+
+            directions.append(direction)
+
+        lanes = np.sum(segments.layout, axis=1)
+
         return LinkCollection(
             ids=segments.index.ids,
             from_nodes=segments.from_node_id.array,
             to_nodes=segments.to_node_id.array,
-            directions=segments.direction.array,
+            directions=directions,
             geometries=geometries,
             max_speeds=segments.max_speed.array / 3.6,  # convert km/h to m/s
-            capacities=segments.capacity.array,
+            capacities=segments.capacity.array * lanes,
         )
 
     @staticmethod
-    def _get_virtual_nodes_links(virtual_nodes, vertices, segments):
+    def _get_virtual_nodes_links(
+        virtual_nodes: VirtualNodeEntity,
+        vertices: VertexEntity,
+        segments: SegmentEntity,
+        point_generator: PointGenerator,
+    ) -> t.Tuple[NodeCollection, LinkCollection]:
         # TODO(baris) refactor this function, maybe numpyfy
         current_link_id = np.max(segments.index.ids) + 1
         link_ids = []
@@ -120,29 +163,21 @@ class Model(TrackedBaseModel):
             connected_node_geometries = np.stack([xs, ys]).T
 
             geometry = np.mean(connected_node_geometries, axis=0)
-            if len(xs == 1):
-                geometry += [
-                    0.01,
-                    0.01,
-                ]
-                # TODO(baris) I  did this to trick aequilibrae
-                #  geometry indexing, but how to fix it?
-                #  Add +i to and origin rd coordinate,
-                #  check if it exists in set of node geometries
+            geometry = point_generator.generate_and_add(geometry)
             geometries.append(geometry)
 
             link_ids_to_add = list(
-                range(current_link_id, current_link_id + len(connected_node_geometries) * 2)
+                range(current_link_id, current_link_id + len(connected_node_geometries))
             )
-            current_link_id += len(connected_node_geometries) * 2
+            current_link_id += len(connected_node_geometries)
 
             link_ids += link_ids_to_add
             link_from_nodes += [node_id] * len(link_ids_to_add)
-            link_to_nodes += connected_node_ids.tolist() * 2
-            link_directions += [i % 2 == 0 for i in range(len(link_ids_to_add))]
+            link_to_nodes += connected_node_ids.tolist()
+            link_directions += [0] * len(link_ids_to_add)
 
             for connected_node_geometry in connected_node_geometries:
-                link_geometries += [[geometry, connected_node_geometry]] * 2
+                link_geometries += [[geometry, connected_node_geometry]]
 
         return (
             NodeCollection(
@@ -177,6 +212,9 @@ class Model(TrackedBaseModel):
         self.road_segments.passenger_car_unit[:] = results.passenger_car_unit[:real_link_len]
 
         # Calculate ourselves because aequilibrae is broken
+        # self.road_segments.volume_to_capacity[:] = results.volume_to_capacity[:real_link_len]
         self.road_segments.volume_to_capacity[:] = (
-            results.passenger_car_unit[:real_link_len] / self.road_segments.capacity[:]
+            results.passenger_car_unit[:real_link_len]
+            / self.road_segments.capacity[:]
+            / np.sum(self.road_segments.layout, axis=1)
         )

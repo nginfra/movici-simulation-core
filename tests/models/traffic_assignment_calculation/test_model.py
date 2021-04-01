@@ -17,10 +17,11 @@ def model_name():
 
 @pytest.fixture
 def config(
+    time_scale,
     model_config,
     init_data,
-    time_scale,
 ):
+
     return {
         "config": {
             "version": 4,
@@ -36,13 +37,15 @@ def config(
     }
 
 
-@pytest.fixture
+@pytest.fixture(params=["road_network", "road_network_with_line3d"])
 def init_data(
+    request,
     road_network_name,
-    road_network,
     virtual_nodes_name,
     virtual_nodes_dataset,
 ):
+    road_network = request.getfixturevalue(request.param)
+
     return [
         {"name": road_network_name, "data": road_network},
         {"name": virtual_nodes_name, "data": virtual_nodes_dataset},
@@ -56,9 +59,9 @@ def model_config(model_name, road_network_name, virtual_nodes_name):
         "type": "traffic_assignment_calculation",
         "transport_network_segments": [(road_network_name, "road_segment_entities")],
         "transport_network_vertices": [(road_network_name, "road_vertex_entities")],
-        "virtual_nodes": [
+        "demand_nodes": [
             (virtual_nodes_name, "virtual_node_entities")
-        ],  # todo call virtual nodes demand nodes
+        ],
     }
 
 
