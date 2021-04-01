@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from model_engine import testing
+from movici_simulation_core.base_model.base import model_factory
 from movici_simulation_core.models.overlap_status.model import Model
 
 np.random.seed(4002)
@@ -153,7 +154,7 @@ def get_random_update(entity_count, true_chance):
     properties = np.random.rand(entity_count)
     properties[properties <= true_chance] = 1
     properties[properties > true_chance] = 0
-    properties = properties.astype(np.bool).tolist()
+    properties = properties.astype(bool).tolist()
 
     return {
         "water_pipe_entities": get_entity_update(
@@ -167,7 +168,7 @@ def get_random_update(entity_count, true_chance):
 
 def run_model(model_name, scenario):
     testing.ModelDriver.run_scenario(
-        model=Model,
+        model=model_factory(Model),
         name=model_name,
         scenario=scenario,
         atol=0.01,

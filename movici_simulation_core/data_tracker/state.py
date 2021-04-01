@@ -171,7 +171,7 @@ class TrackedState:
         return dict(rv)
 
     def receive_update(self, update: t.Dict):
-        general_section = update.pop("general", {})
+        general_section = update.pop("general", None) or {}
 
         for dataset_name, dataset_data in update.items():
             if not isinstance(dataset_data, dict):

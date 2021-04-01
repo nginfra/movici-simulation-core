@@ -2,6 +2,7 @@ from typing import Iterable, Dict
 
 import pytest
 from model_engine import testing
+from movici_simulation_core.base_model.base import model_factory
 from movici_simulation_core.models.overlap_status.model import Model
 
 
@@ -271,7 +272,7 @@ class TestOverlapStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model,
+            model=model_factory(Model),
             name=model_name,
             scenario=scenario,
             atol=0.01,
@@ -490,7 +491,7 @@ class TestOverlapStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model,
+            model=model_factory(Model),
             name=model_name,
             scenario=scenario,
             atol=0.01,
@@ -682,7 +683,7 @@ class TestOverlapStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model,
+            model=model_factory(Model),
             name=model_name,
             scenario=scenario,
             atol=0.01,
@@ -885,7 +886,7 @@ class TestOverlapStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model,
+            model=model_factory(Model),
             name=model_name,
             scenario=scenario,
             atol=0.01,
@@ -1001,7 +1002,7 @@ class TestOverlapStatus:
 
         scenario.update(config)
         testing.ModelDriver.run_scenario(
-            model=Model,
+            model=model_factory(Model),
             name=model_name,
             scenario=scenario,
             atol=0.01,

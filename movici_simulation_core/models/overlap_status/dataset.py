@@ -1,16 +1,8 @@
 from abc import abstractmethod
-from collections import Iterable
-from typing import Type, Optional, cast, List
 
-import numpy as np
-
-import model_engine.dataset_manager.dataset_definition as dd
+from shapely.geometry import LineString, Point, Polygon
 import model_engine.dataset_manager.entity_definition as ed
-import model_engine.dataset_manager.property_definition as pd
-from model_engine.dataset_manager import Property
-from model_engine.dataset_manager.dataset_handler import DataSet, DataEntityHandler
-from model_engine.dataset_manager.numba_functions import slice_compressed_data
-from model_engine.dataset_manager.property import PropertyData
+import numpy as np
 from model_engine.dataset_manager.property_definition import (
     DisplayName,
     ConnectionProperties,
@@ -19,6 +11,10 @@ from model_engine.dataset_manager.property_definition import (
     PointProperties,
     ShapeProperties,
 )
+from movici_simulation_core.base_model.config_helpers import to_spec
+from movici_simulation_core.data_tracker.entity_group import EntityGroup
+from movici_simulation_core.data_tracker.property import field, PUB, INIT, OPT
+from shapely.geometry.base import BaseGeometry
 from spatial_mapper.geometry import (
     PointCollection,
     LineStringCollection,
@@ -27,167 +23,88 @@ from spatial_mapper.geometry import (
 )
 
 
-class OverlapEntity(DataEntityHandler):
-    entity_group_name = ed.Overlap
-    init = True
-    calc = False
-    display_name = DisplayName(init=False, pub=True)
-    overlap_active = Overlap_Active(init=False, pub=True)
-    connection_from_id = ConnectionProperties.FromId(init=False, pub=True)
-    connection_to_id = ConnectionProperties.ToId(init=False, pub=True)
-    connection_from_reference = ConnectionProperties.FromReference(init=False, pub=True)
-    connection_to_reference = ConnectionProperties.ToReference(init=False, pub=True)
-    connection_from_dataset = ConnectionProperties.FromDataset(init=False, pub=True)
-    connection_to_dataset = ConnectionProperties.ToDataset(init=False, pub=True)
-    x = PointProperties.PositionX(init=False, pub=True)
-    y = PointProperties.PositionY(init=False, pub=True)
+class OverlapEntity(EntityGroup, name=ed.Overlap):
+    display_name = field(to_spec(DisplayName), flags=PUB)
+    overlap_active = field(to_spec(Overlap_Active), flags=PUB)
+    connection_from_id = field(to_spec(ConnectionProperties.FromId), flags=PUB)
+    connection_to_id = field(to_spec(ConnectionProperties.ToId), flags=PUB)
+    connection_from_reference = field(to_spec(ConnectionProperties.FromReference), flags=PUB)
+    connection_to_reference = field(to_spec(ConnectionProperties.ToReference), flags=PUB)
+    connection_from_dataset = field(to_spec(ConnectionProperties.FromDataset), flags=PUB)
+    connection_to_dataset = field(to_spec(ConnectionProperties.ToDataset), flags=PUB)
+    x = field(to_spec(PointProperties.PositionX), flags=PUB)
+    y = field(to_spec(PointProperties.PositionY), flags=PUB)
 
 
-class OverlapDataset(DataSet):
-    data_entity_types = [OverlapEntity]
-    dataset_type = dd.Overlap
+class GeometryEntity(EntityGroup):
+    reference = field(to_spec(Reference), flags=OPT)
 
+    @abstractmethod
+    def get_geometry(self) -> GeometryCollection:
+        ...
 
-class GeometryEntity(DataEntityHandler):
-    entity_group_name: str = ""
-    init = True
-    calc = True
-    reference = Reference(init=True)
-    overlap_active = Overlap_Active(init=False, pub=True)
-    active_status: Optional[PropertyData] = None
+    @abstractmethod
+    def get_single_geometry(self, index: int) -> BaseGeometry:
+        ...
 
 
 class PointEntity(GeometryEntity):
-    x = PointProperties.PositionX(sub=True)
-    y = PointProperties.PositionY(sub=True)
+    x = field(to_spec(PointProperties.PositionX), flags=INIT)
+    y = field(to_spec(PointProperties.PositionY), flags=INIT)
+
+    def get_geometry(self) -> PointCollection:
+        return PointCollection(coord_seq=np.stack((self.x.array, self.y.array), axis=-1))
+
+    def get_single_geometry(self, index: int) -> Point:
+        return Point(self.x.array[index], self.y.array[index])
 
 
-class Line3dEntity(GeometryEntity):
-    line3d = ShapeProperties.Linestring3d(sub=True)
+class LineEntity(GeometryEntity):
+    line2d = field(to_spec(ShapeProperties.Linestring2d), flags=OPT)
+    line3d = field(to_spec(ShapeProperties.Linestring3d), flags=OPT)
+
+    def get_geometry(self) -> LineStringCollection:
+        if self.line3d.is_initialized():
+            line_data = self.line3d.csr.data[:, 0:2]
+            line_ptr = self.line3d.csr.row_ptr
+        elif self.line2d.is_initialized():
+            line_data = self.line2d.csr.data
+            line_ptr = self.line2d.csr.row_ptr
+        else:
+            raise RuntimeError(
+                f"line2d or line3d needs to have data before get_geometry "
+                f"is called on line entity {self.__entity_name__} "
+            )
+
+        return LineStringCollection(coord_seq=line_data, indptr=line_ptr)
+
+    def get_single_geometry(self, index: int) -> LineString:
+        if self.line3d.is_initialized():
+            csr = self.line3d.csr
+        elif self.line2d.is_initialized():
+            csr = self.line2d.csr
+        else:
+            raise RuntimeError(
+                f"line2d or line3d needs to have data before get_geometry "
+                f"is called on line entity {self.__entity_name__} "
+            )
+        return LineString(csr.slice([index]).data[:, 0:2])
 
 
 class PolygonEntity(GeometryEntity):
-    polygon = ShapeProperties.Polygon(sub=True)
+    polygon = field(to_spec(ShapeProperties.Polygon), flags=INIT)
+
+    def get_geometry(self) -> ClosedPolygonCollection:
+        return ClosedPolygonCollection(
+            coord_seq=self.polygon.csr.data, indptr=self.polygon.csr.row_ptr
+        )
+
+    def get_single_geometry(self, index: int) -> Polygon:
+        return Polygon(self.polygon.csr.slice([index]).data[:, 0:2])
 
 
-class GeometryDataset(DataSet):
-    dataset_type = ""
-    data_entity_types: List[Type[DataEntityHandler]] = []
-
-    @abstractmethod
-    def get_geometry(self, indices=None) -> GeometryCollection:
-        pass
-
-    @property
-    def entity(self) -> GeometryEntity:
-        return cast(GeometryEntity, list(self.data.values())[0])
-
-
-class PointDataset(GeometryDataset):
-    def get_geometry(self, indices=None) -> PointCollection:
-        entity_cls = self.data_entity_types[0]
-        point_entity = cast(PointEntity, self.data[entity_cls])
-        x = point_entity.x.data
-        y = point_entity.y.data
-        if indices is not None:
-            if not isinstance(indices, Iterable):
-                indices = [indices]
-            x = x[indices]
-            y = y[indices]
-        return PointCollection(coord_seq=np.stack((x, y), axis=-1))
-
-
-class LineDataset(GeometryDataset):
-    def get_geometry(self, indices=None):
-        entity_cls = self.data_entity_types[0]
-        line_entity = cast(Line3dEntity, self.data[entity_cls])
-        line3d = line_entity.line3d
-        line2d_data = line3d.data[:, 0:2]
-        indptr = line3d.indptr
-        if indices is not None and not isinstance(indices, Iterable):
-            indices = [indices]
-            data, ptr = slice_compressed_data(line2d_data, indptr, np.array(indices), (2,))
-            return LineStringCollection(coord_seq=data, indptr=ptr)
-        return LineStringCollection(coord_seq=line2d_data, indptr=indptr)
-
-
-class PolygonDataset(GeometryDataset):
-    def get_geometry(self, indices=None):
-        entity_cls = self.data_entity_types[0]
-        line_entity = cast(PolygonEntity, self.data[entity_cls])
-        polygon = line_entity.polygon
-        polygon2d_data = polygon.data[:, 0:2]
-        indptr = polygon.indptr
-        if indices is not None and not isinstance(indices, Iterable):
-            indices = [indices]
-            data, ptr = slice_compressed_data(polygon2d_data, indptr, np.array(indices), (2,))
-            return ClosedPolygonCollection(coord_seq=data, indptr=ptr)
-        return ClosedPolygonCollection(coord_seq=polygon2d_data, indptr=indptr)
-
-
-def get_geometry_entity_cls(
-    entity_name: str,
-    entity_base: Type[GeometryEntity],
-    active_property: str,
-    active_component: Optional[str] = None,
-) -> Type[GeometryEntity]:
-
-    return cast(
-        Type[GeometryEntity],
-        type(
-            entity_name,
-            (entity_base,),
-            {
-                "entity_group_name": entity_name,
-                "active_status": get_dynamic_property(active_property, active_component)(
-                    init=False, sub=True
-                )
-                if active_property
-                else None,
-            },
-        ),
-    )
-
-
-def get_geometry_dataset_cls(
-    class_name: str,
-    entity_name: str,
-    geom_type: str,
-    active_property: str,
-    active_component: Optional[str] = None,
-) -> Type[DataSet]:
-
-    base_classes = {
-        "point": (PointDataset, PointEntity),
-        "line": (LineDataset, Line3dEntity),
-        "polygon": (PolygonDataset, PolygonEntity),
-    }
-    dataset_base, entity_base = base_classes[geom_type]
-    entity_cls = get_geometry_entity_cls(
-        entity_name, entity_base, active_property, active_component
-    )
-
-    return cast(
-        Type[DataSet],
-        type(
-            class_name,
-            (dataset_base,),
-            {"dataset_type": "", "data_entity_types": [entity_cls]},
-        ),
-    )
-
-
-def get_field_name(property_name: str) -> str:
-    return property_name.replace("_", " ").title().replace(" ", "").replace(".", "_")
-
-
-def get_dynamic_property(
-    property_name: str, component_name: Optional[str] = None
-) -> Type[Property]:
-
-    root_obj = pd
-    if component_name is not None:
-        root_obj = getattr(root_obj, get_field_name(component_name))
-
-    property_class_name = get_field_name(property_name)
-    return getattr(root_obj, property_class_name)
+supported_geometry_types = {
+    "point": PointEntity,
+    "line": LineEntity,
+    "polygon": PolygonEntity,
+}

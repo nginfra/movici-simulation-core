@@ -1,161 +1,117 @@
-from typing import Union, List, Optional, Tuple, cast
+import typing as t
 
-from model_engine import TimeStamp, Config, DataFetcher
-from model_engine.base_model.base import BaseModelVDataManager
-from model_engine.model_driver.data_handlers import DataHandlerType, DType
-from .dataset import get_geometry_dataset_cls, OverlapDataset, GeometryDataset
+from model_engine import TimeStamp
+from movici_simulation_core.base_model.base import TrackedBaseModel
+from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.data_tracker.property import PropertySpec, SUB
+from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.exceptions import NotReady
+
+from .dataset import OverlapEntity, supported_geometry_types
 from .overlap_status import OverlapStatus
 
-ComponentPropertyTuple = Optional[Tuple[Optional[str], Optional[str]]]
 
-
-class Model(BaseModelVDataManager):
+class Model(TrackedBaseModel):
     """
-    Implementation of the time window status model
+    Implementation of the overlap status model
     """
 
-    overlap_status: Union[OverlapStatus, None] = None
-    type = "overlap_status"
-    custom_variable_names = [
-        "output_dataset",
-        "from_entity_group",
-        "from_geometry_type",
-        "from_check_status_property",
-        "to_entity_groups",
-        "to_geometry_types",
-        "to_check_status_properties",
-        "distance_threshold",
-        "display_name_template",
-    ]
+    overlap_status: t.Union[OverlapStatus, None] = None
 
-    def __init__(self, name: str, config: Config) -> None:
-        super().__init__(name, config)
-        self.data_handler_types = {}
-        self.managed_datasets = {}
-        self.netcdf_datasets = {}
-        self.parse_config(self.custom_variable_names)
+    def setup(self, state: TrackedState, config: dict, **_):
+        self.check_input_lengths(config)
+        self.parse_config(state, config)
 
-    def initialize_model(self, data_fetcher: DataFetcher) -> None:
-        overlap_dataset = cast(
-            OverlapDataset, self.datasets[self.custom_variables.get("output_dataset")[0]]
+    @staticmethod
+    def check_input_lengths(config):
+        keys = [
+            "to_entity_groups",
+            "to_geometry_types",
+        ]
+        if "to_check_status_properties" in config:
+            keys.append("to_check_status_properties")
+        if any(len(config[key]) != len(config[keys[0]]) for key in keys[1:]):
+            raise IndexError(f"Arrays {[key for key in keys]} must have the same lengths")
+
+    def initialize(self, state: TrackedState) -> None:
+        if not self.overlap_status.is_ready():
+            raise NotReady
+        self.overlap_status.resolve_connections()
+
+    def update(self, state: TrackedState, time_stamp: TimeStamp):
+        self.overlap_status.update()
+
+    def parse_config(
+        self,
+        state: TrackedState,
+        config: dict,
+    ) -> None:
+
+        overlap_entity = state.register_entity_group(config["output_dataset"][0], OverlapEntity())
+        to_entities = []
+        to_check_properties = []
+        for (ds_name, entity_name), prop, geometry in zip(
+            config["to_entity_groups"],
+            config.get("to_check_status_properties", [None] * len(config["to_entity_groups"])),
+            config["to_geometry_types"],
+        ):
+            to_entities.append(
+                state.register_entity_group(
+                    dataset_name=ds_name, entity=try_get_geometry_type(geometry)(name=entity_name)
+                )
+            )
+            if prop is None or prop == (None, None):
+                to_check_properties.append(None)
+            else:
+                to_spec = property_mapping[tuple(prop)]
+                self.ensure_uniform_property(ds_name, entity_name, to_spec)
+                to_check_properties.append(
+                    state.register_property(
+                        dataset_name=ds_name, entity_name=entity_name, spec=to_spec, flags=SUB
+                    )
+                )
+
+        from_ds_name, from_entity_name = config["from_entity_group"][0]
+        from_geometry = try_get_geometry_type(config["from_geometry_type"])
+        from_prop = config.get("from_check_status_property")
+        from_entity = state.register_entity_group(
+            dataset_name=from_ds_name, entity=from_geometry(name=from_entity_name)
         )
-        from_dataset = cast(
-            GeometryDataset, self.datasets[self.custom_variables.get("from_entity_group")[0][0]]
-        )
-        to_datasets = []
-        for dataset in self.custom_variables.get("to_entity_groups") or []:
-            to_datasets.append(cast(GeometryDataset, self.datasets[dataset[0]]))
+        if from_prop is None:
+            from_check_property = None
+        else:
+            from_spec = property_mapping[tuple(from_prop)]
+            self.ensure_uniform_property(from_ds_name, from_entity_name, from_spec)
+            from_check_property = state.register_property(
+                dataset_name=from_ds_name, entity_name=from_entity_name, spec=from_spec, flags=SUB
+            )
 
         self.overlap_status = OverlapStatus(
-            from_dataset=from_dataset,
-            to_datasets=to_datasets,
-            overlap_dataset=overlap_dataset,
-            logger=self.logger,
-            distance_threshold=self.custom_variables.get("distance_threshold"),
-            display_name_template=self.custom_variables.get("display_name_template"),
+            from_entity=from_entity,
+            from_check_property=from_check_property,
+            to_entities=to_entities,
+            to_check_properties=to_check_properties,
+            overlap_entity=overlap_entity,
+            distance_threshold=config.get("distance_threshold"),
+            display_name_template=config.get("display_name_template"),
         )
 
-    def update_model(self, time_stamp: TimeStamp) -> Optional[TimeStamp]:
-        return self.overlap_status.update(time_stamp)
-
-    def parse_config(self, custom_variable_names: Optional[List[str]] = None) -> None:
-        """
-        Parse scenario config
-        Differs from base class in that we set the data_handler_types dataset_classes on the fly
-        """
-        scenario_config: Config = self.config
-        self.check_config_version(scenario_config)
-        self.set_custom_variables(custom_variable_names)
-        self.parse_datasets(
-            self.custom_variables.get("output_dataset")[0],
-            self.custom_variables.get("from_entity_group")[0],
-            self.custom_variables.get("from_geometry_type"),
-            self.custom_variables.get("from_check_status_property"),
-            self.custom_variables.get("to_entity_groups"),
-            self.custom_variables.get("to_geometry_types"),
-            self.custom_variables.get("to_check_status_properties"),
-        )
-        self.set_filters()
-
-    def parse_datasets(
-        self,
-        output_dataset: str,
-        from_entity_group: Tuple[str, str],
-        from_geometry_type: str,
-        from_check_status_property: ComponentPropertyTuple,
-        to_entity_groups: List[Tuple[str, str]],
-        to_geometry_types: List[str],
-        to_check_status_properties: Optional[List[ComponentPropertyTuple]],
-    ) -> None:
-        self.data_handler_types = {output_dataset: DataHandlerType(dataset_cls=OverlapDataset)}
-        self.managed_datasets = {output_dataset: output_dataset}
-        self.netcdf_datasets = {}
-
-        from_active_status_component, from_active_status_property = (
-            from_check_status_property if from_check_status_property else (None, None)
-        )
-
-        self.parse_dataset(
-            from_entity_group,
-            from_geometry_type,
-            from_active_status_component,
-            from_active_status_property,
-            "FromDataset",
-        )
-
-        if to_check_status_properties is None:
-            to_check_status_properties = [(None, None)] * len(to_geometry_types)
-        for i, elem in enumerate(to_check_status_properties):
-            if elem is None:
-                to_check_status_properties[i] = (None, None)
-
-        if len(to_entity_groups) != len(to_geometry_types) or len(to_entity_groups) != len(
-            to_check_status_properties
-        ):
-            raise IndexError(
-                "Arrays to_entity_groups, to_geometry_types"
-                " and to_check_status_properties must have the same lengths"
+    @staticmethod
+    def ensure_uniform_property(ds, entity, spec: PropertySpec):
+        if spec.data_type.py_type == str:
+            raise ValueError(f"Property {ds}/{entity}/{spec.full_name} can't have string type")
+        if spec.data_type.csr is True:
+            raise ValueError(
+                f"property {ds}/{entity}/{spec.full_name} should be of uniform data type"
             )
+        if len(spec.data_type.unit_shape):
+            raise ValueError(f"property {ds}/{entity}/{spec.full_name} should be one-dimensional")
 
-        for entity_group, geometry_type, to_check_status_property in zip(
-            to_entity_groups, to_geometry_types, to_check_status_properties
-        ):
-            self.parse_dataset(
-                entity_group,
-                geometry_type,
-                to_check_status_property[0],
-                to_check_status_property[1],
-                "ToDataset",
-            )
 
-    def parse_dataset(
-        self,
-        entity_group: Tuple[str, str],
-        geometry_type: str,
-        active_status_component: Optional[str],
-        active_status_property: Optional[str],
-        dataset_name_prefix: str,
-    ) -> None:
-        dataset_name, entity_name = entity_group
-        self.managed_datasets[dataset_name] = dataset_name
-        self.data_handler_types[dataset_name] = DataHandlerType(
-            dataset_cls=get_geometry_dataset_cls(
-                f"{dataset_name_prefix}_{geometry_type}",
-                entity_name=entity_name,
-                geom_type=geometry_type,
-                active_component=active_status_component,
-                active_property=active_status_property,
-            )
+def try_get_geometry_type(geometry_type):
+    try:
+        return supported_geometry_types[geometry_type]
+    except KeyError:
+        raise ValueError(
+            f"models geometry_type must be one of {[k for k in supported_geometry_types.keys()]}"
         )
-
-    def read_managed_data(self, data_fetcher: DataFetcher) -> None:
-        """
-        Differs from base class in that we have to set the dataset_type into the dataset_cls
-        """
-        for dataset_name in self.managed_datasets.values():
-            data_dtype, data_dict = data_fetcher.get(dataset_name)
-            if data_dtype not in [DType.JSON, DType.MSGPACK]:
-                raise ValueError(f"`{dataset_name}` not of type {DType.JSON} / {DType.MSGPACK}")
-            dataset_cls = self.data_handler_types[dataset_name].dataset_cls
-            dataset_cls.dataset_type = data_dict["type"]
-            self.datasets[dataset_name] = dataset_cls(data_dict)

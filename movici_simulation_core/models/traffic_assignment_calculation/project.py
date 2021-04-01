@@ -245,10 +245,10 @@ class ProjectWrapper:
         assignment = TrafficAssignment()
 
         od_matrix_passenger = self.convert_od_matrix(od_matrix_passenger, "passenger_demand")
-        tc_passenger = TrafficClass(graph, od_matrix_passenger)
+        tc_passenger = TrafficClass("passenger", graph, od_matrix_passenger)
 
         od_matrix_cargo = self.convert_od_matrix(od_matrix_cargo, "cargo_demand")
-        tc_cargo = TrafficClass(graph, od_matrix_cargo)
+        tc_cargo = TrafficClass("cargo", graph, od_matrix_cargo)
         tc_cargo.set_pce(parameters.cargo_pcu)
 
         assignment.set_classes([tc_passenger, tc_cargo])
