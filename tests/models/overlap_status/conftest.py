@@ -50,12 +50,3 @@ def mv_network(mv_network_name):
             },
         },
     )
-
-
-@pytest.fixture
-def overlap_dataset(overlap_dataset_name):
-    return get_dataset(
-        name=overlap_dataset_name,
-        ds_type="random_type",
-        data={"overlap_entities": {"id": list(range(1, 1000))}},
-    )

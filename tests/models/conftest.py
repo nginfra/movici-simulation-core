@@ -142,6 +142,7 @@ def road_network(road_network_name):
                         [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
                     ]
                 },
+                "line_properties": {"length": [1.4142, 2.0006, 5.3154]},
             }
         },
     )
@@ -163,6 +164,15 @@ def area_dataset(area_dataset_name):
                 },
             }
         },
+    )
+
+
+@pytest.fixture
+def overlap_dataset(overlap_dataset_name):
+    return get_dataset(
+        name=overlap_dataset_name,
+        ds_type="random_type",
+        data={"overlap_entities": {"id": list(range(1, 1000))}},
     )
 
 
