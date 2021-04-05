@@ -59,9 +59,7 @@ def model_config(model_name, road_network_name, virtual_nodes_name):
         "type": "traffic_assignment_calculation",
         "transport_network_segments": [(road_network_name, "road_segment_entities")],
         "transport_network_vertices": [(road_network_name, "road_vertex_entities")],
-        "demand_nodes": [
-            (virtual_nodes_name, "virtual_node_entities")
-        ],
+        "demand_nodes": [(virtual_nodes_name, "virtual_node_entities")],
     }
 
 

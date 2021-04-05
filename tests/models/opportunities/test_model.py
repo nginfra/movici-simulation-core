@@ -28,6 +28,7 @@ def model_config(model_name, overlap_dataset_name, road_network_name):
         "opportunity_entity": [
             (road_network_name, "road_segment_entities"),
         ],
+        "cost_per_meter": [10.0],
     }
 
 
@@ -96,7 +97,7 @@ class TestOpportunity:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [3],
-                                "opportunity": [5.3154],
+                                "opportunity": [53.154],
                                 "maintenance.length": [5.3154],
                             }
                         },
@@ -199,8 +200,8 @@ class TestOpportunity:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [3],
-                                "missed_opportunity": [5.3154],
-                                "opportunity": [5.3154],
+                                "missed_opportunity": [53.154],
+                                "opportunity": [53.154],
                             }
                         },
                     },

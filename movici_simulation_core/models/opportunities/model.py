@@ -23,11 +23,13 @@ class Model(TrackedBaseModel):
     opportunity_entity: t.Optional[LineEntity]
     opportunity_taken_property: t.Optional[UniformProperty]
     total_length_property: t.Optional[UniformProperty]
+    cost_per_meter: t.Optional[float]
 
     def __init__(self):
         self.overlap_entity = None
         self.opportunity_entity = None
         self.opportunity_taken_property = None
+        self.cost_per_meter = None
 
     def setup(self, state: TrackedState, config: dict, **_):
         self.parse_config(state, config)
@@ -66,6 +68,7 @@ class Model(TrackedBaseModel):
             spec=property_mapping[tuple(prop)],
             flags=PUB,
         )
+        self.cost_per_meter = config["cost_per_meter"]
 
     def update_opportunities(self):
         changed = self.overlap_entity.overlap_active.changed
@@ -91,13 +94,17 @@ class Model(TrackedBaseModel):
         from_boolean_active = np.zeros(len(self.opportunity_entity), dtype=bool)
         from_boolean_active[from_index_active] = 1
         active = from_boolean_active | to_boolean_active
-        self.opportunity_entity.opportunity[active] = self.opportunity_entity.length[active]
+        self.opportunity_entity.opportunity[active] = (
+            self.opportunity_entity.length[active] * self.cost_per_meter
+        )
 
         # missed = once opportunity & never self.opportunity_taken_property
         # can be temporarily set, will be unset as overlap actives come in
         self.opportunity_entity.missed_opportunity[active] = 0
         taken = self.opportunity_taken_property.array > 0
-        self.opportunity_entity.missed_opportunity[active] = self.opportunity_entity.length[active]
+        self.opportunity_entity.missed_opportunity[active] = (
+            self.opportunity_entity.length[active] * self.cost_per_meter
+        )
         self.opportunity_entity.missed_opportunity[taken & active] = 0
 
         self.total_length_property[taken] = self.opportunity_entity.length[taken]
