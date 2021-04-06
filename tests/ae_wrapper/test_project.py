@@ -3,6 +3,7 @@ import sqlite3
 
 import numpy as np
 import pytest
+from _pytest.fixtures import SubRequest
 from aequilibrae import Graph
 
 from movici_simulation_core.ae_wrapper.collections import (
@@ -169,7 +170,6 @@ def test_can_correct_rounding_error_in_geometries(project: ProjectWrapper):
         directions=[True],
         geometries=[[[0.0000001, 0], [1.5, 2], [1.0000001, 0]]],
     )
-    # todo add warning if geometries are wildly different
     project.add_links(links)
 
     assert np.array_equal(project.get_nodes().ids, [0, 1])
@@ -178,6 +178,37 @@ def test_can_correct_rounding_error_in_geometries(project: ProjectWrapper):
 
     assert np.array_equal(resulting_links.from_nodes, links.from_nodes)
     assert np.array_equal(resulting_links.to_nodes, links.to_nodes)
+
+
+def test_raises_if_mismatch_in_geometries(project: ProjectWrapper):
+    nodes = NodeCollection(
+        ids=[0, 1],
+        is_centroids=[1, 1],
+        geometries=[[0, 0], [1, 0]],
+    )
+    project.add_nodes(nodes)
+
+    links = LinkCollection(
+        ids=[1],
+        from_nodes=[0],
+        to_nodes=[1],
+        directions=[True],
+        geometries=[[[1, 0], [1.5, 2], [1, 0]]],
+    )
+
+    with pytest.raises(ValueError):
+        project.add_links(links)
+
+    links = LinkCollection(
+        ids=[1],
+        from_nodes=[0],
+        to_nodes=[1],
+        directions=[True],
+        geometries=[[[0, 0], [1.5, 2], [0, 0]]],
+    )
+
+    with pytest.raises(ValueError):
+        project.add_links(links)
 
 
 def test_can_build_graph(project: ProjectWrapper):
@@ -280,8 +311,8 @@ def test_can_assign_traffic(project: ProjectWrapper):
         geometries=[
             [[97701, 434000], [97700, 434000]],
             [[97700, 434000], [97702, 434000]],
-            [[97702, 434000], [97704, 434000], [97700, 434000]],
-            [[97700, 434000], [97700, 434000]],
+            [[97701, 434000], [97704, 434000], [97702, 434000]],
+            [[97700, 434000], [97701, 434000]],
         ],
         max_speeds=[10, 25, 100, 10],
         capacities=[50, 100, 50, 10],
@@ -305,7 +336,16 @@ def test_can_assign_traffic(project: ProjectWrapper):
     assert np.all(results.passenger_car_unit > 0)
 
 
-def test_shortest_path(project: ProjectWrapper):
+@pytest.fixture
+def p(request: SubRequest):
+    """
+    Chooser for project parametrization
+    """
+    return request.getfixturevalue(request.param)
+
+
+@pytest.fixture
+def p_triangle(project: ProjectWrapper):
     nodes = NodeCollection(
         ids=[5, 6, 7],
         is_centroids=[1, 1, 1],
@@ -320,56 +360,35 @@ def test_shortest_path(project: ProjectWrapper):
         directions=[1, -1, -1],
         geometries=[
             [[97700, 434000], [97702, 434000]],
-            [[97702, 434000], [97704, 434000], [97700, 434000]],
-            [[97700, 434000], [97700, 434000]],
+            [[97701, 434000], [97704, 434000], [97702, 434000]],
+            [[97700, 434000], [97701, 434000]],
         ],
         max_speeds=[25, 100, 10],
         capacities=[100, 50, 10],
     )
     project.add_links(links)
     project.add_column("free_flow_time", project.calculate_free_flow_times())
+    project.add_column("custom_field", [10, 11, 12])
     project.build_graph(
         cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance"],
+        skim_fields=["free_flow_time", "distance", "custom_field"],
         block_centroid_flows=False,
     )
-
-    path = project.get_shortest_path(5, 6)
-    assert np.array_equal(path.nodes, [5, 7, 6])
-    assert np.array_equal(path.links, [102, 103])
-
-    path = project.get_shortest_path(6, 5)
-    assert np.array_equal(path.nodes, [6, 5])
-    assert np.array_equal(path.links, [104])
-
-    path = project.get_shortest_path(7, 5)
-    assert np.array_equal(path.nodes, [7, 6, 5])
-    assert np.array_equal(path.links, [103, 104])
-
-    path = project.get_shortest_path(7, 6)
-    assert np.array_equal(path.nodes, [7, 6])
-    assert np.array_equal(path.links, [103])
-
-    path = project.get_shortest_path(5, 7)
-    assert np.array_equal(path.nodes, [5, 7])
-    assert np.array_equal(path.links, [102])
-
-    path = project.get_shortest_path(6, 7)
-    assert np.array_equal(path.nodes, [6, 5, 7])
-    assert np.array_equal(path.links, [104, 102])
+    return project
 
 
-def test_shortest_path_blocking(project: ProjectWrapper):
+@pytest.fixture
+def p_triangle_block(project: ProjectWrapper):
     nodes = NodeCollection(
         ids=[5, 6, 7, 15, 16, 17],
         is_centroids=[0, 0, 0, 1, 1, 1],
         geometries=[
             [97700, 434000],
-            [97701, 434001],
+            [97701, 434000],
             [97702, 434000],
-            [97700.1, 434000.1],
-            [97701.1, 434001.1],
-            [97702.1, 434000.1],
+            [97700.001, 434000.001],
+            [97701.001, 434000.001],
+            [97702.001, 434000.001],
         ],
     )
     project.add_nodes(nodes)
@@ -381,22 +400,16 @@ def test_shortest_path_blocking(project: ProjectWrapper):
         directions=[1, -1, -1, 0, 0, 0],
         geometries=[
             [[97700, 434000], [97702, 434000]],
-            [[97701, 434001], [97702, 434000]],
+            [[97701, 434000], [97704, 434000], [97702, 434000]],
             [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97701, 434001]],
+            [[97700, 434000], [97700, 434000]],
+            [[97701, 434000], [97701, 434001]],
+            [[97702, 434000], [97702, 434001]],
         ],
         max_speeds=[
             25,
             100,
             10,
-            float("inf"),
-            float("inf"),
-            float("inf"),
             float("inf"),
             float("inf"),
             float("inf"),
@@ -408,73 +421,74 @@ def test_shortest_path_blocking(project: ProjectWrapper):
             float("inf"),
             float("inf"),
             float("inf"),
-            float("inf"),
-            float("inf"),
-            float("inf"),
         ],
     )
     project.add_links(links)
     project.add_column("free_flow_time", project.calculate_free_flow_times())
+    project.add_column("custom_field", [10, 11, 12, 0, 0, 0])
     project.build_graph(
         cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance"],
+        skim_fields=["free_flow_time", "distance", "custom_field"],
         block_centroid_flows=True,
     )
+    return project
 
-    path = project.get_shortest_path(15, 16)
+
+def test_shortest_path(p_triangle: ProjectWrapper):
+    path = p_triangle.get_shortest_path(5, 6)
+    assert np.array_equal(path.nodes, [5, 7, 6])
+    assert np.array_equal(path.links, [102, 103])
+
+    path = p_triangle.get_shortest_path(6, 5)
+    assert np.array_equal(path.nodes, [6, 5])
+    assert np.array_equal(path.links, [104])
+
+    path = p_triangle.get_shortest_path(7, 5)
+    assert np.array_equal(path.nodes, [7, 6, 5])
+    assert np.array_equal(path.links, [103, 104])
+
+    path = p_triangle.get_shortest_path(7, 6)
+    assert np.array_equal(path.nodes, [7, 6])
+    assert np.array_equal(path.links, [103])
+
+    path = p_triangle.get_shortest_path(5, 7)
+    assert np.array_equal(path.nodes, [5, 7])
+    assert np.array_equal(path.links, [102])
+
+    path = p_triangle.get_shortest_path(6, 7)
+    assert np.array_equal(path.nodes, [6, 5, 7])
+    assert np.array_equal(path.links, [104, 102])
+
+
+def test_shortest_path_blocking(p_triangle_block: ProjectWrapper):
+    path = p_triangle_block.get_shortest_path(15, 16)
     assert np.array_equal(path.nodes, [15, 5, 7, 6, 16])
     assert np.array_equal(path.links, [15, 102, 103, 16])
 
-    path = project.get_shortest_path(16, 15)
+    path = p_triangle_block.get_shortest_path(16, 15)
     assert np.array_equal(path.nodes, [16, 6, 5, 15])
     assert np.array_equal(path.links, [16, 104, 15])
 
-    path = project.get_shortest_path(17, 15)
+    path = p_triangle_block.get_shortest_path(17, 15)
     assert np.array_equal(path.nodes, [17, 7, 6, 5, 15])
     assert np.array_equal(path.links, [17, 103, 104, 15])
 
-    path = project.get_shortest_path(17, 16)
+    path = p_triangle_block.get_shortest_path(17, 16)
     assert np.array_equal(path.nodes, [17, 7, 6, 16])
     assert np.array_equal(path.links, [17, 103, 16])
 
-    path = project.get_shortest_path(15, 17)
+    path = p_triangle_block.get_shortest_path(15, 17)
     assert np.array_equal(path.nodes, [15, 5, 7, 17])
     assert np.array_equal(path.links, [15, 102, 17])
 
-    path = project.get_shortest_path(16, 17)
+    path = p_triangle_block.get_shortest_path(16, 17)
     assert np.array_equal(path.nodes, [16, 6, 5, 7, 17])
     assert np.array_equal(path.links, [16, 104, 102, 17])
 
 
-def test_skimming(project: ProjectWrapper):
-    nodes = NodeCollection(
-        ids=[5, 6, 7],
-        is_centroids=[1, 1, 1],
-        geometries=[[97700, 434000], [97701, 434000], [97702, 434000]],
-    )
-    project.add_nodes(nodes)
+@pytest.mark.parametrize("p", ("p_triangle", "p_triangle_block"), indirect=True)
+def test_skimming(p: ProjectWrapper):
+    skims = p.calculate_skims()
 
-    links = LinkCollection(
-        ids=[102, 103, 104],
-        from_nodes=[5, 6, 5],
-        to_nodes=[7, 7, 6],
-        directions=[1, -1, -1],
-        geometries=[
-            [[97700, 434000], [97702, 434000]],
-            [[97702, 434000], [97704, 434000], [97700, 434000]],
-            [[97700, 434000], [97700, 434000]],
-        ],
-        max_speeds=[25, 100, 10],
-        capacities=[100, 50, 10],
-    )
-    project.add_links(links)
-    project.add_column("free_flow_time", project.calculate_free_flow_times())
-    project.build_graph(
-        cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance"],
-        block_centroid_flows=False,
-    )
-
-    assert np.allclose(
-        project.calculate_skims().distance, [[0, 7, 2], [1, 0, 3], [6, 5, 0]], rtol=0.01
-    )
+    assert np.allclose(skims.distance, [[0, 7, 2], [1, 0, 3], [6, 5, 0]], rtol=0.01)
+    assert np.allclose(skims.custom_field, [[0, 21, 10], [12, 0, 22], [23, 11, 0]], rtol=0.01)

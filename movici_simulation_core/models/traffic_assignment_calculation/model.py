@@ -109,7 +109,7 @@ class Model(TrackedBaseModel):
     def _get_links(segments: SegmentEntity) -> LinkCollection:
         geometries = []
         for i in range(len(segments.linestring.csr.row_ptr) - 1):
-            geometries.append(segments.linestring.csr.get_row(i)[:2])
+            geometries.append(segments.linestring.csr.get_row(i)[:, :2])
 
         directions = []
         for layout in segments.layout:

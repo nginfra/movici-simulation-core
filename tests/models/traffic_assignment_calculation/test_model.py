@@ -134,7 +134,7 @@ class TestTrafficAssignmentCalculation:
                                     "average_time": [
                                         0.4216,
                                         0.3032,
-                                        0.884,
+                                        4.4203,
                                         0.4216,
                                     ],  # todo rename to transport.travel_time
                                 },
@@ -160,7 +160,7 @@ class TestTrafficAssignmentCalculation:
                                 ],
                                 "transport.passenger_car_unit": [25.8334, 38.5, 88.5, 5.1667],
                                 "traffic_properties": {
-                                    "average_time": [0.3639, 0.289, 0.089, 0.3639],
+                                    "average_time": [0.3639, 0.289, 0.445, 0.3639],
                                 },
                             },
                         },

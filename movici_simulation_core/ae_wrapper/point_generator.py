@@ -11,7 +11,7 @@ class PointGenerator:
     we have to be able to generate unique points
     """
 
-    def __init__(self, increment=0.1):
+    def __init__(self, increment=0.001):
         self._increment = increment
         self._points = set()
 

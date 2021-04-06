@@ -105,6 +105,8 @@ class ProjectWrapper:
                 zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
             )
 
+            self._db.commit()
+
     def get_nodes(self) -> NodeCollection:
         with closing(self._db.cursor()) as cursor:
             cursor.execute("SELECT node_id, is_centroid FROM nodes")
@@ -118,7 +120,6 @@ class ProjectWrapper:
     def add_links(self, links: LinkCollection) -> None:
         transformer = Transformer.from_crs(28992, 4326)
 
-        new_link_ids = self._link_id_generator.get_new_ids(links.ids)
         new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
         new_to_nodes = self._node_id_generator.query_new_ids(links.to_nodes)
 
@@ -128,6 +129,7 @@ class ProjectWrapper:
                 self._get_linestring_string(linestring, from_node, to_node, transformer)
             )
 
+        new_link_ids = self._link_id_generator.get_new_ids(links.ids)
         directions = links.directions.tolist()
         max_speeds = links.max_speeds.tolist()
         capacities = links.capacities.tolist()
@@ -154,6 +156,8 @@ class ProjectWrapper:
                     linestring_strs,
                 ),
             )
+
+            self._db.commit()
 
     def get_links(self) -> LinkCollection:
         with closing(self._db.cursor()) as cursor:
@@ -182,9 +186,23 @@ class ProjectWrapper:
             # So if there are rounding errors it will generate new nodes
             #  regardless of the node id specified
             if i == 0:
-                point = self._node_id_to_point[from_node]
+                from_node_point = self._node_id_to_point[from_node]
+                if not np.allclose(point, from_node_point, atol=0.1):
+                    raise ValueError(
+                        f"Mismatch in data:"
+                        f" Linestring beginning has point {point} but"
+                        f" from_node has point {from_node_point}"
+                    )
+                point = from_node_point
             if i == len(linestring) - 1:
-                point = self._node_id_to_point[to_node]
+                to_node_point = self._node_id_to_point[to_node]
+                if not np.allclose(point, to_node_point, atol=0.1):
+                    raise ValueError(
+                        f"Mismatch in data:"
+                        f" Linestring end has point {point} but"
+                        f" to_node has point {to_node_point}"
+                    )
+                point = to_node_point
             lat, lon = transformer.transform(point[0], point[1])
             linestring2d.append(f"{lon} {lat}")
         linestring_str = ",".join(linestring2d)
@@ -219,8 +237,10 @@ class ProjectWrapper:
                 values = values.tolist()
 
             cursor.executemany(
-                "UPDATE links SET free_flow_time=? WHERE link_id=?", zip(values, ids)
+                f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
             )
+
+            self._db.commit()
 
     @property
     def _graph(self) -> Graph:
