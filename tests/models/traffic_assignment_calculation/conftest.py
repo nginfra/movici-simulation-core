@@ -25,7 +25,7 @@ def road_network(road_network_name):
                 "road_segment_properties": {
                     "layout": [[1, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 1, 0, 0]]
                 },
-                "transport.max_speed": [10, 25, 100, 10],
+                "transport.max_speed": [2.7778, 6.9444, 27.7778, 2.7778],
                 "transport.capacity.hours": [50, 100, 25, 10],
             },
             "road_vertex_entities": {
@@ -51,6 +51,15 @@ def road_network_with_line3d(road_network):
             point.append(0.0)
 
     shape_properties["linestring_3d"] = linestrings
+
+    return road_network
+
+
+@pytest.fixture
+def road_network_with_virtual_nodes(road_network, virtual_nodes_dataset):
+    virtual_node_data = virtual_nodes_dataset["data"]
+    del virtual_node_data["virtual_node_entities"]["connection_properties"]["to_dataset"]
+    road_network["data"].update(virtual_node_data)
 
     return road_network
 

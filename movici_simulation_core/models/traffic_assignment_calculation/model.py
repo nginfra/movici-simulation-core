@@ -134,7 +134,7 @@ class Model(TrackedBaseModel):
             to_nodes=segments.to_node_id.array,
             directions=directions,
             geometries=geometries,
-            max_speeds=segments.max_speed.array / 3.6,  # convert km/h to m/s
+            max_speeds=segments.max_speed.array,
             capacities=segments.capacity.array * lanes,
         )
 

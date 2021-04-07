@@ -63,7 +63,6 @@ class VertexEntity(EntityGroup):
 
 
 class VirtualNodeEntity(EntityGroup):
-    to_dataset = field(to_spec(ConnectionProperties.ToDataset), flags=INIT)
     to_nodes = field(to_spec(ConnectionProperties.ToIds), flags=INIT)
     passenger_demand = field(to_spec(Transport_PassengerDemand), flags=SUB)
     cargo_demand = field(to_spec(Transport_CargoDemand), flags=SUB)

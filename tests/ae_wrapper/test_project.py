@@ -211,6 +211,37 @@ def test_raises_if_mismatch_in_geometries(project: ProjectWrapper):
         project.add_links(links)
 
 
+def test_raises_if_wrong_connecting_node_ids(project: ProjectWrapper):
+    nodes = NodeCollection(
+        ids=[0, 1],
+        is_centroids=[1, 1],
+        geometries=[[0, 0], [1, 0]],
+    )
+    project.add_nodes(nodes)
+
+    links = LinkCollection(
+        ids=[1],
+        from_nodes=[3],
+        to_nodes=[0],
+        directions=[1],
+        geometries=[[[3, 0], [0, 0]]],
+    )
+
+    with pytest.raises(ValueError):
+        project.add_links(links)
+
+    links = LinkCollection(
+        ids=[1],
+        from_nodes=[1],
+        to_nodes=[2],
+        directions=[1],
+        geometries=[[[1, 0], [2, 0]]],
+    )
+
+    with pytest.raises(ValueError):
+        project.add_links(links)
+
+
 def test_can_build_graph(project: ProjectWrapper):
     nodes = NodeCollection(
         ids=[0, 1, 2, 3],

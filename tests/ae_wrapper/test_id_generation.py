@@ -52,3 +52,11 @@ def test_adding_same_id_twice_raises_error(id_generator):
 
     with pytest.raises(ValueError):
         id_generator.get_new_ids([6, 6])
+
+
+def test_querying_nonexistent_id_raises(id_generator):
+    with pytest.raises(ValueError):
+        id_generator.query_new_ids([99])
+
+    with pytest.raises(ValueError):
+        id_generator.query_original_ids([99])

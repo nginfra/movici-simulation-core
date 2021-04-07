@@ -64,8 +64,8 @@ def model_config(model_name, road_network_name, virtual_nodes_name):
 
 
 class TestTrafficAssignmentCalculation:
+    @staticmethod
     def test_traffic_assignment_calculation(
-        self,
         get_entity_update,
         config,
         model_name,
@@ -175,4 +175,43 @@ class TestTrafficAssignmentCalculation:
             name=model_name,
             scenario=scenario,
             atol=0.01,
+        )
+
+
+class TestVirtualNodesInSameDataset:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_with_virtual_nodes,
+        road_network_name,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_with_virtual_nodes},
+        ]
+
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name):
+        return {
+            "name": model_name,
+            "type": "traffic_assignment_calculation",
+            "transport_network_segments": [(road_network_name, "road_segment_entities")],
+            "transport_network_vertices": [(road_network_name, "road_vertex_entities")],
+            "demand_nodes": [(road_network_name, "virtual_node_entities")],
+        }
+
+    def test_traffic_assignment_calculation(
+        self,
+        get_entity_update,
+        config,
+        model_name,
+        road_network_name,
+        time_scale,
+    ):
+        TestTrafficAssignmentCalculation.test_traffic_assignment_calculation(
+            get_entity_update,
+            config,
+            model_name,
+            road_network_name,
+            road_network_name,
+            time_scale,
         )

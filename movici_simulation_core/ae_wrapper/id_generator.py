@@ -23,9 +23,15 @@ class IdGenerator:
             raise ValueError("Index is non unique")
 
     def query_new_ids(self, original_ids: Union[np.ndarray, Sequence]) -> np.ndarray:
-        return self.index[original_ids] + 1
+        index = self.index[original_ids]
+        if np.any(index == -1):
+            raise ValueError(f"Original ids {original_ids} non-existent in index")
+        return index + 1
 
     def query_original_ids(self, new_ids: Union[np.ndarray, Sequence]) -> np.ndarray:
         if not isinstance(new_ids, np.ndarray):
             new_ids = np.array(new_ids)
-        return self.index.ids[new_ids - 1]
+        try:
+            return self.index.ids[new_ids - 1]
+        except IndexError:
+            raise ValueError(f"New ids {new_ids} non-existent in index")

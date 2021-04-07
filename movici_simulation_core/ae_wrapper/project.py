@@ -52,6 +52,8 @@ class ProjectWrapper:
     This class wraps Aequilibrae methods with sensible methods and bugfixes
     """
 
+    transformer = Transformer.from_crs(28992, 4326)
+
     def __init__(self, project_dir: str, remove_existing: bool = False) -> None:
         project_dir = Path(project_dir, "ae_project_dir")
         if remove_existing and project_dir.exists():
@@ -83,13 +85,11 @@ class ProjectWrapper:
             print(e)
 
     def add_nodes(self, nodes: NodeCollection) -> None:
-        transformer = Transformer.from_crs(28992, 4326)
-
         new_node_ids = self._node_id_generator.get_new_ids(nodes.ids)
 
         point_strs = []
         for node_id, (node_x, node_y) in zip(new_node_ids, nodes.geometries):
-            lat, lon = transformer.transform(node_x, node_y)
+            lat, lon = self.transformer.transform(node_x, node_y)
             point_strs.append(f"POINT({lon} {lat})")
             self._node_id_to_point[node_id] = (node_x, node_y)
 
@@ -118,15 +118,20 @@ class ProjectWrapper:
         return NodeCollection(ids=node_id, is_centroids=is_centroids)
 
     def add_links(self, links: LinkCollection) -> None:
-        transformer = Transformer.from_crs(28992, 4326)
+        try:
+            new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
+        except ValueError:
+            raise ValueError(f"From nodes {links.from_nodes} does not exist in node ids")
 
-        new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
-        new_to_nodes = self._node_id_generator.query_new_ids(links.to_nodes)
+        try:
+            new_to_nodes = self._node_id_generator.query_new_ids(links.to_nodes)
+        except ValueError:
+            raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids")
 
         linestring_strs = []
         for from_node, to_node, linestring in zip(new_from_nodes, new_to_nodes, links.geometries):
             linestring_strs.append(
-                self._get_linestring_string(linestring, from_node, to_node, transformer)
+                self._get_linestring_string(linestring, from_node, to_node, self.transformer)
             )
 
         new_link_ids = self._link_id_generator.get_new_ids(links.ids)
