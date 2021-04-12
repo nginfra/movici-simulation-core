@@ -117,7 +117,7 @@ class ProjectWrapper:
         node_id = self._node_id_generator.query_original_ids(node_id)
         return NodeCollection(ids=node_id, is_centroids=is_centroids)
 
-    def add_links(self, links: LinkCollection) -> None:
+    def add_links(self, links: LinkCollection, raise_on_geometry_mismatch=True) -> None:
         try:
             new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
         except ValueError:
@@ -131,7 +131,9 @@ class ProjectWrapper:
         linestring_strs = []
         for from_node, to_node, linestring in zip(new_from_nodes, new_to_nodes, links.geometries):
             linestring_strs.append(
-                self._get_linestring_string(linestring, from_node, to_node, self.transformer)
+                self._get_linestring_string(
+                    linestring, from_node, to_node, self.transformer, raise_on_geometry_mismatch
+                )
             )
 
         new_link_ids = self._link_id_generator.get_new_ids(links.ids)
@@ -180,7 +182,12 @@ class ProjectWrapper:
         )
 
     def _get_linestring_string(
-        self, linestring: Sequence, from_node, to_node, transformer: Transformer
+        self,
+        linestring: Sequence,
+        from_node,
+        to_node,
+        transformer: Transformer,
+        raise_on_geometry_mismatch=True,
     ) -> str:
         linestring2d = []
 
@@ -192,7 +199,9 @@ class ProjectWrapper:
             #  regardless of the node id specified
             if i == 0:
                 from_node_point = self._node_id_to_point[from_node]
-                if not np.allclose(point, from_node_point, atol=0.1):
+                if raise_on_geometry_mismatch and not np.allclose(
+                    point, from_node_point, atol=0.1
+                ):
                     raise ValueError(
                         f"Mismatch in data:"
                         f" Linestring beginning has point {point} but"
@@ -201,7 +210,7 @@ class ProjectWrapper:
                 point = from_node_point
             if i == len(linestring) - 1:
                 to_node_point = self._node_id_to_point[to_node]
-                if not np.allclose(point, to_node_point, atol=0.1):
+                if raise_on_geometry_mismatch and not np.allclose(point, to_node_point, atol=0.1):
                     raise ValueError(
                         f"Mismatch in data:"
                         f" Linestring end has point {point} but"
