@@ -176,9 +176,7 @@ class Model(TrackedBaseModel):
         demand_nodes: DemandNodeEntity, point_generator: PointGenerator
     ) -> NodeCollection:
         geometries = []
-        for node_index, (node_id, node_x, node_y) in enumerate(
-            zip(demand_nodes.index.ids, demand_nodes.x, demand_nodes.y)
-        ):
+        for node_x, node_y in zip(demand_nodes.x, demand_nodes.y):
             geometry = point_generator.generate_and_add([node_x, node_y])
             geometries.append(geometry)
 

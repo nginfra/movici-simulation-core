@@ -1,10 +1,9 @@
 import shutil
-from collections import Sequence
+import typing as t
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
-from typing import Tuple, Dict, Optional, List, Type
 
 import numpy as np
 from aequilibrae import (
@@ -63,7 +62,7 @@ class ProjectWrapper:
         self._project.new(str(self.project_dir))
         self._db = self._project.conn
 
-        self._node_id_to_point: Dict[int, Tuple[float, float]] = {}
+        self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
 
         # Aequilibrae makes assumptions on how ids should look.
         # We don't have these assumptions in model_engine,
@@ -75,7 +74,7 @@ class ProjectWrapper:
     def __enter__(self) -> "ProjectWrapper":
         return self
 
-    def __exit__(self, exc_type: Type, exc_val: Exception, exc_tb: TracebackType) -> None:
+    def __exit__(self, exc_type: t.Type, exc_val: Exception, exc_tb: TracebackType) -> None:
         self._project.close()
 
     def close(self) -> None:
@@ -117,7 +116,7 @@ class ProjectWrapper:
         node_id = self._node_id_generator.query_original_ids(node_id)
         return NodeCollection(ids=node_id, is_centroids=is_centroids)
 
-    def add_links(self, links: LinkCollection, raise_on_geometry_mismatch=True) -> None:
+    def add_links(self, links: LinkCollection, raise_on_geometry_mismatch: bool = True) -> None:
         try:
             new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
         except ValueError:
@@ -183,11 +182,11 @@ class ProjectWrapper:
 
     def _get_linestring_string(
         self,
-        linestring: Sequence,
-        from_node,
-        to_node,
+        linestring: t.Sequence,
+        from_node: int,
+        to_node: int,
         transformer: Transformer,
-        raise_on_geometry_mismatch=True,
+        raise_on_geometry_mismatch: bool = True,
     ) -> str:
         linestring2d = []
 
@@ -240,7 +239,7 @@ class ProjectWrapper:
 
         return np.array(free_flow_times)
 
-    def add_column(self, column_name: str, values: Sequence) -> None:
+    def add_column(self, column_name: str, values: t.Sequence) -> None:
         with closing(self._db.cursor()) as cursor:
             cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32)")
 
@@ -261,7 +260,10 @@ class ProjectWrapper:
         return self._project.network.graphs[TransportMode.CAR]
 
     def build_graph(
-        self, cost_field, skim_fields: Optional[List[str]] = None, block_centroid_flows=True
+        self,
+        cost_field: str,
+        skim_fields: t.Optional[t.List[str]] = None,
+        block_centroid_flows: bool = True,
     ) -> Graph:
         self._project.network.build_graphs(modes=[TransportMode.CAR])
         graph = self._graph
@@ -298,7 +300,7 @@ class ProjectWrapper:
         self,
         od_matrix_passenger: np.ndarray,
         od_matrix_cargo: np.ndarray,
-        parameters: Optional[AssignmentParameters] = None,
+        parameters: t.Optional[AssignmentParameters] = None,
     ) -> AssignmentResultCollection:
         if parameters is None:
             parameters = AssignmentParameters()
@@ -342,7 +344,7 @@ class ProjectWrapper:
             passenger_car_unit=results.PCE_tot,
         )
 
-    def get_shortest_path(self, from_node, to_node) -> Optional[GraphPath]:
+    def get_shortest_path(self, from_node: int, to_node: int) -> t.Optional[GraphPath]:
         ae_from_node, ae_to_node = self._node_id_generator.query_new_ids(
             [from_node, to_node]
         ).tolist()
@@ -371,7 +373,7 @@ class ProjectWrapper:
 
         return GraphPath(path_nodes, path_links)
 
-    def calculate_skims(self):
+    def calculate_skims(self) -> AequilibraeMatrix:
         graph = self._graph
         skimming = NetworkSkimming(graph)
         skimming.execute()

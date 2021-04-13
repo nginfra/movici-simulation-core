@@ -1,6 +1,5 @@
-from typing import Sequence, Union
-
 import numpy as np
+import numpy.typing as npt
 from pandas.core.indexes.base import InvalidIndexError
 
 from movici_simulation_core.data_tracker.index import Index
@@ -12,23 +11,23 @@ class IdGenerator:
     we have to be able to convert between our ids and aequilibrae ids
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.index = Index()
 
-    def get_new_ids(self, original_ids: Union[np.ndarray, Sequence]) -> np.ndarray:
+    def get_new_ids(self, original_ids: npt.ArrayLike) -> np.ndarray:
         try:
             self.index.add_ids(original_ids)
             return self.index[original_ids] + 1
         except InvalidIndexError:
             raise ValueError("Index is non unique")
 
-    def query_new_ids(self, original_ids: Union[np.ndarray, Sequence]) -> np.ndarray:
+    def query_new_ids(self, original_ids: npt.ArrayLike) -> np.ndarray:
         index = self.index[original_ids]
         if np.any(index == -1):
             raise ValueError(f"Original ids {original_ids} non-existent in index")
         return index + 1
 
-    def query_original_ids(self, new_ids: Union[np.ndarray, Sequence]) -> np.ndarray:
+    def query_original_ids(self, new_ids: npt.ArrayLike) -> np.ndarray:
         if not isinstance(new_ids, np.ndarray):
             new_ids = np.array(new_ids)
         try:

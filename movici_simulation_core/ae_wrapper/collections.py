@@ -1,32 +1,32 @@
+import typing as t
 from dataclasses import dataclass
-from typing import Optional, cast, List, Sequence, Union
 
 import numpy as np
+import numpy.typing as npt
 
-PointCollection = Union[List[List[float]], List[np.ndarray]]
-LinestringCollection = List[List[List[float]]]
+PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray]]
+LinestringCollection = t.List[t.List[t.List[float]]]
 
 
-def _get_numpy_array(sequence: Optional[Sequence], fill_len: int = 0) -> np.ndarray:
+def _get_numpy_array(sequence: t.Optional[npt.ArrayLike], fill_len: int = 0) -> np.ndarray:
     if sequence is None:
         return np.zeros(fill_len)
-    elif not isinstance(sequence, np.ndarray):
+    if not isinstance(sequence, np.ndarray):
         return np.array(sequence)
-    else:
-        return cast(np.ndarray, sequence)
+    return t.cast(np.ndarray, sequence)
 
 
 @dataclass(init=False)
 class NodeCollection:
     ids: np.ndarray
     is_centroids: np.ndarray
-    geometries: Optional[PointCollection]
+    geometries: t.Optional[PointCollection]
 
     def __init__(
         self,
-        ids: Optional[Sequence] = None,
-        is_centroids: Optional[Sequence] = None,
-        geometries: Optional[PointCollection] = None,
+        ids: t.Optional[npt.ArrayLike] = None,
+        is_centroids: t.Optional[npt.ArrayLike] = None,
+        geometries: t.Optional[PointCollection] = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.is_centroids = _get_numpy_array(is_centroids, len(self.ids))
@@ -41,17 +41,17 @@ class LinkCollection:
     directions: np.ndarray
     max_speeds: np.ndarray
     capacities: np.ndarray
-    geometries: Optional[LinestringCollection]
+    geometries: t.Optional[LinestringCollection]
 
     def __init__(
         self,
-        ids: Optional[Sequence] = None,
-        from_nodes: Optional[Sequence] = None,
-        to_nodes: Optional[Sequence] = None,
-        directions: Optional[Sequence] = None,
-        max_speeds: Optional[Sequence] = None,
-        capacities: Optional[Sequence] = None,
-        geometries: Optional[LinestringCollection] = None,
+        ids: t.Optional[npt.ArrayLike] = None,
+        from_nodes: t.Optional[npt.ArrayLike] = None,
+        to_nodes: t.Optional[npt.ArrayLike] = None,
+        directions: t.Optional[npt.ArrayLike] = None,
+        max_speeds: t.Optional[npt.ArrayLike] = None,
+        capacities: t.Optional[npt.ArrayLike] = None,
+        geometries: t.Optional[LinestringCollection] = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.from_nodes = _get_numpy_array(from_nodes, len(self.ids))
@@ -74,13 +74,13 @@ class AssignmentResultCollection:
 
     def __init__(
         self,
-        ids: Optional[Sequence] = None,
-        passenger_flow: Optional[Sequence] = None,
-        cargo_flow: Optional[Sequence] = None,
-        congested_time: Optional[Sequence] = None,
-        delay_factor: Optional[Sequence] = None,
-        volume_to_capacity: Optional[Sequence] = None,
-        passenger_car_unit: Optional[Sequence] = None,
+        ids: t.Optional[npt.ArrayLike] = None,
+        passenger_flow: t.Optional[npt.ArrayLike] = None,
+        cargo_flow: t.Optional[npt.ArrayLike] = None,
+        congested_time: t.Optional[npt.ArrayLike] = None,
+        delay_factor: t.Optional[npt.ArrayLike] = None,
+        volume_to_capacity: t.Optional[npt.ArrayLike] = None,
+        passenger_car_unit: t.Optional[npt.ArrayLike] = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.passenger_flow = _get_numpy_array(passenger_flow, len(self.ids))

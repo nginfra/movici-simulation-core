@@ -4,7 +4,6 @@ from abc import abstractmethod
 from model_engine import BaseModel, Config, TimeStamp, Result, DataFetcher
 from model_engine.model_driver.data_handlers import DType
 from movici_simulation_core.exceptions import NotReady
-
 from ..data_tracker.property import INIT, SUB, PUB
 from ..data_tracker.state import TrackedState
 
@@ -52,10 +51,12 @@ class TrackedBaseModelAdapter(BaseModel):
 
         if self.model_ready_for_update:
             next_time = self.model.update(self.state, time_stamp)
-            (self.model.auto_reset & SUB) and self.state.reset_tracked_changes(SUB)
+            if self.model.auto_reset & SUB:
+                self.state.reset_tracked_changes(SUB)
 
         update = self.state.generate_update(PUB)
-        (self.model.auto_reset & PUB) and self.state.reset_tracked_changes(PUB)
+        if self.model.auto_reset & PUB:
+            self.state.reset_tracked_changes(PUB)
 
         return Result(time_stamp, update, next_time)
 
