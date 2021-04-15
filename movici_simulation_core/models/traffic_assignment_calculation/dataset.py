@@ -1,3 +1,5 @@
+import typing as t
+
 from model_engine.dataset_manager.property_definition import (
     ShapeProperties,
     LineProperties,
@@ -29,20 +31,25 @@ from movici_simulation_core.data_tracker.property import (
 class DemandLinkEntity(EntityGroup):
     _linestring2d = field(to_spec(ShapeProperties.Linestring2d), flags=OPT)
     _linestring3d = field(to_spec(ShapeProperties.Linestring3d), flags=OPT)
+    _linestring: t.Optional[CSRProperty] = None
 
     from_node_id = field(to_spec(LineProperties.FromNodeId), flags=INIT)
     to_node_id = field(to_spec(LineProperties.ToNodeId), flags=INIT)
 
     @property
     def linestring(self) -> CSRProperty:
-        if self._linestring3d.is_initialized():
-            return self._linestring3d
-        if self._linestring2d.is_initialized():
-            return self._linestring2d
-        raise RuntimeError(
-            f"_linestring2d or _linestring3d needs to have data before linestring "
-            f"is called on line entity {self.__entity_name__} "
-        )
+        if not self._linestring:
+            if self._linestring3d.is_initialized():
+                self._linestring = self._linestring3d
+            elif self._linestring2d.is_initialized():
+                self._linestring = self._linestring2d
+            else:
+                raise RuntimeError(
+                    f"_linestring2d or _linestring3d needs to have data before linestring "
+                    f"is called on line entity {self.__entity_name__} "
+                )
+
+        return self._linestring
 
 
 class TransportSegmentEntity(DemandLinkEntity):

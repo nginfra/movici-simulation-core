@@ -69,14 +69,15 @@ class Model(TrackedBaseModel):
 
     def initialize(self, state: TrackedState):
         self.ensure_ready()
+
+        demand_nodes = self._get_demand_nodes(self.demand_nodes, self.project.point_generator)
+        self.project.add_nodes(demand_nodes)
+
         nodes = self._get_nodes(self.transport_nodes, self.project.point_generator)
         self.project.add_nodes(nodes)
 
         links = self._get_links(self.transport_segments)
         self.project.add_links(links)
-
-        demand_nodes = self._get_demand_nodes(self.demand_nodes, self.project.point_generator)
-        self.project.add_nodes(demand_nodes)
 
         demand_links = self._get_demand_links(self.demand_links)
         self.project.add_links(demand_links, raise_on_geometry_mismatch=False)
@@ -91,7 +92,6 @@ class Model(TrackedBaseModel):
             raise NotReady(e)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
-
         passenger_demand = self._get_matrix(self.demand_nodes.passenger_demand.csr)
         cargo_demand = self._get_matrix(self.demand_nodes.cargo_demand.csr)
 
@@ -130,19 +130,24 @@ class Model(TrackedBaseModel):
     def _get_nodes(
         vertices: TransportNodeEntity, point_generator: PointGenerator
     ) -> NodeCollection:
-        point_generator.add_points(np.stack([vertices.x.array, vertices.y.array]).T)
+
+        geometries = []
+        for node_x, node_y in zip(vertices.x, vertices.y):
+            geometry = point_generator.generate_and_add([node_x, node_y])
+            geometries.append(geometry)
 
         return NodeCollection(
             ids=vertices.index.ids,
             is_centroids=np.zeros(len(vertices), dtype=bool),
-            geometries=np.stack([vertices.x.array, vertices.y.array]).T,
+            geometries=geometries,
         )
 
     @staticmethod
     def _get_links(segments: TransportSegmentEntity) -> LinkCollection:
         geometries = []
-        for i in range(len(segments.linestring.csr.row_ptr) - 1):
-            geometries.append(segments.linestring.csr.get_row(i)[:, :2])
+        linestring_csr = segments.linestring.csr
+        for i in range(len(linestring_csr.row_ptr) - 1):
+            geometries.append(linestring_csr.get_row(i)[:, :2])
 
         directions = []
         for layout in segments.layout:
@@ -189,8 +194,9 @@ class Model(TrackedBaseModel):
     @staticmethod
     def _get_demand_links(segments: DemandLinkEntity) -> LinkCollection:
         geometries = []
-        for i in range(len(segments.linestring.csr.row_ptr) - 1):
-            geometries.append(segments.linestring.csr.get_row(i)[:, :2])
+        linestring_csr = segments.linestring.csr
+        for i in range(len(linestring_csr.row_ptr) - 1):
+            geometries.append(linestring_csr.get_row(i)[:, :2])
 
         return LinkCollection(
             ids=segments.index.ids,
