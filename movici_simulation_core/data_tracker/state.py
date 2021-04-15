@@ -224,6 +224,9 @@ class TrackedState:
             target[entity_type] = index
             return index
 
+    def has_changes(self) -> bool:
+        return any(prop.has_changes() for _, _, _, prop in self.iter_properties())
+
 
 def parse_special_values(
     general_section: dict,

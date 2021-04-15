@@ -28,7 +28,7 @@ VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
 EXTRA_REQUIREMENTS = {
     "models": [
-        "model-engine>=1.1.24",
+        "model-engine>=1.2.3",
         "shapely>=1.7.1",
         "aequilibrae>=0.7.2",
         "pyproj>=3.0.1",
@@ -50,6 +50,7 @@ setup(
         "bin/run_opportunity.py",
         "bin/run_area_aggregation.py",
         "bin/run_traffic_assignment_calculation.py",
+        "bin/run_traffic_kpi.py",
     ],
     packages=find_packages(),
     install_requires=REQUIREMENTS,

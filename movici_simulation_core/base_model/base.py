@@ -44,6 +44,9 @@ class TrackedBaseModelAdapter(BaseModel):
         self.state.receive_update(update_dict)
         self.try_initialize()
 
+        if not self.model_initialized:
+            return Result(time_stamp, {})
+
         if not self.model_ready_for_update and self.state.is_ready_for(SUB):
             self.model_ready_for_update = True
 

@@ -138,6 +138,7 @@ class Property(abc.ABC):
         self.atol = atol
         self.index = index
         self.options = options or PropertyOptions()
+        self._is_initialized = False
 
     def initialize(self, length):
         if self.has_data():
@@ -145,7 +146,10 @@ class Property(abc.ABC):
         self._data = get_undefined_array(self.data_type, length, self.rtol, self.atol)
 
     def is_initialized(self):
-        return self.has_data() and not np.any(self.is_undefined())
+        if self._is_initialized:
+            return True
+        self._is_initialized = self.has_data() and not np.any(self.is_undefined())
+        return self._is_initialized
 
     def has_data(self):
         return self._data is not None
@@ -153,6 +157,9 @@ class Property(abc.ABC):
     def has_data_or_raise(self):
         if not self.has_data():
             raise ValueError("Uninitialized array")
+
+    def has_changes(self) -> bool:
+        return np.any(self.changed)
 
     @property
     def changed(self):
