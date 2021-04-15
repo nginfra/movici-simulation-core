@@ -13,12 +13,11 @@ from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.exceptions import NotReady
+from movici_simulation_core.models.common import model_util
+from movici_simulation_core.models.common.entities import LinkEntity, PointEntity
 from .dataset import (
-    TransportSegmentEntity,
-    TransportNodeEntity,
     DemandNodeEntity,
-    DemandLinkEntity,
+    TrafficTransportSegmentEntity,
 )
 
 
@@ -27,34 +26,28 @@ class Model(TrackedBaseModel):
     Calculates traffic properties on roads
     """
 
-    dataset_to_segments = {
-        "roads": "road_segment_entities",
-        "waterways": "waterway_segment_entities",
-        "tracks": "track_segment_entities",
-    }
-
     def __init__(self):
         self.project: t.Optional[ProjectWrapper] = None
-        self.transport_segments: t.Optional[TransportSegmentEntity] = None
-        self.transport_nodes: t.Optional[TransportNodeEntity] = None
+        self.transport_segments: t.Optional[TrafficTransportSegmentEntity] = None
+        self.transport_nodes: t.Optional[PointEntity] = None
         self.demand_nodes: t.Optional[DemandNodeEntity] = None
-        self.demand_links: t.Optional[DemandLinkEntity] = None
+        self.demand_links: t.Optional[LinkEntity] = None
 
     def setup(
         self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
     ):
 
-        transport_type = self._get_transport_type(config)
+        transport_type = model_util.get_transport_type(config)
 
         transport_dataset_name = config[transport_type][0]
 
         self.transport_segments = state.register_entity_group(
             transport_dataset_name,
-            TransportSegmentEntity(name=self.dataset_to_segments[transport_type]),
+            TrafficTransportSegmentEntity(name=model_util.dataset_to_segments[transport_type]),
         )
 
         self.transport_nodes = state.register_entity_group(
-            transport_dataset_name, TransportNodeEntity(name="transport_node_entities")
+            transport_dataset_name, PointEntity(name="transport_node_entities")
         )
 
         self.demand_nodes = state.register_entity_group(
@@ -62,7 +55,7 @@ class Model(TrackedBaseModel):
         )
 
         self.demand_links = state.register_entity_group(
-            transport_dataset_name, DemandLinkEntity(name="virtual_link_entities")
+            transport_dataset_name, LinkEntity(name="virtual_link_entities")
         )
 
         self.project = ProjectWrapper(scenario_config.TEMP_DIR, remove_existing=True)
@@ -85,11 +78,8 @@ class Model(TrackedBaseModel):
         self.project.add_column("free_flow_time", self.project.calculate_free_flow_times())
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
 
-    def ensure_ready(self) -> bool:
-        try:
-            return self.transport_segments.linestring.is_initialized()
-        except RuntimeError as e:
-            raise NotReady(e)
+    def ensure_ready(self) -> None:
+        self.transport_segments.ensure_ready()
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
         passenger_demand = self._get_matrix(self.demand_nodes.passenger_demand.csr)
@@ -106,30 +96,8 @@ class Model(TrackedBaseModel):
             self.project.close()
             self.project = None
 
-    @classmethod
-    def _get_transport_type(cls, config: t.Dict[str, t.Optional[t.List[str]]]) -> str:
-        return_dataset_type = ""
-        dataset_count = 0
-
-        for dataset_type in ["roads", "waterways", "tracks"]:
-            dataset_name_list = config.get(dataset_type, [])
-            if dataset_name_list:
-                if len(dataset_name_list) > 1:
-                    raise RuntimeError("You can only have one dataset in config")
-                return_dataset_type = dataset_type
-                dataset_count += 1
-
-        if dataset_count != 1:
-            raise RuntimeError(
-                "There should be exactly one of [roads, waterways, tracks] in config"
-            )
-
-        return return_dataset_type
-
     @staticmethod
-    def _get_nodes(
-        vertices: TransportNodeEntity, point_generator: PointGenerator
-    ) -> NodeCollection:
+    def _get_nodes(vertices: PointEntity, point_generator: PointGenerator) -> NodeCollection:
 
         geometries = []
         for node_x, node_y in zip(vertices.x, vertices.y):
@@ -143,7 +111,7 @@ class Model(TrackedBaseModel):
         )
 
     @staticmethod
-    def _get_links(segments: TransportSegmentEntity) -> LinkCollection:
+    def _get_links(segments: TrafficTransportSegmentEntity) -> LinkCollection:
         geometries = []
         linestring_csr = segments.linestring.csr
         for i in range(len(linestring_csr.row_ptr) - 1):
@@ -192,7 +160,7 @@ class Model(TrackedBaseModel):
         )
 
     @staticmethod
-    def _get_demand_links(segments: DemandLinkEntity) -> LinkCollection:
+    def _get_demand_links(segments: LinkEntity) -> LinkCollection:
         geometries = []
         linestring_csr = segments.linestring.csr
         for i in range(len(linestring_csr.row_ptr) - 1):

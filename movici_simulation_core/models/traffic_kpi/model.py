@@ -1,16 +1,16 @@
 import typing as t
 
 import pandas as pd
+
 from model_engine import TimeStamp, DataFetcher
 from model_engine.model_driver.data_handlers import DType
 from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.data_tracker.property import UniformProperty
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
+from movici_simulation_core.models.common import model_util
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CoefficientsTape
-
 from .entities import TransportSegments
-
 
 CARGO = "cargo"
 PASSENGER = "passenger"
@@ -34,7 +34,7 @@ class Model(TrackedBaseModel):
         self.coefficients_tape = CoefficientsTape()
 
     def setup(self, state: TrackedState, config: dict, data_fetcher: DataFetcher, **_):
-        transport_type = self._get_transport_type(config)
+        transport_type = model_util.get_transport_type(config)
         self.build_state(state, config, transport_type)
 
         if transport_type == "roads":
@@ -155,29 +155,10 @@ class Model(TrackedBaseModel):
         csv: pd.DataFrame = pd.read_csv(data)
         self.coefficients_tape.initialize(csv)
 
-    @classmethod
-    def _get_transport_type(cls, config: t.Dict[str, t.Optional[t.List[str]]]) -> str:
-        return_dataset_type = ""
-        dataset_count = 0
-
-        for dataset_type in ["roads", "waterways", "tracks"]:
-            dataset_name_list = config.get(dataset_type, [])
-            if dataset_name_list:
-                if len(dataset_name_list) > 1:
-                    raise RuntimeError("You can only have one dataset in config")
-                return_dataset_type = dataset_type
-                dataset_count += 1
-
-        if dataset_count != 1:
-            raise RuntimeError(
-                "There should be exactly one of [roads, waterways, tracks] in config"
-            )
-
-        return return_dataset_type
-
     def build_state(self, state: TrackedState, config: t.Dict, transport_type: str):
         self.segments = state.register_entity_group(
-            dataset_name=config[transport_type][0], entity=TransportSegments()
+            dataset_name=config[transport_type][0],
+            entity=TransportSegments(name=model_util.dataset_to_segments[transport_type]),
         )
 
     def initialize(self, state: TrackedState):

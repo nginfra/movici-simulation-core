@@ -1,22 +1,17 @@
 import typing as t
 
 import numpy as np
+
 from model_engine import TimeStamp
 from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import PUB, SUB, PropertySpec
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.exceptions import NotReady
+from movici_simulation_core.models.common.entities import PolygonEntity, GeometryEntity, LineEntity
+from movici_simulation_core.models.common.model_util import try_get_geometry_type
 from spatial_mapper.mapper import Mapper, Mapping
-
 from .aggregators import functions, PropertyAggregator
-from .entities import (
-    PolygonEntity,
-    supported_geometry_types,
-    GeometryEntity,
-    LineEntity,
-)
 
 
 class Model(TrackedBaseModel):
@@ -144,8 +139,7 @@ class Model(TrackedBaseModel):
     def ensure_ready(self):
         for entity in self.src_entities:
             if isinstance(entity, LineEntity):
-                if not (entity.line2d.is_initialized() or entity.line3d.is_initialized()):
-                    raise NotReady
+                entity.ensure_ready()
 
     def resolve_mapping(self):
         mappings = {}
@@ -191,15 +185,6 @@ class Model(TrackedBaseModel):
             next_time = time_stamp + time_stamp.scale
 
         return next_time
-
-
-def try_get_geometry_type(geometry_type):
-    try:
-        return supported_geometry_types[geometry_type]
-    except KeyError:
-        raise ValueError(
-            f"models geometry_type must be one of {[k for k in supported_geometry_types.keys()]}"
-        )
 
 
 def ensure_function(func):

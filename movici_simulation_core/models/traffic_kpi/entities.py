@@ -1,4 +1,3 @@
-from model_engine.dataset_manager.entity_definition import Road
 from model_engine.dataset_manager.property_definition import (
     LineProperties,
     Transport_PassengerFlow,
@@ -12,7 +11,7 @@ from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import field, INIT, PUB, OPT
 
 
-class TransportSegments(EntityGroup, name=Road):
+class TransportSegments(EntityGroup):
     length = field(to_spec(LineProperties.Length), flags=INIT)
 
     passenger_flow = field(to_spec(Transport_PassengerFlow), flags=OPT)

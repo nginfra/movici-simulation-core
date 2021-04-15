@@ -1,14 +1,10 @@
 import numpy as np
 import pytest
+
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.property import UniformProperty, DataType
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.models.overlap_status.dataset import (
-    PointEntity,
-    LineEntity,
-    PolygonEntity,
-)
-
+from movici_simulation_core.models.common.entities import PointEntity, LineEntity, PolygonEntity
 from movici_simulation_core.models.overlap_status.overlap_status import (
     OverlapStatus,
 )
@@ -35,8 +31,8 @@ def get_point_entity(point_collection: PointCollection) -> PointEntity:
 def get_line_entity(line_collection: LineStringCollection) -> LineEntity:
     state = TrackedState()
     line = state.register_entity_group("ds", LineEntity("entity"))
-    line.line2d.initialize(len(line_collection.indptr) - 1)
-    line.line2d.csr = TrackedCSRArray(line_collection.coord_seq, line_collection.indptr)
+    line._linestring2d.initialize(len(line_collection.indptr) - 1)
+    line._linestring2d.csr = TrackedCSRArray(line_collection.coord_seq, line_collection.indptr)
     return line
 
 

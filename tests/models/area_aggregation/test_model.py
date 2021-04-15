@@ -129,7 +129,7 @@ def test_model_setup_fills_state(model, state):
     assert len(model.aggregators) == 2
     assert len(model.src_entities) == 2
 
-    assert len(state.all_properties()) == 9
+    assert len(state.all_properties()) >= 9
     assert state.is_ready_for(INIT) is False
     assert state.is_ready_for(SUB) is False
 

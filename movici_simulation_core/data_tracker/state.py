@@ -47,6 +47,10 @@ class TrackedState:
     def register_entity_group(
         self, dataset_name, entity: t.Union[t.Type[EntityGroupT], EntityGroupT]
     ) -> EntityGroupT:
+        """
+
+        :rtype: object
+        """
         if isinstance(entity, type) and issubclass(entity, EntityGroup):
             entity = entity()
         if entity.__entity_name__ is None:

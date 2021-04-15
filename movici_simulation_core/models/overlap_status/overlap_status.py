@@ -2,11 +2,12 @@ import typing as t
 from dataclasses import dataclass
 
 import numpy as np
-from movici_simulation_core.data_tracker.property import Property
 from shapely.ops import nearest_points
-from spatial_mapper.mapper import Mapper
 
-from .dataset import OverlapEntity, GeometryEntity, LineEntity
+from movici_simulation_core.data_tracker.property import Property
+from movici_simulation_core.models.common.entities import GeometryEntity, LineEntity
+from spatial_mapper.mapper import Mapper
+from .dataset import OverlapEntity
 
 
 @dataclass
@@ -48,17 +49,12 @@ class OverlapStatus:
         self._next_overlap_index: int = 0
 
     def is_ready(self) -> bool:
-        if isinstance(self._from_entity, LineEntity):
-            if not (
-                self._from_entity.line2d.is_initialized()
-                or self._from_entity.line3d.is_initialized()
-            ):
-                return False
+        if isinstance(self._from_entity, LineEntity) and not self._from_entity.is_ready():
+            return False
 
         for entity in self._to_entities:
-            if isinstance(entity, LineEntity):
-                if not (entity.line2d.is_initialized() or entity.line3d.is_initialized()):
-                    return False
+            if isinstance(entity, LineEntity) and not entity.is_ready():
+                return False
 
         if (
             "{to_reference}" in self.display_name_template

@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import pytest
+
 from model_engine import testing
 from movici_simulation_core.models.time_window_status.model import Model
 
@@ -18,27 +19,6 @@ def time_scale():
 @pytest.fixture
 def model_name():
     return "test_time_window_status"
-
-
-@pytest.fixture
-def config(
-    model_config,
-    init_data,
-    time_scale,
-):
-    return {
-        "config": {
-            "version": 4,
-            "simulation_info": {
-                "reference_time": 1_577_833_200,
-                "start_time": 0,
-                "time_scale": time_scale,
-                "duration": 730,
-            },
-            "models": [model_config],
-        },
-        "init_data": init_data,
-    }
 
 
 @pytest.fixture

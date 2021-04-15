@@ -6,38 +6,11 @@ from movici_simulation_core.models.traffic_assignment_calculation.model import M
 
 
 @pytest.fixture
-def time_scale():
-    return 1
-
-
-@pytest.fixture
 def model_name():
     return "test_traffic_assignment_calculation"
 
 
-@pytest.fixture
-def config(
-    time_scale,
-    model_config,
-    init_data,
-):
-
-    return {
-        "config": {
-            "version": 4,
-            "simulation_info": {
-                "reference_time": 1_577_833_200,
-                "start_time": 0,
-                "time_scale": time_scale,
-                "duration": 30,
-            },
-            "models": [model_config],
-        },
-        "init_data": init_data,
-    }
-
-
-@pytest.fixture(params=["road_network", "road_network_with_line3d"])
+@pytest.fixture(params=["road_network_for_traffic", "road_network_for_traffic_with_line3d"])
 def init_data(
     request,
     road_network_name,
@@ -61,8 +34,8 @@ def model_config(model_name, road_network_name):
 
 
 class TestTrafficAssignmentCalculation:
-    @staticmethod
     def test_traffic_assignment_calculation(
+        self,
         get_entity_update,
         config,
         model_name,

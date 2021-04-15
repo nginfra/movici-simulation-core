@@ -6,9 +6,9 @@ from movici_simulation_core.base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.property import PropertySpec, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
-
-from .dataset import OverlapEntity, supported_geometry_types
+from .dataset import OverlapEntity
 from .overlap_status import OverlapStatus
+from ..common.model_util import try_get_geometry_type
 
 
 class Model(TrackedBaseModel):
@@ -106,12 +106,3 @@ class Model(TrackedBaseModel):
             )
         if len(spec.data_type.unit_shape):
             raise ValueError(f"property {ds}/{entity}/{spec.full_name} should be one-dimensional")
-
-
-def try_get_geometry_type(geometry_type):
-    try:
-        return supported_geometry_types[geometry_type]
-    except KeyError:
-        raise ValueError(
-            f"models geometry_type must be one of {[k for k in supported_geometry_types.keys()]}"
-        )

@@ -38,27 +38,6 @@ def overlap_dataset(overlap_dataset_name):
 
 
 @pytest.fixture
-def config(
-    model_config,
-    init_data,
-    time_scale,
-):
-    return {
-        "config": {
-            "version": 4,
-            "simulation_info": {
-                "reference_time": 1_577_833_200,
-                "start_time": 0,
-                "time_scale": time_scale,
-                "duration": 730,
-            },
-            "models": [model_config],
-        },
-        "init_data": init_data,
-    }
-
-
-@pytest.fixture
 def from_network_name():
     return "from_network"
 
