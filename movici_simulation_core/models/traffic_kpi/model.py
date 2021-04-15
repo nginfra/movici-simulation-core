@@ -48,7 +48,7 @@ class Model(TrackedBaseModel):
                 "There should be exactly one of [roads, waterways, tracks] in config"
             )
 
-        self.initialize_coefficients(data_fetcher=data_fetcher, name=config["coefficients_csv"])
+        self.initialize_coefficients(data_fetcher=data_fetcher, name=config["coefficients_csv"][0])
 
     def add_road_coefficients(
         self,

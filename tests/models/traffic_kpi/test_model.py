@@ -43,7 +43,7 @@ def model_config(
         "name": model_name,
         "type": "traffic_kpi",
         "roads": [road_network_name],
-        "coefficients_csv": coefficients_csv_name,
+        "coefficients_csv": [coefficients_csv_name],
     }
 
 
