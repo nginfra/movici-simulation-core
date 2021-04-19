@@ -239,7 +239,7 @@ class UniformProperty(Property):
         self.array[key] = value
 
     def _prevent_undefined(self, key, value):
-        value = np.asarray(value)
+        value = np.array(value, copy=True)
         undefs = _is_undefined(value, self.data_type.undefined)
         if np.any(undefs):
             current = self.array[key]

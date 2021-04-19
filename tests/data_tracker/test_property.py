@@ -274,6 +274,14 @@ def test_doesnt_overwrite_uniform_property_with_undefined(key, value):
     assert not any(prop.is_undefined())
 
 
+def test_doesnt_change_input_array():
+    prop = UniformProperty(TrackedArray([0, 1]), data_type=int_data_type)
+    update = np.array([int_undefined, int_undefined])
+    update.flags.writeable = False
+    prop[:] = update
+    assert np.array_equal(update, [int_undefined, int_undefined])
+
+
 str_data_type = DataType(str, (), False)
 str_undefined = str_data_type.undefined
 
