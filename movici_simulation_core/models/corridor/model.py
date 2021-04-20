@@ -101,7 +101,6 @@ class Model(TrackedBaseModel):
             )
 
         self._calculate_updates()
-
         return None
 
     def _calculate_updates(self) -> None:
@@ -113,10 +112,10 @@ class Model(TrackedBaseModel):
         for corridor_index in range(len(self._corridor_entity.index.ids)):
             from_ids = self._corridor_entity.from_nodes.csr.get_row(corridor_index)
             to_ids = self._corridor_entity.to_nodes.csr.get_row(corridor_index)
+            publish_geometry = self.publish_corridor_geometry
 
             for from_id in from_ids:
                 paths = self._project.get_shortest_paths(from_id, to_ids)
-                publish_geometry = self.publish_corridor_geometry
                 for corridor_to_index, (to_id, path) in enumerate(zip(to_ids, paths)):
                     self._calculate_properties_for(
                         corridor_index,
