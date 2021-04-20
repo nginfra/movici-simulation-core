@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
+from aequilibrae import PathResults
 
 PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray]]
 LinestringCollection = t.List[t.List[t.List[float]]]
@@ -95,3 +96,4 @@ class AssignmentResultCollection:
 class GraphPath:
     nodes: np.ndarray
     links: np.ndarray
+    path_results: PathResults

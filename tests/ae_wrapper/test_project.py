@@ -517,6 +517,15 @@ def test_shortest_path_blocking(p_triangle_block: ProjectWrapper):
     assert np.array_equal(path.links, [16, 104, 102, 17])
 
 
+def test_shortest_paths(p_triangle_block: ProjectWrapper):
+    paths = p_triangle_block.get_shortest_paths(15, [16, 17])
+    assert np.array_equal(paths[0].nodes, [15, 5, 7, 6, 16])
+    assert np.array_equal(paths[0].links, [15, 102, 103, 16])
+
+    assert np.array_equal(paths[1].nodes, [15, 5, 7, 17])
+    assert np.array_equal(paths[1].links, [15, 102, 17])
+
+
 @pytest.mark.parametrize("p", ("p_triangle", "p_triangle_block"), indirect=True)
 def test_skimming(p: ProjectWrapper):
     skims = p.calculate_skims()

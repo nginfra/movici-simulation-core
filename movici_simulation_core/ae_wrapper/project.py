@@ -239,10 +239,15 @@ class ProjectWrapper:
 
         return np.array(free_flow_times)
 
-    def add_column(self, column_name: str, values: t.Sequence) -> None:
+    def add_column(self, column_name: str, values: t.Optional[t.Sequence] = None) -> None:
         with closing(self._db.cursor()) as cursor:
-            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32)")
+            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
 
+        if values is not None:
+            self.update_column(column_name, values)
+
+    def update_column(self, column_name: str, values: t.Sequence) -> None:
+        with closing(self._db.cursor()) as cursor:
             cursor.execute("SELECT link_id FROM links")
             ids = (row[0] for row in cursor.fetchall())
 
@@ -344,7 +349,9 @@ class ProjectWrapper:
             passenger_car_unit=results.PCE_tot,
         )
 
-    def get_shortest_path(self, from_node: int, to_node: int) -> t.Optional[GraphPath]:
+    def get_shortest_path(
+        self, from_node: int, to_node: int, path_results: t.Optional[PathResults] = None
+    ) -> t.Optional[GraphPath]:
         ae_from_node, ae_to_node = self._node_id_generator.query_new_ids(
             [from_node, to_node]
         ).tolist()
@@ -353,11 +360,12 @@ class ProjectWrapper:
         skim_fields = graph.skim_fields
         graph.set_skimming([])
 
-        path_results = PathResults()
-        path_results.prepare(graph)
-
-        path_results.compute_path(ae_from_node, ae_from_node)
-        path_results.update_trace(ae_to_node)
+        if not path_results:
+            path_results = PathResults()
+            path_results.prepare(graph)
+            path_results.compute_path(ae_from_node, ae_to_node)
+        else:
+            path_results.update_trace(ae_to_node)
 
         ae_path_nodes, ae_path_links = path_results.path_nodes, path_results.path
 
@@ -371,7 +379,22 @@ class ProjectWrapper:
             self._link_id_generator.query_original_ids(ae_path_links),
         )
 
-        return GraphPath(path_nodes, path_links)
+        return GraphPath(path_nodes, path_links, path_results)
+
+    def get_shortest_paths(
+        self, from_node: int, to_nodes: t.List[int]
+    ) -> t.List[t.Optional[GraphPath]]:
+        results: t.List[t.Optional[GraphPath]] = []
+        for i, to_node in enumerate(to_nodes):
+            if i == 0:
+                results.append(self.get_shortest_path(from_node, to_node))
+            else:
+                results.append(
+                    self.get_shortest_path(
+                        from_node, to_node, path_results=results[0].path_results
+                    )
+                )
+        return results
 
     def calculate_skims(self) -> AequilibraeMatrix:
         graph = self._graph

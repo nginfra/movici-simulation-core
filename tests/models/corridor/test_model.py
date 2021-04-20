@@ -1,6 +1,6 @@
 import pytest
-from model_engine import testing
 
+from model_engine import testing
 from movici_simulation_core.base_model.base import model_factory
 from movici_simulation_core.models.corridor.model import Model
 
@@ -30,11 +30,11 @@ def model_config(model_name, road_network_name, corridor_dataset_name):
         "waterways": [],
         "tracks": [],
         "cargo_pcu": 2.0,
+        "publish_corridor_geometry": True,
     }
 
 
 class TestCorridor:
-    @pytest.mark.xfail
     def test_corridor(
         self,
         get_entity_update,
@@ -77,26 +77,88 @@ class TestCorridor:
                     },
                 },
                 {"time": 1, "data": {}},
+                {
+                    "time": 2,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [102, 103],
+                                "transport.passenger_flow": [2, 2],
+                                "transport.cargo_flow": [1, 0],
+                                "traffic_properties": {"average_time": [10, 40]},
+                                "transport.passenger_car_unit": [
+                                    4,
+                                    2,
+                                ],
+                                "transport.co2_emission.hours": [100, 100],
+                                "transport.nox_emission.hours": [200, 400],
+                                "transport.energy_consumption.hours": [10, 4],
+                            },
+                            "virtual_node_entities": {
+                                "id": [10],
+                                "transport.passenger_demand": [[0, 2, 0]],
+                                "transport.cargo_demand": [[0, 0, 1]],
+                            },
+                        }
+                    },
+                },
             ],
             "expected_results": [
                 {
                     "time": 0,
                     "data": {
                         corridor_dataset_name: {
-                            "road_segment_entities": {
+                            "corridor_entities": {
                                 "id": [1, 2],
                                 "transport.passenger_flow": [5, 15],
                                 "transport.cargo_flow": [2, 3],
-                                "traffic_properties": {"average_time": [23, 16.7143]},
+                                "traffic_properties": {"average_time": [23, 16.1429]},
                                 "transport.passenger_car_unit": [9, 21],
                                 "transport.co2_emission.hours": [64.1304, 116.3044],
-                                "transport.nox_emission.hours": [153.2609, 309.7826],
-                                "transport.energy_consumption.hours": [2.9565, 5.0435],
+                                "transport.nox_emission.hours": [153.2609, 257.6087],
+                                "transport.energy_consumption.hours": [2.9565, 5.5652],
+                                "transport.volume_to_capacity_ratio": [1.44, 1.44],
+                                "transport.delay_factor": [49.1420, 49.1420],
+                                "shape_properties": {
+                                    "linestring_2d": [
+                                        [
+                                            [97700, 434000],
+                                            [97702, 434000],
+                                            [97704, 434000],
+                                            [97701, 434000],
+                                        ],
+                                        [
+                                            [97700, 434000],
+                                            [97702, 434000],
+                                            [97704, 434000],
+                                            [97701, 434000],
+                                        ],
+                                    ]
+                                },
                             },
                         }
                     },
                 },
                 {"time": 1, "data": {}},
+                {
+                    "time": 2,
+                    "data": {
+                        corridor_dataset_name: {
+                            "corridor_entities": {
+                                "id": [1, 2],
+                                "transport.passenger_flow": [2, 2],
+                                "transport.cargo_flow": [0, 1],
+                                "traffic_properties": {"average_time": [50, 30]},
+                                "transport.passenger_car_unit": [2, 4],
+                                "transport.co2_emission.hours": [150, 200],
+                                "transport.nox_emission.hours": [500, 600],
+                                "transport.energy_consumption.hours": [9, 14],
+                                "transport.volume_to_capacity_ratio": [0.08, 0.08],
+                                "transport.delay_factor": [106.8305, 106.8305],
+                            },
+                        }
+                    },
+                },
             ],
         }
 
