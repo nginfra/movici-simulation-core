@@ -1,5 +1,7 @@
 import shutil
+import tempfile
 import typing as t
+import uuid
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,36 +55,60 @@ class ProjectWrapper:
 
     transformer = Transformer.from_crs(28992, 4326)
 
-    def __init__(self, project_dir: str, remove_existing: bool = False) -> None:
-        project_dir = Path(project_dir, "ae_project_dir")
+    def __init__(
+        self,
+        project_path: t.Optional[str] = None,
+        project_name: t.Optional[str] = None,
+        delete_on_close: bool = True,
+    ) -> None:
+
+        self._delete_on_close = delete_on_close
+
+        if project_path is None:
+            project_path = tempfile.gettempdir()
+
+        if project_name is None:
+            project_name = str(uuid.uuid4())
+
+        project_dir = Path(project_path, "ae_project")
         project_dir.mkdir(parents=True, exist_ok=True)
-        if remove_existing and project_dir.exists():
-            shutil.rmtree(project_dir)
+        project_dir = Path(project_dir, project_name)
+
         self.project_dir = project_dir
-        self._project = Project()
-        self._project.new(str(self.project_dir))
-        self._db = self._project.conn
 
-        self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
+        try:
+            self._project = Project()
+            self._project.new(str(self.project_dir))
+            self._db = self._project.conn
 
-        # Aequilibrae makes assumptions on how ids should look.
-        # We don't have these assumptions in model_engine,
-        #   so we have to map them to new ids.
-        self._node_id_generator = IdGenerator()
-        self._link_id_generator = IdGenerator()
-        self.point_generator = PointGenerator()
+            self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
+
+            # Aequilibrae makes assumptions on how ids should look.
+            # We don't have these assumptions in model_engine,
+            #   so we have to map them to new ids.
+            self._node_id_generator = IdGenerator()
+            self._link_id_generator = IdGenerator()
+            self.point_generator = PointGenerator()
+        except Exception as e:
+            self.close()
+            raise e
 
     def __enter__(self) -> "ProjectWrapper":
         return self
 
     def __exit__(self, exc_type: t.Type, exc_val: Exception, exc_tb: TracebackType) -> None:
-        self._project.close()
+        self.close()
 
     def close(self) -> None:
         try:
-            self._project.close()
+            if self._project is not None:
+                self._project.close()
+                self._project = None
         except AttributeError as e:
             print(e)
+        finally:
+            if self._delete_on_close and self.project_dir.exists():
+                shutil.rmtree(self.project_dir)
 
     def add_nodes(self, nodes: NodeCollection) -> None:
         new_node_ids = self._node_id_generator.get_new_ids(nodes.ids)

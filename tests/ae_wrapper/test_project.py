@@ -1,5 +1,7 @@
 import os
+import shutil
 import sqlite3
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -22,27 +24,37 @@ def project_dir():
     return os.path.dirname(__file__)
 
 
+def delete_project_if_exists(project_dir):
+    path = Path(project_dir, "ae_project_dir")
+    if path.exists():
+        shutil.rmtree(path)
+
+
 @pytest.fixture
 def project(project_dir):
-    with ProjectWrapper(project_dir, remove_existing=True) as project:
+    delete_project_if_exists(project_dir)
+    with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
         yield project
 
 
 def test_can_create_empty_project(project_dir):
-    with ProjectWrapper(project_dir, remove_existing=True) as project:
+    delete_project_if_exists(project_dir)
+    with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
         assert len(project.get_nodes().ids) == 0
         assert len(project.get_links().ids) == 0
 
 
 def test_can_create_project_after_deletion(project_dir):
-    with ProjectWrapper(project_dir, remove_existing=True) as project:
+    delete_project_if_exists(project_dir)
+    with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
         project.close()
-    with ProjectWrapper(project_dir, remove_existing=True):
+    with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True):
         pass
 
 
 def test_closes_db_after_deletion(project_dir):
-    with ProjectWrapper(project_dir, remove_existing=True) as project:
+    delete_project_if_exists(project_dir)
+    with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
         db = project._db
 
     with pytest.raises(sqlite3.ProgrammingError):
@@ -59,9 +71,6 @@ def test_can_add_nodes(project: ProjectWrapper):
 
     assert np.array_equal(resulting_nodes.ids, nodes.ids)
     assert np.array_equal(resulting_nodes.is_centroids, nodes.is_centroids)
-
-
-# TODO add multiple nodes, add multiple links
 
 
 def test_can_add_links(project: ProjectWrapper):
