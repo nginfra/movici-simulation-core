@@ -1,4 +1,5 @@
 import typing as t
+from pathlib import Path
 
 import numpy as np
 
@@ -50,7 +51,9 @@ class Model(TrackedBaseModel):
             transport_dataset_name, LinkEntity(name="virtual_link_entities")
         )
 
-        self.project = ProjectWrapper(scenario_config.TEMP_DIR, remove_existing=True)
+        self.project = ProjectWrapper(
+            str(Path(scenario_config.TEMP_DIR, config["name"])), remove_existing=True
+        )
 
     def initialize(self, state: TrackedState):
         self.ensure_ready()

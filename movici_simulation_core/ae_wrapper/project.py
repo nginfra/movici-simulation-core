@@ -55,6 +55,7 @@ class ProjectWrapper:
 
     def __init__(self, project_dir: str, remove_existing: bool = False) -> None:
         project_dir = Path(project_dir, "ae_project_dir")
+        project_dir.mkdir(parents=True, exist_ok=True)
         if remove_existing and project_dir.exists():
             shutil.rmtree(project_dir)
         self.project_dir = project_dir

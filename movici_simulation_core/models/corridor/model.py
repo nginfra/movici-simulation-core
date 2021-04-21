@@ -1,4 +1,5 @@
 import typing as t
+from pathlib import Path
 
 import numpy as np
 
@@ -44,7 +45,9 @@ class Model(TrackedBaseModel):
             "publish_corridor_geometry", self.publish_corridor_geometry
         )
 
-        self._project = ProjectWrapper(scenario_config.TEMP_DIR, remove_existing=True)
+        self._project = ProjectWrapper(
+            str(Path(scenario_config.TEMP_DIR, config["name"])), remove_existing=True
+        )
 
         self._corridor_entity = state.register_entity_group(
             dataset_name=config["corridors"][0], entity=CorridorEntity
