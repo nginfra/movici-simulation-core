@@ -51,6 +51,7 @@ setup(
         "bin/run_area_aggregation.py",
         "bin/run_traffic_assignment_calculation.py",
         "bin/run_traffic_kpi.py",
+        "bin/run_corridor.py",
     ],
     packages=find_packages(),
     install_requires=REQUIREMENTS,
