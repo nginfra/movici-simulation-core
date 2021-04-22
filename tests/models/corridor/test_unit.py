@@ -98,16 +98,36 @@ def test_weighted_travel_time(model: Model):
     model._calculate_weighted_travel_time(
         corridor_index=2, roads_indices=np.array([0]), pcu_demand=10
     )
-    assert model._corridor_entity.travel_time[2] == 100
+    assert np.isclose(model._corridor_entity.travel_time[2], 100)
 
     model._calculate_weighted_travel_time(
         corridor_index=2, roads_indices=np.array([2, 3]), pcu_demand=10
     )
-    assert model._corridor_entity.travel_time[2] == 100 + 300 + 400
+    assert np.isclose(model._corridor_entity.travel_time[2], 100 + 300 + 400)
 
     model._corridor_entity.passenger_car_unit[2] = 20
-    model._calculate_average_travel_time()
-    assert model._corridor_entity.travel_time[2] == 40
+    num_connections = np.array([1, 1, 2, 1, 1])
+    model._calculate_average_travel_time(num_connections)
+    assert np.isclose(model._corridor_entity.travel_time[2], 40)
+
+
+def test_weighted_travel_time_0_pcu(model: Model):
+    model._transport_segments.travel_time.array = TrackedArray([10, 20, 30, 40])
+
+    model._calculate_weighted_travel_time(
+        corridor_index=2, roads_indices=np.array([0]), pcu_demand=0
+    )
+    assert np.isclose(model._corridor_entity.travel_time[2], 0)
+
+    model._calculate_weighted_travel_time(
+        corridor_index=2, roads_indices=np.array([2, 3]), pcu_demand=0
+    )
+    assert np.isclose(model._corridor_entity.travel_time[2], 0)
+
+    model._corridor_entity.passenger_car_unit[2] = 0
+    num_connections = np.array([1, 1, 2, 1, 1])
+    model._calculate_average_travel_time(num_connections)
+    assert np.isclose(model._corridor_entity.travel_time[2], 40)
 
 
 def test_max_delay_factor(model: Model):

@@ -23,6 +23,8 @@ class Model(TrackedBaseModel):
     Implementation of the corridor model
     """
 
+    epsilon = 1e-12
+
     def __init__(self) -> None:
         super(Model, self).__init__()
         self._corridor_entity: t.Optional[CorridorEntity] = None
@@ -108,15 +110,17 @@ class Model(TrackedBaseModel):
 
         roads_index = self._transport_segments.index
         demand_nodes_index = self._demand_nodes.index
+        num_connections = np.zeros_like(self._corridor_entity.index.ids)
 
         for corridor_index in range(len(self._corridor_entity.index.ids)):
             from_ids = self._corridor_entity.from_nodes.csr.get_row(corridor_index)
             to_ids = self._corridor_entity.to_nodes.csr.get_row(corridor_index)
+            num_connections[corridor_index] += len(from_ids) * len(to_ids)
             publish_geometry = self.publish_corridor_geometry
 
             for from_id in from_ids:
                 paths = self._project.get_shortest_paths(from_id, to_ids)
-                for corridor_to_index, (to_id, path) in enumerate(zip(to_ids, paths)):
+                for to_id, path in zip(to_ids, paths):
                     self._calculate_properties_for(
                         corridor_index,
                         from_id,
@@ -128,7 +132,7 @@ class Model(TrackedBaseModel):
                     )
                     publish_geometry = False
 
-        self._calculate_average_travel_time()
+        self._calculate_average_travel_time(num_connections)
 
     def _calculate_properties_for(
         self,
@@ -146,9 +150,15 @@ class Model(TrackedBaseModel):
         cargo_demand = self._demand_nodes.cargo_demand.csr.get_row(from_idx)[to_idx]
         pcu_demand = self.cargo_pcu * cargo_demand + passenger_demand
 
-        roads_indices = roads_index[path.links][1:-1]
-
         self._add_node_properties(corridor_index, passenger_demand, cargo_demand, pcu_demand)
+
+        if path.links is None:
+            return
+
+        roads_indices = roads_index[path.links][1:-1]
+        if len(roads_indices) == 0:
+            return
+
         self._add_link_properties(corridor_index, roads_indices, pcu_demand)
 
         if publish_corridor_geometry:
@@ -189,11 +199,13 @@ class Model(TrackedBaseModel):
         self, corridor_index: int, roads_indices: np.ndarray, pcu_demand: float
     ) -> None:
         self._corridor_entity.travel_time[corridor_index] += (
-            pcu_demand * self._transport_segments.travel_time[roads_indices].sum()
-        )
+            pcu_demand + self.epsilon
+        ) * self._transport_segments.travel_time[roads_indices].sum()
 
-    def _calculate_average_travel_time(self) -> None:
-        self._corridor_entity.travel_time.array /= self._corridor_entity.passenger_car_unit.array
+    def _calculate_average_travel_time(self, num_connections: np.ndarray) -> None:
+        self._corridor_entity.travel_time.array /= (
+            self._corridor_entity.passenger_car_unit.array + num_connections * self.epsilon
+        )
 
     def _calculate_max_delay_factor(self, corridor_index: int, roads_indices: np.ndarray) -> None:
         self._corridor_entity.delay_factor[corridor_index] = np.maximum(
