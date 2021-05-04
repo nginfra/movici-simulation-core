@@ -6,7 +6,7 @@ from model_engine import TimeStamp, Config, DataFetcher
 from movici_simulation_core.ae_wrapper.collections import (
     AssignmentResultCollection,
 )
-from movici_simulation_core.ae_wrapper.project import ProjectWrapper
+from movici_simulation_core.ae_wrapper.project import ProjectWrapper, AssignmentParameters
 from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -22,6 +22,10 @@ class Model(TrackedBaseModel):
     """
     Calculates traffic properties on roads
     """
+
+    vdf_alpha: float
+    vdf_beta: float
+    cargo_pcu: float
 
     def __init__(self):
         self.project: t.Optional[ProjectWrapper] = None
@@ -52,6 +56,11 @@ class Model(TrackedBaseModel):
 
         self.project = ProjectWrapper(scenario_config.TEMP_DIR)
 
+        default_parameters = AssignmentParameters()
+        self.vdf_alpha = config.get("vdf_alpha", default_parameters.vdf_alpha)
+        self.vdf_beta = config.get("vdf_beta", default_parameters.vdf_beta)
+        self.cargo_pcu = config.get("cargo_pcu", default_parameters.cargo_pcu)
+
     def initialize(self, state: TrackedState):
         self.ensure_ready()
 
@@ -73,7 +82,13 @@ class Model(TrackedBaseModel):
         passenger_demand = self._get_matrix(self._demand_nodes.passenger_demand.csr)
         cargo_demand = self._get_matrix(self._demand_nodes.cargo_demand.csr)
 
-        results = self.project.assign_traffic(passenger_demand, cargo_demand)
+        results = self.project.assign_traffic(
+            passenger_demand,
+            cargo_demand,
+            AssignmentParameters(
+                vdf_alpha=self.vdf_alpha, vdf_beta=self.vdf_beta, cargo_pcu=self.cargo_pcu
+            ),
+        )
 
         self._publish_results(results)
 
