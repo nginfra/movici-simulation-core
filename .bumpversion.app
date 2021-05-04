@@ -1,5 +1,5 @@
 [bumpversion]
-current_version = 0.9.6
+current_version = 0.10.0
 allow_dirty = True
 
 [bumpversion:file:VERSION]

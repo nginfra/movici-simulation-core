@@ -24,6 +24,9 @@ class Model(TrackedBaseModel):
     Implementation of the traffic KPI model.
     Reads a csv with coefficients.
     Calculates segment CO2, NOx and energy consumption.
+
+    Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
+    Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
     segments: t.Optional[TransportSegments]

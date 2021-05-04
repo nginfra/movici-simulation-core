@@ -52,12 +52,13 @@ class TrackedBaseModelAdapter(BaseModel):
 
         next_time = None
 
+        model_updated = False
         if self.model_ready_for_update:
             next_time = self.model.update(self.state, time_stamp)
-            if self.model.auto_reset & SUB:
-                self.state.reset_tracked_changes(SUB)
-
+            model_updated = True
         update = self.state.generate_update(PUB)
+        if model_updated and self.model.auto_reset & SUB:
+            self.state.reset_tracked_changes(SUB)
         if self.model.auto_reset & PUB:
             self.state.reset_tracked_changes(PUB)
 

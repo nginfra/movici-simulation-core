@@ -87,15 +87,12 @@ def test_tape_returns_changed_first_call_after_update(model_config, state, data_
 
     model.coefficients_tape.proceed_to(TimeStamp(0))
     assert model.coefficients_tape.has_update()
-    assert not model.coefficients_tape.has_update()
 
     model.coefficients_tape.proceed_to(TimeStamp(0))
     assert not model.coefficients_tape.has_update()
 
     model.coefficients_tape.proceed_to(TimeStamp(2))
     assert model.coefficients_tape.has_update()
-    assert not model.coefficients_tape.has_update()
-    assert not model.coefficients_tape.has_update()
 
 
 def test_kpi_calculation(

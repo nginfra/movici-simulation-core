@@ -26,7 +26,7 @@ class Model(TrackedBaseModel):
     epsilon = 1e-12
 
     def __init__(self) -> None:
-        super(Model, self).__init__()
+        super().__init__()
         self._corridor_entity: t.Optional[CorridorEntity] = None
         self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
         self._transport_nodes: t.Optional[PointEntity] = None
