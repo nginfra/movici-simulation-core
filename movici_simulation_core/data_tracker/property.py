@@ -7,7 +7,7 @@ import typing as t
 import numpy as np
 
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
-from .csr_helpers import generate_update
+from .csr_helpers import generate_update, remove_undefined_csr
 from .index import Index
 from .types import CSRPropertyData, UniformPropertyData, PropertyIdentifier
 from .unicode_helpers import determine_new_unicode_dtype
@@ -330,9 +330,26 @@ class CSRProperty(Property):
         indices: np.ndarray,
     ):
         value = ensure_csr_data(value)
+        value, indices = self.prevent_undefined(value, indices)
+        if len(indices) == 0:
+            return
         if dtype := determine_new_unicode_dtype(self.csr.data, value.data):
             self.csr = self.csr.astype(dtype)
-        self.csr.update(value, indices, skip_value=self.data_type.undefined)
+        self.csr.update(value, indices)
+
+    def prevent_undefined(
+        self, value: TrackedCSRArray, indices: np.ndarray
+    ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
+
+        num_undefined = len(np.where(value.data == self.data_type.undefined)[0])
+        if num_undefined == 0:
+            return value, indices
+
+        new_data, new_row_ptr, new_indices = remove_undefined_csr(
+            value.data, value.row_ptr, np.array(indices), self.data_type.undefined, num_undefined
+        )
+
+        return TrackedCSRArray(new_data, new_row_ptr), new_indices
 
     def is_undefined(self):
         self.has_data_or_raise()

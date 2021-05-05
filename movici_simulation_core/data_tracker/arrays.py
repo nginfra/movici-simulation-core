@@ -101,7 +101,7 @@ class TrackedCSRArray:
         self.equal_nan = equal_nan
         self.reset()
 
-    def update(self, updates: TrackedCSRArray, indices: np.ndarray, skip_value=None):
+    def update(self, updates: TrackedCSRArray, indices: np.ndarray):
         """Update the CSRArray in place"""
 
         # Numba expects unicode dtypes to be of equal size, so we adjust the updates array
@@ -120,7 +120,6 @@ class TrackedCSRArray:
             rtol=self.rtol,
             atol=self.atol,
             equal_nan=self.equal_nan,
-            skip_value=skip_value,
         )
 
         self.changed += changes

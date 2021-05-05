@@ -1,3 +1,5 @@
+import typing as t
+
 import numba
 import numpy as np
 from numba.core.types import real_domain, complex_domain
@@ -50,7 +52,6 @@ def update_csr_array(
     rtol=1e-05,
     atol=1e-08,
     equal_nan=False,
-    skip_value=None,
 ):
     """Update a csr array (`data` and `row_ptr`) in place with an update csr array (`upd_data`
     and `upd_row_ptr` at the locations `upd_indices`. `data` and `upd_data` must be of the same
@@ -58,8 +59,6 @@ def update_csr_array(
     `changes` output argument as an boolean array of zeros that has the length equal to the
     number of rows in of the data csr array ( `len( row_ptr)-1`). When tracking changes `rtol`,
     `atol` and `equal_nan` mean the same as in np.isclose
-
-    skip_value may be given to skip updating a row when the update row matches the skip_value
     """
     n_rows = row_ptr.size - 1
 
@@ -79,9 +78,6 @@ def update_csr_array(
         old_row = get_row(data, row_ptr, pos)
         new_row = get_row(upd_data, upd_row_ptr, upd_idx)
 
-        if skip_value is not None and len(new_row) == 1 and new_row[0] == skip_value:
-            continue
-
         if changes is not None:
             is_equal = (old_row.shape == new_row.shape) and np.all(
                 isclose(old_row, new_row, rtol, atol, equal_nan)
@@ -89,6 +85,32 @@ def update_csr_array(
             changes[pos] = not is_equal
         set_row(new_data, new_row_ptr, pos, new_row)
     return new_data, new_row_ptr
+
+
+@numba.njit(cache=True)
+def remove_undefined_csr(
+    data: np.ndarray, row_ptr: np.ndarray, indices: np.ndarray, undefined, num_undefined
+) -> t.Tuple[np.ndarray, np.ndarray, np.ndarray]:
+
+    new_data = np.empty(len(data) - num_undefined, dtype=data.dtype)
+    new_row_ptr = np.empty(len(row_ptr) - num_undefined, dtype=row_ptr.dtype)
+    new_indices = np.empty(len(indices) - num_undefined, dtype=indices.dtype)
+
+    new_row_ptr[0] = 0
+    current_index = 0
+
+    for i, index in enumerate(indices):
+        idx = row_ptr[i]
+        idx2 = row_ptr[i + 1]
+        data_field = data[idx:idx2]
+        if len(data_field) == 1 and data_field[0] == undefined:
+            continue
+        new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
+        new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field
+        new_indices[current_index] = index
+        current_index += 1
+
+    return new_data, new_row_ptr, new_indices
 
 
 @numba.njit(cache=True)

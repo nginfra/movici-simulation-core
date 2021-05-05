@@ -316,6 +316,30 @@ def test_doesnt_overwrite_unicode_csr_property_with_undefined():
     assert not any(prop.is_undefined())
 
 
+def test_generate_csr_update_with_null_changes():
+    entity = get_entity_with_initalized_properties(2)
+
+    undefined = entity.csr_prop.data_type.undefined
+    entity.csr_prop.update((np.array([1, 2]), np.array([0, 1, 2])), np.array([0, 1]))
+    entity.csr_prop.update((np.array([undefined, 3]), np.array([0, 1, 2])), np.array([0, 1]))
+    update = entity.csr_prop.generate_update([1, 1])
+
+    assert np.array_equal(update["data"], np.array([1, 3]))
+    assert np.array_equal(update["indptr"], np.array([0, 1, 2]))
+
+
+def test_generate_csr_update_with_null_changes_differing_row_ptr():
+    entity = get_entity_with_initalized_properties(2)
+
+    undefined = entity.csr_prop.data_type.undefined
+    entity.csr_prop.update((np.array([1, 2, 3, 4]), np.array([0, 2, 4])), np.array([0, 1]))
+    entity.csr_prop.update((np.array([undefined, 5, 6]), np.array([0, 1, 3])), np.array([0, 1]))
+    update = entity.csr_prop.generate_update([1, 1])
+
+    assert np.array_equal(update["data"], np.array([1, 2, 5, 6]))
+    assert np.array_equal(update["indptr"], np.array([0, 2, 4]))
+
+
 @pytest.mark.parametrize(
     "prop,expected",
     [
