@@ -103,7 +103,7 @@ def remove_undefined_csr(
         idx = row_ptr[i]
         idx2 = row_ptr[i + 1]
         data_field = data[idx:idx2]
-        if len(data_field) == 1 and data_field[0] == undefined:
+        if len(data_field) == 1 and isclose(data_field, undefined, equal_nan=True):
             continue
         new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
         new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field

@@ -341,7 +341,12 @@ class CSRProperty(Property):
         self, value: TrackedCSRArray, indices: np.ndarray
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
 
-        num_undefined = len(np.where(value.data == self.data_type.undefined)[0])
+        try:
+            is_nan = np.isclose(value.data, self.data_type.undefined, equal_nan=True)
+        except TypeError:
+            is_nan = value.data == self.data_type.undefined
+
+        num_undefined = len(np.where(is_nan)[0])
         if num_undefined == 0:
             return value, indices
 

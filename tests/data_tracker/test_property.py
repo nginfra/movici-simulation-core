@@ -20,6 +20,7 @@ def get_entity_with_initalized_properties(len):
         csr_prop = create_empty_property(data_type=DataType(int, (), True))
         str_prop = create_empty_property(data_type=DataType(str, (), False))
         csr_str_prop = create_empty_property(data_type=DataType(str, (), True))
+        csr_float_prop = create_empty_property(data_type=DataType(float, (), True))
 
         def __init__(self, length):
             MyEntity.prop.initialize(length)
@@ -27,6 +28,7 @@ def get_entity_with_initalized_properties(len):
             MyEntity.csr_prop.initialize(length)
             MyEntity.str_prop.initialize(length)
             MyEntity.csr_str_prop.initialize(length)
+            MyEntity.csr_float_prop.initialize(length)
 
     return MyEntity(len)
 
@@ -337,6 +339,38 @@ def test_generate_csr_update_with_null_changes_differing_row_ptr():
     update = entity.csr_prop.generate_update([1, 1])
 
     assert np.array_equal(update["data"], np.array([1, 2, 5, 6]))
+    assert np.array_equal(update["indptr"], np.array([0, 2, 4]))
+
+
+def test_generate_csr_update_with_null_changes_float():
+    entity = get_entity_with_initalized_properties(2)
+
+    undefined = entity.csr_float_prop.data_type.undefined
+    entity.csr_float_prop.update(
+        (np.array([1.0, 2.0, 3.0, 4.0]), np.array([0, 2, 4])), np.array([0, 1])
+    )
+    entity.csr_float_prop.update(
+        (np.array([undefined, 5.0, 6.0]), np.array([0, 1, 3])), np.array([0, 1])
+    )
+    update = entity.csr_float_prop.generate_update([1, 1])
+
+    assert np.array_equal(update["data"], np.array([1.0, 2.0, 5.0, 6.0]))
+    assert np.array_equal(update["indptr"], np.array([0, 2, 4]))
+
+
+def test_generate_csr_update_with_null_changes_float_and_0s():
+    entity = get_entity_with_initalized_properties(2)
+
+    undefined = entity.csr_float_prop.data_type.undefined
+    entity.csr_float_prop.update(
+        (np.array([0.0, 0.0, 0.0, 0.0]), np.array([0, 2, 4])), np.array([0, 1])
+    )
+    entity.csr_float_prop.update(
+        (np.array([undefined, 1.0, 1.0]), np.array([0, 1, 3])), np.array([0, 1])
+    )
+    update = entity.csr_float_prop.generate_update([1, 1])
+
+    assert np.array_equal(update["data"], np.array([0.0, 0.0, 1.0, 1.0]))
     assert np.array_equal(update["indptr"], np.array([0, 2, 4]))
 
 

@@ -31,6 +31,17 @@ def test_is_close(arr, val, equal_nan, expected):
     assert np.array_equal(isclose(val, arr, equal_nan=equal_nan), expected)
 
 
+@pytest.mark.xfail
+def test_is_close_fail():
+    """Numba bug with np.isclose when a is an array of 0.0 and b is np.nan"""
+    arr = np.zeros(1000)
+    val = np.nan
+    equal_nan = True
+    expected = [False] * 1000
+    assert np.array_equal(isclose(arr, val, equal_nan=equal_nan), expected)
+    assert np.array_equal(isclose(val, arr, equal_nan=equal_nan), expected)
+
+
 @pytest.mark.parametrize(
     ["data", "row_ptr", "row", "equal_nan", "expected"],
     [
