@@ -20,6 +20,11 @@ from movici_simulation_core.data_tracker.csr_helpers import (
         (np.array([1, 2]), 1, False, [True, False]),
         (np.array([1, 2]), np.array([1, 1]), False, [True, False]),
         (np.array([[1, 2]]), 1, False, [[True, False]]),
+        (np.zeros(1000), np.nan, True, np.zeros(1000, dtype=bool)),
+        (np.zeros(1000), np.ones(1000), True, np.zeros(1000, dtype=bool)),
+        (np.zeros(1000), np.zeros(1000), True, np.ones(1000, dtype=bool)),
+        (np.zeros((1000, 2)), np.zeros((1000, 2)), True, np.ones((1000, 2), dtype=bool)),
+        (np.zeros((1000, 2)), np.ones((1000, 2)), True, np.zeros((1000, 2), dtype=bool)),
         (np.array(["a", "b"]), "a", False, [True, False]),
         (np.array([["a"], ["b"]]), "a", False, [[True], [False]]),
         (np.array(["aa", "bb"]), "aaa", False, [False, False]),
@@ -31,15 +36,21 @@ def test_is_close(arr, val, equal_nan, expected):
     assert np.array_equal(isclose(val, arr, equal_nan=equal_nan), expected)
 
 
-@pytest.mark.xfail
-def test_is_close_fail():
-    """Numba bug with np.isclose when a is an array of 0.0 and b is np.nan"""
-    arr = np.zeros(1000)
-    val = np.nan
-    equal_nan = True
-    expected = [False] * 1000
-    assert np.array_equal(isclose(arr, val, equal_nan=equal_nan), expected)
-    assert np.array_equal(isclose(val, arr, equal_nan=equal_nan), expected)
+@pytest.mark.parametrize(
+    ["arr", "val", "equal_nan"],
+    [
+        (np.array([1.0, np.nan, 1.0]), np.array([1.0, 1.0]), True),
+        (np.array([1.0, np.nan, 1.0]), np.array([1.0, 1.0]), False),
+        (np.array(["aa", "bb", "cc"]), np.array(["aaa", "bbb"]), True),
+        (np.array(["aa", "bb", "cc"]), np.array(["aaa", "bbb"]), False),
+    ],
+)
+def test_is_close_differing_lengths_throws(arr, val, equal_nan):
+    with pytest.raises(ValueError):
+        isclose(arr, val, equal_nan=equal_nan)
+
+    with pytest.raises(ValueError):
+        isclose(val, arr, equal_nan=equal_nan)
 
 
 @pytest.mark.parametrize(

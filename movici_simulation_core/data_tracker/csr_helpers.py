@@ -89,10 +89,15 @@ def update_csr_array(
 
 @numba.njit(cache=True)
 def remove_undefined_csr(
-    data: np.ndarray, row_ptr: np.ndarray, indices: np.ndarray, undefined, num_undefined
+    data: np.ndarray,
+    row_ptr: np.ndarray,
+    indices: np.ndarray,
+    undefined,
+    num_undefined,
+    new_data_shape,
 ) -> t.Tuple[np.ndarray, np.ndarray, np.ndarray]:
 
-    new_data = np.empty(len(data) - num_undefined, dtype=data.dtype)
+    new_data = np.empty(new_data_shape, dtype=data.dtype)
     new_row_ptr = np.empty(len(row_ptr) - num_undefined, dtype=row_ptr.dtype)
     new_indices = np.empty(len(indices) - num_undefined, dtype=indices.dtype)
 
@@ -103,7 +108,7 @@ def remove_undefined_csr(
         idx = row_ptr[i]
         idx2 = row_ptr[i + 1]
         data_field = data[idx:idx2]
-        if len(data_field) == 1 and isclose(data_field, undefined, equal_nan=True):
+        if len(data_field) == 1 and np.all(isclose(data_field, undefined, equal_nan=True)):
             continue
         new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
         new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field

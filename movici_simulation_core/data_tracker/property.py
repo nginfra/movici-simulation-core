@@ -7,7 +7,7 @@ import typing as t
 import numpy as np
 
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
-from .csr_helpers import generate_update, remove_undefined_csr
+from .csr_helpers import generate_update, remove_undefined_csr, isclose
 from .index import Index
 from .types import CSRPropertyData, UniformPropertyData, PropertyIdentifier
 from .unicode_helpers import determine_new_unicode_dtype
@@ -341,17 +341,24 @@ class CSRProperty(Property):
         self, value: TrackedCSRArray, indices: np.ndarray
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
 
-        try:
-            is_nan = np.isclose(value.data, self.data_type.undefined, equal_nan=True)
-        except TypeError:
-            is_nan = value.data == self.data_type.undefined
+        is_undefined = isclose(value.data, self.data_type.undefined, equal_nan=True)
+        if len(is_undefined.shape) > 1:
+            num_undefined = np.sum(np.all(is_undefined, axis=-1))
+            new_data_shape = (value.data.shape[0] - num_undefined, *value.data.shape[1:])
+        else:
+            num_undefined = np.sum(is_undefined)
+            new_data_shape = (value.data.shape[0] - num_undefined,)
 
-        num_undefined = len(np.where(is_nan)[0])
         if num_undefined == 0:
             return value, indices
 
         new_data, new_row_ptr, new_indices = remove_undefined_csr(
-            value.data, value.row_ptr, np.array(indices), self.data_type.undefined, num_undefined
+            value.data,
+            value.row_ptr,
+            np.array(indices),
+            self.data_type.undefined,
+            num_undefined,
+            new_data_shape,
         )
 
         return TrackedCSRArray(new_data, new_row_ptr), new_indices

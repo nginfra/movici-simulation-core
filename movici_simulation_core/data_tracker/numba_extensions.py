@@ -72,6 +72,7 @@ def _isclose(a, b, rtol, atol, equal_nan):  # pragma: no cover
 
     else:
         finite = xfin & yfin
+
         # Numba only supports 1D arrays for boolean indexing, so we have to
         # flatten multidimensional arrays and then later shape it back to it's original shape
 
@@ -82,8 +83,13 @@ def _isclose(a, b, rtol, atol, equal_nan):  # pragma: no cover
 
         x = x.flatten()
         y = y.flatten()
+
+        x = x * np.ones_like(cond)
+        y = y * np.ones_like(cond)
+
         # Avoid subtraction with infinite/nan values...
         cond[finite] = np.abs(x[finite] - y[finite]) <= (atol + rtol * np.abs(y[finite]))
+
         # Check for equality of infinite values...
         cond[~finite] = x[~finite] == y[~finite]
         if equal_nan:
