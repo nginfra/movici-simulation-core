@@ -279,3 +279,19 @@ def road_network_for_traffic_with_line3d(road_network_for_traffic):
     shape_properties["linestring_3d"] = linestrings
 
     return road_network_for_traffic
+
+
+@pytest.fixture
+def water_network_for_traffic(water_network_name, road_network_for_traffic):
+    water_network = road_network_for_traffic
+    water_network["name"] = water_network_name
+    water_network["data"]["waterway_segment_entities"] = water_network["data"][
+        "road_segment_entities"
+    ]
+    del water_network["data"]["road_segment_entities"]
+
+    water_network["data"]["freight_transport_station_entities"] = water_network["data"][
+        "virtual_node_entities"
+    ]
+    del water_network["data"]["virtual_node_entities"]
+    return water_network

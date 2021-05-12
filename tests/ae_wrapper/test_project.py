@@ -535,6 +535,43 @@ def test_shortest_paths(p_triangle_block: ProjectWrapper):
     assert np.array_equal(paths[1].links, [15, 102, 17])
 
 
+def test_shortest_paths_some_without_path(project: ProjectWrapper):
+    nodes = NodeCollection(
+        ids=[5, 6, 7],
+        is_centroids=[1, 1, 1],
+        geometries=[[97700, 434000], [97701, 434000], [97702, 434000]],
+    )
+    project.add_nodes(nodes)
+
+    links = LinkCollection(
+        ids=[102, 103, 104],
+        from_nodes=[5, 6, 7],
+        to_nodes=[7, 7, 5],
+        directions=[1, 1, 1],
+        geometries=[
+            [[97700, 434000], [97702, 434000]],
+            [[97701, 434000], [97704, 434000], [97702, 434000]],
+            [[97702, 434000], [97700, 434000]],
+        ],
+        max_speeds=[25, 100, 10],
+        capacities=[100, 50, 10],
+    )
+    project.add_links(links)
+    project.add_column("free_flow_time", project.calculate_free_flow_times())
+    project.add_column("custom_field", [10, 11, 12])
+    project.build_graph(
+        cost_field="free_flow_time",
+        skim_fields=["free_flow_time", "distance", "custom_field"],
+        block_centroid_flows=False,
+    )
+
+    paths = project.get_shortest_paths(5, [6, 7])
+    assert paths[0] is None
+
+    assert np.array_equal(paths[1].nodes, [5, 7])
+    assert np.array_equal(paths[1].links, [102])
+
+
 @pytest.mark.parametrize("p", ("p_triangle", "p_triangle_block"), indirect=True)
 def test_skimming(p: ProjectWrapper):
     skims = p.calculate_skims()

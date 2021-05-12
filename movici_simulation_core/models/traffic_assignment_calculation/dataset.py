@@ -14,7 +14,10 @@ from movici_simulation_core.data_tracker.property import (
     SUB,
     PUB,
 )
-from movici_simulation_core.models.common.entities import TransportSegmentEntity, PointEntity
+from movici_simulation_core.models.common.entities import (
+    TransportSegmentEntity,
+    PointEntity,
+)
 
 
 class TrafficTransportSegmentEntity(TransportSegmentEntity):

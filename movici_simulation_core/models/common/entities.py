@@ -102,6 +102,11 @@ class LinkEntity(LineEntity):
     to_node_id = field(to_spec(LineProperties.ToNodeId), flags=INIT)
 
 
+class VirtualLinkEntity(LinkEntity):
+    max_speed = field(to_spec(Transport_MaxSpeed), flags=OPT)
+    capacity = field(to_spec(Transport_Capacity_Hours), flags=OPT)
+
+
 class TransportSegmentEntity(LinkEntity):
     layout = field(to_spec(RoadSegmentProperties.Layout), flags=INIT)
     max_speed = field(to_spec(Transport_MaxSpeed), flags=INIT)

@@ -11,7 +11,10 @@ from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import model_util, ae_util
-from movici_simulation_core.models.common.entities import LinkEntity, PointEntity
+from movici_simulation_core.models.common.entities import (
+    PointEntity,
+    VirtualLinkEntity,
+)
 from .dataset import (
     DemandNodeEntity,
     TrafficTransportSegmentEntity,
@@ -32,7 +35,7 @@ class Model(TrackedBaseModel):
         self._transport_segments: t.Optional[TrafficTransportSegmentEntity] = None
         self._transport_nodes: t.Optional[PointEntity] = None
         self._demand_nodes: t.Optional[DemandNodeEntity] = None
-        self._demand_links: t.Optional[LinkEntity] = None
+        self._demand_links: t.Optional[VirtualLinkEntity] = None
 
     def setup(
         self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
@@ -48,10 +51,11 @@ class Model(TrackedBaseModel):
             transport_dataset_name, PointEntity(name="transport_node_entities")
         )
         self._demand_nodes = state.register_entity_group(
-            transport_dataset_name, DemandNodeEntity(name="virtual_node_entities")
+            transport_dataset_name,
+            DemandNodeEntity(name=model_util.dataset_to_virtual_nodes[transport_type]),
         )
         self._demand_links = state.register_entity_group(
-            transport_dataset_name, LinkEntity(name="virtual_link_entities")
+            transport_dataset_name, VirtualLinkEntity(name="virtual_link_entities")
         )
 
         self.project = ProjectWrapper(scenario_config.TEMP_DIR)
@@ -62,7 +66,7 @@ class Model(TrackedBaseModel):
         self.cargo_pcu = config.get("cargo_pcu", default_parameters.cargo_pcu)
 
     def initialize(self, state: TrackedState):
-        self.ensure_ready()
+        self._transport_segments.ensure_ready()
 
         ae_util.fill_project(
             self.project,
@@ -74,9 +78,6 @@ class Model(TrackedBaseModel):
 
         self.project.add_column("free_flow_time", self.project.calculate_free_flow_times())
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
-
-    def ensure_ready(self) -> None:
-        self._transport_segments.ensure_ready()
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
         passenger_demand = self._get_matrix(self._demand_nodes.passenger_demand.csr)

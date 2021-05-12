@@ -12,7 +12,8 @@ from model_engine.dataset_manager.property_definition import (
     Transport_NoxEmission_Hours,
     Transport_EnergyConsumption_Hours,
     Transport_PassengerDemand,
-    Transport_CargoDemand, Transport_VolumeToCapacityRatio,
+    Transport_CargoDemand,
+    Transport_VolumeToCapacityRatio,
 )
 from movici_simulation_core.base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup

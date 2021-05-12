@@ -1,4 +1,5 @@
 import typing as t
+from logging import Logger
 
 import numpy as np
 
@@ -10,7 +11,7 @@ from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import model_util, ae_util
-from movici_simulation_core.models.common.entities import PointEntity, LinkEntity
+from movici_simulation_core.models.common.entities import PointEntity, VirtualLinkEntity
 from .entities import (
     CorridorEntity,
     CorridorTransportSegmentEntity,
@@ -31,16 +32,18 @@ class Model(TrackedBaseModel):
         self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
         self._transport_nodes: t.Optional[PointEntity] = None
         self._demand_nodes: t.Optional[DemandNodeEntity] = None
-        self._demand_links: t.Optional[LinkEntity] = None
+        self._demand_links: t.Optional[VirtualLinkEntity] = None
         self._free_flow_times: t.Optional[np.ndarray] = None
         self._transport_directions: t.Optional[np.ndarray] = None
         self._project: t.Optional[ProjectWrapper] = None
+        self._logger: t.Optional[Logger] = None
         self.cargo_pcu = 2.0
         self.publish_corridor_geometry = False
 
     def setup(
         self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
     ) -> None:
+        self._logger = state.logger
         self.cargo_pcu = config.get("cargo_pcu", self.cargo_pcu)
         self.publish_corridor_geometry = config.get(
             "publish_corridor_geometry", self.publish_corridor_geometry
@@ -67,11 +70,12 @@ class Model(TrackedBaseModel):
         )
 
         self._demand_nodes = state.register_entity_group(
-            transport_dataset_name, DemandNodeEntity(name="virtual_node_entities")
+            transport_dataset_name,
+            DemandNodeEntity(name=model_util.dataset_to_virtual_nodes[transport_type]),
         )
 
         self._demand_links = state.register_entity_group(
-            transport_dataset_name, LinkEntity(name="virtual_link_entities")
+            transport_dataset_name, VirtualLinkEntity(name="virtual_link_entities")
         )
 
     def initialize(self, state: TrackedState) -> None:
@@ -121,6 +125,11 @@ class Model(TrackedBaseModel):
             for from_id in from_ids:
                 paths = self._project.get_shortest_paths(from_id, to_ids)
                 for to_id, path in zip(to_ids, paths):
+                    if path is None:
+                        self._logger.warning(
+                            f"Nodes {from_id}-{to_id} doesnt have a valid path between them."
+                        )
+                        continue
                     self._calculate_properties_for(
                         corridor_index,
                         from_id,

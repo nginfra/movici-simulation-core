@@ -412,14 +412,16 @@ class ProjectWrapper:
         self, from_node: int, to_nodes: t.List[int]
     ) -> t.List[t.Optional[GraphPath]]:
         results: t.List[t.Optional[GraphPath]] = []
+        path_results: t.Optional[PathResults] = None
         for i, to_node in enumerate(to_nodes):
-            if i == 0:
-                results.append(self.get_shortest_path(from_node, to_node))
+            if not path_results:
+                result = self.get_shortest_path(from_node, to_node)
+                if result:
+                    path_results = result.path_results
+                results.append(result)
             else:
                 results.append(
-                    self.get_shortest_path(
-                        from_node, to_node, path_results=results[0].path_results
-                    )
+                    self.get_shortest_path(from_node, to_node, path_results=path_results)
                 )
         return results
 

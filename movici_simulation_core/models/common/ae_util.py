@@ -6,7 +6,7 @@ from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.models.common.entities import (
     PointEntity,
     TransportSegmentEntity,
-    LinkEntity,
+    VirtualLinkEntity,
 )
 
 
@@ -75,11 +75,18 @@ def get_demand_nodes(demand_nodes: PointEntity, point_generator: PointGenerator)
     )
 
 
-def get_demand_links(segments: LinkEntity) -> LinkCollection:
+def get_demand_links(segments: VirtualLinkEntity) -> LinkCollection:
     geometries = []
     linestring_csr = segments.linestring.csr
     for i in range(len(linestring_csr.row_ptr) - 1):
         geometries.append(linestring_csr.get_row(i)[:, :2])
+
+    if segments.max_speed.has_data() and segments.capacity.has_data():
+        max_speeds = np.full(len(geometries), float("inf"))
+        capacities = np.full(len(geometries), float("inf"))
+    else:
+        max_speeds = segments.max_speed.array
+        capacities = segments.capacity.array
 
     return LinkCollection(
         ids=segments.index.ids,
@@ -87,15 +94,15 @@ def get_demand_links(segments: LinkEntity) -> LinkCollection:
         to_nodes=segments.to_node_id.array,
         directions=np.zeros(len(geometries)),
         geometries=geometries,
-        max_speeds=np.full(len(geometries), float("inf")),
-        capacities=np.full(len(geometries), float("inf")),
+        max_speeds=max_speeds,
+        capacities=capacities,
     )
 
 
 def fill_project(
     project: ProjectWrapper,
     demand_nodes: PointEntity,
-    demand_links: LinkEntity,
+    demand_links: VirtualLinkEntity,
     transport_nodes: PointEntity,
     transport_segments: TransportSegmentEntity,
 ):
