@@ -80,6 +80,14 @@ def test_model_returns_coefficients_by_time(model_config, state, data_fetcher):
     assert np.array_equal(model.coefficients_tape[("cargo", "co2")][0], [0, 12, 9])
 
 
+def test_coefficients_without_category_return_empty_list(model_config, state, data_fetcher):
+    model = Model()
+    model.setup(state, model_config, data_fetcher=data_fetcher)
+    model.coefficients_tape.proceed_to(TimeStamp(2))
+    assert np.array_equal(model.coefficients_tape[("other_category", "co2")], [])
+    assert np.array_equal(model.coefficients_tape[("cargo", "other_kpi")], [])
+
+
 def test_tape_returns_changed_first_call_after_update(model_config, state, data_fetcher):
     model = Model()
     model.setup(state, model_config, data_fetcher=data_fetcher)

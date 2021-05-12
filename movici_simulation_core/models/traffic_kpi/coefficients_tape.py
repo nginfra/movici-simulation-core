@@ -42,7 +42,7 @@ class CoefficientsTape(CsvTape):
 
     def get_data(self, key: t.Tuple[str, str]) -> t.List[np.ndarray]:
         rv = []
-        for item in self.coefficients[key]:
+        for item in self.coefficients.get(key, []):
             rv.append(item[self.current_pos])
         return rv
 
