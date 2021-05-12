@@ -2,8 +2,9 @@ import os
 
 import numpy as np
 import pytest
-from model_engine.testing import TestDataFetcher, get_test_data_fetcher
+
 from model_engine import testing, TimeStamp
+from model_engine.testing import TestDataFetcher, get_test_data_fetcher
 from movici_simulation_core.base_model.base import model_factory
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.traffic_kpi.model import Model
@@ -146,7 +147,11 @@ def test_kpi_calculation(
                                 0,
                             ],  # flow * length * coef * share * load_capacity
                             "transport.nox_emission.hours": [1.5 * 2 * 17 * 19 * 20 * 1e-9, 0, 0],
-                            "transport.energy_consumption.hours": [1.5 * 2 * 18 * 19 * 20, 0, 0],
+                            "transport.energy_consumption.hours": [
+                                1.5 * 2 * 18 * 19 * 20 * 1e-3,
+                                0,
+                                0,
+                            ],
                         },
                     },
                 },
@@ -165,7 +170,7 @@ def test_kpi_calculation(
                             "id": [1],
                             "transport.co2_emission.hours": [1.5 * 2 * 15 * 18 * 19 * 1e-6],
                             "transport.nox_emission.hours": [1.5 * 2 * 16 * 18 * 19 * 1e-9],
-                            "transport.energy_consumption.hours": [1.5 * 2 * 17 * 18 * 19],
+                            "transport.energy_consumption.hours": [1.5 * 2 * 17 * 18 * 19 * 1e-3],
                         },
                     },
                 },
@@ -195,9 +200,12 @@ def test_kpi_calculation(
                                 1 * 1.5 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11) * 1e-9,
                             ],
                             "transport.energy_consumption.hours": [
-                                1.5 * 2 * 17 * 18 * 19
-                                + 1 * 2 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11),
-                                1 * 1.5 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11),
+                                (
+                                    1.5 * 2 * 17 * 18 * 19
+                                    + 1 * 2 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11)
+                                )
+                                * 1e-3,
+                                1 * 1.5 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11) * 1e-3,
                             ],
                         },
                     },

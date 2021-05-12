@@ -146,7 +146,49 @@ class Model(TrackedBaseModel):
         )
 
     def add_waterway_coefficients(self):
-        raise RuntimeError("waterway coefficients not defined in model")
+        add = self.coefficients_tape.add_coefficient
+        add(
+            CARGO,
+            CO2,
+            "cef_f_rhc_vessel",
+            "share_rhc_vessel",
+            "load_capacity_rhc_vessel",
+        )
+        add(
+            CARGO,
+            CO2,
+            "cef_f_large_vessel",
+            "share_large_vessel",
+            "load_capacity_large_vessel",
+        )
+        add(
+            CARGO,
+            NOX,
+            "nef_f_rhc_vessel",
+            "share_rhc_vessel",
+            "load_capacity_rhc_vessel",
+        )
+        add(
+            CARGO,
+            NOX,
+            "nef_f_large_vessel",
+            "share_large_vessel",
+            "load_capacity_large_vessel",
+        )
+        add(
+            CARGO,
+            ENERGY,
+            "ecf_f_rhc_vessel",
+            "share_rhc_vessel",
+            "load_capacity_rhc_vessel",
+        )
+        add(
+            CARGO,
+            ENERGY,
+            "ecf_f_large_vessel",
+            "share_large_vessel",
+            "load_capacity_large_vessel",
+        )
 
     def add_tracks_coefficients(self):
         raise RuntimeError("tracks coefficients not defined in model")
@@ -177,8 +219,8 @@ class Model(TrackedBaseModel):
             return self.coefficients_tape.get_next_timestamp()
 
         self.reset_values()
-        self.add_cargo_flow_contribution()
-        self.add_passenger_flow_contribution()
+        self._add_contributions_for(self.segments.cargo_flow, CARGO)
+        self._add_contributions_for(self.segments.passenger_flow, PASSENGER)
 
         return self.coefficients_tape.get_next_timestamp()
 
@@ -194,56 +236,32 @@ class Model(TrackedBaseModel):
         self.segments.co2_emission[:] = 0
         self.segments.nox_emission[:] = 0
 
-    def add_cargo_flow_contribution(self):
-        cargo_flow = self.segments.cargo_flow
-        if not cargo_flow.is_initialized():
+    def _add_contributions_for(self, flow: UniformProperty, flow_category: str):
+        if not flow.is_initialized():
             return
         self._add_contributions(
             self.segments.co2_emission,
-            cargo_flow,
+            flow,
             self.segments.length,
-            CARGO,
+            flow_category,
             CO2,
-            multiplier=1.0e-6,
+            multiplier=1.0e-6,  # convert g/km to kg/m
         )
         self._add_contributions(
             self.segments.nox_emission,
-            cargo_flow,
+            flow,
             self.segments.length,
-            CARGO,
+            flow_category,
             NOX,
-            multiplier=1.0e-9,
-        )
-        self._add_contributions(
-            self.segments.energy_consumption, cargo_flow, self.segments.length, CARGO, ENERGY
-        )
-
-    def add_passenger_flow_contribution(self):
-        passenger_flow = self.segments.passenger_flow
-        if not passenger_flow.is_initialized():
-            return
-        self._add_contributions(
-            self.segments.co2_emission,
-            passenger_flow,
-            self.segments.length,
-            PASSENGER,
-            CO2,
-            multiplier=1.0e-6,
-        )
-        self._add_contributions(
-            self.segments.nox_emission,
-            passenger_flow,
-            self.segments.length,
-            PASSENGER,
-            NOX,
-            multiplier=1.0e-9,
+            multiplier=1.0e-9,  # convert mg/km to kg/m
         )
         self._add_contributions(
             self.segments.energy_consumption,
-            passenger_flow,
+            flow,
             self.segments.length,
-            PASSENGER,
+            flow_category,
             ENERGY,
+            multiplier=1.0e-3,  # convert MJ/km to MJ/m
         )
 
     def _add_contributions(
