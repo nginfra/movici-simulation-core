@@ -310,7 +310,6 @@ class TestCargoWithLocalParameters:
                             [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
                         ]
                     },
-                    "traffic_properties": {"average_time": [1, 1, 1]},
                 }
             },
         )
@@ -370,6 +369,18 @@ class TestCargoWithLocalParameters:
                     },
                 },
                 {
+                    "time": 1,
+                    "data": {
+                        water_network_name: {
+                            "road_segment_entities": {
+                                "id": [1, 2, 3],
+                                "traffic_properties": {
+                                    "average_time": [1, 1, 1]},
+                            }
+                        }
+                    },
+                },
+                {
                     "time": 2,
                     "data": {
                         water_network_name: {
@@ -384,6 +395,10 @@ class TestCargoWithLocalParameters:
             "expected_results": [
                 {
                     "time": 0,
+                    "data": {},
+                },
+                {
+                    "time": 1,
                     "data": {},
                     "next_time": 2,
                 },

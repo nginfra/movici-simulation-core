@@ -130,7 +130,7 @@ class Model(TrackedBaseModel):
                     dataset_name=ds_name,
                     entity_name=entity_name,
                     spec=prop_spec,
-                    flags=SUB,
+                    flags=INIT,
                 )
             )
         self._local_elasticities = config["local_elasticities"]
