@@ -88,8 +88,8 @@ class TestTrafficAssignmentRoads:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_flow": [4.1667, 20, 120, 0.8333],
-                                "transport.cargo_flow": [25, 30, 30, 5],
+                                "transport.passenger_vehicle_flow": [4.1667, 20, 120, 0.8333],
+                                "transport.cargo_vehicle_flow": [25, 30, 30, 5],
                                 "transport.delay_factor": [1.171, 1.0527, 24.5561, 1.171],
                                 "transport.volume_to_capacity_ratio": [
                                     1.03333,
@@ -117,8 +117,8 @@ class TestTrafficAssignmentRoads:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_flow": [2.0834, 10, 60, 0.4167],
-                                "transport.cargo_flow": [12.5, 15, 15, 2.5],
+                                "transport.passenger_vehicle_flow": [2.0834, 10, 60, 0.4167],
+                                "transport.cargo_vehicle_flow": [12.5, 15, 15, 2.5],
                                 "transport.delay_factor": [1.011, 1.003, 2.472, 1.011],
                                 "transport.volume_to_capacity_ratio": [
                                     0.5167,
@@ -218,8 +218,8 @@ class TestTrafficAssignmentWaterways:
                         water_network_name: {
                             "waterway_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_flow": [4.1667, 20, 120, 0.8333],
-                                "transport.cargo_flow": [25, 30, 30, 5],
+                                "transport.passenger_vehicle_flow": [4.1667, 20, 120, 0.8333],
+                                "transport.cargo_vehicle_flow": [25, 30, 30, 5],
                                 "transport.delay_factor": [1.171, 1.0527, 24.5561, 1.171],
                                 "transport.volume_to_capacity_ratio": [
                                     1.03333,
@@ -247,8 +247,8 @@ class TestTrafficAssignmentWaterways:
                         water_network_name: {
                             "waterway_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_flow": [2.0834, 10, 60, 0.4167],
-                                "transport.cargo_flow": [12.5, 15, 15, 2.5],
+                                "transport.passenger_vehicle_flow": [2.0834, 10, 60, 0.4167],
+                                "transport.cargo_vehicle_flow": [12.5, 15, 15, 2.5],
                                 "transport.delay_factor": [1.011, 1.003, 2.472, 1.011],
                                 "transport.volume_to_capacity_ratio": [
                                     0.5167,

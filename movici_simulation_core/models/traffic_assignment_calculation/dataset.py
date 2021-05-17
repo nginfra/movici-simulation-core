@@ -1,7 +1,7 @@
 from model_engine.dataset_manager.property_definition import (
     TrafficProperties,
-    Transport_PassengerFlow,
-    Transport_CargoFlow,
+    Transport_PassengerVehicleFlow,
+    Transport_CargoVehicleFlow,
     Transport_DelayFactor,
     Transport_VolumeToCapacityRatio,
     Transport_PassengerCarUnit,
@@ -21,8 +21,8 @@ from movici_simulation_core.models.common.entities import (
 
 
 class TrafficTransportSegmentEntity(TransportSegmentEntity):
-    passenger_flow = field(to_spec(Transport_PassengerFlow), flags=PUB)
-    cargo_flow = field(to_spec(Transport_CargoFlow), flags=PUB)
+    passenger_flow = field(to_spec(Transport_PassengerVehicleFlow), flags=PUB)
+    cargo_flow = field(to_spec(Transport_CargoVehicleFlow), flags=PUB)
     average_time = field(to_spec(TrafficProperties.AverageTime), flags=PUB)
     delay_factor = field(to_spec(Transport_DelayFactor), flags=PUB)
     volume_to_capacity = field(to_spec(Transport_VolumeToCapacityRatio), flags=PUB)

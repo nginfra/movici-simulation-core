@@ -1,7 +1,7 @@
 from model_engine.dataset_manager.property_definition import (
     LineProperties,
-    Transport_PassengerFlow,
-    Transport_CargoFlow,
+    Transport_PassengerVehicleFlow,
+    Transport_CargoVehicleFlow,
     Transport_EnergyConsumption_Hours,
     Transport_Co2Emission_Hours,
     Transport_NoxEmission_Hours,
@@ -14,8 +14,8 @@ from movici_simulation_core.data_tracker.property import field, INIT, PUB, OPT
 class TransportSegments(EntityGroup):
     length = field(to_spec(LineProperties.Length), flags=INIT)
 
-    passenger_flow = field(to_spec(Transport_PassengerFlow), flags=OPT)
-    cargo_flow = field(to_spec(Transport_CargoFlow), flags=OPT)
+    passenger_flow = field(to_spec(Transport_PassengerVehicleFlow), flags=OPT)
+    cargo_flow = field(to_spec(Transport_CargoVehicleFlow), flags=OPT)
 
     energy_consumption = field(to_spec(Transport_EnergyConsumption_Hours), flags=PUB)
     co2_emission = field(to_spec(Transport_Co2Emission_Hours), flags=PUB)

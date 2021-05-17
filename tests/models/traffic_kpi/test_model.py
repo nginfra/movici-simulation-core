@@ -119,7 +119,7 @@ def test_kpi_calculation(
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2, 3],
-                            "transport.passenger_flow": [1.5, 0, 0],
+                            "transport.passenger_vehicle_flow": [1.5, 0, 0],
                         }
                     },
                 },
@@ -132,7 +132,7 @@ def test_kpi_calculation(
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2, 3],
-                            "transport.cargo_flow": [1, 1, 0],
+                            "transport.cargo_vehicle_flow": [1, 1, 0],
                         }
                     },
                 },

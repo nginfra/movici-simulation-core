@@ -28,7 +28,7 @@ VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
 EXTRA_REQUIREMENTS = {
     "models": [
-        "model-engine>=1.2.3",
+        "model-engine>=1.2.27",
         "shapely>=1.7.1",
         "aequilibrae>=0.7.2",
         "pyproj>=3.0.1",

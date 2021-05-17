@@ -3,8 +3,8 @@ from model_engine.dataset_manager.property_definition import (
     ConnectionProperties,
     ShapeProperties,
     Transport_DelayFactor,
-    Transport_PassengerFlow,
-    Transport_CargoFlow,
+    Transport_PassengerVehicleFlow,
+    Transport_CargoVehicleFlow,
     TrafficProperties,
     LineProperties,
     Transport_PassengerCarUnit,
@@ -28,8 +28,8 @@ class CorridorEntity(EntityGroup, name=ed.Corridor):
     max_volume_to_capacity = field(to_spec(Transport_VolumeToCapacityRatio), flags=PUB)
     travel_time = field(to_spec(TrafficProperties.AverageTime), flags=PUB)
     delay_factor = field(to_spec(Transport_DelayFactor), flags=PUB)
-    passenger_flow = field(to_spec(Transport_PassengerFlow), flags=PUB)
-    cargo_flow = field(to_spec(Transport_CargoFlow), flags=PUB)
+    passenger_flow = field(to_spec(Transport_PassengerVehicleFlow), flags=PUB)
+    cargo_flow = field(to_spec(Transport_CargoVehicleFlow), flags=PUB)
     passenger_car_unit = field(to_spec(Transport_PassengerCarUnit), flags=PUB)
     co2_emission = field(to_spec(Transport_Co2Emission_Hours), flags=PUB)
     nox_emission = field(to_spec(Transport_NoxEmission_Hours), flags=PUB)

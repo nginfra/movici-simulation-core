@@ -51,8 +51,8 @@ class TestCorridor:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_flow": [5, 15, 30, 40],
-                                "transport.cargo_flow": [4, 4, 3, 1],
+                                "transport.passenger_vehicle_flow": [5, 15, 30, 40],
+                                "transport.cargo_vehicle_flow": [4, 4, 3, 1],
                                 "traffic_properties": {"average_time": [10, 11, 12, 13]},
                                 "transport.passenger_car_unit": [
                                     13,
@@ -83,8 +83,8 @@ class TestCorridor:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [102, 103],
-                                "transport.passenger_flow": [2, 2],
-                                "transport.cargo_flow": [1, 0],
+                                "transport.passenger_vehicle_flow": [2, 2],
+                                "transport.cargo_vehicle_flow": [1, 0],
                                 "traffic_properties": {"average_time": [10, 40]},
                                 "transport.passenger_car_unit": [
                                     4,
@@ -110,8 +110,8 @@ class TestCorridor:
                         corridor_dataset_name: {
                             "corridor_entities": {
                                 "id": [1, 2],
-                                "transport.passenger_flow": [5, 15],
-                                "transport.cargo_flow": [2, 3],
+                                "transport.passenger_vehicle_flow": [5, 15],
+                                "transport.cargo_vehicle_flow": [2, 3],
                                 "traffic_properties": {"average_time": [23, 16.1429]},
                                 "transport.passenger_car_unit": [9, 21],
                                 "transport.co2_emission.hours": [64.1304, 116.3044],
@@ -146,8 +146,8 @@ class TestCorridor:
                         corridor_dataset_name: {
                             "corridor_entities": {
                                 "id": [1, 2],
-                                "transport.passenger_flow": [2, 2],
-                                "transport.cargo_flow": [0, 1],
+                                "transport.passenger_vehicle_flow": [2, 2],
+                                "transport.cargo_vehicle_flow": [0, 1],
                                 "traffic_properties": {"average_time": [50, 30]},
                                 "transport.passenger_car_unit": [2, 4],
                                 "transport.co2_emission.hours": [150, 200],
