@@ -43,7 +43,7 @@ class TestCargoDemand:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [road_network_name, "virtual_node_entities"],
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
             "demand_property": [None, "transport.cargo_demand"],
             "total_inward_demand_property": [],
             "total_outward_demand_property": [],
@@ -125,7 +125,7 @@ class TestPassengerDemand:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [road_network_name, "virtual_node_entities"],
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
             "demand_property": [None, "transport.passenger_demand"],
             "total_inward_demand_property": [],
             "total_outward_demand_property": [],
@@ -207,7 +207,7 @@ class TestCargoDemandSum:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [road_network_name, "virtual_node_entities"],
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
             "demand_property": [None, "transport.cargo_demand"],
             "total_inward_demand_property": [None, "transport.total_inward_cargo_demand_vehicles"],
             "total_outward_demand_property": [
@@ -338,7 +338,7 @@ class TestCargoWithLocalParameters:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [road_network_name, "virtual_node_entities"],
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
             "demand_property": [None, "transport.cargo_demand"],
             "scenario_parameters": [scenario_parameters_csv_name],
             "global_parameters": ["gp1", "gp2"],

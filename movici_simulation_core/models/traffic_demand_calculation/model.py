@@ -61,7 +61,7 @@ class Model(TrackedBaseModel):
         self.auto_reset = PUB
 
     def set_demand_entity(self, config, state):
-        ds_name, demand_entity = config["demand_entity"]
+        ds_name, demand_entity = config["demand_entity"][0]
         self._demand_entity = state.register_entity_group(
             dataset_name=ds_name, entity=PointEntity(name=demand_entity)
         )
