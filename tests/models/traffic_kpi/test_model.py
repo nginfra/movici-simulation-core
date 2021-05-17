@@ -154,7 +154,7 @@ def test_kpi_calculation(
                                 0,
                                 0,
                             ],  # flow * length * coef * share * load_capacity
-                            "transport.nox_emission.hours": [1.5 * 2 * 17 * 19 * 20 * 1e-9, 0, 0],
+                            "transport.nox_emission.hours": [1.5 * 2 * 17 * 19 * 20 * 1e-6, 0, 0],
                             "transport.energy_consumption.hours": [
                                 1.5 * 2 * 18 * 19 * 20 * 1e-3,
                                 0,
@@ -177,7 +177,7 @@ def test_kpi_calculation(
                         "road_segment_entities": {
                             "id": [1],
                             "transport.co2_emission.hours": [1.5 * 2 * 15 * 18 * 19 * 1e-6],
-                            "transport.nox_emission.hours": [1.5 * 2 * 16 * 18 * 19 * 1e-9],
+                            "transport.nox_emission.hours": [1.5 * 2 * 16 * 18 * 19 * 1e-6],
                             "transport.energy_consumption.hours": [1.5 * 2 * 17 * 18 * 19 * 1e-3],
                         },
                     },
@@ -204,8 +204,8 @@ def test_kpi_calculation(
                                     1.5 * 2 * 16 * 18 * 19
                                     + 1 * 2 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11)
                                 )
-                                * 1e-9,
-                                1 * 1.5 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11) * 1e-9,
+                                * 1e-6,
+                                1 * 1.5 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11) * 1e-6,
                             ],
                             "transport.energy_consumption.hours": [
                                 (

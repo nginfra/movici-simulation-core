@@ -144,6 +144,9 @@ def test_max_delay_factor(model: Model):
 def test_max_volume_to_capacity(model: Model):
     model._transport_segments.passenger_car_unit.array = TrackedArray([10, 20, 30, 40])
     model._transport_segments.capacity.array = TrackedArray([2, 5, 5, 4])
+    model._transport_segments.layout.array = TrackedArray(
+        [[1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0], [1, 0, 0, 0]]
+    )
 
     model._calculate_max_volume_to_capacity(corridor_index=2, roads_indices=np.array([0]))
     assert model._corridor_entity.max_volume_to_capacity[2] == 5

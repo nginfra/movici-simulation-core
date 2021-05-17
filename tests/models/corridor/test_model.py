@@ -117,7 +117,7 @@ class TestCorridor:
                                 "transport.co2_emission.hours": [64.1304, 116.3044],
                                 "transport.nox_emission.hours": [153.2609, 257.6087],
                                 "transport.energy_consumption.hours": [2.9565, 5.5652],
-                                "transport.volume_to_capacity_ratio": [1.44, 1.44],
+                                "transport.volume_to_capacity_ratio": [0.72, 0.72],
                                 "transport.delay_factor": [49.1420, 49.1420],
                                 "shape_properties": {
                                     "linestring_2d": [
@@ -153,7 +153,7 @@ class TestCorridor:
                                 "transport.co2_emission.hours": [150, 200],
                                 "transport.nox_emission.hours": [500, 600],
                                 "transport.energy_consumption.hours": [9, 14],
-                                "transport.volume_to_capacity_ratio": [0.08, 0.08],
+                                "transport.volume_to_capacity_ratio": [0.04, 0.04],
                                 "transport.delay_factor": [106.8305, 106.8305],
                             },
                         }

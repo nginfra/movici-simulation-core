@@ -232,7 +232,10 @@ class Model(TrackedBaseModel):
             self._corridor_entity.max_volume_to_capacity[corridor_index],
             (
                 self._transport_segments.passenger_car_unit[roads_indices]
-                / self._transport_segments.capacity[roads_indices]
+                / ae_util.calculate_capacities(
+                    self._transport_segments.capacity[roads_indices],
+                    self._transport_segments.layout[roads_indices],
+                )
             ).max(),
         )
 

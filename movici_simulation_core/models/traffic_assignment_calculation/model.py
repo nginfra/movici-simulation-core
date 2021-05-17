@@ -80,6 +80,8 @@ class Model(TrackedBaseModel):
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
+        self._process_link_changes()
+
         passenger_demand = self._get_matrix(self._demand_nodes.passenger_demand.csr)
         cargo_demand = self._get_matrix(self._demand_nodes.cargo_demand.csr)
 
@@ -103,7 +105,7 @@ class Model(TrackedBaseModel):
     @staticmethod
     def _get_matrix(csr_array: TrackedCSRArray):
         matrix = []
-        for i in range(len(csr_array.row_ptr) - 1):
+        for i in range(csr_array.size):
             matrix.append(csr_array.get_row(i))
         return np.stack(matrix)
 
@@ -117,8 +119,39 @@ class Model(TrackedBaseModel):
 
         # Calculate volume_to_capacity ourselves because aequilibrae is broken
         # self.road_segments.volume_to_capacity[:] = results.volume_to_capacity[:real_link_len]
-        self._transport_segments.volume_to_capacity[:] = (
-            results.passenger_car_unit[:real_link_len]
-            / self._transport_segments.capacity[:]
-            / np.sum(self._transport_segments.layout, axis=1)
+        self._transport_segments.volume_to_capacity[:] = results.passenger_car_unit[
+            :real_link_len
+        ] / ae_util.calculate_capacities(
+            self._transport_segments.capacity.array, self._transport_segments.layout.array
         )
+
+        # Aequilibrae does not like 0 capacity, so we have to post correct
+        correction_indices = self._transport_segments.capacity.array <= ae_util.eps
+        self._transport_segments.passenger_flow[correction_indices] = 0
+        self._transport_segments.cargo_flow[correction_indices] = 0
+        self._transport_segments.passenger_car_unit[correction_indices] = 0
+        self._transport_segments.average_time[correction_indices] = 1e9
+        self._transport_segments.delay_factor[correction_indices] = 1
+        self._transport_segments.volume_to_capacity[correction_indices] = 0
+
+    def _process_link_changes(self):
+        changed = False
+        if self._transport_segments.max_speed.has_changes():
+            self.project.update_column("speed_ab", self._transport_segments.max_speed)
+            self.project.update_column("speed_ba", self._transport_segments.max_speed)
+            changed = True
+
+        if (
+            self._transport_segments.capacity.has_changes()
+            or self._transport_segments.layout.has_changes()
+        ):
+            new_capacities = ae_util.calculate_capacities(
+                self._transport_segments.capacity.array, self._transport_segments.layout.array
+            )
+            self.project.update_column("capacity_ab", new_capacities)
+            self.project.update_column("capacity_ba", new_capacities)
+
+            changed = True
+
+        if changed:
+            self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)

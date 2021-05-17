@@ -253,7 +253,7 @@ class Model(TrackedBaseModel):
             self.segments.length,
             flow_category,
             NOX,
-            multiplier=1.0e-9,  # convert mg/km to kg/m
+            multiplier=1.0e-6,  # convert g/km to kg/m
         )
         self._add_contributions(
             self.segments.energy_consumption,

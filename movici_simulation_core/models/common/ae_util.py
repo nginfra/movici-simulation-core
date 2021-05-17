@@ -9,6 +9,14 @@ from movici_simulation_core.models.common.entities import (
     VirtualLinkEntity,
 )
 
+# This epsilon isn't very small, but making it smaller breaks aequilibrae
+eps = 5 * 1e-5
+
+
+def calculate_capacities(capacities, layouts):
+    lanes = np.sum(layouts, axis=1)
+    return np.maximum(capacities * lanes, eps)
+
 
 def get_transport_directions(segments: TransportSegmentEntity) -> np.ndarray:
     directions = []
@@ -49,7 +57,6 @@ def get_links(segments: TransportSegmentEntity) -> LinkCollection:
         geometries.append(linestring_csr.get_row(i)[:, :2])
 
     directions = get_transport_directions(segments)
-    lanes = np.sum(segments.layout, axis=1)
 
     return LinkCollection(
         ids=segments.index.ids,
@@ -58,7 +65,7 @@ def get_links(segments: TransportSegmentEntity) -> LinkCollection:
         directions=directions,
         geometries=geometries,
         max_speeds=segments.max_speed.array,
-        capacities=segments.capacity.array * lanes,
+        capacities=calculate_capacities(segments.capacity, segments.layout),
     )
 
 
@@ -86,7 +93,9 @@ def get_demand_links(segments: VirtualLinkEntity) -> LinkCollection:
         capacities = np.full(len(geometries), float("inf"))
     else:
         max_speeds = segments.max_speed.array
-        capacities = segments.capacity.array
+        capacities = calculate_capacities(
+            segments.capacity.array, np.ones_like(segments.capacity.array)
+        )
 
     return LinkCollection(
         ids=segments.index.ids,
