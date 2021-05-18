@@ -374,8 +374,7 @@ class TestCargoWithLocalParameters:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2, 3],
-                                "traffic_properties": {
-                                    "average_time": [1, 1, 1]},
+                                "traffic_properties": {"average_time": [1, 1, 1]},
                             }
                         }
                     },

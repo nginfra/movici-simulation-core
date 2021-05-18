@@ -170,13 +170,13 @@ class Model(TrackedBaseModel):
             self._update_demand_sum(demand_matrix)
             return self._scenario_parameters_tape.get_next_timestamp()
 
-        global_factor = 1
+        global_factor = 1.0
         if self._scenario_parameters_tape.has_update():
             global_factor = self._calculate_global_factor()
 
         matrix_dimension = self._demand_property.csr.size
         multiplication_factor = np.full(
-            shape=(matrix_dimension, matrix_dimension), fill_value=global_factor
+            shape=(matrix_dimension, matrix_dimension), fill_value=global_factor, dtype=np.float64
         )
 
         multiplication_factor = self._add_local_property_effects_to_factor(multiplication_factor)
