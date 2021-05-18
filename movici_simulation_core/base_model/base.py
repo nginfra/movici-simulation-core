@@ -75,6 +75,7 @@ class TrackedBaseModelAdapter(BaseModel):
     def new_time(self, time_stamp: TimeStamp):
         self.model.new_time(time_stamp)
         if not (self.model_initialized or self.model_ready_for_update) and time_stamp.time > 0:
+            self.log_uninitialized_properties()
             raise RuntimeError(
                 f"Model [{self.name}] called with timestamp >0 while"
                 f" initialized: {self.model_initialized} ,"
@@ -84,11 +85,18 @@ class TrackedBaseModelAdapter(BaseModel):
     def shutdown(self):
         self.model.shutdown()
         if not (self.model_initialized or self.model_ready_for_update):
+            self.log_uninitialized_properties()
             raise RuntimeError(
                 f"Model [{self.name}] called with shutdown while"
                 f" initialized: {self.model_initialized} ,"
                 f" ready_for_updates:{self.model_ready_for_update}"
             )
+
+    def log_uninitialized_properties(self):
+        for ds, entity, (comp, prop_name), prop in self.state.iter_properties():
+            if (prop.flags & INIT) and not prop.is_initialized():
+                msg = "/".join((ds, entity, comp or "", prop_name))
+                self.logger.warn(f"Uninitialized property: {msg}")
 
 
 class TrackedBaseModel:

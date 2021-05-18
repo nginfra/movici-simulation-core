@@ -287,9 +287,4 @@ def water_network_for_traffic(water_network_name, road_network_for_traffic):
         "road_segment_entities"
     ]
     del water_network["data"]["road_segment_entities"]
-
-    water_network["data"]["freight_transport_station_entities"] = water_network["data"][
-        "virtual_node_entities"
-    ]
-    del water_network["data"]["virtual_node_entities"]
     return water_network

@@ -8,13 +8,6 @@ dataset_to_segments = {
     "tracks": "track_segment_entities",
 }
 
-dataset_to_virtual_nodes = {
-    "roads": "virtual_node_entities",
-    "waterways": "freight_transport_station_entities",
-    "tracks": "freight_transport_station_entities",
-}
-
-
 supported_geometry_types = {
     "point": PointEntity,
     "line": LineEntity,

@@ -177,7 +177,7 @@ class TestTrafficAssignmentWaterways:
                     "time": 0,
                     "data": {
                         water_network_name: {
-                            "freight_transport_station_entities": {
+                            "virtual_node_entities": {
                                 "id": [10, 11, 12],
                                 "transport.passenger_demand": [[0, 20, 0], [5, 0, 0], [0, 100, 0]],
                                 "transport.cargo_demand": [
@@ -194,7 +194,7 @@ class TestTrafficAssignmentWaterways:
                     "time": 2,
                     "data": {
                         water_network_name: {
-                            "freight_transport_station_entities": {
+                            "virtual_node_entities": {
                                 "id": [10, 11, 12],
                                 "transport.passenger_demand": [
                                     [0, 10, 0],

@@ -71,7 +71,7 @@ class Model(TrackedBaseModel):
 
         self._demand_nodes = state.register_entity_group(
             transport_dataset_name,
-            DemandNodeEntity(name=model_util.dataset_to_virtual_nodes[transport_type]),
+            DemandNodeEntity(name="virtual_node_entities"),
         )
 
         self._demand_links = state.register_entity_group(
