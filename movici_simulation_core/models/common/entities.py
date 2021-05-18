@@ -9,10 +9,10 @@ from model_engine.dataset_manager.property_definition import (
     ShapeProperties,
     LineProperties,
     PointProperties,
-    RoadSegmentProperties,
     Transport_MaxSpeed,
     Transport_Capacity_Hours,
     Reference,
+    Transport_Layout,
 )
 from movici_simulation_core.base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
@@ -108,6 +108,6 @@ class VirtualLinkEntity(LinkEntity):
 
 
 class TransportSegmentEntity(LinkEntity):
-    layout = field(to_spec(RoadSegmentProperties.Layout), flags=INIT)
+    layout = field(to_spec(Transport_Layout), flags=INIT)
     max_speed = field(to_spec(Transport_MaxSpeed), flags=INIT)
     capacity = field(to_spec(Transport_Capacity_Hours), flags=INIT)

@@ -223,9 +223,7 @@ def road_network_for_traffic(road_network_name):
                         [[97700, 434000], [97701, 434000]],
                     ]
                 },
-                "road_segment_properties": {
-                    "layout": [[1, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 1, 0, 0]]
-                },
+                "transport.layout": [[1, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 1, 0, 0]],
                 "transport.max_speed": [2.7778, 6.9444, 27.7778, 2.7778],
                 "transport.capacity.hours": [50, 100, 25, 10],
             },
