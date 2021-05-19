@@ -36,6 +36,7 @@ class Model(TrackedBaseModel):
         self._transport_nodes: t.Optional[PointEntity] = None
         self._demand_nodes: t.Optional[DemandNodeEntity] = None
         self._demand_links: t.Optional[VirtualLinkEntity] = None
+        self._free_flow_times: t.Optional[np.ndarray] = None
 
     def setup(
         self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
@@ -76,7 +77,8 @@ class Model(TrackedBaseModel):
             transport_segments=self._transport_segments,
         )
 
-        self.project.add_column("free_flow_time", self.project.calculate_free_flow_times())
+        self._free_flow_times = self.project.calculate_free_flow_times()
+        self.project.add_column("free_flow_time", self._free_flow_times)
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
@@ -113,16 +115,22 @@ class Model(TrackedBaseModel):
         real_link_len = len(self._transport_segments.index.ids)
         self._transport_segments.passenger_flow[:] = results.passenger_flow[:real_link_len]
         self._transport_segments.cargo_flow[:] = results.cargo_flow[:real_link_len]
-        self._transport_segments.average_time[:] = results.congested_time[:real_link_len]
-        self._transport_segments.delay_factor[:] = results.delay_factor[:real_link_len]
         self._transport_segments.passenger_car_unit[:] = results.passenger_car_unit[:real_link_len]
 
-        # Calculate volume_to_capacity ourselves because aequilibrae is broken
+        # Calculate everything other than flow ourselves because aequilibrae is broken
         # self.road_segments.volume_to_capacity[:] = results.volume_to_capacity[:real_link_len]
         self._transport_segments.volume_to_capacity[:] = results.passenger_car_unit[
             :real_link_len
         ] / ae_util.calculate_capacities(
             self._transport_segments.capacity.array, self._transport_segments.layout.array
+        )
+
+        self._transport_segments.delay_factor[:] = (
+            1 + self.vdf_alpha * self._transport_segments.volume_to_capacity[:] ** self.vdf_beta
+        )
+
+        self._transport_segments.average_time[:] = (
+            self._transport_segments.delay_factor[:] * self._free_flow_times[:real_link_len]
         )
 
         # Aequilibrae does not like 0 capacity, so we have to post correct
