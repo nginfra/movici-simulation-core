@@ -53,6 +53,7 @@ setup(
         "bin/run_traffic_demand_calculation.py",
         "bin/run_traffic_kpi.py",
         "bin/run_corridor.py",
+        "bin/run_unit_conversions.py",
     ],
     packages=find_packages(),
     install_requires=REQUIREMENTS,

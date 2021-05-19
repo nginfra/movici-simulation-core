@@ -1,16 +1,16 @@
 import typing as t
 
 import numpy as np
-
 from model_engine import TimeStamp
 from movici_simulation_core.base_model.base import TrackedBaseModel
 from movici_simulation_core.base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import PUB, SUB, PropertySpec
+from movici_simulation_core.data_tracker.property import PUB, PropertySpec, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.entities import PolygonEntity, GeometryEntity, LineEntity
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
 from spatial_mapper.mapper import Mapper, Mapping
+
 from .aggregators import functions, PropertyAggregator
 
 
@@ -86,7 +86,7 @@ class Model(TrackedBaseModel):
             src_spec = property_mapping[tuple(src_prop)]
             self.ensure_uniform_property(target_ds_name, target_entity_name, src_spec)
             src_prop = state.register_property(
-                dataset_name=src_ds_name, entity_name=src_entity_name, spec=src_spec, flags=SUB
+                dataset_name=src_ds_name, entity_name=src_entity_name, spec=src_spec, flags=INIT
             )
 
             ensure_function(func)
