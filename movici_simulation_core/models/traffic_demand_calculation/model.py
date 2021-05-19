@@ -151,11 +151,11 @@ class Model(TrackedBaseModel):
         for param in self._global_parameters:
             self._current_parameters[param] = self._scenario_parameters_tape[param]
 
-        point_geom_mapper = Mapper(self._demand_entity.get_geometry())
+        demand_geometry = self._demand_entity.get_geometry()
         self._local_closest_entity_index = []
         for entity in self._local_entities:
-            # todo do this whole thing twice
-            mapping = point_geom_mapper.find_nearest(entity.get_geometry())
+            # todo do not do this whole thing twice for the same entities
+            mapping = Mapper(entity.get_geometry()).find_nearest(demand_geometry)
             self._local_closest_entity_index.append(mapping.seq)
 
         self._initialize_state()
@@ -276,6 +276,7 @@ def update_multiplication_factor(
             prop_j = prop[j_closest]
             old_prop_j = old_prop[j_closest]
 
-            multiplication_factor[i][j] *= (
-                prop_i / old_prop_i * prop_j / old_prop_j
-            ) ** elasticity
+            if old_prop_i != 0:
+                multiplication_factor[i][j] *= (prop_i / old_prop_i) ** elasticity
+            if old_prop_j != 0:
+                multiplication_factor[i][j] *= (prop_j / old_prop_j) ** elasticity

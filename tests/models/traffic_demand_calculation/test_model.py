@@ -39,12 +39,11 @@ def waterways(water_network_name):
         ds_type="random_type",
         data={
             "road_segment_entities": {
-                "id": [1, 2, 3],
+                "id": [1, 2],
                 "shape_properties": {
                     "linestring_3d": [
                         [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
                         [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
-                        [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
                     ]
                 },
             }
@@ -380,8 +379,8 @@ class TestCargoWithLocalParameters:
                     "data": {
                         water_network_name: {
                             "road_segment_entities": {
-                                "id": [1, 2, 3],
-                                "traffic_properties": {"average_time": [1, 1, 1]},
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [1, 1]},
                             }
                         }
                     },
@@ -391,8 +390,8 @@ class TestCargoWithLocalParameters:
                     "data": {
                         water_network_name: {
                             "road_segment_entities": {
-                                "id": [1, 2, 3],
-                                "traffic_properties": {"average_time": [2, 2, 2]},
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [2, 2]},
                             }
                         }
                     },
@@ -497,8 +496,8 @@ class TestCargoWithNonIterativeLocalParameters:
                     "data": {
                         water_network_name: {
                             "road_segment_entities": {
-                                "id": [1, 2, 3],
-                                "traffic_properties": {"average_time": [1, 1, 1]},
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [1, 1]},
                             }
                         }
                     },
@@ -512,8 +511,8 @@ class TestCargoWithNonIterativeLocalParameters:
                     "data": {
                         water_network_name: {
                             "road_segment_entities": {
-                                "id": [1, 2, 3],
-                                "traffic_properties": {"average_time": [2, 2, 2]},
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [2, 2]},
                             }
                         }
                     },
