@@ -578,3 +578,99 @@ class TestCargoWithNonIterativeLocalParameters:
             rtol=0.01,
             use_new_time=True,
         )
+
+
+class TestCargoDemandWithInvestment:
+    @pytest.fixture
+    def model_config(
+        self,
+        model_name,
+        road_network_name,
+        scenario_parameters_csv_name,
+    ):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "total_inward_demand_property": [],
+            "total_outward_demand_property": [],
+            "scenario_parameters": [scenario_parameters_csv_name],
+            "global_parameters": ["gp1", "gp2"],
+            "global_elasticities": [2, -1],
+            "local_entity_groups": [],
+            "local_properties": [],
+            "local_geometries": [],
+            "local_geometry_entities": [],
+            "local_elasticities": [],
+            "investment_multipliers": [[0, 10, 2], [2, 11, 1.5], [2, 11, 2]],
+        }
+
+    def test_demand_calculation(
+        self,
+        config,
+        model_name,
+        road_network_name,
+    ):
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11, 12],
+                                "transport.cargo_demand": [
+                                    [6, 0, 0],
+                                    [10, 0, 0],
+                                    [0, 0, 0],
+                                ],
+                            }
+                        }
+                    },
+                },
+                {"time": 2, "data": {}},
+                {"time": 3, "data": {}},
+            ],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11],
+                                "transport.cargo_demand": [
+                                    [6 * 2 * 2, 0, 0],
+                                    [10 * 2, 0, 0],
+                                ],
+                            }
+                        }
+                    },
+                    "next_time": 1,
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11],
+                                "transport.cargo_demand": [
+                                    [121.5 * 2 * 2, 0, 0],
+                                    [202.5 * 2 * 1.5 * 2, 0, 0],
+                                ],
+                            }
+                        }
+                    },
+                    "next_time": 3,
+                },
+                {"time": 3, "data": {}, "next_time": 4},
+            ],
+        }
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=model_factory(Model),
+            name=model_name,
+            scenario=scenario,
+            rtol=0.01,
+            use_new_time=True,
+        )

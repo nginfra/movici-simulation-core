@@ -23,6 +23,10 @@ from movici_simulation_core.models.overlap_status.model import try_get_geometry_
 from spatial_mapper.mapper import Mapper
 
 
+# seconds, entity_id, multiplier
+Investment = t.Tuple[int, int, float]
+
+
 class Model(TrackedBaseModel):
     """
     Implementation of the demand estimation model.
@@ -47,6 +51,10 @@ class Model(TrackedBaseModel):
     _local_properties: t.List[UniformProperty]
     _local_closest_entity_index: t.List[np.ndarray]
     _prev_timestep_local_properties: t.List[TrackedArray]
+
+    _investments: t.List
+    _investment_idx: int
+
     _new_time: bool = True
 
     _current_parameters: t.Dict[str, float]
@@ -56,6 +64,9 @@ class Model(TrackedBaseModel):
 
         self.set_local_parameters(config, state)
         self.set_global_parameters(config, data_fetcher)
+
+        self._investments = config.get("investment_multipliers", [])
+        self._investment_idx = 0
 
         # We remove auto reset for SUB because
         #  we are subbing and pubbing same properties.
@@ -185,6 +196,9 @@ class Model(TrackedBaseModel):
         )
 
         multiplication_factor = self._add_local_property_effects_to_factor(multiplication_factor)
+
+        multiplication_factor = self._add_investments(time_stamp, multiplication_factor)
+
         demand_matrix *= multiplication_factor
 
         # Reset our PUB | INIT which is also SUB underwater before we publish results
@@ -226,6 +240,21 @@ class Model(TrackedBaseModel):
             )
 
             self._prev_timestep_local_properties[prop_idx] = prop.array.copy()
+        return multiplication_factor
+
+    def _add_investments(
+        self, timestamp: TimeStamp, multiplication_factor: np.ndarray
+    ) -> np.ndarray:
+        while not self._investment_idx >= len(self._investments):
+            next_investment = self._investments[self._investment_idx]
+            if next_investment[0] <= timestamp.seconds:
+                idx = self._demand_entity.index[[next_investment[1]]]
+                multiplication_factor[idx] *= next_investment[2]
+                multiplication_factor[:, idx] *= next_investment[2]
+            else:
+                break
+            self._investment_idx += 1
+
         return multiplication_factor
 
     def _calculate_global_factor(self) -> float:
