@@ -143,7 +143,7 @@ def test_new_time_accepted_when_ready_for_updates(adapter, data_fetcher, update,
     adapter.initialize(data_fetcher)
     adapter.update(time_stamp=TimeStamp(0), update_dict=update)
     adapter.new_time(TimeStamp(1))
-    assert model.new_time.call_args == call(TimeStamp(1))
+    assert model.new_time.call_args == call(adapter.state, TimeStamp(1))
 
 
 def test_shutdown_succeeds_when_ready_for_updates(adapter, data_fetcher, update, model):

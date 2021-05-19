@@ -47,6 +47,7 @@ class Model(TrackedBaseModel):
     _local_properties: t.List[UniformProperty]
     _local_closest_entity_index: t.List[np.ndarray]
     _prev_timestep_local_properties: t.List[TrackedArray]
+    _new_time: bool = True
 
     _current_parameters: t.Dict[str, float]
 
@@ -109,13 +110,14 @@ class Model(TrackedBaseModel):
         self._local_properties = []
         self._local_elasticities = []
 
-        if "local_entity_groups" not in config:
+        if "local_entity_groups" not in config or "local_properties" not in config:
             return
 
-        for entity, prop, geom in zip(
+        for entity, prop, geom, iterative in zip(
             config["local_entity_groups"],
             config["local_properties"],
             config["local_geometries"],
+            config.get("local_prop_is_iterative", [True] * len(config["local_entity_groups"])),
         ):
             ds_name, entity_name = entity
             self._local_entities.append(
@@ -131,6 +133,7 @@ class Model(TrackedBaseModel):
                     entity_name=entity_name,
                     spec=prop_spec,
                     flags=INIT,
+                    atol=1e-8 if iterative else float("inf"),
                 )
             )
         self._local_elasticities = config["local_elasticities"]
@@ -156,6 +159,8 @@ class Model(TrackedBaseModel):
             self._local_closest_entity_index.append(mapping.seq)
 
         self._initialize_state()
+        demand_matrix = self._get_matrix(self._demand_property.csr)
+        self._update_demand_sum(demand_matrix)
 
     def _initialize_state(self):
         self._prev_timestep_local_properties = []
@@ -165,10 +170,10 @@ class Model(TrackedBaseModel):
     def update(self, state: TrackedState, time_stamp: TimeStamp):
         self._scenario_parameters_tape.proceed_to(time_stamp)
         demand_matrix = self._get_matrix(self._demand_property.csr)
-        if not self._any_changes():
+        if not self._any_changes() and not self._new_time:
             state.reset_tracked_changes(SUB)
-            self._update_demand_sum(demand_matrix)
-            return self._scenario_parameters_tape.get_next_timestamp()
+            self._new_time = False
+            return TimeStamp(time=time_stamp.time + 1)
 
         global_factor = 1.0
         if self._scenario_parameters_tape.has_update():
@@ -189,7 +194,11 @@ class Model(TrackedBaseModel):
 
         self._update_demand_sum(demand_matrix)
 
-        return self._scenario_parameters_tape.get_next_timestamp()
+        self._new_time = False
+        return TimeStamp(time=time_stamp.time + 1)
+
+    def new_time(self, state: TrackedState, time_stamp: TimeStamp):
+        self._new_time = True
 
     def _any_changes(self) -> False:
         if self._scenario_parameters_tape.has_update():
@@ -205,7 +214,7 @@ class Model(TrackedBaseModel):
         for prop_idx, (elasticity, prop, closest_entity_index) in enumerate(
             zip(self._local_elasticities, self._local_properties, self._local_closest_entity_index)
         ):
-            if not prop.has_changes():
+            if not prop.has_changes() and not self._new_time:
                 continue
 
             update_multiplication_factor(

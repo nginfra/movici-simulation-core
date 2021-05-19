@@ -73,7 +73,7 @@ class TrackedBaseModelAdapter(BaseModel):
             self.model_initialized = True
 
     def new_time(self, time_stamp: TimeStamp):
-        self.model.new_time(time_stamp)
+        self.model.new_time(self.state, time_stamp)
         if not (self.model_initialized or self.model_ready_for_update) and time_stamp.time > 0:
             self.log_uninitialized_properties()
             raise RuntimeError(
@@ -83,7 +83,7 @@ class TrackedBaseModelAdapter(BaseModel):
             )
 
     def shutdown(self):
-        self.model.shutdown()
+        self.model.shutdown(self.state)
         if not (self.model_initialized or self.model_ready_for_update):
             self.log_uninitialized_properties()
             raise RuntimeError(
@@ -171,13 +171,13 @@ class TrackedBaseModel:
                  per the model engine's protocol
         """
 
-    def new_time(self, time_stamp: TimeStamp):
+    def new_time(self, state: TrackedState, time_stamp: TimeStamp):
         """Called for every change of timestamp during a simulation run. This method is called
         before checking whether the state is ready for INIT or PUB and may be called before the
         `initialize` and `update` methods have been called the first time.
         """
 
-    def shutdown(self):
+    def shutdown(self, state: TrackedState):
         """Called when a simulation ends (either due to it being finished or one of the models
         raises an exception). The model may implement this method to clean up local resources.
         This method may be called before the `initialize` and `update` methods have been called

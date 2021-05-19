@@ -277,7 +277,7 @@ class Model(TrackedBaseModel):
         self._corridor_entity.max_volume_to_capacity[:] = 0
         self._corridor_entity.delay_factor[:] = 0
 
-    def shutdown(self) -> None:
+    def shutdown(self, state: TrackedState) -> None:
         if self._project:
             self._project.close()
             self._project = None

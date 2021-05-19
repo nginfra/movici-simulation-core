@@ -97,7 +97,7 @@ class Model(TrackedBaseModel):
 
         return None
 
-    def shutdown(self):
+    def shutdown(self, state: TrackedState) -> None:
         if self.project:
             self.project.close()
             self.project = None
