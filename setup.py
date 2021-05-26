@@ -30,7 +30,7 @@ EXTRA_REQUIREMENTS = {
     "models": [
         "model-engine>=1.2.27",
         "shapely>=1.7.1",
-        "aequilibrae>=0.7.2",
+        "aequilibrae==0.7.2+movici.2",
         "pyproj>=3.0.1",
     ]
 }

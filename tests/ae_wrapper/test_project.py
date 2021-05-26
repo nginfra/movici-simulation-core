@@ -370,10 +370,10 @@ def test_can_assign_traffic(project: ProjectWrapper):
     assert np.array_equal(results.ids, [1, 102, 103, 104])
     assert np.allclose(results.passenger_flow, [4.1667, 20, 120, 0.8333], atol=0.01)
     assert np.allclose(results.cargo_flow, [25, 30, 30, 5], atol=0.01)
-    assert np.all(results.congested_time > 0)
-    assert np.all(results.delay_factor > 0)
-    assert np.all(results.volume_to_capacity > 0)
-    assert np.all(results.passenger_car_unit > 0)
+    assert np.allclose(results.congested_time, [[0.11710974, 0.08422376, 1.22788609, 0.11710973]])
+    assert np.allclose(results.delay_factor, [1.17102242, 1.05272956, 24.55614978, 1.17102232])
+    assert np.allclose(results.volume_to_capacity, [1.03333336, 0.77, 3.54, 1.0333332])
+    assert np.allclose(results.passenger_car_unit, [51.66666798, 77, 177, 10.33333202])
 
 
 @pytest.fixture
