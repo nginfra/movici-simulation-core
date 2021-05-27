@@ -287,4 +287,17 @@ def water_network_for_traffic(water_network_name, road_network_for_traffic):
         "road_segment_entities"
     ]
     del water_network["data"]["road_segment_entities"]
+
+    water_network["data"]["waterway_segment_entities"]["transport.capacity.hours"] = [
+        -999,
+        100,
+        -999,
+        -999,
+    ]
+
+    water_network["data"]["waterway_segment_entities"]["transport.max_speed"][-1] = 1e-6
+    water_network["general"] = {
+        "special": {"waterway_segment_entities..transport.capacity.hours": -999}
+    }
+
     return water_network

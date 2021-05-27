@@ -2,6 +2,7 @@ import pytest
 
 from model_engine import testing
 from movici_simulation_core.base_model.base import model_factory
+from movici_simulation_core.data_tracker.property import UNDEFINED
 from movici_simulation_core.models.traffic_assignment_calculation.model import Model
 
 
@@ -218,22 +219,22 @@ class TestTrafficAssignmentWaterways:
                         water_network_name: {
                             "waterway_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "transport.passenger_vehicle_flow": [4.1667, 20, 120, 0.8333],
-                                "transport.cargo_vehicle_flow": [25, 30, 30, 5],
-                                "transport.delay_factor": [1.171, 1.0527, 24.5561, 1.171],
+                                "transport.passenger_vehicle_flow": [5, 20, 120, 0],
+                                "transport.cargo_vehicle_flow": [30, 30, 30, 0],
+                                "transport.delay_factor": [1, 5.2152, 1, 1],
                                 "transport.volume_to_capacity_ratio": [
-                                    1.03333,
+                                    0,
                                     0.77,
-                                    3.54,
-                                    1.03333,
+                                    0,
+                                    0,
                                 ],
-                                "transport.passenger_car_unit": [51.6667, 77, 177, 10.3333],
+                                "transport.passenger_car_unit": [62, 77, 177, 0],
                                 "traffic_properties": {
                                     "average_time": [
-                                        0.4216,
-                                        0.3032,
-                                        4.4203,
-                                        0.4216,
+                                        0.3600,
+                                        7198.4478,
+                                        0.1800,
+                                        1e6,
                                     ],
                                 },
                             },
@@ -246,19 +247,26 @@ class TestTrafficAssignmentWaterways:
                     "data": {
                         water_network_name: {
                             "waterway_segment_entities": {
-                                "id": [101, 102, 103, 104],
-                                "transport.passenger_vehicle_flow": [2.0834, 10, 60, 0.4167],
-                                "transport.cargo_vehicle_flow": [12.5, 15, 15, 2.5],
-                                "transport.delay_factor": [1.011, 1.003, 2.472, 1.011],
-                                "transport.volume_to_capacity_ratio": [
-                                    0.5167,
-                                    0.385,
-                                    1.77,
-                                    0.5167,
+                                "id": [101, 102, 103],
+                                "transport.passenger_vehicle_flow": [2.5, 10, 60],
+                                "transport.cargo_vehicle_flow": [15, 15, 15],
+                                "transport.delay_factor": [
+                                    UNDEFINED[float],
+                                    1.1513,
+                                    UNDEFINED[float],
                                 ],
-                                "transport.passenger_car_unit": [25.8334, 38.5, 88.5, 5.1667],
+                                "transport.volume_to_capacity_ratio": [
+                                    UNDEFINED[float],
+                                    0.385,
+                                    UNDEFINED[float],
+                                ],
+                                "transport.passenger_car_unit": [31, 38.5, 88.5],
                                 "traffic_properties": {
-                                    "average_time": [0.3639, 0.289, 0.445, 0.3639],
+                                    "average_time": [
+                                        UNDEFINED[float],
+                                        1589.1415,
+                                        UNDEFINED[float],
+                                    ],
                                 },
                             },
                         },
@@ -272,7 +280,7 @@ class TestTrafficAssignmentWaterways:
             model=model_factory(Model),
             name=model_name,
             scenario=scenario,
-            atol=0.01,
+            rtol=0.01,
         )
 
 

@@ -26,7 +26,7 @@ class Model(TrackedBaseModel):
     Calculates traffic properties on roads
     """
 
-    vdf_alpha: float
+    vdf_alpha: t.Union[float, str]
     vdf_beta: float
     cargo_pcu: float
 
@@ -37,6 +37,7 @@ class Model(TrackedBaseModel):
         self._demand_nodes: t.Optional[DemandNodeEntity] = None
         self._demand_links: t.Optional[VirtualLinkEntity] = None
         self._free_flow_times: t.Optional[np.ndarray] = None
+        self._use_waterway_parameters = False
 
     def setup(
         self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
@@ -59,6 +60,9 @@ class Model(TrackedBaseModel):
             transport_dataset_name, VirtualLinkEntity(name="virtual_link_entities")
         )
 
+        if transport_type == "waterways":
+            self._use_waterway_parameters = True
+
         self.project = ProjectWrapper(scenario_config.TEMP_DIR)
 
         default_parameters = AssignmentParameters()
@@ -79,6 +83,10 @@ class Model(TrackedBaseModel):
 
         self._free_flow_times = self.project.calculate_free_flow_times()
         self.project.add_column("free_flow_time", self._free_flow_times)
+
+        if self._use_waterway_parameters:
+            self._initialize_waterway_parameters()
+
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
@@ -121,7 +129,8 @@ class Model(TrackedBaseModel):
         self._transport_segments.average_time[:] = results.congested_time[:real_link_len]
 
         # Aequilibrae does not like 0 capacity, so we have to post correct
-        correction_indices = self._transport_segments.capacity.array <= ae_util.eps
+        capacities = ae_util.get_capacities_from_property(self._transport_segments.capacity)
+        correction_indices = capacities <= ae_util.eps
         self._transport_segments.passenger_flow[correction_indices] = 0
         self._transport_segments.cargo_flow[correction_indices] = 0
         self._transport_segments.passenger_car_unit[correction_indices] = 0
@@ -132,21 +141,70 @@ class Model(TrackedBaseModel):
     def _process_link_changes(self):
         changed = False
         if self._transport_segments.max_speed.has_changes():
-            self.project.update_column("speed_ab", self._transport_segments.max_speed)
-            self.project.update_column("speed_ba", self._transport_segments.max_speed)
+            max_speeds = ae_util.get_max_speeds_from_property(self._transport_segments.max_speed)
+            self._free_flow_times = self.project.calculate_free_flow_times()
+            self.project.update_column("speed_ab", max_speeds)
+            self.project.update_column("speed_ba", max_speeds)
+            self.project.update_column("free_flow_time", self._free_flow_times)
             changed = True
 
         if (
             self._transport_segments.capacity.has_changes()
             or self._transport_segments.layout.has_changes()
         ):
-            new_capacities = ae_util.calculate_capacities(
-                self._transport_segments.capacity.array, self._transport_segments.layout.array
+            capacities = ae_util.get_capacities_from_property(
+                self._transport_segments.capacity, self._transport_segments.layout
             )
-            self.project.update_column("capacity_ab", new_capacities)
-            self.project.update_column("capacity_ba", new_capacities)
-
+            self.project.update_column("capacity_ab", capacities)
+            self.project.update_column("capacity_ba", capacities)
             changed = True
 
         if changed:
             self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
+
+    def _initialize_waterway_parameters(self):
+        """
+        We want waterway segments with locks to have an additional waiting time t_wait
+        We set the free_flow_times of these roads as
+
+        t_ff' = t_ff + t_wait
+
+        To convert it to vdf terms:
+
+        t_ff' = t_ff + s'
+        a = r / t_ff'
+        b = 4.8
+
+        With these aequilibrae can compute:
+        vdf = t_ff' * (1 + a * volume_over_capacity**b)
+        """
+        seconds_per_minute = 60
+        s = 23 * seconds_per_minute
+        r = 340 * seconds_per_minute
+        self.vdf_beta = 4.8
+
+        segments_with_locks = np.where(~self._transport_segments.capacity.is_special())[0]
+
+        total_free_flow_times = self._calculate_waterway_free_flow_times(segments_with_locks, s)
+        self.project.update_column("free_flow_time", total_free_flow_times)
+
+        self.vdf_alpha = "alpha"
+        alpha = self._calculate_waterway_alpha(segments_with_locks, total_free_flow_times, r)
+        self.project.add_column(self.vdf_alpha, alpha)
+
+    def _calculate_waterway_free_flow_times(
+        self, finite_indices: np.ndarray, s: float
+    ) -> np.ndarray:
+
+        t_ff_prime = self._free_flow_times.copy()
+        t_ff_prime[finite_indices] += s
+        return t_ff_prime
+
+    @staticmethod
+    def _calculate_waterway_alpha(
+        finite_indices: np.ndarray, free_flow_times: np.ndarray, r: float
+    ) -> np.ndarray:
+        default_alpha = AssignmentParameters().vdf_alpha
+        alpha_fill = np.full_like(free_flow_times, default_alpha)
+        alpha_fill[finite_indices] = r / free_flow_times[finite_indices]
+        return alpha_fill
