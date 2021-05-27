@@ -87,9 +87,9 @@ class OverlapStatus:
 
             self._connections.append(
                 Connections(
-                    from_indices=np.array(from_indices),
-                    to_indices=np.array(to_indices),
-                    overlap_indices=np.full_like(from_indices, -1),
+                    from_indices=np.array(from_indices, dtype=np.int64),
+                    to_indices=np.array(to_indices, dtype=np.int64),
+                    overlap_indices=np.full_like(from_indices, -1, dtype=np.int64),
                     overlap_published=np.full_like(from_indices, False, dtype=bool),
                 )
             )

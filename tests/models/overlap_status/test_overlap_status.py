@@ -1009,6 +1009,101 @@ class TestOverlapStatus:
         )
 
 
+class TestOverlapWithoutActualOverlaps:
+    @pytest.fixture
+    def knotweed_dataset(self, knotweed_dataset):
+        knotweed_dataset["data"]["knotweed_entities"]["shape_properties"]["polygon"] = [
+            [
+                [-10000, -10000],
+                [-10000, -10001],
+                [-10001, -10001],
+                [-10001, -10000],
+                [-10000, -10000],
+            ],
+            [
+                [-10000, -10000],
+                [-10000, -10001],
+                [-10001, -10001],
+                [-10001, -10000],
+                [-10000, -10000],
+            ],
+        ]
+        return knotweed_dataset
+
+    def test_overlap_without_actual_overlap(
+        self,
+        config,
+        model_name,
+        water_network_name,
+        knotweed_dataset_name,
+        time_scale,
+        get_entity_update,
+        get_overlap_update,
+    ):
+        config["config"]["models"][0]["to_entity_groups"] = [
+            (knotweed_dataset_name, "knotweed_entities")
+        ]
+        config["config"]["models"][0]["to_geometry_types"] = ["polygon"]
+        del config["config"]["models"][0]["to_check_status_properties"]
+
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1, 2, 3],
+                                properties=[False, False, False],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 1 * time_scale,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1],
+                                properties=[True],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+                {
+                    "time": 2 * time_scale,
+                    "data": {
+                        water_network_name: {
+                            "water_pipe_entities": get_entity_update(
+                                [1],
+                                properties=[False],
+                                component_name="operation_status_properties",
+                                key_name="is_working_properly",
+                            ),
+                        },
+                    },
+                },
+            ],
+            "expected_results": [
+                {"time": 0, "data": {}},
+                {"time": 1 * time_scale, "data": {}},
+                {"time": 2 * time_scale, "data": {}},
+            ],
+        }
+
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=model_factory(Model),
+            name=model_name,
+            scenario=scenario,
+            atol=0.01,
+        )
+
+
 @pytest.fixture
 def get_overlap_update(get_entity_update):
     def _factory(
