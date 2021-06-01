@@ -411,7 +411,6 @@ def p_triangle(project: ProjectWrapper):
     project.add_column("custom_field", [10, 11, 12])
     project.build_graph(
         cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance", "custom_field"],
         block_centroid_flows=False,
     )
     return project
@@ -468,7 +467,6 @@ def p_triangle_block(project: ProjectWrapper):
     project.add_column("custom_field", [10, 11, 12, 0, 0, 0])
     project.build_graph(
         cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance", "custom_field"],
         block_centroid_flows=True,
     )
     return project
@@ -561,7 +559,6 @@ def test_shortest_paths_some_without_path(project: ProjectWrapper):
     project.add_column("custom_field", [10, 11, 12])
     project.build_graph(
         cost_field="free_flow_time",
-        skim_fields=["free_flow_time", "distance", "custom_field"],
         block_centroid_flows=False,
     )
 
@@ -570,11 +567,3 @@ def test_shortest_paths_some_without_path(project: ProjectWrapper):
 
     assert np.array_equal(paths[1].nodes, [5, 7])
     assert np.array_equal(paths[1].links, [102])
-
-
-@pytest.mark.parametrize("p", ("p_triangle", "p_triangle_block"), indirect=True)
-def test_skimming(p: ProjectWrapper):
-    skims = p.calculate_skims()
-
-    assert np.allclose(skims.distance, [[0, 7, 2], [1, 0, 3], [6, 5, 0]], rtol=0.01)
-    assert np.allclose(skims.custom_field, [[0, 21, 10], [12, 0, 22], [23, 11, 0]], rtol=0.01)

@@ -15,7 +15,6 @@ from aequilibrae import (
     TrafficAssignment,
     TrafficClass,
     PathResults,
-    NetworkSkimming,
 )
 from pyproj import Transformer
 
@@ -294,14 +293,11 @@ class ProjectWrapper:
     def build_graph(
         self,
         cost_field: str,
-        skim_fields: t.Optional[t.List[str]] = None,
         block_centroid_flows: bool = True,
     ) -> Graph:
         self._project.network.build_graphs(modes=[TransportMode.CAR])
         graph = self._graph
         graph.set_graph(cost_field)
-        if skim_fields:
-            graph.set_skimming(skim_fields)
         graph.set_blocked_centroid_flows(block_centroid_flows)
         return graph
 
@@ -384,8 +380,6 @@ class ProjectWrapper:
         ).tolist()
 
         graph = self._graph
-        skim_fields = graph.skim_fields
-        graph.set_skimming([])
 
         if not path_results:
             path_results = PathResults()
@@ -395,8 +389,6 @@ class ProjectWrapper:
             path_results.update_trace(ae_to_node)
 
         ae_path_nodes, ae_path_links = path_results.path_nodes, path_results.path
-
-        graph.set_skimming(skim_fields)
 
         if ae_path_nodes is None:
             return None
@@ -424,10 +416,3 @@ class ProjectWrapper:
                     self.get_shortest_path(from_node, to_node, path_results=path_results)
                 )
         return results
-
-    def calculate_skims(self) -> AequilibraeMatrix:
-        graph = self._graph
-        skimming = NetworkSkimming(graph)
-        skimming.execute()
-
-        return skimming.results.skims
