@@ -1,13 +1,10 @@
-import typing as t
-
-import model_engine.dataset_manager as dm
 import numpy as np
-from model_engine.dataset_manager import property_definition
 
+from .optional import get_schema_for_parser, type_code_to_data_type
 from ..data_tracker.property import PropertySpec, DataType
 
 
-def to_spec(prop: t.Type[dm.Property]):
+def to_spec(prop):
     dtype_map = {
         np.dtype("float64"): float,
         np.dtype("int32"): int,
@@ -22,16 +19,25 @@ def to_spec(prop: t.Type[dm.Property]):
     )
 
 
-def _get_property_mapping(pd, rv=None) -> t.Dict:
-    if rv is None:
-        rv = {}
-    for obj in vars(pd).values():
-        if isinstance(obj, type):
-            if issubclass(obj, dm.Component):
-                _get_property_mapping(obj, rv)
-            if issubclass(obj, dm.Property) and obj is not dm.Property:
-                rv[(obj.component_name, obj.property_name)] = to_spec(obj)
+def _get_property_mapping(schema=None) -> dict:
+    if schema is None:
+        schema = get_schema_for_parser()
+    rv = {}
+
+    for prop in schema["prop_schema"].values():
+        data_type = type_code_to_data_type(prop["type"]).to_dict()
+        component = prop["component_name"] or None
+        name = prop["property_name"]
+        rv[(component, name)] = PropertySpec(
+            name=name,
+            component=component,
+            data_type=DataType(
+                py_type=data_type["dtype"],
+                unit_shape=data_type["unit_shape"],
+                csr=data_type["has_indptr"],
+            ),
+        )
     return rv
 
 
-property_mapping = _get_property_mapping(property_definition)
+property_mapping = _get_property_mapping()

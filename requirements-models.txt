@@ -1,0 +1,5 @@
+model-engine>=1.2.27
+movici-sdk>=0.4.2
+shapely>=1.7.1
+aequilibrae==0.7.2+movici.3
+pyproj>=3.0.1
