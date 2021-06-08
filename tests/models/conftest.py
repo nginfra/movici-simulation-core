@@ -288,12 +288,16 @@ def water_network_for_traffic(water_network_name, road_network_for_traffic):
     ]
     del water_network["data"]["road_segment_entities"]
 
+    # Entity index 0 has no extras, 1 has a lock, 2 has a bridge and 3 is closed
+
     water_network["data"]["waterway_segment_entities"]["transport.capacity.hours"] = [
         -999,
         100,
         -999,
         -999,
     ]
+
+    water_network["data"]["waterway_segment_entities"]["transport.additional_time"] = [0, 0, 1, 0]
 
     water_network["data"]["waterway_segment_entities"]["transport.max_speed"][-1] = 1e-6
     water_network["general"] = {

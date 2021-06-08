@@ -7,12 +7,14 @@ from model_engine.dataset_manager.property_definition import (
     Transport_PassengerCarUnit,
     Transport_PassengerDemand,
     Transport_CargoDemand,
+    Transport_AdditionalTime,
 )
 from movici_simulation_core.base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.property import (
     field,
     SUB,
     PUB,
+    OPT,
 )
 from movici_simulation_core.models.common.entities import (
     TransportSegmentEntity,
@@ -27,6 +29,7 @@ class TrafficTransportSegmentEntity(TransportSegmentEntity):
     delay_factor = field(to_spec(Transport_DelayFactor), flags=PUB)
     volume_to_capacity = field(to_spec(Transport_VolumeToCapacityRatio), flags=PUB)
     passenger_car_unit = field(to_spec(Transport_PassengerCarUnit), flags=PUB)
+    additional_time = field(to_spec(Transport_AdditionalTime), flags=OPT)
 
 
 class DemandNodeEntity(PointEntity):

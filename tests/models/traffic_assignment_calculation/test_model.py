@@ -221,7 +221,7 @@ class TestTrafficAssignmentWaterways:
                                 "id": [101, 102, 103, 104],
                                 "transport.passenger_vehicle_flow": [5, 20, 120, 0],
                                 "transport.cargo_vehicle_flow": [30, 30, 30, 0],
-                                "transport.delay_factor": [1, 5.2152, 1, 1],
+                                "transport.delay_factor": [1, 5.1547, 1, 1],
                                 "transport.volume_to_capacity_ratio": [
                                     0,
                                     0.77,
@@ -232,8 +232,8 @@ class TestTrafficAssignmentWaterways:
                                 "traffic_properties": {
                                     "average_time": [
                                         0.3600,
-                                        7198.4478,
-                                        0.1800,
+                                        7115.0348,
+                                        1.1800,
                                         1e6,
                                     ],
                                 },
@@ -252,7 +252,7 @@ class TestTrafficAssignmentWaterways:
                                 "transport.cargo_vehicle_flow": [15, 15, 15],
                                 "transport.delay_factor": [
                                     UNDEFINED[float],
-                                    1.1513,
+                                    1.1392,
                                     UNDEFINED[float],
                                 ],
                                 "transport.volume_to_capacity_ratio": [
@@ -264,7 +264,7 @@ class TestTrafficAssignmentWaterways:
                                 "traffic_properties": {
                                     "average_time": [
                                         UNDEFINED[float],
-                                        1589.1415,
+                                        1572.3614,
                                         UNDEFINED[float],
                                     ],
                                 },

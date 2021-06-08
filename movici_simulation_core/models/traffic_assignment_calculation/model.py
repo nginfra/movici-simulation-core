@@ -81,7 +81,7 @@ class Model(TrackedBaseModel):
             transport_segments=self._transport_segments,
         )
 
-        self._free_flow_times = self.project.calculate_free_flow_times()
+        self._free_flow_times = self._calculate_free_flow_times()
         self.project.add_column("free_flow_time", self._free_flow_times)
 
         if self._use_waterway_parameters:
@@ -142,9 +142,15 @@ class Model(TrackedBaseModel):
         changed = False
         if self._transport_segments.max_speed.has_changes():
             max_speeds = ae_util.get_max_speeds_from_property(self._transport_segments.max_speed)
-            self._free_flow_times = self.project.calculate_free_flow_times()
             self.project.update_column("speed_ab", max_speeds)
             self.project.update_column("speed_ba", max_speeds)
+            changed = True
+
+        if (
+            self._transport_segments.max_speed.has_changes()
+            or self._transport_segments.additional_time.has_changes()
+        ):
+            self._free_flow_times = self._calculate_free_flow_times()
             self.project.update_column("free_flow_time", self._free_flow_times)
             changed = True
 
@@ -173,15 +179,15 @@ class Model(TrackedBaseModel):
 
         t_ff' = t_ff + s'
         a = r / t_ff'
-        b = 4.8
+        b = 4.9
 
         With these aequilibrae can compute:
         vdf = t_ff' * (1 + a * volume_over_capacity**b)
         """
         seconds_per_minute = 60
         s = 23 * seconds_per_minute
-        r = 340 * seconds_per_minute
-        self.vdf_beta = 4.8
+        r = 344 * seconds_per_minute
+        self.vdf_beta = 4.9
 
         segments_with_locks = np.where(~self._transport_segments.capacity.is_special())[0]
 
@@ -199,6 +205,13 @@ class Model(TrackedBaseModel):
         t_ff_prime = self._free_flow_times.copy()
         t_ff_prime[finite_indices] += s
         return t_ff_prime
+
+    def _calculate_free_flow_times(self) -> np.ndarray:
+        free_flow_times = self.project.calculate_free_flow_times()
+        free_flow_times[: len(self._transport_segments)] += np.nan_to_num(
+            self._transport_segments.additional_time.array
+        )
+        return free_flow_times
 
     @staticmethod
     def _calculate_waterway_alpha(
