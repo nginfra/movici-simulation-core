@@ -147,6 +147,7 @@ class Model(TrackedBaseModel):
 
         target_polygons = self.target_entity.get_geometry()
         for src_entity in self.src_entities:
+            # This works as the hash for an EntityGroup is customized
             if src_entity in mappings:
                 continue
             mapping = Mapper(src_entity.get_geometry()).find_intersecting(target_polygons)

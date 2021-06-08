@@ -46,7 +46,7 @@ def waterways(water_network_name):
                         [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
                     ]
                 },
-            }
+            },
         },
     )
 
@@ -106,7 +106,7 @@ class TestCargoDemand:
                 {
                     "time": 0,
                     "data": {},
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -121,7 +121,6 @@ class TestCargoDemand:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
             ],
         }
@@ -190,7 +189,7 @@ class TestPassengerDemand:
                 {
                     "time": 0,
                     "data": {},
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -205,7 +204,6 @@ class TestPassengerDemand:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
             ],
         }
@@ -285,7 +283,7 @@ class TestCargoDemandSum:
                             }
                         }
                     },
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -305,7 +303,6 @@ class TestCargoDemandSum:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
             ],
         }
@@ -405,7 +402,7 @@ class TestCargoWithLocalParameters:
                 {
                     "time": 0,
                     "data": {},
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -420,7 +417,6 @@ class TestCargoWithLocalParameters:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
             ],
         }
@@ -530,7 +526,7 @@ class TestCargoWithNonIterativeLocalParameters:
                 {
                     "time": 0,
                     "data": {},
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -545,7 +541,6 @@ class TestCargoWithNonIterativeLocalParameters:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
                 {
                     "time": 2,
@@ -565,7 +560,6 @@ class TestCargoWithNonIterativeLocalParameters:
                             }
                         }
                     },
-                    "next_time": 4,
                 },
             ],
         }
@@ -646,7 +640,7 @@ class TestCargoDemandWithInvestment:
                             }
                         }
                     },
-                    "next_time": 1,
+                    "next_time": 2,
                 },
                 {
                     "time": 2,
@@ -661,11 +655,309 @@ class TestCargoDemandWithInvestment:
                             }
                         }
                     },
-                    "next_time": 3,
                 },
-                {"time": 3, "data": {}, "next_time": 4},
+                {"time": 3, "data": {}},
             ],
         }
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=model_factory(Model),
+            name=model_name,
+            scenario=scenario,
+            rtol=0.01,
+            use_new_time=True,
+        )
+
+
+class TestCargoWithLocalRouting:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_name,
+        road_network_for_traffic,
+        water_network_name,
+        scenario_parameters_csv_path,
+        waterways,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_for_traffic},
+            {"name": water_network_name, "data": waterways},
+        ]
+
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name, water_network_name):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[water_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
+            "local_properties": [
+                ["traffic_properties", "average_time"],
+            ],
+            "local_mapping_type": ["route"],
+            "local_geometries": ["line"],
+            "local_prop_is_iterative": [False],
+            "local_elasticities": [2],
+        }
+
+    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11, 12, 13],
+                                # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
+                                "point_properties": {
+                                    "position_x": [97702, 97702, 97700, 97700],
+                                    "position_y": [434000, 434000, 434000, 434000],
+                                },
+                                "transport.cargo_demand": [
+                                    [0, 0, 14, 5],
+                                    [10, 0, 0, 0],
+                                    [11, 0, 0, 0],
+                                    [1, 0, 2, 0],
+                                ],
+                            },
+                        }
+                    },
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101, 102, 103, 104],
+                                "traffic_properties": {"average_time": [1, 1, 1, 1]},
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101, 102],
+                                "traffic_properties": {"average_time": [2, 2]},
+                            }
+                        }
+                    },
+                },
+                {"time": 2, "data": {}},
+                {
+                    "time": 3,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [103, 104],
+                                "traffic_properties": {"average_time": [3, 3]},
+                            }
+                        }
+                    },
+                },
+                {"time": 4, "data": {}},
+            ],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {},
+                },
+                {
+                    "time": 0,
+                    "data": {},
+                },
+                {
+                    "time": 0,
+                    "data": {},
+                    "next_time": 1,
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [12, 13],
+                                "transport.cargo_demand": [
+                                    [11 * 4, 0, 0, 0],
+                                    [1 * 4, 0, 2, 0],
+                                ],
+                            },
+                        },
+                    },
+                },
+                {
+                    "time": 3,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10],
+                                "transport.cargo_demand": [
+                                    [0, 0, 14 * (5 / 2) ** 2, 5 * (5 / 2) ** 2],
+                                ],
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 4,
+                    "data": {},
+                },
+            ],
+        }
+
+        scenario.update(config)
+        testing.ModelDriver.run_scenario(
+            model=model_factory(Model),
+            name=model_name,
+            scenario=scenario,
+            rtol=0.01,
+            use_new_time=True,
+        )
+
+
+class TestCargoWithLocalRoutingIterative:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_name,
+        road_network_for_traffic,
+        water_network_name,
+        scenario_parameters_csv_path,
+        waterways,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_for_traffic},
+            {"name": water_network_name, "data": waterways},
+        ]
+
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name, water_network_name):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[water_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
+            "local_properties": [
+                ["traffic_properties", "average_time"],
+            ],
+            "local_mapping_type": ["route"],
+            "local_geometries": ["line"],
+            "local_prop_is_iterative": [True],
+            "local_elasticities": [2],
+        }
+
+    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11, 12, 13],
+                                # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
+                                "point_properties": {
+                                    "position_x": [97702, 97702, 97700, 97700],
+                                    "position_y": [434000, 434000, 434000, 434000],
+                                },
+                                "transport.cargo_demand": [
+                                    [0, 0, 14, 5],
+                                    [10, 0, 0, 0],
+                                    [11, 0, 0, 0],
+                                    [1, 0, 2, 0],
+                                ],
+                            },
+                        }
+                    },
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101, 102, 103, 104],
+                                "traffic_properties": {"average_time": [1, 1, 1, 1]},
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101, 102],
+                                "traffic_properties": {"average_time": [2, 2]},
+                            }
+                        }
+                    },
+                },
+                {"time": 2, "data": {}},
+                {
+                    "time": 3,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [103, 104],
+                                "traffic_properties": {"average_time": [3, 3]},
+                            }
+                        }
+                    },
+                },
+                {"time": 4, "data": {}},
+            ],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": {},
+                },
+                {
+                    "time": 0,
+                    "data": {},
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [12, 13],
+                                "transport.cargo_demand": [
+                                    [11 * 4, 0, 0, 0],
+                                    [1 * 4, 0, 2, 0],
+                                ],
+                            },
+                        },
+                    },
+                },
+                {
+                    "time": 2,
+                    "data": {},
+                },
+                {
+                    "time": 3,
+                    "data": {
+                        water_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10],
+                                "transport.cargo_demand": [
+                                    [0, 0, 14 * (5 / 2) ** 2, 5 * (5 / 2) ** 2],
+                                ],
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 4,
+                    "data": {},
+                },
+            ],
+        }
+
         scenario.update(config)
         testing.ModelDriver.run_scenario(
             model=model_factory(Model),
