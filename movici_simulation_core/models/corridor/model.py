@@ -192,7 +192,9 @@ class Model(TrackedBaseModel):
         self, corridor_index: int, roads_indices: np.ndarray, pcu_demand: float
     ) -> None:
         road_pcu = self._transport_segments.passenger_car_unit[roads_indices]
-        weight_factors = np.minimum(pcu_demand / road_pcu, 1)
+        non_zero = road_pcu != 0
+        weight_factors = np.ones(len(roads_indices), dtype=np.float64)
+        weight_factors[non_zero] = np.minimum(pcu_demand / road_pcu[non_zero], 1)
 
         self._corridor_entity.co2_emission[corridor_index] += self._weighted_sum(
             self._transport_segments.co2_emission[roads_indices], weight_factors

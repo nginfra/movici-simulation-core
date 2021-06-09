@@ -1,6 +1,7 @@
 import typing as t
 from abc import abstractmethod
 from logging import Logger
+from pathlib import Path
 
 import numba
 import numpy as np
@@ -125,7 +126,7 @@ class TransportPathingValueSum(LocalEffectsCalculator):
         scenario_config: Config,
         **kwargs,
     ):
-        self._project = ProjectWrapper(scenario_config.TEMP_DIR)
+        self._project = ProjectWrapper(Path(scenario_config.TEMP_DIR, ds_name))
         self._property = prop
         self._elasticity = elasticity
 
@@ -210,15 +211,14 @@ class TransportPathingValueSum(LocalEffectsCalculator):
 
         unique_indices = np.unique(self._indices)
         nb_unique_nodes = len(unique_indices)
-        summed_values = np.full(shape=(nb_unique_nodes, nb_unique_nodes), fill_value=np.inf)
+        summed_values = np.zeros(shape=(nb_unique_nodes, nb_unique_nodes), dtype=np.float64)
         for i, from_idx in enumerate(unique_indices):
             paths = self._project.get_shortest_paths(ids[from_idx], ids[unique_indices])
             for j, (to_idx, path) in enumerate(zip(unique_indices, paths)):
                 if i == j:
-                    summed_values[i][j] = 0
                     continue
                 if path is None:
-                    self._logger.warning(
+                    self._logger.debug(
                         f"Nodes {ids[from_idx]}-{ids[to_idx]} "
                         f"do not have a valid path between them."
                     )
