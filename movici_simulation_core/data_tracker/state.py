@@ -275,7 +275,9 @@ class EntityUpdateHandler:
         for identifier, data in iter_entity_data(entity_data):
             if identifier == (None, "id"):
                 continue
-            if prop := self.properties.get(identifier):
+            if (prop := self.properties.get(identifier)) is not None:
+                if not prop.has_data():
+                    prop.initialize(len(self.index))
                 prop.update(data, self.index[ids])
 
     def generate_update(self, flags=PUB):

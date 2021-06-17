@@ -344,6 +344,19 @@ class TestEntityUpdateHandler:
         )
 
     @pytest.fixture
+    def update_with_new_prop(self, dataset_name, entity_type):
+        return dataset_data_to_numpy(
+            {
+                dataset_name: {
+                    entity_type: {
+                        "id": [1, 2, 3],
+                        "new_prop": [4, 5, 6],
+                    },
+                }
+            }
+        )
+
+    @pytest.fixture
     def entity_group(self, entity_type):
         class MyEntity(EntityGroup, name=entity_type):
             prop = get_property(name="prop", flags=PUB)
@@ -361,17 +374,25 @@ class TestEntityUpdateHandler:
         return state
 
     @pytest.fixture
-    def get_property(self, state, entity_group, dataset_name):
+    def get_property_from_state(self, state, entity_group, dataset_name):
         def _get_property(identifier):
             return state.get_property(dataset_name, entity_group.__entity_name__, identifier)
 
         return _get_property
 
-    def test_initialization(self, get_property):
-        assert get_property((None, "prop")).is_initialized()
+    def test_initialization(self, get_property_from_state):
+        assert get_property_from_state((None, "prop")).is_initialized()
 
-    def test_initializes_with_empty_property_when_not_supplied(self, get_property):
-        assert np.all(get_property((None, "non_changed")).is_undefined())
+    def test_initializes_with_empty_property_when_not_supplied(self, get_property_from_state):
+        assert np.all(get_property_from_state((None, "non_changed")).is_undefined())
+
+    def test_later_added_property_is_initialized(
+        self, state, get_property_from_state, update_with_new_prop, dataset_name, entity_group
+    ):
+        prop = get_property("new_prop")
+        state.register_property(dataset_name, entity_group.__entity_name__, prop.spec, prop.flags)
+        state.receive_update(update_with_new_prop)
+        assert np.all(get_property_from_state((None, "new_prop")).is_initialized())
 
     def test_generate_update(self, initial_data, dataset_name, entity_group, state):
         entity_group.prop[0] = 42
