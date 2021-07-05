@@ -96,6 +96,8 @@ class Model(TrackedBaseModel):
             entity_name=demand_entity,
             spec=prop_spec,
             flags=INIT | PUB,
+            rtol=config.get("rtol", 1e-5),
+            atol=config.get("atol", 1e-8),
         )
 
         sum_prop_config_in = config.get("total_inward_demand_property")
