@@ -6,7 +6,7 @@ from shapely.ops import nearest_points
 
 from movici_simulation_core.data_tracker.property import Property
 from movici_simulation_core.models.common.entities import GeometryEntity, LineEntity
-from spatial_mapper.mapper import Mapper
+from boost_geo_query.geo_query import GeoQuery
 from .dataset import OverlapEntity
 
 
@@ -75,8 +75,8 @@ class OverlapStatus:
         from_geometry = self._from_entity.get_geometry()
         self._connections = []
         for to_entity in self._to_entities:
-            mapper = Mapper(to_entity.get_geometry())
-            mapping = mapper.find_in_radius(from_geometry, self._distance_threshold)
+            mapper = GeoQuery(to_entity.get_geometry())
+            mapping = mapper.within_distance_of(from_geometry, self._distance_threshold)
 
             from_indices = []
             to_indices = []

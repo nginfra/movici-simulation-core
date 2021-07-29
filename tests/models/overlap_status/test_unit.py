@@ -8,39 +8,35 @@ from movici_simulation_core.models.common.entities import PointEntity, LineEntit
 from movici_simulation_core.models.overlap_status.overlap_status import (
     OverlapStatus,
 )
-from spatial_mapper.geometry import (
-    PointCollection,
-    LineStringCollection,
-    ClosedPolygonCollection,
-)
+from boost_geo_query.geometry import PointGeometry, LinestringGeometry, ClosedPolygonGeometry
 
 
-def get_point_entity(point_collection: PointCollection) -> PointEntity:
+def get_point_entity(point_collection: PointGeometry) -> PointEntity:
     state = TrackedState()
     point = state.register_entity_group("ds", PointEntity("entity"))
 
-    nb_points = len(point_collection.coord_seq)
+    nb_points = len(point_collection.points)
     point.x.initialize(nb_points)
     point.y.initialize(nb_points)
 
-    point.x[:] = point_collection.coord_seq[:, 0]
-    point.y[:] = point_collection.coord_seq[:, 1]
+    point.x[:] = point_collection.points[:, 0]
+    point.y[:] = point_collection.points[:, 1]
     return point
 
 
-def get_line_entity(line_collection: LineStringCollection) -> LineEntity:
+def get_line_entity(line_collection: LinestringGeometry) -> LineEntity:
     state = TrackedState()
     line = state.register_entity_group("ds", LineEntity("entity"))
-    line._linestring2d.initialize(len(line_collection.indptr) - 1)
-    line._linestring2d.csr = TrackedCSRArray(line_collection.coord_seq, line_collection.indptr)
+    line._linestring2d.initialize(len(line_collection.row_ptr) - 1)
+    line._linestring2d.csr = TrackedCSRArray(line_collection.points, line_collection.row_ptr)
     return line
 
 
-def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEntity:
+def get_polygon_entity(polygon_collection: ClosedPolygonGeometry) -> PolygonEntity:
     state = TrackedState()
     polygon = state.register_entity_group("ds", PolygonEntity("entity"))
-    polygon.polygon.initialize(len(polygon_collection.indptr) - 1)
-    polygon.polygon.csr = TrackedCSRArray(polygon_collection.coord_seq, polygon_collection.indptr)
+    polygon.polygon.initialize(len(polygon_collection.row_ptr) - 1)
+    polygon.polygon.csr = TrackedCSRArray(polygon_collection.points, polygon_collection.row_ptr)
     return polygon
 
 
@@ -48,41 +44,41 @@ def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEn
     ["geometry_entity1", "geometry_entity2", "index1", "index2", "overlap_point"],
     [
         (
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0], [1, 1]])),
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0], [1, 1]])),
             0,
             0,
             (0, 0),
         ),
         (
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0], [1, 1]])),
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0], [1, 1]])),
             0,
             1,
             (0, 0.5),
         ),
         (
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0], [1, 1]])),
             get_line_entity(
-                LineStringCollection([[0, 0], [0, 1], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0, 0], [0, 1], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             0,
             0,
             (0, 0),
         ),
         (
-            get_point_entity(PointCollection([[0, 0], [0, 1], [1, 0.5], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [1, 0.5], [1, 1]])),
             get_line_entity(
-                LineStringCollection([[0, 0], [0, 1], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0, 0], [0, 1], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             2,
             1,
             (1, 0.5),
         ),
         (
-            get_point_entity(PointCollection([[0, 0], [0, 1], [2, 0.5], [1, 1]])),
+            get_point_entity(PointGeometry([[0, 0], [0, 1], [2, 0.5], [1, 1]])),
             get_line_entity(
-                LineStringCollection([[0, 0], [0, 1], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0, 0], [0, 1], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             2,
             1,
@@ -90,10 +86,10 @@ def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEn
         ),
         (
             get_line_entity(
-                LineStringCollection([[0, 0], [0, 1], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0, 0], [0, 1], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             get_line_entity(
-                LineStringCollection([[0.5, 0.5], [-0.5, 0.5], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0.5, 0.5], [-0.5, 0.5], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             0,
             0,
@@ -101,19 +97,19 @@ def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEn
         ),
         (
             get_line_entity(
-                LineStringCollection([[0, 0], [0, 1], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0, 0], [0, 1], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             get_line_entity(
-                LineStringCollection([[0.5, 0.5], [0.4, 0.5], [1, 0], [1, 1]], indptr=[0, 2, 4])
+                LinestringGeometry([[0.5, 0.5], [0.4, 0.5], [1, 0], [1, 1]], row_ptr=[0, 2, 4])
             ),
             0,
             0,
             (0.2, 0.5),
         ),
         (
-            get_point_entity(PointCollection([[0.5, 2]])),
+            get_point_entity(PointGeometry([[0.5, 2]])),
             get_polygon_entity(
-                ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], indptr=[0, 5])
+                ClosedPolygonGeometry([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], row_ptr=[0, 5])
             ),
             0,
             0,
@@ -121,11 +117,11 @@ def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEn
         ),
         (
             get_polygon_entity(
-                ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], indptr=[0, 5])
+                ClosedPolygonGeometry([[0, 0], [0, 1], [1, 1], [1, 0], [0, 0]], row_ptr=[0, 5])
             ),
             get_polygon_entity(
-                ClosedPolygonCollection(
-                    [[-10, -10], [-10, 10], [10, 10], [10, -10], [-10, -10]], indptr=[0, 5]
+                ClosedPolygonGeometry(
+                    [[-10, -10], [-10, 10], [10, 10], [10, -10], [-10, -10]], row_ptr=[0, 5]
                 )
             ),
             0,
@@ -134,10 +130,10 @@ def get_polygon_entity(polygon_collection: ClosedPolygonCollection) -> PolygonEn
         ),
         (
             get_polygon_entity(
-                ClosedPolygonCollection([[0, 0], [0, 1], [1, 1], [0, 0]], indptr=[0, 4])
+                ClosedPolygonGeometry([[0, 0], [0, 1], [1, 1], [0, 0]], row_ptr=[0, 4])
             ),
             get_polygon_entity(
-                ClosedPolygonCollection([[10, 0], [10, 1], [11, 1], [10, 0]], indptr=[0, 4])
+                ClosedPolygonGeometry([[10, 0], [10, 1], [11, 1], [10, 0]], row_ptr=[0, 4])
             ),
             0,
             0,

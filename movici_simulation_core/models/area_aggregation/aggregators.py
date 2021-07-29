@@ -2,7 +2,7 @@ import typing as t
 
 import numpy as np
 from movici_simulation_core.data_tracker.property import UniformProperty
-from spatial_mapper.mapper import Mapping
+from boost_geo_query.geo_query import QueryResult
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
@@ -73,7 +73,7 @@ class PropertyAggregator:
         source: UniformProperty,
         target: UniformProperty,
         func: str,
-        mapping: Mapping = None,
+        mapping: QueryResult = None,
         default_special_value=-9999,
         weights: np.ndarray = None,
         previous_source: np.ndarray = None,
@@ -87,7 +87,7 @@ class PropertyAggregator:
         self.previous_source = previous_source
         self.initialized = False
 
-    def add_mapping(self, mapping: Mapping):
+    def add_mapping(self, mapping: QueryResult):
         self.mapping = mapping
 
     def set_weights(self, weights: np.ndarray):
@@ -110,7 +110,7 @@ class PropertyAggregator:
         self.initialize()
         self.ensure_special_value(self.target, self.default_special_value)
         if not self.mapping:
-            raise RuntimeError("Mapping not set at runtime")
+            raise RuntimeError("QueryResult not set at runtime")
         if self.weights is None:
             self.weights = np.ones(len(self.source))
 

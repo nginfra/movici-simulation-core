@@ -9,7 +9,7 @@ from movici_simulation_core.data_tracker.property import PUB, PropertySpec, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.entities import PolygonEntity, GeometryEntity, LineEntity
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
-from spatial_mapper.mapper import Mapper, Mapping
+from boost_geo_query.geo_query import GeoQuery, QueryResult
 
 from .aggregators import functions, PropertyAggregator
 
@@ -150,7 +150,7 @@ class Model(TrackedBaseModel):
             # This works as the hash for an EntityGroup is customized
             if src_entity in mappings:
                 continue
-            mapping = Mapper(src_entity.get_geometry()).find_intersecting(target_polygons)
+            mapping = GeoQuery(src_entity.get_geometry()).intersects_with(target_polygons)
             mappings[src_entity] = mapping
 
             weights[src_entity] = self.calculate_weights(mapping, len(src_entity))
@@ -160,8 +160,8 @@ class Model(TrackedBaseModel):
             aggregator.set_weights(weights[src_entity])
 
     @staticmethod
-    def calculate_weights(mapping: Mapping, length: int):
-        indices, counts = np.unique(mapping.seq, return_counts=True)
+    def calculate_weights(mapping: QueryResult, length: int):
+        indices, counts = np.unique(mapping.indices, return_counts=True)
         rv = np.zeros((length,), dtype=float)
         rv[indices] = 1.0 / counts
         return rv

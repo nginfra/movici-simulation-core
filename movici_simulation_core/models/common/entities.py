@@ -18,11 +18,12 @@ from movici_simulation_core.base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import field, OPT, CSRProperty, INIT
 from movici_simulation_core.exceptions import NotReady
-from spatial_mapper.geometry import (
-    GeometryCollection,
-    LineStringCollection,
-    PointCollection,
-    ClosedPolygonCollection,
+
+from boost_geo_query.geometry import (
+    Geometry,
+    LinestringGeometry,
+    PointGeometry,
+    ClosedPolygonGeometry,
 )
 
 
@@ -30,7 +31,7 @@ class GeometryEntity(EntityGroup):
     reference = field(to_spec(Reference), flags=OPT)
 
     @abstractmethod
-    def get_geometry(self) -> GeometryCollection:
+    def get_geometry(self) -> Geometry:
         ...
 
     @abstractmethod
@@ -42,8 +43,8 @@ class PointEntity(GeometryEntity):
     x = field(to_spec(PointProperties.PositionX), flags=INIT)
     y = field(to_spec(PointProperties.PositionY), flags=INIT)
 
-    def get_geometry(self) -> PointCollection:
-        return PointCollection(coord_seq=np.stack((self.x.array, self.y.array), axis=-1))
+    def get_geometry(self) -> PointGeometry:
+        return PointGeometry(points=np.stack((self.x.array, self.y.array), axis=-1))
 
     def get_single_geometry(self, index: int) -> Point:
         return Point(self.x.array[index], self.y.array[index])
@@ -76,9 +77,9 @@ class LineEntity(GeometryEntity):
     def is_ready(self) -> bool:
         return self._linestring3d.is_initialized() or self._linestring2d.is_initialized()
 
-    def get_geometry(self) -> LineStringCollection:
-        return LineStringCollection(
-            coord_seq=self.linestring.csr.data[:, 0:2], indptr=self.linestring.csr.row_ptr
+    def get_geometry(self) -> LinestringGeometry:
+        return LinestringGeometry(
+            points=self.linestring.csr.data[:, 0:2], row_ptr=self.linestring.csr.row_ptr
         )
 
     def get_single_geometry(self, index: int) -> LineString:
@@ -88,9 +89,9 @@ class LineEntity(GeometryEntity):
 class PolygonEntity(GeometryEntity):
     polygon = field(to_spec(ShapeProperties.Polygon), flags=INIT)
 
-    def get_geometry(self) -> ClosedPolygonCollection:
-        return ClosedPolygonCollection(
-            coord_seq=self.polygon.csr.data, indptr=self.polygon.csr.row_ptr
+    def get_geometry(self) -> ClosedPolygonGeometry:
+        return ClosedPolygonGeometry(
+            points=self.polygon.csr.data, row_ptr=self.polygon.csr.row_ptr
         )
 
     def get_single_geometry(self, index: int) -> Polygon:

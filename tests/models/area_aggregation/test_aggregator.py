@@ -14,7 +14,7 @@ from movici_simulation_core.models.area_aggregation.aggregators import (
     func_min,
     func_max,
 )
-from spatial_mapper.mapper import Mapping
+from boost_geo_query.geo_query import QueryResult
 
 
 @pytest.fixture
@@ -73,7 +73,7 @@ def aggregator(float_data):
     def get(func="max", previous_source=None):
         source = float_data([0, 5, 7])
         target = float_data([2, 0, 6])
-        mapping = Mapping(ids=None, seq=np.array([0, 1, 0, 1, 2]), indptr=np.array([0, 2, 2, 5]))
+        mapping = QueryResult(indices=np.array([0, 1, 0, 1, 2]), row_ptr=np.array([0, 2, 2, 5]))
         return PropertyAggregator(
             source=source,
             target=target,
@@ -113,7 +113,7 @@ def simple_aggregator(float_data):
     def get(func="max", previous_source=None):
         source = float_data([0, 5, 7])
         target = float_data([2, 0, 6])
-        mapping = Mapping(ids=None, seq=np.array([0, 1, 2]), indptr=np.array([0, 1, 2, 3]))
+        mapping = QueryResult(indices=np.array([0, 1, 2]), row_ptr=np.array([0, 1, 2, 3]))
         return PropertyAggregator(
             source=source,
             target=target,

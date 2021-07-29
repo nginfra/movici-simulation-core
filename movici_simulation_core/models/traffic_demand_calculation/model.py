@@ -26,7 +26,7 @@ from movici_simulation_core.models.traffic_demand_calculation.local_effect_calcu
     TransportPathingValueSum,
     NearestValue,
 )
-from spatial_mapper.mapper import Mapper, Mapping
+from boost_geo_query.geo_query import GeoQuery, QueryResult
 
 # seconds, entity_id, multiplier
 Investment = t.Tuple[int, int, float]
@@ -196,7 +196,7 @@ class Model(TrackedBaseModel):
         self._update_demand_sum(demand_matrix)
 
     def _initialize_local_calculators(self):
-        mappings: t.Dict[EntityGroup, Mapping] = {}
+        mappings: t.Dict[EntityGroup, QueryResult] = {}
 
         demand_geometry = self._demand_entity.get_geometry()
 
@@ -206,9 +206,9 @@ class Model(TrackedBaseModel):
             if entity in mappings:
                 mapping = mappings[entity]
             else:
-                mapping = Mapper(entity.get_geometry()).find_nearest(demand_geometry)
+                mapping = GeoQuery(entity.get_geometry()).nearest_to(demand_geometry)
                 mappings[entity] = mapping
-            calculator.initialize(mapping.seq)
+            calculator.initialize(mapping.indices)
 
     def update(self, state: TrackedState, time_stamp: TimeStamp):
         self._proceed_tapes(time_stamp)
