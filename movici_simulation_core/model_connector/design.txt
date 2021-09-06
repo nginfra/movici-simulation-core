@@ -1,0 +1,45 @@
+Stream --list[bytes]--> MessageInterpretation
+MessageInterpretation --> calls methods on Connector
+Connector has `initialize`, `new_time`, `update`, `close` methods
+Connector uses UpdateFetcher to fetch bytes
+
+UpdateFetcher takes in (Update)Message, responds bytes
+
+Connector calls DataInterpretation/ModelWrapper method `initialize`, `new_time`, `update<bytes>`, `close`
+DataInterpretation parses bytes, calls method on (Base)Model
+
+InitDataFetcher takes in string (name), responds bytes / fileIO?
+
+
+Model receives WrappedInitDataFetcher (depends on ModelWrapper) responds whatever (Base)Model needs
+
+
+
+
+
+ROUTER (async, starts with recv):
+A ROUTER socket adds `ident` frame on send and strips `ident` frame on recv
+       internal                 external
+ recv: ident, empty, payload <- empty, payload
+ send: ident, empty, payload -> empty, payload
+
+REQ (sync):
+A REQ socket adds `empty` frame on send and strips empty frame
+on receive
+       internal                 external
+ recv: payload               <- empty, payload
+ send: payload               -> empty, payload
+
+REP (sync):
+A REP socket strips envelope until empty frame on recv
+and re-adds envelope on send
+       internal                 external
+ recv: payload               <- *ident, empty, payload
+ send: payload               -> *ident, empty, payload
+
+
+DEALER (async, one connection):
+A DEALER socket passes message as-is
+       internal                     external
+ recv: *ident, empty, payload <-  *ident, empty, payload
+ send: *ident, empty, payload ->  *ident, empty, payload

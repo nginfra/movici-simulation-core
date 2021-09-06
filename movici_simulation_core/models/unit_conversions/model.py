@@ -3,7 +3,7 @@ import typing as t
 import pandas as pd
 from model_engine import TimeStamp, DataFetcher
 from model_engine.model_driver.data_handlers import DType
-from movici_simulation_core.base_model.base import TrackedBaseModel
+from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
 from movici_simulation_core.data_tracker.property import UniformProperty
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
@@ -11,7 +11,7 @@ from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
 from .entities import FlowEntityGroup, ODEntityGroup
 
 
-class Model(TrackedBaseModel):
+class Model(LegacyTrackedBaseModel):
     """
     Implementation of the unit conversions model.
     Reads a csv with coefficients.

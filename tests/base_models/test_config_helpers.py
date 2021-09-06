@@ -1,5 +1,5 @@
 import pytest
-from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.base_models.config_helpers import property_mapping
 
 
 @pytest.mark.parametrize(

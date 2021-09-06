@@ -13,8 +13,9 @@ def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
-        rv[i] = np.all(
-            isclose(get_row(data, row_ptr, i), row, rtol=rtol, atol=atol, equal_nan=equal_nan)
+        data_row = get_row(data, row_ptr, i)
+        rv[i] = (data_row.shape == row.shape) and np.all(
+            isclose(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
         )
     return rv
 

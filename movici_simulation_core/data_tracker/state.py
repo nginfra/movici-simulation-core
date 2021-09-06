@@ -16,9 +16,11 @@ from .property import (
     PropertySpec,
     PropertyObject,
     PropertyOptions,
-    propstring,
+    create_empty_property_for_data,
 )
-from .types import PropertyIdentifier, EntityData, ComponentData, NumpyPropertyData, ValueType
+from ..types import NumpyPropertyData, ComponentData, EntityData, PropertyIdentifier, ValueType
+from ..core.data_format import extract_dataset_data
+from ..core.schema import propstring
 
 PropertyDict = t.Dict[PropertyIdentifier, PropertyObject]
 EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)
@@ -28,10 +30,18 @@ class TrackedState:
     properties: t.Dict[str, t.Dict[str, PropertyDict]]
     index: t.Dict[str, t.Dict[str, Index]]
 
-    def __init__(self, logger=None):
+    def __init__(self, logger=None, track_unknown=0):
+        """
+
+        :param logger: a logging.Logger instance
+        :param track_unknown: a union of flags (eg PUB|SUB) that will be used to track
+        attributes present in updates, but not yet registered to the state. If 0 (ie. no flags are
+        given) these attributes will not be tracked
+        """
         self.properties = {}
         self.index = {}
         self.logger = logger
+        self.track_unknown = track_unknown
 
     def log(self, level, message):
         if self.logger is not None:
@@ -55,6 +65,7 @@ class TrackedState:
             entity = entity()
         if entity.__entity_name__ is None:
             raise ValueError("EntityGroup must have __entity_name__ defined")
+        ensure_path(self.properties, (dataset_name, entity.__entity_name__))
         for field in entity.all_properties().values():
             self.register_property(
                 dataset_name=dataset_name,
@@ -169,22 +180,24 @@ class TrackedState:
         rv = defaultdict(dict)
         for dataset_name, entity_type, properties in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
-            data = EntityUpdateHandler(properties, index).generate_update(flags)
+            data = EntityDataHandler(properties, index).generate_update(flags)
             if data:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
-    def receive_update(self, update: t.Dict):
-        general_section = update.pop("general", None) or {}
+    def receive_update(self, update: t.Dict, process_undefined=False):
+        general_section = update.pop("general", None) or {}  # {"general": None} should yield {}
 
-        for dataset_name, dataset_data in update.items():
-            if not isinstance(dataset_data, dict):
-                continue
+        for dataset_name, dataset_data in extract_dataset_data(update):
             for entity_name, entity_data in dataset_data.items():
-                if not (entity_group := self._get_entity_group(dataset_name, entity_name)):
+                if self.track_unknown != 0:
+                    self.register_entity_group(dataset_name, EntityGroup(entity_name))
+                if (entity_group := self._get_entity_group(dataset_name, entity_name)) is None:
                     continue
                 index = self.get_index(dataset_name, entity_name)
-                handler = EntityUpdateHandler(entity_group, index)
+                handler = EntityDataHandler(
+                    entity_group, index, self.track_unknown, process_undefined=process_undefined
+                )
                 handler.receive_update(entity_data)
             self.process_general_section(dataset_name, general_section)
 
@@ -231,6 +244,15 @@ class TrackedState:
     def has_changes(self) -> bool:
         return any(prop.has_changes() for _, _, _, prop in self.iter_properties())
 
+    def to_dict(self):
+        rv = defaultdict(dict)
+        for dataset_name, entity_type, properties in self.iter_entities():
+            index = self.get_index(dataset_name, entity_type)
+            data = EntityDataHandler(properties, index).to_dict()
+            if data:
+                rv[dataset_name][entity_type] = data
+        return dict(rv)
+
 
 def parse_special_values(
     general_section: dict,
@@ -243,10 +265,14 @@ def parse_special_values(
     return dict(rv)
 
 
-class EntityUpdateHandler:
-    def __init__(self, properties: PropertyDict, index: Index):
+class EntityDataHandler:
+    def __init__(
+        self, properties: PropertyDict, index: Index, track_unknown=0, process_undefined=False
+    ):
         self.properties = properties
         self.index = index
+        self.track_unknown = track_unknown
+        self.process_undefined = process_undefined
 
     def receive_update(self, entity_data: EntityData):
         """Update the entity state with new external update data. The first time this is called,
@@ -258,6 +284,7 @@ class EntityUpdateHandler:
         if not self.is_initialized():
             self.initialize(entity_data)
         else:
+            self._process_new_ids(entity_data)
             self._apply_update(entity_data)
 
     def is_initialized(self):
@@ -270,15 +297,32 @@ class EntityUpdateHandler:
         self._apply_update(data)
         reset_tracked_changes(self.properties.values())
 
+    def _process_new_ids(self, entity_data: EntityData):
+        ids = entity_data["id"]["data"]
+        new_ids = ids[self.index[ids] == -1]
+        self.index.add_ids(new_ids)
+        for attr in self.properties.values():
+            attr.resize(len(self.index))
+
     def _apply_update(self, entity_data: EntityData):
         ids = entity_data["id"]["data"]
         for identifier, data in iter_entity_data(entity_data):
             if identifier == (None, "id"):
                 continue
-            if (prop := self.properties.get(identifier)) is not None:
-                if not prop.has_data():
-                    prop.initialize(len(self.index))
-                prop.update(data, self.index[ids])
+            if (prop := self.properties.get(identifier)) is None and self.track_unknown:
+                prop = self._register_new_attribute(identifier, data)
+            if prop is None:
+                continue
+            if not prop.has_data():
+                prop.initialize(len(self.index))
+            prop.update(data, self.index[ids], process_undefined=self.process_undefined)
+
+    def _register_new_attribute(self, identifier: PropertyIdentifier, data: NumpyPropertyData):
+        prop = create_empty_property_for_data(data, len(self.index))
+        prop.index = self.index
+        prop.flags |= self.track_unknown
+        self.properties[identifier] = prop
+        return prop
 
     def generate_update(self, flags=PUB):
         rv: t.Dict[str, dict] = defaultdict(dict)
@@ -293,6 +337,18 @@ class EntityUpdateHandler:
                 continue
             data = prop.generate_update(mask=all_changes)
 
+            if component:
+                rv[component][name] = data
+            else:
+                rv[name] = data
+        return dict(rv)
+
+    def to_dict(self):
+        rv: t.Dict[str, dict] = defaultdict(dict)
+        rv["id"] = {"data": self.index.ids}
+
+        for (component, name), prop in self.properties.items():
+            data = prop.to_dict()
             if component:
                 rv[component][name] = data
             else:

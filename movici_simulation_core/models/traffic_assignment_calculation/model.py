@@ -7,7 +7,7 @@ from movici_simulation_core.ae_wrapper.collections import (
     AssignmentResultCollection,
 )
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper, AssignmentParameters
-from movici_simulation_core.base_model.base import TrackedBaseModel
+from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import model_util, ae_util
@@ -21,7 +21,7 @@ from .dataset import (
 )
 
 
-class Model(TrackedBaseModel):
+class Model(LegacyTrackedBaseModel):
     """
     Calculates traffic properties on roads
     """

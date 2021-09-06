@@ -3,7 +3,7 @@ import pytest
 import logging
 from model_engine.dataset_manager.dataset_handler import _convert_dataset_to_numpy_format
 from model_engine.utils.config import current_config
-from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.base_models.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.property import INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.traffic_demand_calculation.local_effect_calculators import (

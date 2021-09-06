@@ -7,7 +7,7 @@ import numpy as np
 
 from .index import Index
 from .property import PropertyField
-from .types import PropertyIdentifier
+from ..types import PropertyIdentifier
 
 if t.TYPE_CHECKING:
     from .state import StateProxy

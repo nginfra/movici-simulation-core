@@ -12,7 +12,7 @@ from model_engine.dataset_manager.property_definition import (
     Transport_TotalOutwardPassengerDemand,
     Transport_TotalInwardPassengerDemand,
 )
-from movici_simulation_core.base_model.config_helpers import to_spec
+from movici_simulation_core.legacy_base_model.config_helpers import to_spec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import field, PUB, OPT
 

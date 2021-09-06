@@ -2,8 +2,8 @@ import typing as t
 
 import numpy as np
 from model_engine import TimeStamp
-from movici_simulation_core.base_model.base import TrackedBaseModel
-from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import PUB, PropertySpec, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -14,7 +14,7 @@ from boost_geo_query.geo_query import GeoQuery, QueryResult
 from .aggregators import functions, PropertyAggregator
 
 
-class Model(TrackedBaseModel):
+class Model(LegacyTrackedBaseModel):
     """
     Implementation of the area aggregation model
     """

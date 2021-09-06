@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from movici_simulation_core.base_model.base import model_factory
+from movici_simulation_core.legacy_base_model.base import model_factory
 from movici_simulation_core.models.area_aggregation.model import Model
 from model_engine import execute
 

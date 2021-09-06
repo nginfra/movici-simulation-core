@@ -1,6 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Tuple, Union
-
+import typing as t
 import numpy as np
 
 from .csr_helpers import (
@@ -15,8 +14,8 @@ from .unicode_helpers import equal_str_dtypes
 
 
 class TrackedArray(np.ndarray):
-    _curr: Optional[np.ndarray] = None
-    _changed: Optional[np.ndarray] = None
+    _curr: t.Optional[np.ndarray] = None
+    _changed: t.Optional[np.ndarray] = None
     rtol: float
     atol: float
     equal_nan: bool
@@ -73,7 +72,7 @@ class TrackedArray(np.ndarray):
         self._curr = None
         self._changed = None
 
-    def diff(self) -> Tuple[np.ndarray, np.ndarray]:
+    def diff(self) -> t.Tuple[np.ndarray, np.ndarray]:
         self._start_tracking()
         return self._curr[self.changed], self[self.changed]
 
@@ -159,7 +158,12 @@ class TrackedCSRArray:
         """return a boolean array where the rows of `csr` contain the `val` argument"""
 
         return rows_contain(
-            self.data, self.row_ptr, val, rtol=self.rtol, atol=self.atol, equal_nan=self.equal_nan
+            self.data,
+            self.row_ptr,
+            np.array(val, dtype=self.data.dtype),
+            rtol=self.rtol,
+            atol=self.atol,
+            equal_nan=self.equal_nan,
         )
 
     def rows_intersect(self, vals):
@@ -172,4 +176,4 @@ class TrackedCSRArray:
         self.changed = np.zeros((self.size,), dtype=bool)
 
 
-TrackedArrayType = Union[TrackedArray, TrackedCSRArray]
+TrackedArrayType = t.Union[TrackedArray, TrackedCSRArray]

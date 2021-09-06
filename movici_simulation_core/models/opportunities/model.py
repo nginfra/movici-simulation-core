@@ -2,15 +2,15 @@ import typing as t
 
 import numpy as np
 from model_engine import TimeStamp
-from movici_simulation_core.base_model.base import TrackedBaseModel
-from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.property import UniformProperty, SUB, PUB
 from movici_simulation_core.data_tracker.state import TrackedState
 
 from .dataset import OverlapEntity, LineEntity
 
 
-class Model(TrackedBaseModel):
+class Model(LegacyTrackedBaseModel):
     """
     Implementation of the opportunities model
     Takes in a line entity and a overlap status dataset

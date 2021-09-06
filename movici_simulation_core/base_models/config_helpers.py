@@ -20,9 +20,13 @@ def to_spec(prop):
 
 
 def _get_property_mapping(schema=None) -> dict:
-    if schema is None:
-        schema = get_schema_for_parser()
     rv = {}
+
+    if schema is None:
+        try:
+            schema = get_schema_for_parser()
+        except RuntimeError:  # optional dependency is not installed
+            return rv
 
     for prop in schema["prop_schema"].values():
         data_type = type_code_to_data_type(prop["type"]).to_dict()

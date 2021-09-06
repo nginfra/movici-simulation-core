@@ -37,6 +37,9 @@ setup(
     author_email="pelle.koster@nginfra.nl",
     url="http://www.movici.nl",
     license=LICENSE,
+    plugins={
+        "simulation-core.model": [],
+    },
     scripts=[
         "bin/run_time_window_status.py",
         "bin/run_overlap_status.py",

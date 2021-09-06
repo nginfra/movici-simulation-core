@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from model_engine import testing
-from movici_simulation_core.base_model.base import model_factory
+from movici_simulation_core.legacy_base_model.base import model_factory
 from movici_simulation_core.models.overlap_status.model import Model
 
 np.random.seed(4002)

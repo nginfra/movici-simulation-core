@@ -70,6 +70,16 @@ def test_integral_aggregator_functions(int_data, func, result, dt, previous_targ
 
 @pytest.fixture
 def aggregator(float_data):
+    """This aggregator works on a mapping where the source entities are mapped to target entities
+    like the following:
+      target 0 gets data from source 0 and 1
+      target 1 gets data from none
+      target 2 gets data from source 0, 1 and 2
+      The sources have values of 0, 5, 7
+      The targets start at value 2, 0, 6
+
+    """
+
     def get(func="max", previous_source=None):
         source = float_data([0, 5, 7])
         target = float_data([2, 0, 6])

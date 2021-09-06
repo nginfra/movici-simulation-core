@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from model_engine import TimeStamp, DataFetcher, Config
 from model_engine.model_driver.data_handlers import DType
-from movici_simulation_core.base_model.base import TrackedBaseModel
-from movici_simulation_core.base_model.config_helpers import property_mapping
+from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import (
@@ -32,7 +32,7 @@ from boost_geo_query.geo_query import GeoQuery, QueryResult
 Investment = t.Tuple[int, int, float]
 
 
-class Model(TrackedBaseModel):
+class Model(LegacyTrackedBaseModel):
     """
     Implementation of the demand estimation model.
     Reads a csv with scenario parameters.

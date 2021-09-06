@@ -5,7 +5,10 @@ import pytest
 from model_engine import TimeStamp, Config
 from model_engine.model_driver.data_handlers import DType
 
-from movici_simulation_core.base_model.base import TrackedBaseModel, TrackedBaseModelAdapter
+from movici_simulation_core.legacy_base_model.base import (
+    LegacyTrackedBaseModel,
+    LegacyTrackedBaseModelAdapter,
+)
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import (
     field,
@@ -44,7 +47,7 @@ def entity_group():
 
 @pytest.fixture
 def model(entity_group):
-    class Model(TrackedBaseModel):
+    class Model(LegacyTrackedBaseModel):
         def __init__(self):
             self.calls = []
             self.entity = None
@@ -62,7 +65,7 @@ def model(entity_group):
 
 @pytest.fixture
 def adapter(model, config):
-    return TrackedBaseModelAdapter(model, name="my_model", config=config)
+    return LegacyTrackedBaseModelAdapter(model, name="my_model", config=config)
 
 
 @pytest.fixture
@@ -155,7 +158,7 @@ def test_shutdown_succeeds_when_ready_for_updates(adapter, data_fetcher, update,
 
 
 def test_full_run(model, adapter, update, data_fetcher, entity_group, config):
-    class Model(TrackedBaseModel):
+    class Model(LegacyTrackedBaseModel):
         def __init__(self):
             self.entity_group = None
 
@@ -173,7 +176,7 @@ def test_full_run(model, adapter, update, data_fetcher, entity_group, config):
         shutdown = Mock()
 
     model = Model()
-    adapter = TrackedBaseModelAdapter(model, "mymodel", config)
+    adapter = LegacyTrackedBaseModelAdapter(model, "mymodel", config)
     adapter.initialize(data_fetcher)
     assert dataset_dicts_equal(
         adapter.update(TimeStamp(0), {}).data,

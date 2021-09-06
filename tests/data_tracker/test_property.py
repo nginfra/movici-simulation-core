@@ -10,6 +10,7 @@ from movici_simulation_core.data_tracker.property import (
     ensure_csr_data,
     ensure_uniform_data,
     create_empty_property,
+    CSRProperty,
 )
 
 
@@ -445,3 +446,51 @@ def test_uniform_is_special_returns_false_if_not_set(prop):
 )
 def test_csr_is_special_returns_false_if_not_set(prop):
     assert np.array_equal(prop.is_special(), np.zeros(prop.csr.data.shape))
+
+
+def test_is_undefined_csr():
+    prop = CSRProperty(
+        {
+            "data": np.array([1, 2, 3], dtype=int),
+            "row_ptr": np.array([0, 2, 3, 3], dtype=int),
+        },
+        data_type=DataType(int, (), True),
+    )
+    assert np.array_equal(prop.is_undefined(), [False, False, False])
+
+
+def test_initialize_property_with_string_data():
+    prop = UniformProperty(["some_long_string"], data_type=DataType(str, (), False))
+    assert np.array_equal(prop.array, ["some_long_string"])
+
+
+def test_grow_uniform_property():
+    data_type = DataType(int, (), False)
+    prop = UniformProperty([1, 2, 3], data_type=data_type)
+    prop.resize(4)
+    assert np.array_equal(prop.array, [1, 2, 3, data_type.undefined])
+
+
+def test_grow_uniform_property_keeps_changes():
+    data_type = DataType(int, (), False)
+    prop = UniformProperty([1, 2, 3], data_type=data_type)
+    prop[0] = 2
+    prop.resize(4)
+    assert np.array_equal(prop.array, [2, 2, 3, data_type.undefined])
+    assert np.array_equal(prop.changed, [True, False, False, False])
+
+
+def test_grow_uniform_property_keeps_unicode_length():
+    data_type = DataType(str, (), False)
+    prop = UniformProperty(["some_long_string"], data_type=data_type)
+    prop.resize(2)
+    assert np.array_equal(prop.array, ["some_long_string", data_type.undefined])
+
+
+def test_grow_csr_property():
+    data_type = DataType(int, (), True)
+    prop = CSRProperty(([[1], [], [2]]), data_type=data_type)
+    prop.resize(5)
+
+    assert np.array_equal(prop.csr.data, [1, 2, data_type.undefined, data_type.undefined])
+    assert np.array_equal(prop.csr.row_ptr, [0, 1, 1, 2, 3, 4])

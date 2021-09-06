@@ -1,7 +1,8 @@
 import pytest
 from model_engine import testing
-from movici_simulation_core.base_model.base import model_factory
-from movici_simulation_core.data_tracker.property import INIT, SUB, UNDEFINED
+from movici_simulation_core.legacy_base_model.base import model_factory
+from movici_simulation_core.core.schema import UNDEFINED
+from movici_simulation_core.data_tracker.property import INIT, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.models.area_aggregation.model import Model

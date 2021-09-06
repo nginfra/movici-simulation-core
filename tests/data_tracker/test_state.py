@@ -4,6 +4,7 @@ from unittest.mock import Mock, call
 import numpy as np
 import pytest
 
+from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import (
     PropertyField,
@@ -13,13 +14,12 @@ from movici_simulation_core.data_tracker.property import (
     INIT,
     OPT,
     PropertySpec,
-    UNDEFINED,
 )
 from movici_simulation_core.data_tracker.state import (
     TrackedState,
     ensure_path,
     StateProxy,
-    EntityUpdateHandler,
+    EntityDataHandler,
     filter_props,
 )
 from movici_simulation_core.testing.helpers import (
@@ -176,7 +176,7 @@ def test_is_ready_for2(
         flags=prop_flag,
     )
     if initial_data:
-        EntityUpdateHandler(
+        EntityDataHandler(
             state._get_entity_group(dataset_name, MyEntity.__entity_name__), prop.index
         ).receive_update(initial_data)
     assert state.is_ready_for(ready_flags) == expected
@@ -564,6 +564,68 @@ def test_resets_changes_with_recurring_properties():
     state.reset_tracked_changes(PUB)
     assert np.array_equal(e1.prop.changed, [False])
     assert np.array_equal(e2.prop.changed, [False])
+
+
+def test_can_grow_entity_group_with_new_entities():
+    state = TrackedState()
+    state.register_property(
+        "dataset", "some_entities", PropertySpec("some_prop", DataType(int, (), False))
+    )
+    state.receive_update(
+        {
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([2])},
+                    "some_prop": {"data": np.array([10])},
+                }
+            }
+        }
+    )
+    state.receive_update(
+        {
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([1])},
+                    "some_prop": {"data": np.array([20])},
+                }
+            }
+        }
+    )
+    assert np.array_equal(
+        state.get_property("dataset", "some_entities", (None, "some_prop")).array, [10, 20]
+    )
+    assert np.array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
+
+
+def test_can_add_new_entity_groups_and_properties_in_update():
+    state = TrackedState(track_unknown=OPT)
+    state.register_property(
+        "dataset", "some_entities", PropertySpec("some_prop", DataType(int, (), False))
+    )
+    state.receive_update(
+        {
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([2])},
+                    "some_prop": {"data": np.array([10])},
+                }
+            }
+        }
+    )
+    state.receive_update(
+        {
+            "dataset": {
+                "other_entities": {
+                    "id": {"data": np.array([1])},
+                    "other_prop": {"data": np.array([20])},
+                }
+            }
+        }
+    )
+    assert np.array_equal(
+        state.get_property("dataset", "other_entities", (None, "other_prop")).array, [20]
+    )
+    assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
 
 
 def test_can_inherit_properties():

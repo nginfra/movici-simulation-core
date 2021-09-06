@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.data_tracker.csr_helpers import (
     isclose,
     rows_equal,
@@ -76,6 +77,27 @@ def test_is_close_differing_lengths_throws(arr, val, equal_nan):
             np.array([np.nan]),
             True,
             [False, True],
+        ),
+        (
+            np.array([], dtype=int),
+            np.array([0], dtype=int),
+            np.array([1]),
+            True,
+            [],
+        ),
+        (
+            np.array([], dtype=int),
+            np.array([0, 0], dtype=int),
+            np.array([UNDEFINED[int]]),
+            True,
+            [False],
+        ),
+        (
+            np.array([], dtype=float),
+            np.array([0, 0], dtype=int),
+            np.array([UNDEFINED[float]]),
+            True,
+            [False],
         ),
     ],
 )

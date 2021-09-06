@@ -9,8 +9,16 @@ import numpy as np
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
 from .csr_helpers import generate_update, remove_undefined_csr, isclose
 from .index import Index
-from .types import CSRPropertyData, UniformPropertyData, PropertyIdentifier
+from ..types import UniformPropertyData, CSRPropertyData, NumpyPropertyData
 from .unicode_helpers import determine_new_unicode_dtype
+from ..core.schema import (
+    PropertySpec,
+    DataType,
+    DEFAULT_ROWPTR_KEY,
+    has_rowptr_key,
+    get_rowptr,
+    infer_data_type_from_array,
+)
 
 if t.TYPE_CHECKING:
     from .entity_group import EntityGroup
@@ -63,54 +71,8 @@ class PropertyField:
 
 field = PropertyField
 
+
 T = t.TypeVar("T", bool, int, float, str)
-
-
-@dc.dataclass(frozen=True)
-class PropertySpec:
-    name: str
-    data_type: DataType = dc.field(compare=False)
-    component: t.Optional[str] = None
-    enum_name: t.Optional[str] = dc.field(default=None, compare=False)
-
-    @property
-    def full_name(self):
-        return propstring(self.name, self.component)
-
-    @property
-    def key(self) -> PropertyIdentifier:
-        return (self.component, self.name)
-
-
-UNDEFINED = {
-    bool: np.iinfo(np.dtype("<i1")).min,
-    int: np.iinfo(np.dtype("<i4")).min,
-    float: np.nan,
-    str: "_udf_",
-}
-
-NP_TYPES = {
-    bool: np.dtype("<i1"),
-    int: np.dtype("<i4"),
-    float: np.dtype("f8"),
-    str: np.dtype("<U8"),
-}
-
-
-@dc.dataclass
-class DataType(t.Generic[T]):
-    py_type: t.Type[T]
-    unit_shape: t.Tuple[int, ...]
-    csr: bool
-    enum_name: t.Optional[str] = None
-
-    @property
-    def undefined(self):
-        return UNDEFINED[self.py_type]
-
-    @property
-    def np_type(self):
-        return NP_TYPES[self.py_type]
 
 
 @dc.dataclass
@@ -170,6 +132,28 @@ class Property(abc.ABC):
         reduction_axes = tuple(range(1, len(self._data.changed.shape)))
         return np.maximum.reduce(self._data.changed, axis=reduction_axes)
 
+    def resize(self, new_size: int):
+        curr_size = len(self)
+        if new_size < curr_size:
+            raise ValueError("Can only increase size of attribute array, not decrease it")
+        if new_size == curr_size:
+            return
+        if not self.has_data():
+            self.initialize(new_size)
+        self._do_resize(new_size)
+
+    @abc.abstractmethod
+    def __len__(self):
+        pass
+
+    @abc.abstractmethod
+    def slice(self, item):
+        pass
+
+    @abc.abstractmethod
+    def _do_resize(self, new_size: int):
+        pass
+
     @abc.abstractmethod
     def is_special(self):
         pass
@@ -219,45 +203,66 @@ class UniformProperty(Property):
         value = ensure_uniform_data(value)
         self._data = value
 
+    def slice(self, item):
+        return self.array[item]
+
     def __len__(self):
         if self.array is not None:
             return self.array.shape[0]
         return 0
 
     def __getitem__(self, item):
-        return self.array[item]
+        return self.slice(item)
 
     def __setitem__(self, key, value):
-        if np.isscalar(value):
-            if value == self.data_type.undefined:
+        self._set_item(key, value, process_undefined=False)
+
+    def update(
+        self,
+        value: t.Union[np.ndarray, UniformPropertyData],
+        indices: np.ndarray,
+        process_undefined=False,
+    ):
+        value = ensure_uniform_data(value)
+        self._set_item(indices, value, process_undefined)
+
+    def _set_item(self, key, value, process_undefined):
+        if not process_undefined:
+            if not np.isscalar(value):
+                value = self.strip_undefined(key, value)
+            elif self.data_type.is_undefined(value):
                 return
-        else:
-            value = self._prevent_undefined(key, value)
 
         if dtype := determine_new_unicode_dtype(self.array, value):
             self.array = self.array.astype(dtype)
         self.array[key] = value
 
-    def _prevent_undefined(self, key, value):
+    def strip_undefined(self, key, value):
         value = np.array(value, copy=True)
-        undefs = _is_undefined(value, self.data_type.undefined)
+        undefs = self.data_type.is_undefined(value)
         if np.any(undefs):
             current = self.array[key]
             value[undefs] = current[undefs]
         return value
 
-    def update(self, value: t.Union[np.ndarray, UniformPropertyData], indices: np.ndarray):
-        value = ensure_uniform_data(value)
-        self[indices] = value
+    def _do_resize(self, new_size: int):
+        curr_size = len(self)
+        new_arr = get_undefined_array(
+            self.data_type, new_size, self.rtol, self.atol, override_dtype=self._data.dtype
+        )
+        new_arr[:curr_size] = self._data
+        if self._data._curr is not None:
+            new_arr._curr[:curr_size] = self._data._curr
+        self._data = new_arr
 
     def is_undefined(self):
         self.has_data_or_raise()
 
-        undefs = _is_undefined(self.array, self.data_type.undefined)
+        undefs = self.data_type.is_undefined(self.array)
 
         # reduce over all but the first axis, e.g. an array with shape (10,2,3) should be
         # reduced to a result array of shape (10,) by reducing over axes (1,2). An single
-        # entity's property is considered undefined if the item is undefined in all it's dimensions
+        # entity's property is considered undefined if the item is undefined in all its dimensions
         reduction_axes = tuple(range(1, len(undefs.shape)))
         return np.minimum.reduce(undefs, axis=reduction_axes)
 
@@ -290,7 +295,7 @@ class UniformProperty(Property):
         return {"data": data}
 
     def to_dict(self):
-        return {"data": self.array}
+        return {"data": self.array.copy()}
 
     def reset(self):
         self.array.reset()
@@ -321,23 +326,28 @@ class CSRProperty(Property):
 
     def __len__(self):
         if self.csr is not None:
-            return self.csr.row_ptr[-1]
+            return len(self.csr.row_ptr) - 1
         return 0
+
+    def slice(self, item):
+        return self.csr.slice(item)
 
     def update(
         self,
         value: t.Union[CSRPropertyData, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray]],
         indices: np.ndarray,
+        process_undefined=False,
     ):
         value = ensure_csr_data(value)
-        value, indices = self.prevent_undefined(value, indices)
+        if not process_undefined:
+            value, indices = self.strip_undefined(value, indices)
         if len(indices) == 0:
             return
         if dtype := determine_new_unicode_dtype(self.csr.data, value.data):
             self.csr = self.csr.astype(dtype)
         self.csr.update(value, indices)
 
-    def prevent_undefined(
+    def strip_undefined(
         self, value: TrackedCSRArray, indices: np.ndarray
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
 
@@ -363,9 +373,44 @@ class CSRProperty(Property):
 
         return TrackedCSRArray(new_data, new_row_ptr), new_indices
 
+    def _do_resize(self, new_size: int):
+        curr_size = len(self)
+        curr_arr = self._data
+        new_rowptr = np.concatenate(
+            (curr_arr.row_ptr, np.arange(new_size - curr_size) + (1 + self._data.row_ptr[-1]))
+        )
+        new_data = np.concatenate(
+            (
+                curr_arr.data,
+                np.full(
+                    (new_size - curr_size, *self.data_type.unit_shape),
+                    fill_value=self.data_type.undefined,
+                    dtype=self.data_type.np_type,
+                ),
+            )
+        )
+        if curr_arr.changed is None:
+            new_changed = None
+        else:
+            new_changed = np.concatenate(
+                (
+                    curr_arr.changed,
+                    np.zeros((new_size - curr_size,), dtype=bool),
+                )
+            )
+
+        self._data = TrackedCSRArray(
+            new_data,
+            new_rowptr,
+            rtol=curr_arr.rtol,
+            atol=curr_arr.atol,
+            equal_nan=curr_arr.equal_nan,
+        )
+        self._data.changed = new_changed
+
     def is_undefined(self):
         self.has_data_or_raise()
-        return self.csr.rows_equal(np.array([self.data_type.undefined]))
+        return self.csr.rows_contain(np.array([self.data_type.undefined]))
 
     def is_special(self):
         self.has_data_or_raise()
@@ -382,7 +427,7 @@ class CSRProperty(Property):
     def generate_update(self, mask=None):
         """
         :param mask: a boolean array signifying which indices should be returned. If there are no
-        changes for a specific index, its value should be `self.data_type.undefined`
+        changes for a specific index, its value will be `self.data_type.undefined`
         :return:
         """
         if dtype := determine_new_unicode_dtype(
@@ -403,30 +448,28 @@ class CSRProperty(Property):
                 undefined=self.data_type.undefined,
             )
 
-        return {"data": arr, "indptr": row_ptr}
+        return {"data": arr, DEFAULT_ROWPTR_KEY: row_ptr}
 
     def to_dict(self):
-        return {"data": self.csr.data, "indptr": self.csr.row_ptr}
+        return {
+            "data": self.csr.data.copy(),
+            DEFAULT_ROWPTR_KEY: self.csr.row_ptr.copy(),
+        }
 
     def reset(self):
         self.csr.reset()
-
-
-def _is_undefined(a, undefined):
-    result = a == undefined
-    if not isinstance(undefined, str) and np.isnan(undefined):
-        return result | np.isnan(a)
-    return result
 
 
 PropertyObject = t.Union[UniformProperty, CSRProperty]
 
 
 def get_undefined_array(
-    data_type: DataType, length: int, rtol=1e-5, atol=1e-8
+    data_type: DataType, length: int, rtol=1e-5, atol=1e-8, override_dtype=None
 ) -> TrackedArrayType:
     data = np.full(
-        (length, *data_type.unit_shape), fill_value=data_type.undefined, dtype=data_type.np_type
+        (length, *data_type.unit_shape),
+        fill_value=data_type.undefined,
+        dtype=override_dtype or data_type.np_type,
     )
 
     if data_type.csr:
@@ -446,44 +489,12 @@ def create_empty_property(data_type, length=None, rtol=1e-5, atol=1e-8, options=
     return prop_t(arr, data_type, rtol=rtol, atol=atol, options=options)
 
 
-def ensure_csr_data(
-    value: t.Union[dict, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray]],
-    data_type: t.Optional[DataType] = None,
-) -> TrackedCSRArray:
-    row_ptr_keys = {"row_ptr", "indptr", "ind_ptr"}
-
-    if isinstance(value, TrackedCSRArray):
-        return value
-
-    if isinstance(value, list):
-        if not value or isinstance(value[0], list):
-            value = convert_nested_list_to_csr(value, data_type.np_type)
-
-    if isinstance(value, tuple) and len(value) == 2:
-        value = np.asarray(value[0], dtype=getattr(data_type, "np_type", None)), np.asarray(
-            value[1], dtype="<i4"
-        )
-        return TrackedCSRArray(value[0], value[1])
-
-    if isinstance(value, dict):
-        if "data" not in value:
-            raise TypeError("Cannot read value as valid input: missing 'data' key")
-        if not (value.keys() & row_ptr_keys):
-            raise TypeError("Cannot read value as valid input: missing row pointer key")
-
-        row_ptr = next(iter(value.keys() & row_ptr_keys))
-        return TrackedCSRArray(value["data"], value[row_ptr])
-
-    raise TypeError(f"Cannot read value of type {type(value)} as valid input")
-
-
-def convert_nested_list_to_csr(nested_list: t.List[t.List[object]], dtype: np.dtype):
-    indptr = [0]
-    data = []
-    for entry in nested_list:
-        data.extend(entry)
-        indptr.append(len(data))
-    return np.array(data, dtype=dtype), np.array(indptr, dtype="<i4")
+def create_empty_property_for_data(data: NumpyPropertyData, length: int):
+    data_type = infer_data_type_from_array(data)
+    return create_empty_property(
+        data_type,
+        length=length,
+    )
 
 
 def ensure_uniform_data(
@@ -492,16 +503,69 @@ def ensure_uniform_data(
     if isinstance(value, TrackedArray):
         return value
 
-    if isinstance(value, (np.ndarray, list)):
-        return TrackedArray(np.asanyarray(value, dtype=getattr(data_type, "np_type", None)))
-
     if isinstance(value, dict) and "data" in value:
-        if value.keys() & {"row_ptr", "indptr", "ind_ptr"}:
+        if has_rowptr_key(value):
             raise TypeError("You're trying assign a CSR array to a uniform array property")
-        return TrackedArray(value["data"])
+        value = value["data"]
+
+    if isinstance(value, (list, np.ndarray)):
+        value = ensure_array(value, data_type)
+        return TrackedArray(value)
 
     raise TypeError(f"Cannot read value of type {type(value)} as valid input")
 
 
-def propstring(property_name: str, component: t.Optional[str] = None):
-    return f"{component}/{property_name}" if component else property_name
+def ensure_csr_data(
+    value: t.Union[dict, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray], t.List[list]],
+    data_type: t.Optional[DataType] = None,
+) -> TrackedCSRArray:
+
+    if isinstance(value, TrackedCSRArray):
+        return value
+
+    if isinstance(value, list) and (len(value) == 0 or isinstance(value[0], list)):
+        data, row_ptr = convert_nested_list_to_csr(value, data_type)
+
+    elif isinstance(value, dict):
+        if "data" not in value:
+            raise TypeError("Cannot read value as valid input: missing 'data' key")
+        if not has_rowptr_key(value):
+            raise TypeError("Cannot read value as valid input: missing row pointer key")
+
+        data, row_ptr = value["data"], get_rowptr(value)
+
+    elif isinstance(value, tuple) and len(value) == 2:
+        data, row_ptr = value
+
+    else:
+        raise TypeError(f"Cannot read value of type {type(value)} as valid input")
+
+    data = ensure_array(data, data_type)
+    row_ptr = np.asarray(row_ptr, dtype="<i4")
+    return TrackedCSRArray(data, row_ptr)
+
+
+def ensure_array(data: t.Union[list, np.ndarray], data_type: t.Optional[DataType] = None):
+    if isinstance(data, list):
+        data = np.array(data)
+
+    if data_type is not None and data_type.py_type is not str and data.dtype != data_type.np_type:
+        data = data.astype(data_type.np_type)
+
+    if isinstance(data, np.ndarray):
+        if data_type is not None and (
+            dtype := determine_new_unicode_dtype(data, data_type.undefined)
+        ):
+            data = np.asanyarray(data, dtype=dtype)
+    return data
+
+
+def convert_nested_list_to_csr(
+    nested_list: t.List[t.List[object]], data_type: t.Optional[DataType] = None
+):
+    indptr = [0]
+    data = []
+    for entry in nested_list:
+        data.extend(entry)
+        indptr.append(len(data))
+    return ensure_array(data, data_type), np.array(indptr, dtype="<i4")

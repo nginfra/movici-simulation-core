@@ -24,6 +24,12 @@ def dataset_dicts_equal(a, b):
     return not _dataset_dicts_equal_helper(a, b, {}, "")
 
 
+def assert_dataset_dicts_equal(a, b):
+    errors = _dataset_dicts_equal_helper(a, b, {}, "")
+    if errors:
+        raise AssertionError("\n".join(f"{k or '/'}: {v}" for k, v in errors.items()))
+
+
 def _dataset_dicts_equal_helper(
     a: t.Union[dict, np.ndarray, list],
     b: t.Union[dict, np.ndarray, list],
@@ -34,7 +40,7 @@ def _dataset_dicts_equal_helper(
         if a.keys() == b.keys():
             for key in a.keys():
                 _dataset_dicts_equal_helper(
-                    a[key], b[key], current_errors, current_path=current_path + "/" + key
+                    a[key], b[key], current_errors, current_path=current_path + "/" + str(key)
                 )
         else:
             missing_keys = a.keys() - b.keys()
@@ -45,10 +51,19 @@ def _dataset_dicts_equal_helper(
             if extra_keys:
                 messages.append(f"extra keys: {extra_keys}")
             current_errors[current_path] = ";".join(messages)
-
+    elif isinstance(a, list) and isinstance(b, list):
+        if len(a) != len(b):
+            current_errors[current_path] = f"lists not of equal length {len(a)} vs {len(b)}"
+        elif len(a) and isinstance(a[0], (list, dict)) and isinstance(b[0], (list, dict)):
+            for idx, (i_a, i_b) in enumerate(zip(a, b)):
+                _dataset_dicts_equal_helper(i_a, i_b, current_errors, current_path + f"[{idx}]")
+        else:
+            if not np.array_equal(a, b):
+                current_errors[current_path] = "lists not equal"
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
         if not np.array_equal(a, b):
             current_errors[current_path] = "arrays not equal"
     else:
-        current_errors[current_path] = f"incompatible types {type(a)} and {type(b)}"
+        if not a == b:
+            current_errors[current_path] = f"{a} and {b} differ"
     return current_errors

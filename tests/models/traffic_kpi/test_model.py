@@ -5,7 +5,7 @@ import pytest
 
 from model_engine import testing, TimeStamp
 from model_engine.testing import TestDataFetcher, get_test_data_fetcher
-from movici_simulation_core.base_model.base import model_factory
+from movici_simulation_core.legacy_base_model.base import model_factory
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.traffic_kpi.model import Model
 
