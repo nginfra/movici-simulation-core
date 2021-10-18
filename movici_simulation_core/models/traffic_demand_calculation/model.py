@@ -27,6 +27,7 @@ from movici_simulation_core.models.traffic_demand_calculation.local_effect_calcu
     LocalEffectsCalculator,
     TransportPathingValueSum,
     NearestValue,
+    InducedDemand,
 )
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
@@ -62,6 +63,8 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
     _global_parameters: t.List[str]
     _global_elasticities: t.List[float]
 
+    _multipliers: t.List[str]
+
     _local_factor_calculators: t.List[LocalEffectsCalculator]
 
     _investments: t.List[Investment]
@@ -74,6 +77,7 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
     _local_mapping_type_to_calculators_dict = {
         "nearest": NearestValue,
         "route": TransportPathingValueSum,
+        "extended_route": InducedDemand,
     }
 
     def setup(
@@ -89,6 +93,7 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
         self.setup_local_calculators(settings=settings, state=state, schema=schema)
         self.set_global_parameters(init_data_handler)
 
+        self._multipliers = self.config.get("scenario_multipliers", [])
         self._investments = [Investment(*i) for i in self.config.get("investment_multipliers", [])]
         self._investment_idx = 0
 
@@ -190,6 +195,7 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
                 geom=geom,
                 elasticity=elasticity,
                 settings=settings,
+                schema=schema,
             )
             self._local_factor_calculators.append(calculator)
 
@@ -230,6 +236,16 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
 
         self._proceed_tapes(moment)
 
+        # NORMALLY, you would do something like this:
+        # if nothing changed, just lookup the next moment (or timestamp) that our coefficients
+        # would change and return that
+        # if not self._any_changes():
+        #     return self._get_next_timestep_from_tapes()
+
+        # Instead we have this as we fiddle around with our state's auto resetting of the changed
+        # property because we are subscribing and publishing to the same property which is not
+        # fully supported. Secondly this also forces the model to only publish an update on the
+        # first time it is called per timestep/timestamp.
         if not self._any_changes() and not self._new_timesteps_first_update:
             state.reset_tracked_changes(SUBSCRIBE)
             self._new_timesteps_first_update = False
@@ -307,6 +323,12 @@ class Model(TrackedModel, name="traffic_demand_calculation"):
 
     def _calculate_global_factor(self) -> float:
         global_factor = 1.0
+
+        # constant factors
+        for multiplier in self._multipliers:
+            global_factor *= self._scenario_parameters_tape[multiplier]
+
+        # elasticity based factors
         for i, param in enumerate(self._global_parameters):
             current_param = self._scenario_parameters_tape[param]
             old_param = self._current_parameters[param]

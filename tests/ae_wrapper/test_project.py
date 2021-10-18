@@ -334,45 +334,68 @@ def test_can_calculate_free_flow_time(project: ProjectWrapper):
     assert np.allclose(free_flow_times, [0.1, 0.08, 0.05], rtol=1e-2)
 
 
-def test_can_assign_traffic(project: ProjectWrapper):
-    nodes = NodeCollection(
-        ids=[0, 1, 2],
-        is_centroids=[1, 1, 1],
-        geometries=[[97700, 434000], [97701, 434000], [97702, 434000]],
-    )
-    project.add_nodes(nodes)
+class TestTrafficAssignment:
+    @pytest.fixture
+    def project(self, project):
+        nodes = NodeCollection(
+            ids=[0, 1, 2],
+            is_centroids=[1, 1, 1],
+            geometries=[[97700, 434000], [97701, 434000], [97702, 434000]],
+        )
+        project.add_nodes(nodes)
 
-    links = LinkCollection(
-        ids=[1, 102, 103, 104],
-        from_nodes=[1, 0, 1, 0],
-        to_nodes=[0, 2, 2, 1],
-        directions=[1, 1, -1, -1],
-        geometries=[
-            [[97701, 434000], [97700, 434000]],
-            [[97700, 434000], [97702, 434000]],
-            [[97701, 434000], [97704, 434000], [97702, 434000]],
-            [[97700, 434000], [97701, 434000]],
-        ],
-        max_speeds=[10, 25, 100, 10],
-        capacities=[50, 100, 50, 10],
-    )
-    project.add_links(links)
-    project.add_column("free_flow_time", project.calculate_free_flow_times())
-    project.build_graph("free_flow_time", block_centroid_flows=False)
+        links = LinkCollection(
+            ids=[1, 102, 103, 104],
+            from_nodes=[1, 0, 1, 0],
+            to_nodes=[0, 2, 2, 1],
+            directions=[1, 1, -1, -1],
+            geometries=[
+                [[97701, 434000], [97700, 434000]],
+                [[97700, 434000], [97702, 434000]],
+                [[97701, 434000], [97704, 434000], [97702, 434000]],
+                [[97700, 434000], [97701, 434000]],
+            ],
+            max_speeds=[10, 25, 100, 10],
+            capacities=[50, 100, 50, 10],
+        )
+        project.add_links(links)
+        project.add_column("free_flow_time", project.calculate_free_flow_times())
+        project.build_graph("free_flow_time", block_centroid_flows=False)
+        return project
 
-    od_matrix_passenger = np.array([[0, 20, 0], [5, 0, 0], [0, 100, 0]])
-    od_matrix_cargo = np.array([[0, 10, 10], [10, 0, 10], [10, 10, 0]])
+    @pytest.fixture
+    def od_passenger(self):
+        return np.array([[0, 20, 0], [5, 0, 0], [0, 100, 0]])
 
-    results = project.assign_traffic(od_matrix_passenger, od_matrix_cargo, AssignmentParameters())
+    @pytest.fixture
+    def od_cargo(self):
+        return np.array([[0, 10, 10], [10, 0, 10], [10, 10, 0]])
 
-    assert isinstance(results, AssignmentResultCollection)
-    assert np.array_equal(results.ids, [1, 102, 103, 104])
-    assert np.allclose(results.passenger_flow, [4.1667, 20, 120, 0.8333], atol=0.01)
-    assert np.allclose(results.cargo_flow, [25, 30, 30, 5], atol=0.01)
-    assert np.allclose(results.congested_time, [[0.117, 0.084, 1.227, 0.117]], atol=5e-3)
-    assert np.allclose(results.delay_factor, [1.17102242, 1.05272956, 24.55614978, 1.17102232])
-    assert np.allclose(results.volume_to_capacity, [1.03333336, 0.77, 3.54, 1.0333332])
-    assert np.allclose(results.passenger_car_unit, [51.66666798, 77, 177, 10.33333202])
+    def test_can_assign_traffic(self, project: ProjectWrapper, od_passenger, od_cargo):
+        results = project.assign_traffic(
+            od_passenger, od_cargo, AssignmentParameters(vdf_alpha=0.15)
+        )
+
+        assert isinstance(results, AssignmentResultCollection)
+        assert np.array_equal(results.ids, [1, 102, 103, 104])
+        assert np.allclose(results.passenger_flow, [4.1667, 20, 120, 0.8333], atol=0.01)
+        assert np.allclose(results.cargo_flow, [25, 30, 30, 5], atol=0.01)
+        assert np.allclose(results.congested_time, [[0.117, 0.084, 1.227, 0.117]], atol=5e-3)
+        assert np.allclose(results.delay_factor, [1.17102242, 1.05272956, 24.55614978, 1.17102232])
+        assert np.allclose(results.volume_to_capacity, [1.03333336, 0.77, 3.54, 1.0333332])
+        assert np.allclose(results.passenger_car_unit, [51.66666798, 77, 177, 10.33333202])
+
+    @pytest.mark.parametrize("parameters", [AssignmentParameters(vdf_alpha=0.64)])
+    def test_assign_traffic_with_different_parameters(
+        self, project: ProjectWrapper, od_passenger, od_cargo, parameters
+    ):
+
+        results = project.assign_traffic(od_passenger, od_cargo, parameters)
+
+        assert np.array_equal(results.ids, [1, 102, 103, 104])
+        assert np.allclose(
+            results.delay_factor, [1.72969568, 1.22497946, 101.50623908, 1.72969523]
+        )
 
 
 @pytest.fixture

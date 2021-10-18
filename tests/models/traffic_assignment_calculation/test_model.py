@@ -27,6 +27,7 @@ class TestTrafficAssignmentRoads:
         return {
             "name": model_name,
             "type": "traffic_assignment_calculation",
+            "vdf_alpha": 0.15,
             "roads": [road_network_name],
             "waterways": [],
             "tracks": [],
@@ -153,6 +154,7 @@ class TestTrafficAssignmentWaterways:
         return {
             "name": model_name,
             "type": "traffic_assignment_calculation",
+            "vdf_alpha": 0.15,
             "roads": [],
             "waterways": [water_network_name],
             "tracks": [],
@@ -292,6 +294,7 @@ class TestRoadsCapacityChanges:
         return {
             "name": model_name,
             "type": "traffic_assignment_calculation",
+            "vdf_alpha": 0.15,
             "roads": [road_network_name],
             "waterways": [],
             "tracks": [],

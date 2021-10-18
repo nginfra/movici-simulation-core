@@ -110,13 +110,13 @@ class Model(TrackedModel, name="unit_conversions"):
             self._update_cargo_value(
                 entity.cargo_vehicle_flow, entity.cargo_flow, flow_type, self.coefficients_tape
             )
-
-            # passenger vehicles to passengers
-            self._update_passenger_value(
-                entity.passenger_vehicle_flow,
-                entity.passenger_flow,
-                self.coefficients_tape,
-            )
+            if flow_type == "roads":
+                # passenger vehicles to passengers
+                self._update_passenger_value(
+                    entity.passenger_vehicle_flow,
+                    entity.passenger_flow,
+                    self.coefficients_tape,
+                )
 
     @staticmethod
     def _update_cargo_value(

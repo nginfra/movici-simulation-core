@@ -416,6 +416,124 @@ class TestCargoWithLocalParameters:
         )
 
 
+class TestCargoWithLoadFactor:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_name,
+        road_network_for_traffic,
+        water_network_name,
+        scenario_parameters_csv_name,
+        scenario_parameters_csv_path,
+        waterways,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_for_traffic},
+            {"name": scenario_parameters_csv_name, "data": scenario_parameters_csv_path},
+            {"name": water_network_name, "data": waterways},
+        ]
+
+    @pytest.fixture
+    def model_config(
+        self, model_name, road_network_name, scenario_parameters_csv_name, water_network_name
+    ):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "scenario_parameters": [scenario_parameters_csv_name],
+            "global_parameters": ["gp1", "gp2", "load_factor_multiplier"],
+            "scenario_multipliers": ["load_factor_multiplier"],
+            "global_elasticities": [2, -1, 0],
+            "local_entity_groups": [[water_network_name, "road_segment_entities"]],
+            "local_properties": [
+                ["traffic_properties", "average_time"],
+            ],
+            "local_geometries": ["line"],
+            "local_elasticities": [2],
+        }
+
+    def test_demand_calculation(
+        self, config, model_name, road_network_name, water_network_name, global_schema
+    ):
+        scenario = {
+            "updates": [
+                {
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11, 12],
+                                "transport.cargo_demand": [
+                                    [6, 0, 0],
+                                    [10, 0, 0],
+                                    [0, 0, 0],
+                                ],
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 0,
+                    "data": {
+                        water_network_name: {
+                            "road_segment_entities": {
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [1, 1]},
+                            }
+                        }
+                    },
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        water_network_name: {
+                            "road_segment_entities": {
+                                "id": [1, 2],
+                                "traffic_properties": {"average_time": [2, 2]},
+                            }
+                        }
+                    },
+                },
+            ],
+            "expected_results": [
+                {
+                    "time": 0,
+                    "data": None,
+                },
+                {
+                    "time": 0,
+                    "data": None,
+                    "next_time": 2,
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11],
+                                "transport.cargo_demand": [
+                                    [121.5 * 16 * 20, 0, 0],
+                                    [202.5 * 16 * 20, 0, 0],
+                                ],
+                            }
+                        }
+                    },
+                },
+            ],
+        }
+
+        scenario.update(config)
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
+            scenario=scenario,
+            rtol=0.01,
+            global_schema=global_schema,
+        )
+
+
 class TestCargoWithNonIterativeLocalParameters:
     @pytest.fixture
     def init_data(
@@ -940,6 +1058,111 @@ class TestCargoWithLocalRoutingIterative:
                 {
                     "time": 4,
                     "data": None,
+                },
+            ],
+        }
+
+        scenario.update(config)
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
+            scenario=scenario,
+            rtol=0.01,
+            global_schema=global_schema,
+        )
+
+
+class TestCargoWithInducedDemand:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_name,
+        road_network_for_traffic,
+        scenario_parameters_csv_path,
+        waterways,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_for_traffic},
+        ]
+
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
+            "local_properties": [
+                [None, "transport.layout"],
+            ],
+            "local_mapping_type": ["extended_route"],
+            "local_geometries": ["line"],
+            "local_prop_is_iterative": [False],
+            "local_elasticities": [2],
+        }
+
+    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
+        scenario = {
+            "updates": [
+                {
+                    # Publish road lengths, required for induced demand
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101, 102, 103, 104],
+                                # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
+                                "line_properties": {"length": [1, 2, 3, 42]},
+                                "traffic_properties": {"average_time": [5, 6, 7, 8]},
+                            },
+                        }
+                    },
+                },
+                {
+                    # Publish demands lengths, required to calculate any demand at all
+                    "time": 0,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [10, 11, 12],
+                                "transport.cargo_demand": [
+                                    [0, 0, 14],
+                                    [10, 0, 0],
+                                    [11, 0, 0],
+                                ],
+                            },
+                        }
+                    },
+                },
+                {
+                    "time": 2,
+                    "data": {
+                        road_network_name: {
+                            "road_segment_entities": {
+                                "id": [101],
+                                "transport.layout": [[2, 0, 0, 0]],
+                            }
+                        }
+                    },
+                },
+            ],
+            "expected_results": [
+                {"time": 0, "data": None},
+                {"time": 0, "data": None},
+                {
+                    "time": 2,
+                    "data": {
+                        road_network_name: {
+                            "virtual_node_entities": {
+                                "id": [11, 12],
+                                "transport.cargo_demand": [
+                                    [10 * ((2 * 1) / (1 * 1)) ** 2, 0, 0],
+                                    [11 * ((2 * 1 + 2 * 3) / (1 * 1 + 2 * 3)) ** 2, 0, 0],
+                                ],
+                            },
+                        },
+                    },
                 },
             ],
         }

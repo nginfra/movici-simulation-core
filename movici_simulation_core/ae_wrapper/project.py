@@ -39,7 +39,7 @@ class TransportMode:
 @dataclass
 class AssignmentParameters:
     volume_delay_function: str = "BPR"  # one of ["BPR", "CONICAL"]
-    vdf_alpha: float = 0.15
+    vdf_alpha: float = 0.64
     vdf_beta: float = 4.0
     cargo_pcu: float = 1.9
     algorithm: str = (

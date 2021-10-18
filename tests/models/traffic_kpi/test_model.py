@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -22,14 +22,32 @@ def coefficients_csv_name():
 
 @pytest.fixture
 def coefficients_csv_path():
-    return os.path.join(os.path.dirname(__file__), "coefficients.csv")
+    return Path(__file__).parent.joinpath("coefficients.csv")
 
 
 @pytest.fixture
-def init_data(road_network_name, coefficients_csv_name, road_network, coefficients_csv_path):
+def scenario_parameters_csv_name():
+    return "scenario_interpolated_csv"
+
+
+@pytest.fixture
+def scenario_parameters_csv_path():
+    return Path(__file__).parent.joinpath("scenario_interpolated.csv")
+
+
+@pytest.fixture
+def init_data(
+    road_network_name,
+    coefficients_csv_name,
+    scenario_parameters_csv_name,
+    road_network,
+    coefficients_csv_path,
+    scenario_parameters_csv_path,
+):
     return [
         {"name": road_network_name, "data": road_network},
         {"name": coefficients_csv_name, "data": coefficients_csv_path},
+        {"name": scenario_parameters_csv_name, "data": scenario_parameters_csv_path},
     ]
 
 
@@ -38,12 +56,18 @@ def model_config(
     model_name,
     road_network_name,
     coefficients_csv_name,
+    scenario_parameters_csv_name,
 ):
     return {
         "name": model_name,
         "type": "traffic_kpi",
         "roads": [road_network_name],
         "coefficients_csv": [coefficients_csv_name],
+        "scenario_parameters": [scenario_parameters_csv_name],
+        "cargo_scenario_parameters": ["h2_share_freight_road"],
+        "energy_consumption_property": [None, "transport.energy_consumption_h2.hours"],
+        "co2_emission_property": [None, "transport.co2_emission_h2.hours"],
+        "nox_emission_property": [None, "transport.nox_emission_h2.hours"],
     }
 
 
@@ -54,16 +78,22 @@ def state():
 
 @pytest.fixture
 def init_data_handler(
-    init_data_handler, add_init_data, coefficients_csv_name, coefficients_csv_path
+    init_data_handler,
+    add_init_data,
+    coefficients_csv_name,
+    coefficients_csv_path,
+    scenario_parameters_csv_name,
+    scenario_parameters_csv_path,
 ):
     add_init_data(coefficients_csv_name, coefficients_csv_path)
+    add_init_data(scenario_parameters_csv_name, scenario_parameters_csv_path)
     return init_data_handler
 
 
 @pytest.fixture
-def model(model_config, state, init_data_handler):
+def model(model_config, state, init_data_handler, global_schema):
     model = Model(model_config)
-    model.setup(state, init_data_handler=init_data_handler)
+    model.setup(state, init_data_handler=init_data_handler, schema=global_schema)
     return model
 
 
@@ -114,20 +144,30 @@ def test_kpi_calculation(
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2, 3],
-                            "transport.passenger_vehicle_flow": [1.5, 0, 0],
+                            "transport.cargo_vehicle_flow": [1.5, 0, 0],
                         }
                     },
                 },
             },
             {"time": 1, "data": None},
-            {"time": 2, "data": None},
+            {
+                "time": 2,
+                "data": {
+                    road_network_name: {
+                        "road_segment_entities": {
+                            "id": [1, 2, 3],
+                            "transport.cargo_vehicle_flow": [1, 1, 0],
+                        }
+                    },
+                },
+            },
             {
                 "time": 3,
                 "data": {
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2, 3],
-                            "transport.cargo_vehicle_flow": [1, 1, 0],
+                            "transport.cargo_vehicle_flow": [10, 10, 0],
                         }
                     },
                 },
@@ -144,14 +184,21 @@ def test_kpi_calculation(
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2, 3],
-                            "transport.co2_emission.hours": [
-                                1.5 * 2 * 16 * 19 * 20 * 1e-6,
+                            # flow * length * coef * share * load_capacity
+                            # * scenario_multipliers ("load_factor_multiplier"
+                            # * PI<energy_type>_share_freight_<modeality>")
+                            "transport.co2_emission_h2.hours": [
+                                1.5 * 2 * (1 * 13 * 10 + 2 * 14 * 11 + 3 * 15 * 12) * 0 * 1e-6,
                                 0,
                                 0,
-                            ],  # flow * length * coef * share * load_capacity
-                            "transport.nox_emission.hours": [1.5 * 2 * 17 * 19 * 20 * 1e-6, 0, 0],
-                            "transport.energy_consumption.hours": [
-                                1.5 * 2 * 18 * 19 * 20 * 1e-3,
+                            ],
+                            "transport.nox_emission_h2.hours": [
+                                1.5 * 2 * (4 * 13 * 10 + 5 * 14 * 11 + 6 * 15 * 12) * 0 * 1e-6,
+                                0,
+                                0,
+                            ],
+                            "transport.energy_consumption_h2.hours": [
+                                1.5 * 2 * (7 * 13 * 10 + 8 * 14 * 11 + 9 * 15 * 12) * 0 * 1e-3,
                                 0,
                                 0,
                             ],
@@ -170,14 +217,50 @@ def test_kpi_calculation(
                 "data": {
                     road_network_name: {
                         "road_segment_entities": {
-                            "id": [1],
-                            "transport.co2_emission.hours": [1.5 * 2 * 15 * 18 * 19 * 1e-6],
-                            "transport.nox_emission.hours": [1.5 * 2 * 16 * 18 * 19 * 1e-6],
-                            "transport.energy_consumption.hours": [1.5 * 2 * 17 * 18 * 19 * 1e-3],
+                            "id": [1, 2],
+                            # flow * length * coef * share * load_capacity
+                            # * scenario_multipliers ("load_factor_multiplier"
+                            # * PI<energy_type>_share_freight_<modeality>")
+                            "transport.co2_emission_h2.hours": [
+                                1
+                                * 2
+                                * (0 * 12 * 9 + 1 * 13 * 10 + 2 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-6,
+                                1
+                                * 1.5
+                                * (0 * 12 * 9 + 1 * 13 * 10 + 2 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-6,
+                            ],
+                            "transport.nox_emission_h2.hours": [
+                                1
+                                * 2
+                                * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-6,
+                                1
+                                * 1.5
+                                * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-6,
+                            ],
+                            "transport.energy_consumption_h2.hours": [
+                                1
+                                * 2
+                                * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-3,
+                                1
+                                * 1.5
+                                * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11)
+                                * 0.004545454545455
+                                * 1e-3,
+                            ],
                         },
                     },
                 },
-                "next_time": None,
+                "next_time": 3,
             },
             {
                 "time": 3,
@@ -185,35 +268,49 @@ def test_kpi_calculation(
                     road_network_name: {
                         "road_segment_entities": {
                             "id": [1, 2],
-                            "transport.co2_emission.hours": [
-                                # flow * length * coef * share * load_capacity
-                                (
-                                    1.5 * 2 * 15 * 18 * 19
-                                    + 1 * 2 * (0 * 12 * 9 + 1 * 13 * 10 + 2 * 14 * 11)
-                                )
+                            # flow * length * coef * share * load_capacity
+                            # * scenario_multipliers ("load_factor_multiplier"
+                            # * PI<energy_type>_share_freight_<modeality>")
+                            "transport.co2_emission_h2.hours": [
+                                10
+                                * 2
+                                * (-1 * 11 * 8 + 0 * 12 * 9 + 1 * 13 * 10)
+                                * 0.009090909090909
                                 * 1e-6,
-                                (1 * 1.5 * (0 * 12 * 9 + 1 * 13 * 10 + 2 * 14 * 11)) * 1e-6,
-                            ],
-                            "transport.nox_emission.hours": [
-                                (
-                                    1.5 * 2 * 16 * 18 * 19
-                                    + 1 * 2 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11)
-                                )
+                                10
+                                * 1.5
+                                * (-1 * 11 * 8 + 0 * 12 * 9 + 1 * 13 * 10)
+                                * 0.009090909090909
                                 * 1e-6,
-                                1 * 1.5 * (3 * 12 * 9 + 4 * 13 * 10 + 5 * 14 * 11) * 1e-6,
                             ],
-                            "transport.energy_consumption.hours": [
-                                (
-                                    1.5 * 2 * 17 * 18 * 19
-                                    + 1 * 2 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11)
-                                )
+                            "transport.nox_emission_h2.hours": [
+                                10
+                                * 2
+                                * (2 * 11 * 8 + 3 * 12 * 9 + 4 * 13 * 10)
+                                * 0.009090909090909
+                                * 1e-6,
+                                10
+                                * 1.5
+                                * (2 * 11 * 8 + 3 * 12 * 9 + 4 * 13 * 10)
+                                * 0.009090909090909
+                                * 1e-6,
+                            ],
+                            "transport.energy_consumption_h2.hours": [
+                                10
+                                * 2
+                                * (5 * 11 * 8 + 6 * 12 * 9 + 7 * 13 * 10)
+                                * 0.009090909090909
                                 * 1e-3,
-                                1 * 1.5 * (6 * 12 * 9 + 7 * 13 * 10 + 8 * 14 * 11) * 1e-3,
+                                10
+                                * 1.5
+                                * (5 * 11 * 8 + 6 * 12 * 9 + 7 * 13 * 10)
+                                * 0.009090909090909
+                                * 1e-3,
                             ],
                         },
                     },
                 },
-                "next_time": None,
+                "next_time": 94608000,
             },
         ],
     }
