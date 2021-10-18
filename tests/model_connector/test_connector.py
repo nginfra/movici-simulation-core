@@ -1,17 +1,21 @@
-from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import Mock, call
 
 import pytest
 
+from movici_simulation_core.exceptions import InvalidMessage, StreamDone
 from movici_simulation_core.model_connector.connector import (
     ConnectorStreamHandler,
     ModelConnector,
-    ModelBaseAdapter,
-    UpdateDataHandler,
-    InitDataHandler,
-    DatasetType,
+    ModelAdapterBase,
+    UpdateDataClient,
 )
+from movici_simulation_core.model_connector.init_data import (
+    InitDataHandler,
+    DirectoryInitDataHandler,
+    FileType,
+)
+from movici_simulation_core.networking.client import Sockets
 from movici_simulation_core.networking.messages import (
     RegistrationMessage,
     NewTimeMessage,
@@ -26,7 +30,6 @@ from movici_simulation_core.networking.messages import (
     ClearDataMessage,
     ResultMessage,
 )
-from movici_simulation_core.exceptions import InvalidMessage
 
 
 @pytest.fixture
@@ -78,7 +81,8 @@ class TestConnectorStreamHandler:
         assert getattr(connector, method).call_args == call(msg)
 
     def test_handle_quit_message_calls_close(self, stream_handler, connector):
-        stream_handler.handle_message(QuitMessage())
+        with pytest.raises(StreamDone):
+            stream_handler.handle_message(QuitMessage())
         assert connector.close.call_count == 1
 
     @pytest.mark.usefixtures("stream_handler")
@@ -95,7 +99,7 @@ class TestModelConnector:
 
     @pytest.fixture
     def model(self, data_mask):
-        mock = Mock(ModelBaseAdapter)
+        mock = Mock(ModelAdapterBase)
         mock.initialize.return_value = data_mask
         mock.update.return_value = (b"some_data", None)
         return mock
@@ -106,7 +110,7 @@ class TestModelConnector:
 
     @pytest.fixture
     def update_handler(self, update_data):
-        mock = Mock(UpdateDataHandler)
+        mock = Mock(UpdateDataClient)
         mock.put.return_value = ("address", "key")
         mock.get.return_value = update_data
         return mock
@@ -140,11 +144,12 @@ class TestModelConnector:
 
     def test_new_time_calls_model_with_new_time(self, connector, model):
         connector.new_time(NewTimeMessage(42))
-        assert model.new_time.call_args == call(42)
+        assert model.new_time.call_args == call(NewTimeMessage(42))
 
     def test_update_calls_model_with_timestamp(self, initialized_connector, model, update_data):
-        initialized_connector.update(UpdateMessage(42, key=None, address=None))
-        assert model.update.call_args == call(42, data=None)
+        msg = UpdateMessage(42, key=None, address=None)
+        initialized_connector.update(msg)
+        assert model.update.call_args == call(msg, data=None)
 
     def test_update_doesnt_get_data_on_empty_update(self, initialized_connector, update_handler):
         initialized_connector.update(UpdateMessage(42, key=None, address=None))
@@ -167,7 +172,7 @@ class TestModelConnector:
     ):
         model.update_series.return_value = (None, None)
         initialized_connector.update_series(update_series_message)
-        assert model.update_series.call_args[0][0] == 1
+        assert model.update_series.call_args[0][0].timestamp == 1
 
     def test_update_series_supplies_update_data(
         self, initialized_connector, model, update_series_message, update_handler, data_mask
@@ -187,8 +192,14 @@ class TestModelConnector:
         result = initialized_connector.update_series(UpdateSeriesMessage([]))
         assert result == ResultMessage(key="key", address="address", next_time=12)
 
+    @pytest.mark.parametrize("origin", ["origin", None])
+    def test_sends_origin(self, origin, initialized_connector, model):
+        initialized_connector.name = origin
+        result = initialized_connector.update(UpdateMessage(1))
+        assert result == ResultMessage(key="key", address="address", origin=origin)
+
     def test_closes_model(self, initialized_connector, model):
-        initialized_connector.close()
+        initialized_connector.close(object())
         assert model.close.call_count == 1
 
 
@@ -213,22 +224,22 @@ class TestUpdateHandler:
 
     @pytest.fixture
     def socket_factory(self, socket):
-        @contextmanager
-        def get_socket(*_):
-            yield socket
+        def get_socket(*_, **__):
+            return socket
 
         return get_socket
 
     @pytest.fixture
     def update_handler(self, name, home_address, socket_factory):
-        return UpdateDataHandler(name, home_address, socket_factory)
+        sockets = Sockets(socket_factory)
+        return UpdateDataClient(name, home_address, sockets=sockets)
 
-    def test_get_data_calls_right_address(self, update_handler, socket_factory, socket):
+    def test_get_data_calls_right_address(self, update_handler, socket):
         socket.recv.return_value = DataMessage(b"data")
         update_handler.get("address", "key", None)
         assert socket.connect.call_args == call("address")
 
-    def test_get_data_requests_for_key_with_mask(self, update_handler, socket_factory, socket):
+    def test_get_data_requests_for_key_with_mask(self, update_handler, socket):
         socket.recv.return_value = DataMessage(b"data")
 
         update_handler.get("address", "key", mask={"some": "mask"})
@@ -285,15 +296,16 @@ class TestUpdateHandler:
 @pytest.mark.parametrize(
     "extension, dstype",
     [
-        (".csv", DatasetType.CSV),
-        (".CSV", DatasetType.CSV),
-        (".json", DatasetType.JSON),
-        (".msgpack", DatasetType.MSGPACK),
-        (".nc", DatasetType.OTHER),
+        (".csv", FileType.CSV),
+        (".CSV", FileType.CSV),
+        (".json", FileType.JSON),
+        (".msgpack", FileType.MSGPACK),
+        (".nc", FileType.NETCDF),
+        (".png", FileType.OTHER),
     ],
 )
 def test_data_type(extension, dstype):
-    assert DatasetType.from_extension(extension) == dstype
+    assert FileType.from_extension(extension) == dstype
 
 
 class TestInitDataHandler:
@@ -312,14 +324,14 @@ class TestInitDataHandler:
 
     @pytest.fixture
     def handler(self, tmp_path):
-        return InitDataHandler(tmp_path)
+        return DirectoryInitDataHandler(tmp_path)
 
     @pytest.mark.parametrize(
         "name, filename, data_type",
         [
-            ("some_name", "some_name.json", DatasetType.JSON),
-            ("some_name", "some_name.csv", DatasetType.CSV),
-            ("some_name", "path/to/some_name.csv", DatasetType.CSV),
+            ("some_name", "some_name.json", FileType.JSON),
+            ("some_name", "some_name.csv", FileType.CSV),
+            ("some_name", "path/to/some_name.csv", FileType.CSV),
         ],
     )
     def test_get_init_data(self, handler, add_file, name, filename, data_type):

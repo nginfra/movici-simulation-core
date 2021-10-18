@@ -1,16 +1,22 @@
 import typing as t
 
 import numpy as np
-from model_engine import TimeStamp
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
-from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
-from movici_simulation_core.data_tracker.property import UniformProperty, SUB, PUB
-from movici_simulation_core.data_tracker.state import TrackedState
 
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import (
+    AttributeSchema,
+    DataType,
+    attributes_from_dict,
+    PropertySpec,
+)
+from movici_simulation_core.data_tracker.property import UniformProperty, PUB, OPT
+from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.utils.moment import Moment
+from . import dataset
 from .dataset import OverlapEntity, LineEntity
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="opportunity"):
     """
     Implementation of the opportunities model
     Takes in a line entity and a overlap status dataset
@@ -25,28 +31,26 @@ class Model(LegacyTrackedBaseModel):
     total_length_property: t.Optional[UniformProperty]
     cost_per_meter: t.Optional[float]
 
-    def __init__(self):
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
         self.overlap_entity = None
         self.opportunity_entity = None
         self.opportunity_taken_property = None
         self.cost_per_meter = None
 
-    def setup(self, state: TrackedState, config: dict, **_):
-        self.parse_config(state, config)
+    def setup(self, state: TrackedState, schema: AttributeSchema, **_):
+        self.parse_config(state, schema)
 
     def initialize(self, state: TrackedState):
         self.opportunity_entity.opportunity[:] = 0
         self.opportunity_entity.missed_opportunity[:] = 0
         self.total_length_property[:] = 0
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp):
+    def update(self, state: TrackedState, moment: Moment):
         self.update_opportunities()
 
-    def parse_config(
-        self,
-        state: TrackedState,
-        config: dict,
-    ) -> None:
+    def parse_config(self, state: TrackedState, schema: AttributeSchema) -> None:
+        config = self.config
         self.overlap_entity = state.register_entity_group(
             config["overlap_dataset"][0], OverlapEntity()
         )
@@ -58,14 +62,14 @@ class Model(LegacyTrackedBaseModel):
         self.opportunity_taken_property = state.register_property(
             dataset_name=dataset_name,
             entity_name=entity_name,
-            spec=property_mapping[tuple(prop)],
-            flags=SUB,
+            spec=schema.get_spec(prop, default_data_type=DataType(bool)),
+            flags=OPT,
         )
         prop = config["total_length_property"][0]
         self.total_length_property = state.register_property(
             dataset_name=dataset_name,
             entity_name=entity_name,
-            spec=property_mapping[tuple(prop)],
+            spec=schema.get_spec(prop, default_data_type=DataType(float)),
             flags=PUB,
         )
         self.cost_per_meter = config["cost_per_meter"]
@@ -101,10 +105,16 @@ class Model(LegacyTrackedBaseModel):
         # missed = once opportunity & never self.opportunity_taken_property
         # can be temporarily set, will be unset as overlap actives come in
         self.opportunity_entity.missed_opportunity[active] = 0
-        taken = self.opportunity_taken_property.array > 0
+
+        defined = ~self.opportunity_taken_property.is_undefined()
+        taken = defined & self.opportunity_taken_property.array > 0
         self.opportunity_entity.missed_opportunity[active] = (
             self.opportunity_entity.length[active] * self.cost_per_meter
         )
         self.opportunity_entity.missed_opportunity[taken & active] = 0
 
         self.total_length_property[taken] = self.opportunity_entity.length[taken]
+
+    @classmethod
+    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+        return attributes_from_dict(vars(dataset))

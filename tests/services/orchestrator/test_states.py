@@ -4,7 +4,7 @@ import pytest
 
 from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.networking.messages import QuitMessage
-from movici_simulation_core.services.orchestrator.context import ModelCollection
+from movici_simulation_core.services.orchestrator.context import ModelCollection, ConnectedModel
 from movici_simulation_core.services.orchestrator.fsm import send_silent, FSMDone
 from movici_simulation_core.services.orchestrator.states import (
     WaitForModels,
@@ -47,11 +47,15 @@ class TestWaitForModels(BaseTestState):
 
     @pytest.fixture
     def model_mock(self):
-        return Mock()
+        mock = Mock()
+        mock.name = "model_a"
+        return mock
 
     @pytest.fixture
     def context(self, context, model_mock):
-        context.models = ModelCollection(model_a=model_mock, model_b=model_mock)
+        context.models = ModelCollection(
+            model_a=model_mock, model_b=ConnectedModel("model_b", Mock(), Mock())
+        )
         return context
 
     @pytest.fixture
@@ -70,11 +74,13 @@ class TestWaitForModels(BaseTestState):
     def test_handles_event(self, state, send_message, model_mock, event):
         state.valid_messages = ("dummy",)
         send_message()
-        assert model_mock.handle_message.call_args == call(event, state.valid_messages)
+        assert model_mock.handle_message.call_args == call(
+            event, state.valid_messages, raise_on_invalid=True
+        )
 
     def test_sends_out_pending_messages(self, send_message, model_mock):
         send_message()
-        assert model_mock.send_pending_message.call_count == 2
+        assert model_mock.send_pending_message.call_count == 1
 
     def test_quits_when_model_crashes(self, send_message, model_mock, state):
         model_mock.handle_message.side_effect = SimulationExit

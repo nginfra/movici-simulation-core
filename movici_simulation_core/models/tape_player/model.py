@@ -1,0 +1,93 @@
+import dataclasses
+import typing as t
+
+import ujson as json
+
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import (
+    AttributeSchema,
+    infer_data_type_from_array,
+    DataType,
+    PropertySpec,
+)
+from movici_simulation_core.data_tracker.data_format import load_from_json
+from movici_simulation_core.data_tracker.property import PUB
+from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.model_connector.init_data import InitDataHandler
+from movici_simulation_core.models.common.time_series import TimeSeries
+from movici_simulation_core.utils.moment import Moment, get_timeline_info
+
+
+class Model(TrackedModel, name="tape_player"):
+
+    timeline: t.Optional[TimeSeries[dict]] = None
+
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
+        self.pub_attributes: t.Set[AttributeInfo] = set()
+
+    def setup(
+        self, state: TrackedState, schema: AttributeSchema, init_data_handler: InitDataHandler, **_
+    ):
+        self.timeline = TimeSeries()
+
+        for tape_name in self.config.get("tabular", []):
+            _, tapefile_path = init_data_handler.get(tape_name)
+            if tapefile_path is None:
+                raise ValueError(f"Tapefile dataset {tape_name} not found!")
+            tapefile = json.loads(tapefile_path.read_text())
+            self.process_tape(tapefile, schema)
+
+        for info in self.pub_attributes:
+            state.register_property(info.dataset, info.entity_group, info.spec, flags=PUB)
+        self.timeline.sort()
+
+    def initialize(self, state: TrackedState):
+        pass
+
+    def process_tape(self, tapefile: dict, schema):
+        data_section = tapefile["data"]
+        dataset_name = data_section["tabular_data_name"]
+        timeline_info = get_timeline_info()
+        for seconds, json_data in zip(data_section["time_series"], data_section["data_series"]):
+            timestamp = timeline_info.seconds_to_timestamp(seconds)
+            numpy_data = load_from_json(
+                {dataset_name: json_data}, schema, cache_inferred_attributes=True
+            )
+
+            self.timeline.append((timestamp, numpy_data))
+            self.pub_attributes.update(iter_attribute_info(numpy_data, exclude=("id",)))
+
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        for _, upd in self.timeline.pop_until(moment.timestamp):
+            state.receive_update(upd)
+        return self.timeline.next_time
+
+
+@dataclasses.dataclass(frozen=True)
+class AttributeInfo:
+    dataset: str
+    entity_group: str
+    component: t.Optional[str]
+    name: str
+    data_type: DataType
+
+    @property
+    def spec(self):
+        return PropertySpec(self.name, self.data_type, self.component)
+
+
+def iter_attribute_info(data: dict, dataset=None, entity_group=None, component=None, exclude=()):
+    for key, val in data.items():
+        if dataset is None:
+            yield from iter_attribute_info(val, dataset=key, exclude=exclude)
+        elif entity_group is None:
+            yield from iter_attribute_info(val, dataset, entity_group=key, exclude=exclude)
+        elif "data" not in val:
+            yield from iter_attribute_info(
+                val, dataset, entity_group, component=key, exclude=exclude
+            )
+        elif key not in exclude:
+            yield AttributeInfo(
+                dataset, entity_group, component, key, infer_data_type_from_array(val)
+            )

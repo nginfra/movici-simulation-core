@@ -1,17 +1,19 @@
 import typing as t
 
 import pandas as pd
-from model_engine import TimeStamp, DataFetcher
-from model_engine.model_driver.data_handlers import DType
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
 from movici_simulation_core.data_tracker.property import UniformProperty
 from movici_simulation_core.data_tracker.state import TrackedState
+from ...model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
-
+from movici_simulation_core.utils.moment import Moment
+from . import attributes
 from .entities import FlowEntityGroup, ODEntityGroup
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="unit_conversions"):
     """
     Implementation of the unit conversions model.
     Reads a csv with coefficients.
@@ -27,14 +29,16 @@ class Model(LegacyTrackedBaseModel):
     od_types: t.List[str]
     coefficients_tape: t.Optional[CsvTape]
 
-    def __init__(self):
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
         self.flow_entities = []
         self.flow_types = []
         self.od_entities = []
         self.od_types = []
         self.coefficients_tape = CsvTape()
 
-    def setup(self, state: TrackedState, config: dict, data_fetcher: DataFetcher, **_):
+    def setup(self, state: TrackedState, init_data_handler: InitDataHandler, **_):
+        config = self.config
         flow_entities = config.get("flow_entities", [])
         flow_types = config.get("flow_types", [])
         for flow_entity, flow_type in zip(flow_entities, flow_types):
@@ -57,20 +61,20 @@ class Model(LegacyTrackedBaseModel):
             )
             self.od_types.append(od_type)
 
-        self.initialize_coefficients(data_fetcher=data_fetcher, name=config["parameters"][0])
-
-    def initialize_coefficients(self, data_fetcher: DataFetcher, name: str):
-        dtype, data = data_fetcher.get(name)
-        if dtype != DType.CSV:
-            raise RuntimeError("Given non-csv as CSV input")
-        csv: pd.DataFrame = pd.read_csv(data)
-        self.coefficients_tape.initialize(csv)
+        self.initialize_coefficients(data_handler=init_data_handler, name=config["parameters"][0])
 
     def initialize(self, state: TrackedState):
         pass
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp):
-        self.coefficients_tape.proceed_to(time_stamp)
+    def initialize_coefficients(self, data_handler: InitDataHandler, name: str):
+        dtype, data = data_handler.get(name)
+        if dtype != FileType.CSV:
+            raise RuntimeError("Given non-csv as CSV input")
+        csv: pd.DataFrame = pd.read_csv(data)
+        self.coefficients_tape.initialize(csv)
+
+    def update(self, state: TrackedState, moment: Moment):
+        self.coefficients_tape.proceed_to(moment)
 
         self._update_od_values()
 
@@ -141,3 +145,7 @@ class Model(LegacyTrackedBaseModel):
         if from_prop.is_initialized():
             coef = tape["load_capacity_passenger_car"] * tape["share_passenger_car"]
             to_prop[:] = from_prop.array * coef
+
+    @classmethod
+    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+        return attributes_from_dict(vars(attributes))

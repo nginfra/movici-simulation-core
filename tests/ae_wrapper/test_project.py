@@ -1,4 +1,3 @@
-import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -20,8 +19,8 @@ from movici_simulation_core.ae_wrapper.project import (
 
 
 @pytest.fixture
-def project_dir():
-    return os.path.dirname(__file__)
+def project_dir(tmp_path):
+    return tmp_path
 
 
 def delete_project_if_exists(project_dir):
@@ -370,7 +369,7 @@ def test_can_assign_traffic(project: ProjectWrapper):
     assert np.array_equal(results.ids, [1, 102, 103, 104])
     assert np.allclose(results.passenger_flow, [4.1667, 20, 120, 0.8333], atol=0.01)
     assert np.allclose(results.cargo_flow, [25, 30, 30, 5], atol=0.01)
-    assert np.allclose(results.congested_time, [[0.11710974, 0.08422376, 1.22788609, 0.11710973]])
+    assert np.allclose(results.congested_time, [[0.117, 0.084, 1.227, 0.117]], atol=5e-3)
     assert np.allclose(results.delay_factor, [1.17102242, 1.05272956, 24.55614978, 1.17102232])
     assert np.allclose(results.volume_to_capacity, [1.03333336, 0.77, 3.54, 1.0333332])
     assert np.allclose(results.passenger_car_unit, [51.66666798, 77, 177, 10.33333202])
@@ -425,9 +424,9 @@ def p_triangle_block(project: ProjectWrapper):
             [97700, 434000],
             [97701, 434000],
             [97702, 434000],
-            [97700.001, 434000.001],
-            [97701.001, 434000.001],
-            [97702.001, 434000.001],
+            [97700.01, 434000.01],
+            [97701.01, 434000.01],
+            [97702.01, 434000.01],
         ],
     )
     project.add_nodes(nodes)
@@ -441,9 +440,9 @@ def p_triangle_block(project: ProjectWrapper):
             [[97700, 434000], [97702, 434000]],
             [[97701, 434000], [97704, 434000], [97702, 434000]],
             [[97700, 434000], [97701, 434001]],
-            [[97700, 434000], [97700, 434000]],
-            [[97701, 434000], [97701, 434001]],
-            [[97702, 434000], [97702, 434001]],
+            [[97700, 434000], [97700.01, 434000.01]],
+            [[97701, 434000], [97701.01, 434000.01]],
+            [[97702, 434000], [97702.01, 434000.01]],
         ],
         max_speeds=[
             25,

@@ -1,9 +1,9 @@
 import os
 
 import pytest
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
+
 from movici_simulation_core.models.unit_conversions.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
@@ -49,14 +49,10 @@ def model_config(
     }
 
 
-def test_unit_conversions(
-    config,
-    model_name,
-    road_network_name,
-):
+def test_unit_conversions(config, model_name, road_network_name, global_schema):
     scenario = {
         "updates": [
-            {"time": 0, "data": {}},
+            {"time": 0, "data": None},
             {
                 "time": 0,
                 "data": {
@@ -80,12 +76,12 @@ def test_unit_conversions(
                     }
                 },
             },
-            {"time": 2, "data": {}},
+            {"time": 2, "data": None},
         ],
         "expected_results": [
             {
                 "time": 0,
-                "data": {},
+                "data": None,
                 "next_time": 2,
             },
             {
@@ -158,9 +154,10 @@ def test_unit_conversions(
         ],
     }
     scenario.update(config)
-    testing.ModelDriver.run_scenario(
-        model=model_factory(Model),
-        name=model_name,
+    ModelTester.run_scenario(
+        model=Model,
+        model_name=model_name,
         scenario=scenario,
         rtol=0.01,
+        global_schema=global_schema,
     )

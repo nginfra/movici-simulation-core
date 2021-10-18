@@ -4,7 +4,7 @@ import numpy as np
 
 
 def determine_new_unicode_dtype(
-    a: np.ndarray, b: t.Union[np.ndarray, str], max_val=2 ** 8
+    a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2 ** 8
 ) -> t.Optional[np.dtype]:
     """Determine the new unicode dtype for array `a` if it needs to be updated with data coming
     from `b`.
@@ -17,13 +17,18 @@ def determine_new_unicode_dtype(
         return newsize
     newsize = a.dtype.itemsize // 4
     if isinstance(b, str) and len(b) > (a.dtype.itemsize // 4):
-        newsize = next_power_of_two(len(b), max_val)
+        newsize = len(b)
     elif isinstance(b, np.ndarray) and b.dtype.itemsize > a.dtype.itemsize:
-        newsize = next_power_of_two(b.dtype.itemsize // 4, max_val)
-    new_dtype = np.dtype(f"<U{newsize}")
+        newsize = b.dtype.itemsize // 4
+    new_dtype = get_unicode_dtype(newsize, max_size)
     if new_dtype != a.dtype:
         return new_dtype
     return None
+
+
+def get_unicode_dtype(size, max_size=2 ** 8):
+    size = next_power_of_two(size, max_val=max_size)
+    return np.dtype(f"<U{size}")
 
 
 def next_power_of_two(val, max_val=2 ** 8):

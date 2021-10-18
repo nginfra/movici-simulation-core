@@ -1,9 +1,9 @@
 from typing import Iterable, Dict
 
 import pytest
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
+
 from movici_simulation_core.models.overlap_status.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
@@ -74,6 +74,7 @@ class TestOverlapStatus:
         time_scale,
         get_entity_update,
         get_overlap_update,
+        global_schema,
     ):
         scenario = {
             "updates": [
@@ -175,11 +176,11 @@ class TestOverlapStatus:
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 2 * time_scale,
@@ -271,11 +272,12 @@ class TestOverlapStatus:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_overlap_without_reference(
@@ -292,6 +294,7 @@ class TestOverlapStatus:
         time_scale,
         get_entity_update,
         get_overlap_update,
+        global_schema,
     ):
 
         del water_network["data"]["water_pipe_entities"]["reference"]
@@ -402,11 +405,11 @@ class TestOverlapStatus:
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 2 * time_scale,
@@ -490,11 +493,12 @@ class TestOverlapStatus:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_overlap_without_status_property(
@@ -507,6 +511,7 @@ class TestOverlapStatus:
         road_network_name,
         time_scale,
         get_entity_update,
+        global_schema,
     ):
         del config["config"]["models"][0]["from_check_status_property"]
         config["config"]["models"][0]["to_check_status_properties"][0] = None
@@ -660,33 +665,34 @@ class TestOverlapStatus:
                 },
                 {
                     "time": 1 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 2 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 3 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 4 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 5 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
             ],
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_overlap_status_starting_null(
@@ -700,12 +706,13 @@ class TestOverlapStatus:
         time_scale,
         get_entity_update,
         get_overlap_update,
+        global_schema,
     ):
         scenario = {
             "updates": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1 * time_scale,
@@ -790,10 +797,10 @@ class TestOverlapStatus:
                 },
             ],
             "expected_results": [
-                {"time": 0, "data": {}},
+                {"time": 0, "data": None},
                 {
                     "time": 1 * time_scale,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 2 * time_scale,
@@ -885,11 +892,12 @@ class TestOverlapStatus:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_overlap_with_polygons(
@@ -902,6 +910,7 @@ class TestOverlapStatus:
         time_scale,
         get_entity_update,
         get_overlap_update,
+        global_schema,
     ):
 
         config["config"]["models"][0]["to_entity_groups"] = [
@@ -953,7 +962,7 @@ class TestOverlapStatus:
                 },
             ],
             "expected_results": [
-                {"time": 0, "data": {}},
+                {"time": 0, "data": None},
                 {
                     "time": 1 * time_scale,
                     "data": {
@@ -1001,11 +1010,12 @@ class TestOverlapStatus:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
 
@@ -1039,6 +1049,7 @@ class TestOverlapWithoutActualOverlaps:
         time_scale,
         get_entity_update,
         get_overlap_update,
+        global_schema,
     ):
         config["config"]["models"][0]["to_entity_groups"] = [
             (knotweed_dataset_name, "knotweed_entities")
@@ -1089,18 +1100,19 @@ class TestOverlapWithoutActualOverlaps:
                 },
             ],
             "expected_results": [
-                {"time": 0, "data": {}},
-                {"time": 1 * time_scale, "data": {}},
-                {"time": 2 * time_scale, "data": {}},
+                {"time": 0, "data": None},
+                {"time": 1 * time_scale, "data": None},
+                {"time": 2 * time_scale, "data": None},
             ],
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
 

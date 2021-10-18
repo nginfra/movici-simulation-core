@@ -1,7 +1,8 @@
 import logging
 
 from movici_simulation_core.core.plugins import Service
-from ...core.simulation import Simulation
+from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.networking.messages import ModelMessage, Message
 from movici_simulation_core.networking.stream import Stream
 from .context import (
@@ -17,15 +18,15 @@ from .states import StartInitializingPhase
 class Orchestrator(Service):
     """The class that manages the timeline and acts as a broker between models"""
 
-    config: dict
+    settings: Settings
     fsm: FSM[Context, ModelMessage]
     timeline: TimelineController
     logger: logging.Logger
     context: Context
     stream: Stream
 
-    def setup(self, *, config: dict, stream: Stream, logger: logging.Logger, **_):
-        self.config = config
+    def setup(self, *, settings: Settings, stream: Stream, logger: logging.Logger, **_):
+        self.settings = settings
         self.logger = logger
         self.stream = stream
         self._setup_timeline()
@@ -33,13 +34,13 @@ class Orchestrator(Service):
         self._setup_fsm()
 
     def _setup_timeline(self):
-        timeline_info = self.config["simulation_info"]
+        timeline_info = self.settings.timeline_info
         self.timeline = TimelineController(
-            start=timeline_info["start_time"], end=timeline_info["duration"]
+            start=timeline_info.start_time, end=timeline_info.end_time
         )
 
     def _setup_context(self):
-        model_names = [model["name"] for model in self.config.get("models", [])]
+        model_names = self.settings.model_names
         self.context = Context(
             models=ModelCollection(
                 **{name: self._get_connected_model(name) for name in model_names}
@@ -79,4 +80,4 @@ class Orchestrator(Service):
 
     @classmethod
     def install(cls, sim: Simulation):
-        sim.register_service("orchestrator", cls, auto_use=True)
+        sim.register_service("orchestrator", cls, auto_use=True, daemon=False)

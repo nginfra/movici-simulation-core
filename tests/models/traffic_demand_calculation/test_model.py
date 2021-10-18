@@ -2,10 +2,8 @@ import os
 
 import pytest
 
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
-from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.models.traffic_demand_calculation.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 from ..conftest import get_dataset
 
 
@@ -76,12 +74,7 @@ class TestCargoDemand:
             "local_elasticities": [],
         }
 
-    def test_demand_calculation(
-        self,
-        config,
-        model_name,
-        road_network_name,
-    ):
+    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
         scenario = {
             "updates": [
                 {
@@ -100,12 +93,12 @@ class TestCargoDemand:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
+                {"time": 2, "data": None},
             ],
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                     "next_time": 2,
                 },
                 {
@@ -125,12 +118,12 @@ class TestCargoDemand:
             ],
         }
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -159,12 +152,7 @@ class TestPassengerDemand:
             "local_elasticities": [],
         }
 
-    def test_demand_calculation(
-        self,
-        config,
-        model_name,
-        road_network_name,
-    ):
+    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
         scenario = {
             "updates": [
                 {
@@ -183,12 +171,12 @@ class TestPassengerDemand:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
+                {"time": 2, "data": None},
             ],
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                     "next_time": 2,
                 },
                 {
@@ -208,12 +196,12 @@ class TestPassengerDemand:
             ],
         }
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -245,12 +233,7 @@ class TestCargoDemandSum:
             "local_elasticities": [],
         }
 
-    def test_demand_calculation(
-        self,
-        config,
-        model_name,
-        road_network_name,
-    ):
+    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
         scenario = {
             "updates": [
                 {
@@ -269,7 +252,7 @@ class TestCargoDemandSum:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
+                {"time": 2, "data": None},
             ],
             "expected_results": [
                 {
@@ -297,7 +280,7 @@ class TestCargoDemandSum:
                                 ],
                                 "transport.total_inward_cargo_demand_vehicles": [
                                     324,
-                                    UNDEFINED[float],
+                                    None,
                                 ],
                                 "transport.total_outward_cargo_demand_vehicles": [121.5, 202.5],
                             }
@@ -307,12 +290,12 @@ class TestCargoDemandSum:
             ],
         }
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -353,7 +336,9 @@ class TestCargoWithLocalParameters:
             "local_elasticities": [2],
         }
 
-    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+    def test_demand_calculation(
+        self, config, model_name, road_network_name, water_network_name, global_schema
+    ):
         scenario = {
             "updates": [
                 {
@@ -397,11 +382,11 @@ class TestCargoWithLocalParameters:
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                     "next_time": 2,
                 },
                 {
@@ -422,12 +407,12 @@ class TestCargoWithLocalParameters:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -469,7 +454,9 @@ class TestCargoWithNonIterativeLocalParameters:
             "local_prop_is_iterative": [False],
         }
 
-    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+    def test_demand_calculation(
+        self, config, model_name, road_network_name, water_network_name, global_schema
+    ):
         scenario = {
             "updates": [
                 {
@@ -479,7 +466,7 @@ class TestCargoWithNonIterativeLocalParameters:
                             "virtual_node_entities": {
                                 "id": [10, 11, 12],
                                 "transport.cargo_demand": [
-                                    [6, 0, 0],
+                                    [6.0, 0, 0],
                                     [10, 0, 0],
                                     [0, 0, 0],
                                 ],
@@ -500,7 +487,7 @@ class TestCargoWithNonIterativeLocalParameters:
                 },
                 {
                     "time": 2,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 2,
@@ -515,17 +502,17 @@ class TestCargoWithNonIterativeLocalParameters:
                 },
                 {
                     "time": 3,
-                    "data": {},
+                    "data": None,
                 },
             ],
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                     "next_time": 2,
                 },
                 {
@@ -544,7 +531,7 @@ class TestCargoWithNonIterativeLocalParameters:
                 },
                 {
                     "time": 2,
-                    "data": {},
+                    "data": None,
                     "next_time": 3,
                 },
                 {
@@ -565,12 +552,12 @@ class TestCargoWithNonIterativeLocalParameters:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -600,12 +587,7 @@ class TestCargoDemandWithInvestment:
             "investment_multipliers": [[0, 10, 2], [2, 11, 1.5], [2, 11, 2]],
         }
 
-    def test_demand_calculation(
-        self,
-        config,
-        model_name,
-        road_network_name,
-    ):
+    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
         scenario = {
             "updates": [
                 {
@@ -623,8 +605,8 @@ class TestCargoDemandWithInvestment:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
-                {"time": 3, "data": {}},
+                {"time": 2, "data": None},
+                {"time": 3, "data": None},
             ],
             "expected_results": [
                 {
@@ -656,16 +638,16 @@ class TestCargoDemandWithInvestment:
                         }
                     },
                 },
-                {"time": 3, "data": {}},
+                {"time": 3, "data": None},
             ],
         }
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -701,7 +683,9 @@ class TestCargoWithLocalRouting:
             "local_elasticities": [2],
         }
 
-    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+    def test_demand_calculation(
+        self, config, model_name, road_network_name, water_network_name, global_schema
+    ):
         scenario = {
             "updates": [
                 {
@@ -747,7 +731,7 @@ class TestCargoWithLocalRouting:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
+                {"time": 2, "data": None},
                 {
                     "time": 3,
                     "data": {
@@ -759,20 +743,20 @@ class TestCargoWithLocalRouting:
                         }
                     },
                 },
-                {"time": 4, "data": {}},
+                {"time": 4, "data": None},
             ],
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                     "next_time": 1,
                 },
                 {
@@ -804,18 +788,18 @@ class TestCargoWithLocalRouting:
                 },
                 {
                     "time": 4,
-                    "data": {},
+                    "data": None,
                 },
             ],
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )
 
 
@@ -851,7 +835,9 @@ class TestCargoWithLocalRoutingIterative:
             "local_elasticities": [2],
         }
 
-    def test_demand_calculation(self, config, model_name, road_network_name, water_network_name):
+    def test_demand_calculation(
+        self, config, model_name, road_network_name, water_network_name, global_schema
+    ):
         scenario = {
             "updates": [
                 {
@@ -897,7 +883,7 @@ class TestCargoWithLocalRoutingIterative:
                         }
                     },
                 },
-                {"time": 2, "data": {}},
+                {"time": 2, "data": None},
                 {
                     "time": 3,
                     "data": {
@@ -909,16 +895,16 @@ class TestCargoWithLocalRoutingIterative:
                         }
                     },
                 },
-                {"time": 4, "data": {}},
+                {"time": 4, "data": None},
             ],
             "expected_results": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 0,
@@ -936,7 +922,7 @@ class TestCargoWithLocalRoutingIterative:
                 },
                 {
                     "time": 2,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 3,
@@ -945,7 +931,7 @@ class TestCargoWithLocalRoutingIterative:
                             "virtual_node_entities": {
                                 "id": [10],
                                 "transport.cargo_demand": [
-                                    [0, 0, 14 * (5 / 2) ** 2, 5 * (5 / 2) ** 2],
+                                    [0.0, 0, 14 * (5 / 2) ** 2, 5 * (5 / 2) ** 2],
                                 ],
                             }
                         }
@@ -953,16 +939,16 @@ class TestCargoWithLocalRoutingIterative:
                 },
                 {
                     "time": 4,
-                    "data": {},
+                    "data": None,
                 },
             ],
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
-            use_new_time=True,
+            global_schema=global_schema,
         )

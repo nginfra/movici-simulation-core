@@ -1,16 +1,19 @@
 from __future__ import annotations
-from abc import ABC
-import typing as t
 
+import time
+import typing as t
+from abc import ABC
+
+from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.networking.messages import (
     Message,
     RegistrationMessage,
     ResultMessage,
     AcknowledgeMessage,
     QuitMessage,
+    ErrorMessage,
 )
 from movici_simulation_core.services.orchestrator.context import Context
-from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.services.orchestrator.fsm import (
     State,
     Condition,
@@ -34,9 +37,9 @@ class AllModelsDone(OrchestratorCondition):
         return AllModelsReady(self.context).met() and self.context.models.next_time is None
 
 
-class Quitting(OrchestratorCondition):
+class Failed(OrchestratorCondition):
     def met(self) -> bool:
-        return self.context.quitting or bool(self.context.failed)
+        return bool(self.context.failed)
 
 
 class OrchestratorState(State[Context]):
@@ -46,8 +49,10 @@ class OrchestratorState(State[Context]):
 class StartInitializingPhase(OrchestratorState):
     def run(self):
         self.context.models.wait_for_all()
+        self.context.models.start_model_timers()
         self.context.global_timer.start()
         self.context.phase_timer.start()
+        self.context.log_new_phase("Initializing Phase")
 
     def transitions(self):
         return [(Always, ModelsRegistration)]
@@ -55,27 +60,29 @@ class StartInitializingPhase(OrchestratorState):
 
 class WaitForModels(OrchestratorState, ABC):
     valid_messages: t.Optional[t.Tuple[t.Type[Message]]] = None
+    raise_on_invalid = True
 
     def run(self):
         ident, msg = yield
+        self.context.last_return = time.monotonic()
 
         if not (model := self.context.models.get(ident)):
             return
 
         try:
-            model.handle_message(msg, self.valid_messages)
+            model.handle_message(msg, self.valid_messages, raise_on_invalid=self.raise_on_invalid)
         except SimulationExit:
-            self.context.failed.append(ident)
+            model.failed = True
         else:
             self.context.models.send_pending_messages()
 
 
 class ModelsRegistration(WaitForModels):
-    valid_messages = (RegistrationMessage,)
+    valid_messages = (RegistrationMessage, ErrorMessage)
 
     def transitions(self) -> TransitionsT:
         return [
-            (Quitting, StartFinalizingPhase),
+            (Failed, StartFinalizingPhase),
             (AllModelsReady, StartRunningPhase),
         ]
 
@@ -83,7 +90,9 @@ class ModelsRegistration(WaitForModels):
 class StartRunningPhase(OrchestratorState):
     def run(self):
         self.context.models.determine_interdependency()
+        self.context.log_interconnectivity_matrix()
         self.context.phase_timer.restart()
+        self.context.log_new_phase("Running Phase")
 
     def transitions(self) -> TransitionsT:
         return [(Always, NewTime)]
@@ -92,6 +101,7 @@ class StartRunningPhase(OrchestratorState):
 class NewTime(OrchestratorState):
     def run(self):
         self.context.timeline.queue_for_next_time(self.context.models)
+        self.context.log_new_time()
         self.context.models.send_pending_messages()
 
     def transitions(self) -> TransitionsT:
@@ -99,11 +109,11 @@ class NewTime(OrchestratorState):
 
 
 class WaitForResults(WaitForModels):
-    valid_messages = (ResultMessage, AcknowledgeMessage)
+    valid_messages = (ResultMessage, AcknowledgeMessage, ErrorMessage)
 
     def transitions(self) -> TransitionsT:
         return [
-            (Quitting, StartFinalizingPhase),
+            (Failed, StartFinalizingPhase),
             (AllModelsDone, StartFinalizingPhase),
             (AllModelsReady, NewTime),
         ]
@@ -112,16 +122,18 @@ class WaitForResults(WaitForModels):
 class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
+        self.context.log_new_phase("Finalizing Phase")
         self.context.models.clear_queue()
         self.context.models.queue_all(QuitMessage())
         self.context.models.send_pending_messages()
 
     def transitions(self) -> TransitionsT:
-        return [(Always, FinalizingWaitForModels)]
+        return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]
 
 
 class FinalizingWaitForModels(WaitForModels):
-    valid_messages = (AcknowledgeMessage,)
+    valid_messages = (AcknowledgeMessage, ErrorMessage)
+    raise_on_invalid = False
 
     def transitions(self) -> TransitionsT:
         return [(AllModelsReady, EndFinalizingPhase)]

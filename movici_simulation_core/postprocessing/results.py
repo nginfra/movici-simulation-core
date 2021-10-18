@@ -9,18 +9,18 @@ from pathlib import Path
 
 import numpy as np
 
-from movici_simulation_core.base_models.moment import TimelineInfo, string_to_datetime
-from movici_simulation_core.core.data_format import (
-    extract_dataset_data,
-    EntityInitDataFormat,
-)
 from movici_simulation_core.core.schema import (
     DEFAULT_ROWPTR_KEY,
     infer_data_type_from_array,
     PropertySpec,
     propstring,
+    AttributeSchema,
 )
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
+from movici_simulation_core.data_tracker.data_format import (
+    extract_dataset_data,
+    EntityInitDataFormat,
+)
 from movici_simulation_core.data_tracker.property import (
     OPT,
     create_empty_property,
@@ -29,6 +29,7 @@ from movici_simulation_core.data_tracker.property import (
 )
 from movici_simulation_core.data_tracker.state import TrackedState, iter_entity_data
 from movici_simulation_core.types import EntityData
+from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
 
 
 @dataclasses.dataclass
@@ -45,13 +46,16 @@ class SimulationResults:
         init_data_dir: Path,
         updates_dir: Path,
         update_pattern=r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\.json",
-        attributes: t.Sequence[PropertySpec] = (),
+        attributes: t.Union[AttributeSchema, t.Sequence[PropertySpec]] = (),
         timeline_info: TimelineInfo = None,
     ):
         self.update_pattern = update_pattern
         self.init_data_dir = init_data_dir
         self.updates_dir = updates_dir
-        self.data_reader = EntityInitDataFormat(attributes)
+        self.schema = (
+            attributes if isinstance(attributes, AttributeSchema) else AttributeSchema(attributes)
+        )
+        self.data_reader = EntityInitDataFormat(self.schema)
         self.datasets: t.Dict[str, Path] = self._build_init_data_index()
         self.updates: t.Dict[str, t.List[UpdateFile]] = self._build_updates_index()
         self.timeline_info = timeline_info
@@ -59,26 +63,26 @@ class SimulationResults:
     def get_dataset(self, name):
         if not (file := self.datasets.get(name)):
             raise ValueError(f"Dataset {name} not found")
-        init_data = self.data_reader.loads(file.read_bytes())
+        init_data = self.data_reader.load_bytes(file.read_bytes())
         update_files = self.updates.get(name, [])
         updates = [
             {
                 "timestamp": int(upd.timestamp),
                 "iteration": int(upd.iteration),
                 "name": upd.dataset,
-                **self.data_reader.loads(upd.path.read_bytes()),
+                **self.data_reader.load_bytes(upd.path.read_bytes()),
             }
             for upd in update_files
         ]
         return ResultDataset(init_data, updates, timeline_info=self.timeline_info)
 
     def _build_init_data_index(self):
-        return {file.stem: file for file in self.init_data_dir.glob("**/*.json")}
+        return {file.stem: file for file in self.init_data_dir.glob("*.json")}
 
     def _build_updates_index(self):
         index = {}
         matcher = re.compile(self.update_pattern)
-        for file in self.updates_dir.glob("**/*.json"):
+        for file in self.updates_dir.glob("*.json"):
             if not (match := matcher.match(file.name)):
                 continue
             values = match.groupdict()
@@ -86,6 +90,9 @@ class SimulationResults:
         for update_list in index.values():
             update_list.sort(key=lambda u: (u.timestamp, u.iteration))
         return index
+
+    def use(self, plugin):
+        self.schema.use(plugin)
 
 
 class ResultDataset:
@@ -251,6 +258,8 @@ class TimeProgressingState(TrackedState):
 
 
 def merge_updates(*updates: dict):
+    if len(updates) == 0:
+        return None
     state = TrackedState(track_unknown=OPT)
     for upd in updates:
         state.receive_update(upd)

@@ -14,6 +14,10 @@ from movici_simulation_core.data_tracker.property import (
     INIT,
     OPT,
     PropertySpec,
+    INITIALIZE,
+    SUBSCRIBE,
+    PUBLISH,
+    REQUIRED,
 )
 from movici_simulation_core.data_tracker.state import (
     TrackedState,
@@ -157,13 +161,18 @@ def test_is_ready_for(state):
 @pytest.mark.parametrize(
     ["prop_flag", "initial_data", "ready_flags", "expected"],
     [
-        (INIT, None, INIT, False),
-        (INIT, None, SUB, False),  # can only be ready for SUB if also ready for INIT
-        (SUB, None, INIT, True),
-        (INIT, dataset_data_to_numpy({"id": [1], "prop": [1]}), INIT, True),
-        (INIT, dataset_data_to_numpy({"id": [1, 2], "prop": [1, UNDEFINED[int]]}), INIT, False),
-        (SUB, dataset_data_to_numpy({"id": [1], "prop": [1]}), SUB, True),
-        (INIT, dataset_data_to_numpy({"id": [1]}), INIT, False),
+        (INIT, None, INITIALIZE, False),
+        (INIT, None, SUBSCRIBE, False),  # can only be ready for SUB if also ready for INIT
+        (SUB, None, INITIALIZE, True),
+        (INIT, dataset_data_to_numpy({"id": [1], "prop": [1]}), INITIALIZE, True),
+        (
+            INIT,
+            dataset_data_to_numpy({"id": [1, 2], "prop": [1, UNDEFINED[int]]}),
+            INITIALIZE,
+            False,
+        ),
+        (SUB, dataset_data_to_numpy({"id": [1], "prop": [1]}), SUBSCRIBE, True),
+        (INIT, dataset_data_to_numpy({"id": [1]}), INITIALIZE, False),
     ],
 )
 def test_is_ready_for2(
@@ -234,9 +243,9 @@ def tracked_entity(state, dataset_name):
 @pytest.mark.parametrize(
     "flag, reset_fields, not_reset_fields",
     [
-        (PUB, ("pub_prop",), ("sub_prop", "init_prop", "opt_prop")),
+        (PUBLISH, ("pub_prop",), ("sub_prop", "init_prop", "opt_prop")),
         (
-            SUB,
+            SUBSCRIBE,
             ("sub_prop", "init_prop", "opt_prop"),
             ("pub_prop",),
         ),
@@ -285,8 +294,8 @@ def test_first_update_creates_index(state, entity, update):
     assert entity.get_indices([9]) == 0
 
 
-def test_first_doesnt_mark_as_changed(state, entity, update):
-    state.receive_update(update)
+def test_receive_initial_doesnt_mark_as_changed(state, entity, update):
+    state.receive_update(update, is_initial=True)
     assert not entity.prop.changed
     assert not state.generate_update()
 
@@ -370,7 +379,7 @@ class TestEntityUpdateHandler:
     def state(self, initial_data, dataset_name, entity_group):
         state = TrackedState()
         state.register_entity_group(dataset_name, entity_group)
-        state.receive_update(initial_data)
+        state.receive_update(initial_data, is_initial=True)
         return state
 
     @pytest.fixture
@@ -432,10 +441,10 @@ def test_state_proxy_can_get_index(state_proxy, update):
 @pytest.mark.parametrize(
     ["flag", "props"],
     [
-        (SUB, ["sub_prop", "either_prop"]),
-        (INIT, ["init_prop", "either_prop"]),
-        (OPT, ["opt_prop"]),
-        (PUB, ["pub_prop"]),
+        (SUBSCRIBE, ["sub_prop", "init_prop", "opt_prop", "either_prop"]),
+        (INITIALIZE, ["init_prop"]),
+        (REQUIRED, ["sub_prop", "init_prop", "either_prop"]),
+        (PUBLISH, ["pub_prop", "either_prop"]),
     ],
 )
 def test_can_filter_properties_by_flag(dataset_name, flag, props):
@@ -444,7 +453,7 @@ def test_can_filter_properties_by_flag(dataset_name, flag, props):
         sub_prop = get_property(name="sub_prop", flags=SUB)
         init_prop = get_property(name="init_prop", flags=INIT)
         opt_prop = get_property(name="opt_prop", flags=OPT)
-        either = get_property(name="either_prop", flags=INIT | SUB)
+        either = get_property(name="either_prop", flags=PUB | SUB)
 
     state = TrackedState()
     state.register_dataset(dataset_name, [AllFlags])
@@ -626,6 +635,39 @@ def test_can_add_new_entity_groups_and_properties_in_update():
         state.get_property("dataset", "other_entities", (None, "other_prop")).array, [20]
     )
     assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
+
+
+def test_can_grow_entity_group():
+    state = TrackedState(track_unknown=OPT)
+    state.receive_update(
+        {
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([2])},
+                    "some_prop": {"data": np.array([10])},
+                }
+            }
+        }
+    )
+    state.receive_update(
+        {
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([1])},
+                    "other_prop": {"data": np.array([20])},
+                }
+            }
+        }
+    )
+    np.testing.assert_array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
+    np.testing.assert_array_equal(
+        state.get_property("dataset", "some_entities", (None, "some_prop")).array,
+        [10, UNDEFINED[int]],
+    )
+    np.testing.assert_array_equal(
+        state.get_property("dataset", "some_entities", (None, "other_prop")).array,
+        [UNDEFINED[int], 20],
+    )
 
 
 def test_can_inherit_properties():

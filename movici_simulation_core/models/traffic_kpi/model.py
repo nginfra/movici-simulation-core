@@ -2,15 +2,15 @@ import typing as t
 
 import pandas as pd
 
-from model_engine import TimeStamp, DataFetcher
-from model_engine.model_driver.data_handlers import DType
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.data_tracker.property import UniformProperty
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
+from ...model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common import model_util
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CoefficientsTape
 from .entities import TransportSegments
+from movici_simulation_core.utils.moment import Moment
 
 CARGO = "cargo"
 PASSENGER = "passenger"
@@ -19,7 +19,7 @@ NOX = "nox"
 ENERGY = "energy"
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="traffic_kpi"):
     """
     Implementation of the traffic KPI model.
     Reads a csv with coefficients.
@@ -32,13 +32,14 @@ class Model(LegacyTrackedBaseModel):
     segments: t.Optional[TransportSegments]
     coefficients_tape: t.Optional[CoefficientsTape]
 
-    def __init__(self):
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
         self.segments = None
         self.coefficients_tape = CoefficientsTape()
 
-    def setup(self, state: TrackedState, config: dict, data_fetcher: DataFetcher, **_):
-        transport_type = model_util.get_transport_type(config)
-        self.build_state(state, config, transport_type)
+    def setup(self, state: TrackedState, init_data_handler: InitDataHandler, **_):
+        transport_type = model_util.get_transport_type(self.config)
+        self.build_state(state, transport_type)
 
         if transport_type == "roads":
             self.add_road_coefficients()
@@ -51,7 +52,9 @@ class Model(LegacyTrackedBaseModel):
                 "There should be exactly one of [roads, waterways, tracks] in config"
             )
 
-        self.initialize_coefficients(data_fetcher=data_fetcher, name=config["coefficients_csv"][0])
+        self.initialize_coefficients(
+            data_handler=init_data_handler, name=self.config["coefficients_csv"][0]
+        )
 
     def add_road_coefficients(
         self,
@@ -193,14 +196,15 @@ class Model(LegacyTrackedBaseModel):
     def add_tracks_coefficients(self):
         raise RuntimeError("tracks coefficients not defined in model")
 
-    def initialize_coefficients(self, data_fetcher: DataFetcher, name: str):
-        dtype, data = data_fetcher.get(name)
-        if dtype != DType.CSV:
+    def initialize_coefficients(self, data_handler: InitDataHandler, name: str):
+        dtype, data = data_handler.get(name)
+        if dtype != FileType.CSV:
             raise RuntimeError("Given non-csv as CSV input")
         csv: pd.DataFrame = pd.read_csv(data)
         self.coefficients_tape.initialize(csv)
 
-    def build_state(self, state: TrackedState, config: t.Dict, transport_type: str):
+    def build_state(self, state: TrackedState, transport_type: str):
+        config = self.config
         self.segments = state.register_entity_group(
             dataset_name=config[transport_type][0],
             entity=TransportSegments(name=model_util.dataset_to_segments[transport_type]),
@@ -213,8 +217,8 @@ class Model(LegacyTrackedBaseModel):
         ):
             raise NotReady
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp):
-        self.coefficients_tape.proceed_to(time_stamp)
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        self.coefficients_tape.proceed_to(moment)
         if not self.has_anything_changed():
             return self.coefficients_tape.get_next_timestamp()
 

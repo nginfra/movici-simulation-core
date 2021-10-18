@@ -2,26 +2,26 @@ import typing as t
 
 import numpy as np
 
-from model_engine import TimeStamp, Config, DataFetcher
 from movici_simulation_core.ae_wrapper.collections import (
     AssignmentResultCollection,
 )
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper, AssignmentParameters
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
+from ...model_connector.init_data import InitDataHandler
 from movici_simulation_core.models.common import model_util, ae_util
 from movici_simulation_core.models.common.entities import (
     PointEntity,
     VirtualLinkEntity,
 )
-from .dataset import (
-    DemandNodeEntity,
-    TrafficTransportSegmentEntity,
-)
+from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.settings import Settings
+from . import dataset as ds
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="traffic_assignment_calculation"):
     """
     Calculates traffic properties on roads
     """
@@ -29,32 +29,30 @@ class Model(LegacyTrackedBaseModel):
     vdf_alpha: t.Union[float, str]
     vdf_beta: float
     cargo_pcu: float
-
-    def __init__(self):
-        self.project: t.Optional[ProjectWrapper] = None
-        self._transport_segments: t.Optional[TrafficTransportSegmentEntity] = None
-        self._transport_nodes: t.Optional[PointEntity] = None
-        self._demand_nodes: t.Optional[DemandNodeEntity] = None
-        self._demand_links: t.Optional[VirtualLinkEntity] = None
-        self._free_flow_times: t.Optional[np.ndarray] = None
-        self._use_waterway_parameters = False
+    project: t.Optional[ProjectWrapper] = None
+    _transport_segments: t.Optional[ds.TrafficTransportSegmentEntity] = None
+    _transport_nodes: t.Optional[PointEntity] = None
+    _demand_nodes: t.Optional[ds.DemandNodeEntity] = None
+    _demand_links: t.Optional[VirtualLinkEntity] = None
+    _free_flow_times: t.Optional[np.ndarray] = None
+    _use_waterway_parameters = False
 
     def setup(
-        self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
+        self, state: TrackedState, settings: Settings, init_data_handler: InitDataHandler, **_
     ):
-        transport_type = model_util.get_transport_type(config)
-        transport_dataset_name = config[transport_type][0]
+        transport_type = model_util.get_transport_type(self.config)
+        transport_dataset_name = self.config[transport_type][0]
 
         self._transport_segments = state.register_entity_group(
             transport_dataset_name,
-            TrafficTransportSegmentEntity(name=model_util.dataset_to_segments[transport_type]),
+            ds.TrafficTransportSegmentEntity(name=model_util.dataset_to_segments[transport_type]),
         )
         self._transport_nodes = state.register_entity_group(
             transport_dataset_name, PointEntity(name="transport_node_entities")
         )
         self._demand_nodes = state.register_entity_group(
             transport_dataset_name,
-            DemandNodeEntity(name="virtual_node_entities"),
+            ds.DemandNodeEntity(name="virtual_node_entities"),
         )
         self._demand_links = state.register_entity_group(
             transport_dataset_name, VirtualLinkEntity(name="virtual_link_entities")
@@ -63,12 +61,12 @@ class Model(LegacyTrackedBaseModel):
         if transport_type == "waterways":
             self._use_waterway_parameters = True
 
-        self.project = ProjectWrapper(scenario_config.TEMP_DIR)
+        self.project = ProjectWrapper(settings.temp_dir)
 
         default_parameters = AssignmentParameters()
-        self.vdf_alpha = config.get("vdf_alpha", default_parameters.vdf_alpha)
-        self.vdf_beta = config.get("vdf_beta", default_parameters.vdf_beta)
-        self.cargo_pcu = config.get("cargo_pcu", default_parameters.cargo_pcu)
+        self.vdf_alpha = self.config.get("vdf_alpha", default_parameters.vdf_alpha)
+        self.vdf_beta = self.config.get("vdf_beta", default_parameters.vdf_beta)
+        self.cargo_pcu = self.config.get("cargo_pcu", default_parameters.cargo_pcu)
 
     def initialize(self, state: TrackedState):
         self._transport_segments.ensure_ready()
@@ -89,16 +87,16 @@ class Model(LegacyTrackedBaseModel):
 
         self.project.build_graph(cost_field="free_flow_time", block_centroid_flows=True)
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         self._process_link_changes()
 
         passenger_demand = self._get_matrix(self._demand_nodes.passenger_demand.csr)
         cargo_demand = self._get_matrix(self._demand_nodes.cargo_demand.csr)
 
         results = self.project.assign_traffic(
-            passenger_demand,
-            cargo_demand,
-            AssignmentParameters(
+            od_matrix_passenger=passenger_demand,
+            od_matrix_cargo=cargo_demand,
+            parameters=AssignmentParameters(
                 vdf_alpha=self.vdf_alpha, vdf_beta=self.vdf_beta, cargo_pcu=self.cargo_pcu
             ),
         )
@@ -114,10 +112,9 @@ class Model(LegacyTrackedBaseModel):
 
     @staticmethod
     def _get_matrix(csr_array: TrackedCSRArray):
-        matrix = []
-        for i in range(csr_array.size):
-            matrix.append(csr_array.get_row(i))
-        return np.stack(matrix)
+        if len(csr_array.data) != csr_array.size ** 2:
+            raise ValueError("Array is not a valid demand matrix")
+        return csr_array.data.copy().reshape((csr_array.size, csr_array.size))
 
     def _publish_results(self, results: AssignmentResultCollection):
         real_link_len = len(self._transport_segments.index.ids)
@@ -221,3 +218,7 @@ class Model(LegacyTrackedBaseModel):
         alpha_fill = np.full_like(free_flow_times, default_alpha)
         alpha_fill[finite_indices] = r / free_flow_times[finite_indices]
         return alpha_fill
+
+    @classmethod
+    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+        return attributes_from_dict(vars(ds))

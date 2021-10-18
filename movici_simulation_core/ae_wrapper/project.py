@@ -26,8 +26,10 @@ from movici_simulation_core.ae_wrapper.collections import (
 )
 from movici_simulation_core.ae_wrapper.id_generator import IdGenerator
 from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
+from movici_simulation_core.data_tracker.csr_helpers import get_row
 
 EPSILON = 1e-12
+GEOM_ACC = 7  # 7 decimals of lat/lon means a
 
 
 class TransportMode:
@@ -56,7 +58,7 @@ class ProjectWrapper:
 
     def __init__(
         self,
-        project_path: t.Optional[str] = None,
+        project_path: t.Union[str, Path, None] = None,
         project_name: t.Optional[str] = None,
         delete_on_close: bool = True,
     ) -> None:
@@ -113,10 +115,12 @@ class ProjectWrapper:
         new_node_ids = self._node_id_generator.get_new_ids(nodes.ids)
 
         point_strs = []
-        for node_id, (node_x, node_y) in zip(new_node_ids, nodes.geometries):
-            lat, lon = self.transformer.transform(node_x, node_y)
-            point_strs.append(f"POINT({lon} {lat})")
-            self._node_id_to_point[node_id] = (node_x, node_y)
+        lats, lons = self.transformer.transform(nodes.geometries[:, 0], nodes.geometries[:, 1])
+        lats = np.round(lats, decimals=7)
+        lons = np.round(lons, decimals=7)
+        for node_id, xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
+            point_strs.append(f"POINT({lon:.7f} {lat:.7f})")
+            self._node_id_to_point[node_id] = (lat, lon)
 
         sql = (
             "INSERT INTO nodes "  # nosec
@@ -154,11 +158,19 @@ class ProjectWrapper:
             raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids")
 
         linestring_strs = []
-        for from_node, to_node, linestring in zip(new_from_nodes, new_to_nodes, links.geometries):
-            linestring_strs.append(
-                self._get_linestring_string(
-                    linestring, from_node, to_node, self.transformer, raise_on_geometry_mismatch
+        geometries = np.round(
+            np.column_stack(
+                self.transformer.transform(
+                    links.geometries.data[:, 0], links.geometries.data[:, 1]
                 )
+            ),
+            decimals=7,
+        )
+
+        for row_idx, (from_node, to_node) in enumerate(zip(new_from_nodes, new_to_nodes)):
+            row = get_row(geometries, links.geometries.row_ptr, row_idx)
+            linestring_strs.append(
+                self._get_linestring_string(row, from_node, to_node, raise_on_geometry_mismatch)
             )
 
         new_link_ids = self._link_id_generator.get_new_ids(links.ids)
@@ -208,42 +220,32 @@ class ProjectWrapper:
 
     def _get_linestring_string(
         self,
-        linestring: t.Sequence,
+        linestring: np.ndarray,
         from_node: int,
         to_node: int,
-        transformer: Transformer,
         raise_on_geometry_mismatch: bool = True,
     ) -> str:
-        linestring2d = []
+        def assert_point_matches(point, expected):
+            if raise_on_geometry_mismatch and not np.allclose(
+                point, expected, atol=1e-6, rtol=1e-6
+            ):
+                raise ValueError(
+                    f"Mismatch in data:"
+                    f" Linestring beginning has point {point} but"
+                    f" from_node has point {expected}"
+                )
 
-        for i, point in enumerate(linestring):
-            # We have to change beginning and end points of links
-            #  to the corresponding node points, because aequilibrae
-            #  indexes points by geometries.
-            # So if there are rounding errors it will generate new nodes
-            #  regardless of the node id specified
-            if i == 0:
-                from_node_point = self._node_id_to_point[from_node]
-                if raise_on_geometry_mismatch and not np.allclose(
-                    point, from_node_point, atol=0.1
-                ):
-                    raise ValueError(
-                        f"Mismatch in data:"
-                        f" Linestring beginning has point {point} but"
-                        f" from_node has point {from_node_point}"
-                    )
-                point = from_node_point
-            if i == len(linestring) - 1:
-                to_node_point = self._node_id_to_point[to_node]
-                if raise_on_geometry_mismatch and not np.allclose(point, to_node_point, atol=0.1):
-                    raise ValueError(
-                        f"Mismatch in data:"
-                        f" Linestring end has point {point} but"
-                        f" to_node has point {to_node_point}"
-                    )
-                point = to_node_point
-            lat, lon = transformer.transform(point[0], point[1])
-            linestring2d.append(f"{lon} {lat}")
+        if len(linestring) < 2:
+            raise ValueError("Linestring must be at least of length 2")
+
+        from_node_point = self._node_id_to_point[from_node]
+        to_node_point = self._node_id_to_point[to_node]
+        assert_point_matches(linestring[0], from_node_point)
+        assert_point_matches(linestring[-1], to_node_point)
+        linestring[0] = from_node_point
+        linestring[-1] = to_node_point
+
+        linestring2d = [f"{lon:.7f} {lat:.7f}" for lat, lon in linestring]
         linestring_str = ",".join(linestring2d)
         return f"LINESTRING({linestring_str})"
 

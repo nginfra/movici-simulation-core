@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import dataclasses
 import dataclasses as dc
 import typing as t
 
@@ -8,6 +9,7 @@ import numpy as np
 
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
 from .csr_helpers import generate_update, remove_undefined_csr, isclose
+from .data_format import is_undefined_uniform, is_undefined_csr
 from .index import Index
 from ..types import UniformPropertyData, CSRPropertyData, NumpyPropertyData
 from .unicode_helpers import determine_new_unicode_dtype
@@ -23,25 +25,43 @@ from ..core.schema import (
 if t.TYPE_CHECKING:
     from .entity_group import EntityGroup
 
-# Property pub/sub flags
-INIT = 1  # This property is required for initialization
-SUB = 1 << 1  # This property is required to start calculating updates
-OPT = 1 << 2  # The model is interested in this property, but it's optional
-PUB = 1 << 3  # The model publishes this property
+# Base property pub/sub flags
+# These are used internally when checking for attributes, model developers should use the combined
+# flags below
+INITIALIZE = 1
+SUBSCRIBE = 1 << 1
+REQUIRED = 1 << 2
+PUBLISH = 1 << 3
 
+# Property pub/sub flags
+INIT = SUBSCRIBE | INITIALIZE | REQUIRED  # This property is required for initialization
+SUB = SUBSCRIBE | REQUIRED  # This property is required to start calculating updates
+OPT = SUBSCRIBE  # The model is interested in this property, but it's optional
+PUB = PUBLISH  # The model publishes this property
 
 # todo: do we want this?
 #  IMMUTABLE = 1 << 4  # the model doesn't support it when this property changes once set
 
 
+def flag_info(flag: int):
+    return FlagInfo(
+        (flag & INITIALIZE) == INITIALIZE,
+        (flag & SUBSCRIBE) == SUBSCRIBE,
+        (flag & REQUIRED) == REQUIRED,
+        (flag & PUBLISH) == PUBLISH,
+    )
+
+
+@dataclasses.dataclass
+class FlagInfo:
+    initialize: bool
+    subscribe: bool
+    required: bool
+    publish: bool
+
+
 class PropertyField:
-    def __init__(
-        self,
-        spec: PropertySpec,
-        flags: int = 0,
-        rtol=1e-5,
-        atol=1e-8,
-    ):
+    def __init__(self, spec: PropertySpec, flags: int = 0, rtol=1e-5, atol=1e-8):
         """
         flags: one or more boolean flags of `INIT`, `SUB`, `OPT`, `PUB`, eg: `SUB|OPT`
         """
@@ -257,14 +277,7 @@ class UniformProperty(Property):
 
     def is_undefined(self):
         self.has_data_or_raise()
-
-        undefs = self.data_type.is_undefined(self.array)
-
-        # reduce over all but the first axis, e.g. an array with shape (10,2,3) should be
-        # reduced to a result array of shape (10,) by reducing over axes (1,2). An single
-        # entity's property is considered undefined if the item is undefined in all its dimensions
-        reduction_axes = tuple(range(1, len(undefs.shape)))
-        return np.minimum.reduce(undefs, axis=reduction_axes)
+        return is_undefined_uniform(self.array, self.data_type)
 
     def is_special(self):
         self.has_data_or_raise()
@@ -410,7 +423,7 @@ class CSRProperty(Property):
 
     def is_undefined(self):
         self.has_data_or_raise()
-        return self.csr.rows_contain(np.array([self.data_type.undefined]))
+        return is_undefined_csr(self.csr, self.data_type)
 
     def is_special(self):
         self.has_data_or_raise()
@@ -523,7 +536,7 @@ def ensure_csr_data(
     if isinstance(value, TrackedCSRArray):
         return value
 
-    if isinstance(value, list) and (len(value) == 0 or isinstance(value[0], list)):
+    if isinstance(value, list) and (len(value) == 0 or isinstance(value[0], (list, np.ndarray))):
         data, row_ptr = convert_nested_list_to_csr(value, data_type)
 
     elif isinstance(value, dict):

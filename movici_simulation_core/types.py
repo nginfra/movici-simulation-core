@@ -4,7 +4,9 @@ import numpy as np
 
 Timestamp = int
 NextTime = t.Optional[int]
-UpdateData = t.Optional[bytes]
+RawUpdateData = t.Optional[bytes]
+RawResult = t.Tuple[RawUpdateData, NextTime]
+UpdateData = t.Optional[dict]
 Result = t.Tuple[UpdateData, NextTime]
 
 
@@ -25,3 +27,8 @@ EntityData = t.Dict[str, t.Union[NumpyPropertyData, ComponentData]]
 DatasetData = t.Dict[str, EntityData]
 PropertyIdentifier = t.Tuple[t.Optional[str], str]
 ValueType = t.Union[int, float, bool, str]
+
+
+class DataMask(t.TypedDict):
+    pub: t.Optional[dict]
+    sub: t.Optional[dict]

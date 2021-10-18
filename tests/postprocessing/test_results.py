@@ -3,8 +3,11 @@ import functools
 import numpy as np
 import pytest
 
-from movici_simulation_core.base_models.moment import string_to_datetime, TimelineInfo
-from movici_simulation_core.core.data_format import EntityInitDataFormat, extract_dataset_data
+from movici_simulation_core.utils.moment import string_to_datetime, TimelineInfo
+from movici_simulation_core.data_tracker.data_format import (
+    EntityInitDataFormat,
+    extract_dataset_data,
+)
 from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.postprocessing.results import (

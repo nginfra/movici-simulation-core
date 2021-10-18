@@ -1,7 +1,10 @@
+import operator
+
 import numpy as np
 import pytest
 
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray, TrackedArray
+from movici_simulation_core.data_tracker.property import ensure_csr_data
 
 
 def assert_equal_csr_arrays(a, b):
@@ -254,3 +257,26 @@ class TestTrackedArray:
         self.assert_changed(arr, [True, False, False])
         arr[1] = 3
         self.assert_changed(arr, [True, True, False])
+
+
+@pytest.mark.parametrize(
+    "a, b, op, expected",
+    [
+        (
+            ensure_csr_data([[1, 2], [3, 4], [5], []]),
+            ensure_csr_data([[1, 2], [3, 4], [5], []]),
+            operator.add,
+            ensure_csr_data([[2, 4], [6, 8], [10], []]),
+        ),
+        (
+            ensure_csr_data([[1, 2], [3, 4], [5], []]),
+            2,
+            operator.mul,
+            ensure_csr_data([[2, 4], [6, 8], [10], []]),
+        ),
+    ],
+)
+def test_csr_bin_ops(a, b, op, expected):
+    result = op(a, b)
+    np.testing.assert_allclose(expected.data, result.data)
+    np.testing.assert_allclose(expected.row_ptr, result.row_ptr)

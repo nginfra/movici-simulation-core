@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import operator
 import typing as t
 import numpy as np
 
@@ -30,7 +32,9 @@ class TrackedArray(np.ndarray):
         return arr
 
     def __array_finalize__(self, obj):
-        # __array_finalize__ is the numpy version of __init__
+        # __array_finalize__ is the numpy version of __init__. `self` is already instantiated
+        # and we get `obj` as an optional source object from which this array was created (such as
+        # during slicing)
         if obj is not None:
             self._curr = getattr(obj, "_curr", None)
             self.atol = getattr(obj, "atol", 1e-05)
@@ -174,6 +178,28 @@ class TrackedCSRArray:
 
     def reset(self):
         self.changed = np.zeros((self.size,), dtype=bool)
+
+    def __bin_op__(self, other, op):
+        if isinstance(other, TrackedCSRArray):
+            if not np.all(self.row_ptr == other.row_ptr):
+                raise ValueError("row_ptr arrays must be equal")
+            return TrackedCSRArray(data=op(self.data, other.data), row_ptr=self.row_ptr.copy())
+        try:
+            return TrackedCSRArray(data=op(self.data, other), row_ptr=self.row_ptr.copy())
+        except TypeError:
+            return NotImplemented
+
+    def __add__(self, other):
+        return self.__bin_op__(other, operator.add)
+
+    def __sub__(self, other):
+        return self.__bin_op__(other, operator.sub)
+
+    def __mul__(self, other):
+        return self.__bin_op__(other, operator.mul)
+
+    def __truediv__(self, other):
+        return self.__bin_op__(other, operator.truediv)
 
 
 TrackedArrayType = t.Union[TrackedArray, TrackedCSRArray]

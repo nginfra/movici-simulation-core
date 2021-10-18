@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numba
 import numpy as np
-from model_engine import Config
+
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.data_tracker.arrays import TrackedArray
 from movici_simulation_core.data_tracker.property import UniformProperty
@@ -18,6 +18,7 @@ from movici_simulation_core.models.common.entities import (
     GeometryEntity,
 )
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
+from movici_simulation_core.utils.settings import Settings
 
 
 class LocalEffectsCalculator:
@@ -33,7 +34,17 @@ class LocalEffectsCalculator:
         self._property = None
 
     @abstractmethod
-    def setup(self, **kwargs):
+    def setup(
+        self,
+        *,
+        state: TrackedState,
+        prop: UniformProperty,
+        ds_name: str,
+        entity_name: str,
+        geom: str,
+        elasticity: float,
+        settings: Settings,
+    ):
         ...
 
     @abstractmethod
@@ -69,7 +80,7 @@ class NearestValue(LocalEffectsCalculator):
         entity_name: str,
         geom: str,
         elasticity: float,
-        **kwargs,
+        **_,
     ):
         self._property = prop
         self._elasticity = elasticity
@@ -123,10 +134,10 @@ class TransportPathingValueSum(LocalEffectsCalculator):
         entity_name: str,
         geom: str,
         elasticity: float,
-        scenario_config: Config,
-        **kwargs,
+        settings: Settings,
+        **_,
     ):
-        self._project = ProjectWrapper(Path(scenario_config.TEMP_DIR, ds_name))
+        self._project = ProjectWrapper(Path(settings.temp_dir, ds_name))
         self._property = prop
         self._elasticity = elasticity
 

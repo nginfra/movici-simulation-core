@@ -2,7 +2,7 @@ import typing as t
 
 import numba
 import numpy as np
-from numba.core.types import real_domain, complex_domain
+from numba.core.types import real_domain, complex_domain, number_domain
 from numba.np.numpy_support import type_can_asarray
 
 from .numba_extensions import generated_jit
@@ -40,6 +40,73 @@ def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False)
                 rv[i] = True
                 break
     return rv
+
+
+@generated_jit
+def row_wise_sum(data, row_ptr):
+    assert_numeric_array(data)
+
+    def impl(data, row_ptr):
+        return reduce_rows(data, row_ptr, np.sum)
+
+    return impl
+
+
+@generated_jit
+def row_wise_max(data, row_ptr, empty_row=None):
+    assert_numeric_array(data)
+
+    def impl(data, row_ptr, empty_row=None):
+
+        if empty_row is None:
+            return reduce_rows(data, row_ptr, np.max)
+
+        return reduce_rows(data, row_ptr, _substituted_max, empty_row)
+
+    return impl
+
+
+@generated_jit(cache=True)
+def row_wise_min(data, row_ptr, empty_row=None):
+    assert_numeric_array(data)
+
+    def impl(data, row_ptr, empty_row=None):
+
+        if empty_row is None:
+            return reduce_rows(data, row_ptr, np.min)
+
+        return reduce_rows(data, row_ptr, _substituted_min, empty_row)
+
+    return impl
+
+
+@numba.njit(cache=True)
+def reduce_rows(data, row_ptr, func, *args):
+    n_rows = row_ptr.size - 1
+    rv = np.zeros((n_rows,), dtype=data.dtype)
+    for i in range(n_rows):
+        data_row = get_row(data, row_ptr, i)
+        rv[i] = func(data_row, *args)
+    return rv
+
+
+@numba.njit(cache=True)
+def _substituted_max(data, empty_row):
+    if len(data) == 0:
+        return empty_row
+    return np.max(data)
+
+
+@numba.njit(cache=True)
+def _substituted_min(data, empty_row):
+    if len(data) == 0:
+        return empty_row
+    return np.min(data)
+
+
+def assert_numeric_array(arr):
+    if getattr(arr, "dtype", None) not in number_domain:
+        raise TypeError("Only numeric arrays are supported")
 
 
 @numba.njit(cache=True)

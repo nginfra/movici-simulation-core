@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import numpy as np
 from shapely.ops import nearest_points
 
-from movici_simulation_core.data_tracker.property import Property
+from movici_geo_query.geo_query import GeoQuery
+from movici_simulation_core.data_tracker.property import Property, UniformProperty
 from movici_simulation_core.models.common.entities import GeometryEntity, LineEntity
-from boost_geo_query.geo_query import GeoQuery
 from .dataset import OverlapEntity
 
 
@@ -242,9 +242,9 @@ class OverlapStatus:
 
     @staticmethod
     def _calculate_active_overlaps(
-        from_active_status: t.Optional[Property],
+        from_active_status: t.Optional[UniformProperty],
         connection_from_indices: np.ndarray,
-        to_active_status: t.Optional[Property],
+        to_active_status: t.Optional[UniformProperty],
         connection_to_indices: np.ndarray,
         undefined_value: int,
     ) -> np.ndarray:

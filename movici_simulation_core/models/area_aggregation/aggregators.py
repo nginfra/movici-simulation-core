@@ -2,7 +2,7 @@ import typing as t
 
 import numpy as np
 from movici_simulation_core.data_tracker.property import UniformProperty
-from boost_geo_query.geo_query import QueryResult
+from movici_geo_query.geo_query import QueryResult
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60

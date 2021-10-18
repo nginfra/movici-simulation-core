@@ -2,6 +2,14 @@ class SimulationException(Exception):
     pass
 
 
+class StreamDone(SimulationException):
+    pass
+
+
+class StartupFailure(SimulationException):
+    pass
+
+
 class OrchestratorException(SimulationException):
     pass
 

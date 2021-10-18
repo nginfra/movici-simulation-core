@@ -1,13 +1,14 @@
 import operator
-import datetime
+from datetime import datetime
 
 import pytest
 
-from movici_simulation_core.base_models.moment import (
+from movici_simulation_core.utils.moment import (
     TimelineInfo,
     set_timeline_info,
     get_timeline_info,
     Moment,
+    string_to_datetime,
 )
 
 
@@ -17,20 +18,8 @@ def timeline_info():
 
 
 @pytest.fixture
-def set_global_timeline_info():
-    curr = get_timeline_info()
-
-    def set_info(*args, **kwargs):
-        set_timeline_info(*args, **kwargs)
-        return get_timeline_info()
-
-    yield set_info
-    set_timeline_info(curr)
-
-
-@pytest.fixture
-def global_timeline_info(timeline_info, set_global_timeline_info):
-    set_global_timeline_info(timeline_info)
+def global_timeline_info(timeline_info):
+    return timeline_info
 
 
 def test_can_read_seconds(timeline_info):
@@ -82,7 +71,7 @@ def test_from_seconds(seconds, expected, timeline_info):
     ],
 )
 def test_from_string(datetimestring, expected):
-    reference = datetime.datetime(2020, 1, 1).timestamp()
+    reference = datetime(2020, 1, 1).timestamp()
     timeline_info = TimelineInfo(reference=reference, time_scale=1, start_time=0)
     assert Moment.from_string(datetimestring, timeline_info) == Moment(
         expected, timeline_info=timeline_info
@@ -96,13 +85,41 @@ def test_from_string(datetimestring, expected):
         ((0, 10, 0), 10.0),
     ],
 )
-def test_can_set_global_timeline_info(args, expected_seconds, set_global_timeline_info):
+def test_can_set_global_timeline_info(args, expected_seconds):
     if not isinstance(args, tuple):
         args = (args,)
-    set_global_timeline_info(*args)
-    assert Moment(1) == expected_seconds
+    with set_timeline_info(*args):
+        assert Moment(1) == expected_seconds
 
 
+@pytest.mark.no_global_timeline_info
+def test_can_temporarily_set_timeline_info():
+
+    assert get_timeline_info() is None
+    with set_timeline_info(TimelineInfo(0, 1, 0)):
+        assert get_timeline_info() is not None
+    assert get_timeline_info() is None
+
+
+@pytest.mark.no_global_timeline_info
 def test_raises_when_no_timeline_info():
     with pytest.raises(ValueError):
         Moment(1).seconds
+
+
+@pytest.mark.parametrize(
+    "input_str, kwargs, expected",
+    [
+        ("2021-02-01", {}, datetime(year=2021, month=2, day=1)),
+        ("2021", {}, datetime(year=2021, month=1, day=1)),
+        ("5000", {}, datetime(year=5000, month=1, day=1)),
+        ("5001", {}, datetime.fromtimestamp(5001)),
+        ("2001", {"max_year": 2000}, datetime.fromtimestamp(2001)),
+        ("01-02-2021", {}, datetime(year=2021, month=1, day=2)),
+        ("01-02-2021", {"dayfirst": False}, datetime(year=2021, month=1, day=2)),
+        ("01-02-2021", {"dayfirst": True}, datetime(year=2021, month=2, day=1)),
+        ("02021", {}, datetime(year=2021, month=1, day=1)),
+    ],
+)
+def test_string_to_date_time(input_str, kwargs, expected):
+    assert string_to_datetime(input_str, **kwargs) == expected

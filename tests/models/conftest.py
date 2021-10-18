@@ -1,7 +1,17 @@
-import collections
-from typing import Iterable, Optional, Dict
+import json
+import shutil
+import typing as t
+from pathlib import Path
 
 import pytest
+
+from movici_simulation_core.core.attributes import GlobalAttributes
+from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.model_connector.init_data import (
+    DirectoryInitDataHandler,
+)
+from movici_simulation_core.models.common.attributes import CommonAttributes
+from movici_simulation_core.utils.moment import TimelineInfo
 
 
 @pytest.fixture
@@ -17,6 +27,47 @@ def init_data():
 @pytest.fixture
 def time_scale():
     return 1
+
+
+@pytest.fixture
+def global_timeline_info():
+    return TimelineInfo(0, 1, 0)
+
+
+@pytest.fixture
+def additional_attributes():
+    return []
+
+
+@pytest.fixture
+def global_schema(additional_attributes):
+    schema = AttributeSchema(attributes=additional_attributes)
+    schema.use(GlobalAttributes)
+    schema.use(CommonAttributes)
+    return schema
+
+
+@pytest.fixture
+def init_data_handler(tmp_path_factory):
+    root = tmp_path_factory.mktemp("init_data_handler")
+    return DirectoryInitDataHandler(root)
+
+
+@pytest.fixture
+def add_init_data(init_data_handler):
+    root = init_data_handler.root
+
+    def _add_init_data(name, data: t.Union[dict, str, Path]):
+        if isinstance(data, dict):
+            root.joinpath(f"{name}.json").write_text(json.dumps(data))
+            return
+        path = Path(data)
+        if not path.is_file():
+            raise ValueError(f"{data} is not a valid file")
+        target = (root / name).with_suffix(path.suffix)
+        shutil.copyfile(path, target)
+
+    return _add_init_data
 
 
 @pytest.fixture
@@ -179,16 +230,19 @@ def overlap_dataset(overlap_dataset_name):
 @pytest.fixture
 def get_entity_update():
     def _factory(
-        ids: Iterable, properties: Iterable, key_name: str, component_name: Optional[str] = None
-    ) -> Dict:
-        if not isinstance(ids, collections.Iterable):
+        ids: t.Iterable,
+        properties: t.Iterable,
+        key_name: str,
+        component_name: t.Optional[str] = None,
+    ) -> dict:
+        if not isinstance(ids, t.Iterable):
             ids = [ids]
         entities = {"id": list(ids)}
         for key, prop, component in [
             (key_name, properties, component_name),
         ]:
             if prop is not None:
-                if not isinstance(prop, collections.Iterable):
+                if not isinstance(prop, t.Iterable):
                     prop = [prop for _ in ids]
                 if component is None:
                     entities[key] = prop

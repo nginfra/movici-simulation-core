@@ -5,13 +5,18 @@ import numpy as np
 import numpy.typing as npt
 from aequilibrae import PathResults
 
-PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray]]
+from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
+from movici_simulation_core.data_tracker.property import ensure_csr_data
+
+PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray], np.ndarray]
 LinestringCollection = t.List[t.List[t.List[float]]]
 
 
-def _get_numpy_array(sequence: t.Optional[npt.ArrayLike], fill_len: int = 0) -> np.ndarray:
+def _get_numpy_array(
+    sequence: t.Optional[npt.ArrayLike], fill_len: int = 0, fill_value=0
+) -> np.ndarray:
     if sequence is None:
-        return np.zeros(fill_len)
+        return np.full(fill_len, fill_value)
     if not isinstance(sequence, np.ndarray):
         return np.array(sequence)
     return t.cast(np.ndarray, sequence)
@@ -30,8 +35,8 @@ class NodeCollection:
         geometries: t.Optional[PointCollection] = None,
     ):
         self.ids = _get_numpy_array(ids)
-        self.is_centroids = _get_numpy_array(is_centroids, len(self.ids))
-        self.geometries = geometries
+        self.is_centroids = _get_numpy_array(is_centroids, len(self.ids), fill_value=False)
+        self.geometries = np.asarray(geometries, dtype=float) if geometries is not None else None
 
 
 @dataclass(init=False)
@@ -42,7 +47,7 @@ class LinkCollection:
     directions: np.ndarray
     max_speeds: np.ndarray
     capacities: np.ndarray
-    geometries: t.Optional[LinestringCollection]
+    geometries: t.Optional[TrackedCSRArray]
 
     def __init__(
         self,
@@ -52,7 +57,7 @@ class LinkCollection:
         directions: t.Optional[npt.ArrayLike] = None,
         max_speeds: t.Optional[npt.ArrayLike] = None,
         capacities: t.Optional[npt.ArrayLike] = None,
-        geometries: t.Optional[LinestringCollection] = None,
+        geometries: t.Optional[TrackedCSRArray] = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.from_nodes = _get_numpy_array(from_nodes, len(self.ids))
@@ -60,7 +65,7 @@ class LinkCollection:
         self.directions = _get_numpy_array(directions, len(self.ids))
         self.max_speeds = _get_numpy_array(max_speeds, len(self.ids))
         self.capacities = _get_numpy_array(capacities, len(self.ids))
-        self.geometries = geometries
+        self.geometries = ensure_csr_data(geometries) if geometries is not None else None
 
 
 @dataclass(init=False)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import typing as t
+from pathlib import Path
 
 
 @dataclasses.dataclass
@@ -29,6 +30,7 @@ class RegistrationMessage(Message):
 class BaseUpdateMessage:
     key: t.Optional[str]
     address: t.Optional[str]
+    origin: t.Optional[str]
 
     def __post_init__(self):
         if (self.key is None) ^ (self.address is None):
@@ -44,6 +46,7 @@ class UpdateMessage(Message, BaseUpdateMessage):
     timestamp: int
     key: t.Optional[str] = None
     address: t.Optional[str] = None
+    origin: t.Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -61,7 +64,7 @@ class UpdateSeriesMessage(Message):
         dict_ = {"updates": [json.loads(raw) for raw in raw_message]}
         return cls.from_dict(dict_)
 
-    def to_bytes(self) -> TypedMultipartMessage:
+    def to_bytes(self) -> MultipartMessage:
         return [upd.to_bytes()[0] for upd in self.updates]
 
     @classmethod
@@ -72,12 +75,31 @@ class UpdateSeriesMessage(Message):
 
 
 @dataclasses.dataclass
+class PathMessage(Message):
+    path: t.Optional[Path]
+
+    @classmethod
+    def from_bytes(cls, raw_message: MultipartMessage) -> Message:
+        dict_ = json.loads(raw_message[0])
+        path = dict_["path"]
+        dict_["path"] = Path(path) if path is not None else None
+        return cls(**dict_)
+
+    def to_bytes(self) -> MultipartMessage:
+        dict_ = dataclasses.asdict(self)
+        path = dict_["path"]
+        dict_["path"] = str(path) if path is not None else None
+        return [json.dumps(dict_).encode()]
+
+
+@dataclasses.dataclass
 class ResultMessage(Message, BaseUpdateMessage):
     """Response to an UpdateMessage"""
 
     key: t.Optional[str] = None
     address: t.Optional[str] = None
     next_time: t.Optional[int] = None
+    origin: t.Optional[str] = None
 
 
 @dataclasses.dataclass
@@ -106,7 +128,7 @@ class GetDataMessage(Message):
 @dataclasses.dataclass
 class PutDataMessage(Message):
     key: str
-    data: bytes
+    data: bytes = dataclasses.field(repr=False)
 
     @classmethod
     def from_bytes(cls, raw_message: MultipartMessage) -> Message:
@@ -124,7 +146,7 @@ class ClearDataMessage(Message):
 
 @dataclasses.dataclass
 class DataMessage(Message):
-    data: bytes
+    data: bytes = dataclasses.field(repr=False)
 
     @classmethod
     def from_bytes(cls, raw_message: MultipartMessage) -> Message:
@@ -151,6 +173,7 @@ MESSAGE_TYPES = {
     b"PUT": PutDataMessage,
     b"CLEAR": ClearDataMessage,
     b"DATA": DataMessage,
+    b"PATH": PathMessage,
     b"ERROR": ErrorMessage,
 }
 

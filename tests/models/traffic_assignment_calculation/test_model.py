@@ -1,9 +1,7 @@
 import pytest
 
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
-from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.models.traffic_assignment_calculation.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
@@ -35,12 +33,7 @@ class TestTrafficAssignmentRoads:
         }
 
     def test_traffic_assignment_roads(
-        self,
-        get_entity_update,
-        config,
-        model_name,
-        road_network_name,
-        time_scale,
+        self, get_entity_update, config, model_name, road_network_name, time_scale, global_schema
     ):
         scenario = {
             "updates": [
@@ -60,7 +53,7 @@ class TestTrafficAssignmentRoads:
                         }
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -111,7 +104,7 @@ class TestTrafficAssignmentRoads:
                         },
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -139,11 +132,12 @@ class TestTrafficAssignmentRoads:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
 
@@ -165,12 +159,7 @@ class TestTrafficAssignmentWaterways:
         }
 
     def test_traffic_assignment_waterways(
-        self,
-        get_entity_update,
-        config,
-        model_name,
-        water_network_name,
-        time_scale,
+        self, get_entity_update, config, model_name, water_network_name, time_scale, global_schema
     ):
         scenario = {
             "updates": [
@@ -190,7 +179,7 @@ class TestTrafficAssignmentWaterways:
                         }
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -221,7 +210,7 @@ class TestTrafficAssignmentWaterways:
                                 "id": [101, 102, 103, 104],
                                 "transport.passenger_vehicle_flow": [5, 20, 120, 0],
                                 "transport.cargo_vehicle_flow": [30, 30, 30, 0],
-                                "transport.delay_factor": [1, 5.1547, 1, 1],
+                                "transport.delay_factor": [1.0, 5.1547, 1, 1],
                                 "transport.volume_to_capacity_ratio": [
                                     0,
                                     0.77,
@@ -241,7 +230,7 @@ class TestTrafficAssignmentWaterways:
                         },
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -249,23 +238,23 @@ class TestTrafficAssignmentWaterways:
                             "waterway_segment_entities": {
                                 "id": [101, 102, 103],
                                 "transport.passenger_vehicle_flow": [2.5, 10, 60],
-                                "transport.cargo_vehicle_flow": [15, 15, 15],
+                                "transport.cargo_vehicle_flow": [15.0, 15, 15],
                                 "transport.delay_factor": [
-                                    UNDEFINED[float],
+                                    None,
                                     1.1392,
-                                    UNDEFINED[float],
+                                    None,
                                 ],
                                 "transport.volume_to_capacity_ratio": [
-                                    UNDEFINED[float],
+                                    None,
                                     0.385,
-                                    UNDEFINED[float],
+                                    None,
                                 ],
                                 "transport.passenger_car_unit": [31, 38.5, 88.5],
                                 "traffic_properties": {
                                     "average_time": [
-                                        UNDEFINED[float],
+                                        None,
                                         1572.3614,
-                                        UNDEFINED[float],
+                                        None,
                                     ],
                                 },
                             },
@@ -276,11 +265,12 @@ class TestTrafficAssignmentWaterways:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             rtol=0.01,
+            global_schema=global_schema,
         )
 
 
@@ -308,12 +298,7 @@ class TestRoadsCapacityChanges:
         }
 
     def test_roads_capacity_changes(
-        self,
-        get_entity_update,
-        config,
-        model_name,
-        road_network_name,
-        time_scale,
+        self, get_entity_update, config, model_name, road_network_name, time_scale, global_schema
     ):
         scenario = {
             "updates": [
@@ -438,9 +423,10 @@ class TestRoadsCapacityChanges:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
-            atol=0.01,
+            rtol=0.01,
+            global_schema=global_schema,
         )

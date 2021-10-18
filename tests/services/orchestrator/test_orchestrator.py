@@ -1,6 +1,6 @@
 import logging
 import typing as t
-from unittest.mock import Mock, call, MagicMock
+from unittest.mock import Mock, call, MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -16,8 +16,9 @@ from movici_simulation_core.networking.messages import (
     dump_message,
     load_message,
     Message,
+    ErrorMessage,
 )
-from movici_simulation_core.networking.stream import Stream, MessageRouterSocketAdapter
+from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
 from movici_simulation_core.services.orchestrator import Orchestrator
 from movici_simulation_core.services.orchestrator.context import (
     ConnectedModel,
@@ -28,6 +29,7 @@ from movici_simulation_core.services.orchestrator.context import (
 )
 from movici_simulation_core.services.orchestrator.fsm import FSM
 from movici_simulation_core.services.orchestrator.states import StartInitializingPhase
+from movici_simulation_core.utils.settings import Settings
 
 
 def get_model(name="dummy", timeline=None, send=None, **kwargs):
@@ -43,7 +45,7 @@ class TestContext:
     @pytest.fixture
     def make_context(self):
         def _make(
-            models=MagicMock(ModelCollection),
+            models=None,
             timeline=Mock(),
             phase_timer=Mock(),
             global_timer=Mock(),
@@ -51,7 +53,7 @@ class TestContext:
             **kwargs,
         ):
             return Context(
-                models=models,
+                models=models if models is not None else ModelCollection(),
                 timeline=timeline,
                 phase_timer=phase_timer,
                 global_timer=global_timer,
@@ -68,14 +70,15 @@ class TestContext:
     def test_logs_on_global_timer_reset(self, make_context):
         context = make_context(global_timer=None, phase_timer=None)
         context.global_timer.reset()
-        assert context.logger.info.call_args == call("Total elapsed time: 0")
+        assert context.logger.info.call_args == call("Total elapsed time: 0.0")
 
     def test_logs_on_phase_timer_reset(self, make_context):
         context = make_context(global_timer=None, phase_timer=None)
         context.phase_timer.reset()
-        assert context.logger.info.call_args == call("Previous phase finished in 0 seconds")
+        assert context.logger.info.call_args == call("Phase finished in 0.0 seconds")
 
-    def test_resets_timers_on_finalize(self, context):
+    def test_resets_timers_on_finalize(self, make_context):
+        context = make_context(models=MagicMock(ModelCollection))
         context.finalize()
         assert context.phase_timer.reset.call_count == 1
         assert context.global_timer.reset.call_count == 1
@@ -90,8 +93,9 @@ class TestContext:
         ],
     )
     def test_logs_finalize_message(self, failures, loglevel, msg_endswith, context):
-        context.failed = failures
-        context.finalize()
+        with patch.object(Context, "failed", new_callable=PropertyMock) as failed:
+            failed.return_value = failures
+            context.finalize()
 
         assert getattr(context.logger, loglevel).call_args[0][0].endswith(msg_endswith)
 
@@ -243,10 +247,13 @@ class TestConnectedModel:
         assert running_model.next_time == 1
 
     def test_result_message_queues_subscriber(self, running_model, subscriber, timeline):
-        result = ResultMessage(next_time=1, key="bla", address="some_address")
+        result = ResultMessage(next_time=1, key="bla", address="some_address", origin="some_model")
         running_model.handle_message(result)
         assert subscriber.message_queue[0] == UpdateMessage(
-            timestamp=timeline.current_time, key=result.key, address=result.address
+            timestamp=timeline.current_time,
+            key=result.key,
+            address=result.address,
+            origin="some_model",
         )
 
     def test_result_doesnt_queue_subscriber_on_empty_result(
@@ -446,16 +453,16 @@ def socket():
 
 @pytest.fixture
 def message_socket(socket):
-    return MessageRouterSocketAdapter(socket)
+    return MessageRouterSocket(socket)
 
 
 @pytest.fixture
-def orchestrator(config, message_socket):
-    return _create_orchestrator(config, message_socket)
+def orchestrator(config, message_socket, settings):
+    return _create_orchestrator(config, message_socket, settings)
 
 
 @pytest.fixture
-def setup_orchestrator(message_socket):
+def setup_orchestrator(message_socket, settings):
     def make_orchestrator(models: t.Sequence[str]):
         config = {
             "name": "test_scenario",
@@ -469,16 +476,22 @@ def setup_orchestrator(message_socket):
             "models": [{"name": model, "type": model} for model in models],
         }
 
-        return _create_orchestrator(config, message_socket)
+        return _create_orchestrator(config, message_socket, settings)
 
     return make_orchestrator
 
 
-def _create_orchestrator(config, socket):
+@pytest.fixture
+def settings(config):
+    return Settings(name="orchestrator")
+
+
+def _create_orchestrator(config, socket, settings):
+    settings.apply_scenario_config(config)
     orchestrator = Orchestrator()
     logger = logging.getLogger()
     stream = Stream(socket, logger)
-    orchestrator.setup(config=config, logger=logger, stream=stream)
+    orchestrator.setup(logger=logger, stream=stream, settings=settings)
     return orchestrator
 
 
@@ -547,6 +560,13 @@ def run_orchestrator(setup_orchestrator, socket):
             orchestrator.run()
         except StopIteration as e:
             raise ValueError("Requires more model responses") from e
+        try:
+            msg = socket.recv_multipart()
+        except StopIteration:
+            pass
+        else:
+            raise ValueError(f"Extra model message {bytes_to_message(msg)}")
+
         return [bytes_to_message(call[0][0]) for call in socket.send_multipart.call_args_list]
 
     return _run_fsm
@@ -710,4 +730,35 @@ def test_updates_have_preference_over_next_time_at_current_time(run_orchestrator
         ("model_a", UpdateMessage(0)),
         ("model_a", QuitMessage()),
         ("model_b", QuitMessage()),
+    ]
+
+
+def test_failed_model_doesnt_have_to_quit(run_orchestrator):
+    results = run_orchestrator(["model_a"], [("model_a", ErrorMessage())])
+    assert results == []
+
+
+def test_multiple_models_can_fail(run_orchestrator):
+    results = run_orchestrator(
+        ["model_a", "model_b"],
+        [
+            ("model_a", ErrorMessage()),
+            ("model_b", ErrorMessage()),
+        ],
+    )
+    assert results == []
+
+
+def test_sends_quit_after_failed_model(run_orchestrator):
+    results = run_orchestrator(
+        ["model_a", "model_b"],
+        [
+            ("model_b", ErrorMessage()),
+            ("model_a", RegistrationMessage(pub={"a": None}, sub={"b": None})),
+            ("model_a", AcknowledgeMessage()),
+        ],
+    )
+
+    assert results == [
+        ("model_a", QuitMessage()),
     ]

@@ -24,7 +24,6 @@ check_version_upgrade:
 
 test:
   stage: test
-  retry: 1
   only:
     refs:
       - merge_requests
@@ -39,7 +38,6 @@ test:
 
 test-numba:
   stage: test
-  retry: 1
   only:
     refs:
       - master
@@ -78,7 +76,7 @@ deploy:package:
     - pip wheel --no-deps --wheel-dir dist .
     - twine upload --repository-url $PYPI_SERVER dist/*.whl
 
-deploy:model_engine:version:
+.deploy:model_engine:version:
   stage: deploy
   before_script:
     - pip install bump2version

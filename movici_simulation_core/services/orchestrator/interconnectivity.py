@@ -11,20 +11,22 @@ class IPubSubFilter(t.Protocol):
 
 def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):
     """
-    title   |0|1|2|3|
-    model_0 | |X|X|X|
-    model_1 | | | |X|
-    model_2 | | | |X|
-    model_10| | | | |
+    title     |0|1|2|3|
+    0|model_0 | |X|X|X|
+    1|model_1 | | | |X|
+    2|model_2 | | | |X|
+    3|model_10| | | | |
     """
-    first_column_size = max([len(model.name) for model in models] + [len(title)])
     box_size = 1 if len(models) < 11 else 2  # Too lazy for logarithms
+    prefix_size = box_size + 1
+    first_column_size = max([len(model.name) for model in models] + [len(title)]) + prefix_size
+    model_nums = {model.name: idx for idx, model in enumerate(models)}
 
     def header_row():
-        return first_column(title) + "".join(box(num) for num in range(len(models)))
+        return first_column(title) + "".join(box(num) for num in model_nums.values())
 
     def model_row(model):
-        return first_column(model.name) + "".join(
+        return first_column(box(model_nums[model.name]) + model.name) + "".join(
             box(match if sub in model.subscribers else "") for sub in models
         )
 

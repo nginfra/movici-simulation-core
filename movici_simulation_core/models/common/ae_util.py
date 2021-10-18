@@ -26,7 +26,7 @@ def get_capacities_from_property(
     layout_property: t.Optional[UniformProperty] = None,
 ) -> np.ndarray:
     capacities = capacity_property.array.copy()
-    capacities[capacity_property.is_special()] = float("inf")
+    capacities[capacity_property.is_special() | capacity_property.is_undefined()] = float("inf")
 
     if layout_property is None:
         layout_array = np.ones((len(capacities), 1), dtype=np.int32)
@@ -39,26 +39,14 @@ def get_capacities_from_property(
 
 def get_max_speeds_from_property(max_speed_property: UniformProperty) -> np.ndarray:
     max_speeds = max_speed_property.array.copy()
-    max_speeds[max_speed_property.is_special()] = float("inf")
+    max_speeds[max_speed_property.is_special() | max_speed_property.is_undefined()] = float("inf")
+
     return max_speeds
 
 
 def get_transport_directions(segments: TransportSegmentEntity) -> np.ndarray:
-    directions = []
-    for layout in segments.layout:
-        forward = layout[0] > 0
-        backward = layout[1] > 0
-        other = np.any(layout[2:] > 0)
-
-        direction = 0
-        if not other:
-            if forward and not backward:
-                direction = 1
-            if backward and not forward:
-                direction = -1
-
-        directions.append(direction)
-    return np.array(directions)
+    contributions = np.array([1, -1, 0, 0])
+    return (np.minimum(segments.layout, 1) * contributions).sum(axis=1)
 
 
 def get_nodes(nodes: PointEntity, point_generator: PointGenerator) -> NodeCollection:
@@ -115,13 +103,15 @@ def get_demand_links(segments: VirtualLinkEntity) -> LinkCollection:
     linestring_csr = segments.linestring.csr
     for i in range(len(linestring_csr.row_ptr) - 1):
         geometries.append(linestring_csr.get_row(i)[:, :2])
-
-    if segments.max_speed.has_data() and segments.capacity.has_data():
-        max_speeds = np.full(len(geometries), float("inf"))
-        capacities = np.full(len(geometries), float("inf"))
-    else:
+    if segments.max_speed.has_data():
         max_speeds = get_max_speeds_from_property(segments.max_speed)
+    else:
+        max_speeds = np.full(len(geometries), float("inf"))
+
+    if segments.capacity.has_data():
         capacities = get_capacities_from_property(segments.capacity)
+    else:
+        capacities = np.full(len(geometries), float("inf"))
 
     return LinkCollection(
         ids=segments.index.ids,

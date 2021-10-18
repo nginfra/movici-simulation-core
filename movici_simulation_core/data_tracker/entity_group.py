@@ -42,6 +42,12 @@ class EntityGroup:
     def _eq_key(self):
         return type(self), self.state, self.__entity_name__
 
+    def is_similiar(self, other: EntityGroup):
+        return (self.dataset_name, self.__entity_name__) == (
+            other.dataset_name,
+            other.__entity_name__,
+        )
+
     def get_indices(self, ids: t.Sequence[int]) -> np.ndarray:
         if not len(self.index):
             raise RuntimeError(f"EntityGroup {self.__entity_name__} doesn't have any ids")
@@ -61,3 +67,7 @@ class EntityGroup:
     @property
     def index(self) -> Index:
         return self.state.get_index()
+
+    @property
+    def dataset_name(self):
+        return self.state.dataset_name

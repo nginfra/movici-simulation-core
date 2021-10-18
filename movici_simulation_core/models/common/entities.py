@@ -2,33 +2,37 @@ import typing as t
 from abc import abstractmethod
 
 import numpy as np
-from shapely.geometry import LineString, Point, Polygon
-from shapely.geometry.base import BaseGeometry
-
-from model_engine.dataset_manager.property_definition import (
-    ShapeProperties,
-    LineProperties,
-    PointProperties,
-    Transport_MaxSpeed,
-    Transport_Capacity_Hours,
-    Reference,
-    Transport_Layout,
-)
-from movici_simulation_core.legacy_base_model.config_helpers import to_spec
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, OPT, CSRProperty, INIT
-from movici_simulation_core.exceptions import NotReady
-
-from boost_geo_query.geometry import (
+from movici_geo_query.geometry import (
     Geometry,
     LinestringGeometry,
     PointGeometry,
     ClosedPolygonGeometry,
 )
+from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry.base import BaseGeometry
+
+from movici_simulation_core.core.attributes import (
+    PointProperties_PositionX,
+    PointProperties_PositionY,
+    ShapeProperties_Linestring2d,
+    ShapeProperties_Linestring3d,
+    ShapeProperties_Polygon,
+    LineProperties_FromNodeId,
+    LineProperties_ToNodeId,
+    Reference,
+)
+from movici_simulation_core.data_tracker.entity_group import EntityGroup
+from movici_simulation_core.data_tracker.property import field, OPT, CSRProperty, INIT
+from movici_simulation_core.exceptions import NotReady
+from movici_simulation_core.models.common.attributes import (
+    Transport_MaxSpeed,
+    Transport_Capacity_Hours,
+    Transport_Layout,
+)
 
 
 class GeometryEntity(EntityGroup):
-    reference = field(to_spec(Reference), flags=OPT)
+    reference = field(Reference, flags=OPT)
 
     @abstractmethod
     def get_geometry(self) -> Geometry:
@@ -40,8 +44,8 @@ class GeometryEntity(EntityGroup):
 
 
 class PointEntity(GeometryEntity):
-    x = field(to_spec(PointProperties.PositionX), flags=INIT)
-    y = field(to_spec(PointProperties.PositionY), flags=INIT)
+    x = field(PointProperties_PositionX, flags=INIT)
+    y = field(PointProperties_PositionY, flags=INIT)
 
     def get_geometry(self) -> PointGeometry:
         return PointGeometry(points=np.stack((self.x.array, self.y.array), axis=-1))
@@ -51,8 +55,8 @@ class PointEntity(GeometryEntity):
 
 
 class LineEntity(GeometryEntity):
-    _linestring2d = field(to_spec(ShapeProperties.Linestring2d), flags=OPT)
-    _linestring3d = field(to_spec(ShapeProperties.Linestring3d), flags=OPT)
+    _linestring2d = field(ShapeProperties_Linestring2d, flags=OPT)
+    _linestring3d = field(ShapeProperties_Linestring3d, flags=OPT)
     _linestring: t.Optional[CSRProperty] = None
 
     @property
@@ -87,7 +91,7 @@ class LineEntity(GeometryEntity):
 
 
 class PolygonEntity(GeometryEntity):
-    polygon = field(to_spec(ShapeProperties.Polygon), flags=INIT)
+    polygon = field(ShapeProperties_Polygon, flags=INIT)
 
     def get_geometry(self) -> ClosedPolygonGeometry:
         return ClosedPolygonGeometry(
@@ -99,16 +103,16 @@ class PolygonEntity(GeometryEntity):
 
 
 class LinkEntity(LineEntity):
-    from_node_id = field(to_spec(LineProperties.FromNodeId), flags=INIT)
-    to_node_id = field(to_spec(LineProperties.ToNodeId), flags=INIT)
+    from_node_id = field(LineProperties_FromNodeId, flags=INIT)
+    to_node_id = field(LineProperties_ToNodeId, flags=INIT)
 
 
 class VirtualLinkEntity(LinkEntity):
-    max_speed = field(to_spec(Transport_MaxSpeed), flags=OPT)
-    capacity = field(to_spec(Transport_Capacity_Hours), flags=OPT)
+    max_speed = field(Transport_MaxSpeed, flags=OPT)
+    capacity = field(Transport_Capacity_Hours, flags=OPT)
 
 
 class TransportSegmentEntity(LinkEntity):
-    layout = field(to_spec(Transport_Layout), flags=INIT)
-    max_speed = field(to_spec(Transport_MaxSpeed), flags=INIT)
-    capacity = field(to_spec(Transport_Capacity_Hours), flags=INIT)
+    layout = field(Transport_Layout, flags=INIT)
+    max_speed = field(Transport_MaxSpeed, flags=INIT)
+    capacity = field(Transport_Capacity_Hours, flags=INIT)

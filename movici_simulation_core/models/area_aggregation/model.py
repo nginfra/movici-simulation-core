@@ -1,20 +1,21 @@
 import typing as t
 
 import numpy as np
-from model_engine import TimeStamp
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
-from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
+
+from movici_geo_query.geo_query import GeoQuery, QueryResult
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import PUB, PropertySpec, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.entities import PolygonEntity, GeometryEntity, LineEntity
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
-from boost_geo_query.geo_query import GeoQuery, QueryResult
-
+from movici_simulation_core.simulation import Simulation
+from movici_simulation_core.utils.moment import Moment
 from .aggregators import functions, PropertyAggregator
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="area_aggregation"):
     """
     Implementation of the area aggregation model
     """
@@ -23,20 +24,22 @@ class Model(LegacyTrackedBaseModel):
     aggregators: t.List[PropertyAggregator]
     target_entity: t.Optional[t.Union[PolygonEntity, EntityGroup]]
     src_entities: t.List[t.Union[GeometryEntity, EntityGroup]]
-    previous_timestamp: t.Optional[TimeStamp]
+    previous_timestamp: t.Optional[Moment]
 
-    def __init__(self):
+    def __init__(self, config):
+        super().__init__(config)
         self.aggregators = []
         self.target_entity = None
         self.src_entities = []
         self.output_interval = None
         self.previous_timestamp = None
 
-    def setup(self, state: TrackedState, config: dict, **_):
+    def setup(self, state: TrackedState, schema, **_):
+        config = self.config
         self.check_input_lengths(config=config)
-        self.parse_config(state, config)
+        self.parse_config(state, config, schema)
 
-    def parse_config(self, state: TrackedState, config: t.Dict):
+    def parse_config(self, state: TrackedState, config: t.Dict, schema: AttributeSchema):
         self.output_interval = config.get("output_interval")
         self.add_aggregators(
             state=state,
@@ -46,6 +49,7 @@ class Model(LegacyTrackedBaseModel):
             funcs=config["aggregation_functions"],
             target_entity=config["target_entity_group"],
             target_props=config["target_properties"],
+            schema=schema,
         )
 
     def add_aggregators(
@@ -57,6 +61,7 @@ class Model(LegacyTrackedBaseModel):
         funcs,
         target_entity,
         target_props,
+        schema: AttributeSchema,
     ):
         target_ds_name, target_entity_name = target_entity[0]
         self.target_entity = state.register_entity_group(
@@ -74,7 +79,7 @@ class Model(LegacyTrackedBaseModel):
                 )
             )
 
-            target_spec = property_mapping[tuple(target_prop)]
+            target_spec = schema.get_spec(target_prop, DataType(float))
             self.ensure_uniform_property(target_ds_name, target_entity_name, target_spec)
             target_prop = state.register_property(
                 dataset_name=target_ds_name,
@@ -83,7 +88,7 @@ class Model(LegacyTrackedBaseModel):
                 flags=PUB,
             )
 
-            src_spec = property_mapping[tuple(src_prop)]
+            src_spec = schema.get_spec(src_prop, DataType(float))
             self.ensure_uniform_property(target_ds_name, target_entity_name, src_spec)
             src_prop = state.register_property(
                 dataset_name=src_ds_name, entity_name=src_entity_name, spec=src_spec, flags=INIT
@@ -166,26 +171,30 @@ class Model(LegacyTrackedBaseModel):
         rv[indices] = 1.0 / counts
         return rv
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         dt = 0
         if self.previous_timestamp:
-            dt = time_stamp.seconds - self.previous_timestamp.seconds
+            dt = moment.seconds - self.previous_timestamp.seconds
 
         for aggregator in self.aggregators:
             aggregator.calculate(dt)
 
-        self.previous_timestamp = time_stamp
+        self.previous_timestamp = moment
 
         if self.output_interval:
-            return self.get_next_timestamp(time_stamp)
+            return self.get_next_update_moment(moment)
 
-    def get_next_timestamp(self, time_stamp: TimeStamp) -> TimeStamp:
-        next_time = TimeStamp(seconds=(time_stamp.seconds + self.output_interval))
+    def get_next_update_moment(self, moment: Moment) -> Moment:
+        next_time = Moment.from_seconds(moment.seconds + self.output_interval)
         # prevent infinite looping
-        if next_time == time_stamp:
-            next_time = time_stamp + time_stamp.scale
+        if next_time == moment:
+            next_time = Moment(moment.timestamp + 1)
 
         return next_time
+
+    @classmethod
+    def install(cls, sim: Simulation):
+        sim.register_model_type("area_aggregation", cls)
 
 
 def ensure_function(func):

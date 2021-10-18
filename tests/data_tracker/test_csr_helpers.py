@@ -8,6 +8,9 @@ from movici_simulation_core.data_tracker.csr_helpers import (
     rows_contain,
     rows_intersect,
     generate_update,
+    row_wise_sum,
+    row_wise_max,
+    row_wise_min,
 )
 
 
@@ -146,6 +149,57 @@ def test_rows_contain(data, row_ptr, val, equal_nan, expected):
 )
 def test_rows_intersect(data, row_ptr, row, equal_nan, expected):
     assert np.array_equal(rows_intersect(data, row_ptr, row, equal_nan=equal_nan), expected)
+
+
+@pytest.mark.parametrize(
+    "data, row_ptr, expected",
+    [
+        (np.array([1, 2, 3, 4]), np.array([0, 2, 4, 4]), [3, 7, 0]),
+        (np.array([1.1, 2]), np.array([0, 2]), [3.1]),
+        (np.array([1.1, np.nan]), np.array([0, 1, 2]), [1.1, np.nan]),
+    ],
+)
+def test_row_wise_sum(data, row_ptr, expected):
+    np.testing.assert_almost_equal(row_wise_sum(data, row_ptr), expected)
+
+
+@pytest.mark.parametrize(
+    "data, row_ptr, empty_row, expected",
+    [
+        (np.array([1, 2, 3, 4]), np.array([0, 2, 4]), None, [2, 4]),
+        (np.array([2, 1.1]), np.array([0, 2]), None, [2.0]),
+        (np.array([1.1, np.nan]), np.array([0, 1, 2]), None, [1.1, np.nan]),
+        (np.array([1]), np.array([0, 0, 1]), 0, [0, 1]),
+    ],
+)
+def test_row_wise_max(data, row_ptr, empty_row, expected):
+    np.testing.assert_almost_equal(row_wise_max(data, row_ptr, empty_row), expected)
+
+
+@pytest.mark.parametrize(
+    "data, row_ptr, empty_row, expected",
+    [
+        (np.array([1, 2, 3, 4]), np.array([0, 2, 4]), None, [1, 3]),
+        (np.array([2, 1.1]), np.array([0, 2]), None, [1.1]),
+        (np.array([1.1, np.nan]), np.array([0, 1, 2]), None, [1.1, np.nan]),
+        (np.array([1]), np.array([0, 0, 1]), 0, [0, 1]),
+    ],
+)
+def test_row_wise_min(data, row_ptr, empty_row, expected):
+    np.testing.assert_almost_equal(row_wise_min(data, row_ptr, empty_row), expected)
+
+
+@pytest.mark.parametrize("func", [row_wise_max, row_wise_min])
+def test_row_wise_func_empty_row_raises(func):
+    with pytest.raises(ValueError):
+        func(np.array([]), np.array([0, 0]))
+
+
+@pytest.mark.parametrize("func", [row_wise_max, row_wise_min])
+def test_unsupported_dtype_raises(func):
+    with pytest.raises(TypeError) as e:
+        func(np.array(["a"]), np.array([0, 1]))
+    assert str(e.value) == "Only numeric arrays are supported"
 
 
 @pytest.mark.parametrize(

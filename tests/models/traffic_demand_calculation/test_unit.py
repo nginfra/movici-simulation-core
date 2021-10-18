@@ -1,28 +1,32 @@
+import logging
+
 import numpy as np
 import pytest
-import logging
-from model_engine.dataset_manager.dataset_handler import _convert_dataset_to_numpy_format
-from model_engine.utils.config import current_config
-from movici_simulation_core.base_models.config_helpers import property_mapping
+
+from movici_simulation_core.core.schema import DataType, PropertySpec
+from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.property import INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.traffic_demand_calculation.local_effect_calculators import (
     TransportPathingValueSum,
 )
+from movici_simulation_core.utils.settings import Settings
 
 
 @pytest.fixture
 def get_transport_value_sum_calculator(
-    road_network_name, road_network_for_traffic
+    road_network_name, road_network_for_traffic, global_schema
 ) -> TransportPathingValueSum:
     calc = TransportPathingValueSum()
     state = TrackedState(logging.getLogger("some_name"))
     elasticity = 2
-    prop_spec = property_mapping[("traffic_properties", "average_time")]
+    prop_spec = PropertySpec(
+        component="traffic_properties", name="average_time", data_type=DataType(float, (), False)
+    )
     prop = state.register_property(
         road_network_name, "road_segment_entities", prop_spec, flags=INIT
     )
-
+    data_format = EntityInitDataFormat(global_schema)
     calc.setup(
         state,
         prop,
@@ -30,10 +34,10 @@ def get_transport_value_sum_calculator(
         "road_segment_entities",
         "line",
         elasticity,
-        current_config(),
+        Settings(),
     )
 
-    upd = {road_network_name: _convert_dataset_to_numpy_format(road_network_for_traffic)["data"]}
+    upd = {road_network_name: data_format.load_json(road_network_for_traffic)["data"]}
     state.receive_update(upd)
 
     return calc

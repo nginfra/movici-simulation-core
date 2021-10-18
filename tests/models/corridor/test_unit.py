@@ -38,7 +38,7 @@ def initialize_transport_segments(transport_segments, entity_count):
 def model() -> Model:
     state = TrackedState()
 
-    corridor_model = Model()
+    corridor_model = Model({})
     corridor_model._corridor_entity = state.register_entity_group("ds", CorridorEntity(name="a"))
     corridor_model._transport_segments = state.register_entity_group(
         "ds", CorridorTransportSegmentEntity(name="b")

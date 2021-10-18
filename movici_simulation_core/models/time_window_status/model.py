@@ -1,129 +1,63 @@
-from typing import Union, List, Optional, Tuple
+import typing as t
 
-from model_engine import TimeStamp, Config, DataFetcher
-from model_engine.base_model.base import BaseModelVDataManager
-from model_engine.dataset_manager.dataset_handler import DataSet
-from model_engine.model_driver.data_handlers import DataHandlerType, DType
-
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import AttributeSchema, DataType
+from movici_simulation_core.data_tracker.property import PUB, OPT
+from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.exceptions import NotReady
+from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.settings import Settings
+from .dataset import TimeWindowEntity, TimeWindowStatusEntity
 from .time_window_status import TimeWindowStatus
-from .dataset import (
-    get_time_window_dataset_cls,
-    get_status_dataset_cls,
-)
 
 
-class Model(BaseModelVDataManager):
+class Model(TrackedModel, name="time_window_status"):
     """
     Implementation of the time window status model
     """
 
-    time_window_status: Union[TimeWindowStatus, None] = None
-    type = "time_window_status"
-    custom_variable_names = [
-        "time_window_dataset",
-        "status_datasets",
-        "time_window_begin",
-        "time_window_end",
-        "time_window_status",
-    ]
+    time_window_status: TimeWindowStatus
+    source_entity_group: TimeWindowEntity
+    target_entity_groups: t.List[TimeWindowStatusEntity]
 
-    def __init__(self, name: str, config: Config) -> None:
-        super().__init__(name, config)
-        self._window_and_status_same_dataset = False
-        self.parse_config(self.custom_variable_names)
-
-    def initialize_model(self, data_fetcher: DataFetcher) -> None:
-        window_dataset_name, _ = self.custom_variables.get("time_window_dataset")[0]
-        status_datasets: List[DataSet] = []
-        for ds_name, ds in self.datasets.items():
-            if ds_name != window_dataset_name:
-                status_datasets.append(ds)
-        time_window_dataset: DataSet = self.datasets.get(window_dataset_name)
-
-        if self._window_and_status_same_dataset:
-            status_datasets = [time_window_dataset]
+    def setup(self, state: TrackedState, schema: AttributeSchema, settings: Settings, **_):
+        source_dataset, source_entity_name = self.config["time_window_dataset"][0]
+        source_entity_group = state.register_entity_group(
+            source_dataset, TimeWindowEntity(source_entity_name)
+        )
+        source_entity_group.time_window_begin = state.register_property(
+            source_dataset,
+            source_entity_name,
+            schema.get_spec(self.config["time_window_begin"], DataType(str)),
+            flags=OPT,
+        )
+        source_entity_group.time_window_end = state.register_property(
+            source_dataset,
+            source_entity_name,
+            schema.get_spec(self.config["time_window_end"], DataType(str)),
+            flags=OPT,
+        )
+        targets = []
+        for target_dataset, target_entity_name in self.config["status_datasets"]:
+            target_entity_group = state.register_entity_group(
+                target_dataset, TimeWindowStatusEntity(target_entity_name)
+            )
+            target_entity_group.time_window_status = state.register_property(
+                target_dataset,
+                target_entity_name,
+                schema.get_spec(self.config["time_window_status"], DataType(bool)),
+                flags=PUB,
+            )
+            targets.append(target_entity_group)
 
         self.time_window_status = TimeWindowStatus(
-            time_window_dataset,
-            status_datasets,
-            self.logger,
-            self.config.REFERENCE_TIME,
-            self.config.TIME_SCALE,
+            source_entity_group, targets, settings.timeline_info
         )
 
-    def update_model(self, time_stamp: TimeStamp) -> Optional[TimeStamp]:
-        return self.time_window_status.update(time_stamp)
+    def initialize(self, state: TrackedState):
+        if not self.time_window_status.can_initialize():
+            raise NotReady()
+        self.time_window_status.initialize()
 
-    def parse_config(self, custom_variable_names: Optional[List[str]] = None) -> None:
-        """
-        Parse scenario config
-        Differs from base class in that we set the data_handler_types dataset_classes on the fly
-        """
-        self.data_handler_types = {}
-        self.managed_datasets = {}
-        self.netcdf_datasets = {}
-        scenario_config: Config = self.config
-        self.check_config_version(scenario_config)
-        self.set_custom_variables(custom_variable_names)
-
-        window_dataset_name, _ = self.custom_variables.get("time_window_dataset")[0]
-        status_dataset_names = self.custom_variables.get("status_datasets")
-        if len(status_dataset_names) == 1 and status_dataset_names[0][0] == window_dataset_name:
-            self._window_and_status_same_dataset = True
-
-        if not self._window_and_status_same_dataset:
-            self.parse_status_datasets(self.custom_variables.get("status_datasets"))
-        self.parse_time_window_dataset()
-        self.set_filters()
-
-    def parse_status_datasets(self, datasets: List[Tuple[str, str]]) -> None:
-        time_window_status_component, time_window_status_property = self.custom_variables.get(
-            "time_window_status"
-        )
-        for i, (dataset_name, entity_name) in enumerate(datasets):
-            self.managed_datasets[dataset_name] = dataset_name
-            self.data_handler_types[dataset_name] = DataHandlerType(
-                dataset_cls=get_status_dataset_cls(
-                    f"StatusDataset{i}",
-                    entity_name=entity_name,
-                    status_property=time_window_status_property,
-                    status_component=time_window_status_component,
-                )
-            )
-
-    def parse_time_window_dataset(self) -> None:
-        dataset_name, entity_name = self.custom_variables.get("time_window_dataset")[0]
-        time_window_begin_component, time_window_begin_property = self.custom_variables.get(
-            "time_window_begin"
-        )
-        time_window_end_component, time_window_end_property = self.custom_variables.get(
-            "time_window_end"
-        )
-        time_window_status_component, time_window_status_property = self.custom_variables.get(
-            "time_window_status"
-        )
-        self.managed_datasets[dataset_name] = dataset_name
-        self.data_handler_types[dataset_name] = DataHandlerType(
-            dataset_cls=get_time_window_dataset_cls(
-                "TimeWindowDataset",
-                entity_name=entity_name,
-                time_window_begin_property=time_window_begin_property,
-                time_window_end_property=time_window_end_property,
-                time_window_begin_component=time_window_begin_component,
-                time_window_end_component=time_window_end_component,
-                status_component=time_window_status_component,
-                status_property=time_window_status_property,
-            )
-        )
-
-    def read_managed_data(self, data_fetcher: DataFetcher) -> None:
-        """
-        Differs from base class in that we have to set the dataset_type into the dataset_cls
-        """
-        for dataset_name in self.managed_datasets.values():
-            data_dtype, data_dict = data_fetcher.get(dataset_name)
-            if data_dtype not in [DType.JSON, DType.MSGPACK]:
-                raise ValueError(f"`{dataset_name}` not of type {DType.JSON} / {DType.MSGPACK}")
-            dataset_cls = self.data_handler_types[dataset_name].dataset_cls
-            dataset_cls.dataset_type = data_dict["type"]
-            self.datasets[dataset_name] = dataset_cls(data_dict)
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        return self.time_window_status.update(moment)

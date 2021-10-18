@@ -2,22 +2,15 @@ from __future__ import annotations
 
 import abc
 import dataclasses
-import enum
 import itertools
 import logging
-import os
-import pathlib
 import typing as t
 from functools import singledispatchmethod
 
-import msgpack
-import zmq
-
 from movici_simulation_core.core import Model
-from movici_simulation_core.core.data_format import EntityInitDataFormat
-from movici_simulation_core.core.schema import PropertySpec
-from movici_simulation_core.core.settings import Settings
-from movici_simulation_core.exceptions import InvalidMessage
+from movici_simulation_core.exceptions import StreamDone
+from movici_simulation_core.model_connector.init_data import InitDataHandler
+from movici_simulation_core.networking.client import Sockets, RequestClient
 from movici_simulation_core.networking.messages import (
     NewTimeMessage,
     UpdateSeriesMessage,
@@ -26,19 +19,15 @@ from movici_simulation_core.networking.messages import (
     Message,
     QuitMessage,
     GetDataMessage,
-    ErrorMessage,
     UpdateMessage,
     PutDataMessage,
     AcknowledgeMessage,
     ClearDataMessage,
     DataMessage,
 )
-from movici_simulation_core.networking.stream import (
-    Stream,
-    get_message_socket,
-    MessageSocketAdapter,
-)
-from movici_simulation_core.types import Timestamp, UpdateData, Result
+from movici_simulation_core.networking.stream import Stream
+from movici_simulation_core.types import RawUpdateData, RawResult, DataMask
+from movici_simulation_core.utils.settings import Settings
 
 
 @dataclasses.dataclass
@@ -56,52 +45,52 @@ class ConnectorStreamHandler:
     @handle_message.register
     def _(self, msg: NewTimeMessage):
         self.connector.new_time(msg)
+        self.stream.send(AcknowledgeMessage())
 
     @handle_message.register
     def _(self, msg: UpdateMessage):
-        self.connector.update(msg)
+        result = self.connector.update(msg)
+        self.stream.send(result)
 
     @handle_message.register
     def _(self, msg: UpdateSeriesMessage):
-        self.connector.update_series(msg)
+        result = self.connector.update_series(msg)
+        self.stream.send(result)
 
     @handle_message.register
     def _(self, msg: QuitMessage):
-        self.connector.close()
+        self.connector.close(msg)
+        self.stream.send(AcknowledgeMessage())
+        raise StreamDone
 
     def initialize(self):
         resp = self.connector.initialize()
         self.stream.send(resp)
 
 
-class DataMask(t.TypedDict):
-    pub: dict
-    sub: dict
-
-
 @dataclasses.dataclass
 class ModelConnector:
-    model: ModelBaseAdapter
-    updates: UpdateDataHandler
+    model: ModelAdapterBase
+    updates: UpdateDataClient
     init_data: InitDataHandler
-    data_mask: t.Optional[DataMask] = None
+    data_mask: t.Optional[DataMask] = dataclasses.field(init=False, default=None)
+    name: t.Optional[str] = None
 
     def initialize(self) -> RegistrationMessage:
         self.data_mask = self.model.initialize(self.init_data)
         return RegistrationMessage(pub=self.data_mask["pub"], sub=self.data_mask["sub"])
 
     def new_time(self, message: NewTimeMessage):
-        self.model.new_time(message.timestamp)
+        self.model.new_time(message)
 
     def update(self, update: UpdateMessage) -> ResultMessage:
         data = self._get_update_data(update)
-        result_data, next_time = self.model.update(update.timestamp, data=data)
+        result_data, next_time = self.model.update(update, data=data)
         return self._process_result(result_data, next_time)
 
     def update_series(self, update: UpdateSeriesMessage) -> ResultMessage:
-        timestamp = update.updates[0].timestamp if update.updates else None
         data_series = (self._get_update_data(upd) for upd in update.updates)
-        result_data, next_time = self.model.update_series(timestamp, data=data_series)
+        result_data, next_time = self.model.update_series(update, data=data_series)
         return self._process_result(result_data, next_time)
 
     def _get_update_data(self, update: UpdateMessage) -> t.Optional[bytes]:
@@ -113,7 +102,7 @@ class ModelConnector:
 
     def _process_result(self, data: bytes, next_time: t.Optional[int]) -> ResultMessage:
         address, key = self._send_update_data(data)
-        return ResultMessage(key=key, address=address, next_time=next_time)
+        return ResultMessage(key=key, address=address, next_time=next_time, origin=self.name)
 
     def _send_update_data(
         self, result: t.Optional[bytes]
@@ -122,150 +111,72 @@ class ModelConnector:
             return None, None
         return self.updates.put(result)
 
-    def close(self):
-        self.model.close()
+    def close(self, message: QuitMessage):
+        self.model.close(message)
+        self.updates.close()
 
 
-@dataclasses.dataclass
-class UpdateDataHandler:
-    name: str
+class UpdateDataClient(RequestClient):
     home_address: str
-    get_socket: t.Callable[[int], MessageSocketAdapter] = get_message_socket
-    counter: t.Iterator = dataclasses.field(default=None, init=False)
+    counter: t.Iterator[str]
 
-    def __post_init__(self):
+    def __init__(self, name: str, home_address: str, sockets: Sockets = None):
+        super().__init__(name, sockets)
+        self.home_address = home_address
         self.reset_counter()
 
     def get(self, address: str, key: str, mask: t.Optional[dict]) -> bytes:
-        resp = self._request(address, GetDataMessage(key, mask), valid_messages=DataMessage)
+        resp = self.request(address, GetDataMessage(key, mask), valid_responses=DataMessage)
         return resp.data
 
     def put(self, data: bytes) -> t.Tuple[str, str]:
         key = next(self.counter)
-        self._request(
-            self.home_address, PutDataMessage(key, data), valid_messages=AcknowledgeMessage
+        self.request(
+            self.home_address, PutDataMessage(key, data), valid_responses=AcknowledgeMessage
         )
         return self.home_address, key
 
     def clear(self):
-        self._request(
-            self.home_address, ClearDataMessage(self.name), valid_messages=AcknowledgeMessage
+        self.request(
+            self.home_address, ClearDataMessage(self.name), valid_responses=AcknowledgeMessage
         )
         self.reset_counter()
 
     def reset_counter(self):
         self.counter = map(lambda num: f"{self.name}_{num}", itertools.count())
 
-    def _request(
-        self,
-        address,
-        msg,
-        *,
-        valid_messages: t.Union[t.Type[Message], t.Tuple[..., t.Type[Message]], None] = None,
-    ):
-        with self.get_socket(zmq.REQ) as socket:
-            socket.connect(address)
-            socket.send(msg)
-            resp = socket.recv()
-        self.raise_on_invalid_message(resp, valid_messages)
-        return resp
 
-    @staticmethod
-    def raise_on_invalid_message(
-        message,
-        valid_messages: t.Optional[t.Union[t.Type[Message], t.Tuple[..., t.Type[Message]]]] = None,
-    ):
-        if isinstance(message, ErrorMessage):
-            raise ValueError(message.error)
-        if valid_messages is not None and not isinstance(message, valid_messages):
-            raise InvalidMessage(message)
-
-
-class DatasetType(enum.Enum):
-    JSON = (".json",)
-    MSGPACK = (".msgpack",)
-    CSV = (".csv",)
-    OTHER = ()
-
-    @classmethod
-    def from_extension(cls, ext):
-        for member in cls.__members__.values():
-            if ext.lower() in member.value:
-                return member
-        return cls.OTHER
-
-
-class DatasetPath(pathlib.Path):
-    # subclassing pathlib.Path requires manually setting the flavour
-    _flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
-
-    def read_dict(self):
-        return NotImplementedError
-
-
-class _JsonPath(DatasetPath):
-    schema: t.Sequence[PropertySpec] = None
-
-    def read_dict(self):
-        return EntityInitDataFormat(self.schema).loads(self.read_text())
-
-
-def JsonPath(path, schema: t.Sequence[PropertySpec]):
-    obj = _JsonPath(path)
-    obj.schema = schema
-    return obj
-
-
-class MsgPackPath(DatasetPath):
-    def read_dict(self):
-        return msgpack.unpackb(self.read_bytes())
-
-
-@dataclasses.dataclass
-class InitDataHandler:
-    root: pathlib.Path
-    schema: t.Sequence[PropertySpec] = dataclasses.field(default_factory=list)
-
-    def get(self, name: str) -> t.Tuple[DatasetType, DatasetPath]:
-        file_walker = (
-            pathlib.Path(root) / pathlib.Path(file)
-            for root, dirs, files in os.walk(self.root)
-            for file in files
-        )
-        for path in file_walker:
-            if path.stem == name:
-                return self.get_type_and_path(path)
-
-    def get_type_and_path(self, path) -> t.Tuple[DatasetType, DatasetPath]:
-        dtype = DatasetType.from_extension(path.suffix)
-        if dtype == DatasetType.JSON:
-            return dtype, _JsonPath(path, schema=self.schema)
-        else:
-            return dtype, DatasetPath(path)
-
-
-@dataclasses.dataclass
-class ModelBaseAdapter(abc.ABC):
+class ModelAdapterBase(abc.ABC):
     model: Model
     settings: Settings
     logger: logging.Logger
+
+    def __init__(self, model: Model, settings: Settings, logger: logging.Logger):
+        self.model = model
+        self.settings = settings
+        self.logger = logger
 
     @abc.abstractmethod
     def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def new_time(self, new_time: Timestamp):
+    def new_time(self, message: NewTimeMessage):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update(self, timestamp: Timestamp, data: UpdateData) -> Result:
+    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update_series(self, timestamp: Timestamp, data: t.Iterable[t.Optional[bytes]]) -> Result:
+    def update_series(
+        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+    ) -> RawResult:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def close(self):
+    def close(self, message: QuitMessage):
         raise NotImplementedError
+
+    def set_schema(self, schema):
+        pass

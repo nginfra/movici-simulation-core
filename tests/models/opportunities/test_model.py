@@ -1,7 +1,7 @@
 import pytest
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
+
 from movici_simulation_core.models.opportunities.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
@@ -42,12 +42,13 @@ class TestOpportunity:
         time_scale,
         get_entity_update,
         water_network_name,
+        global_schema,
     ):
         scenario = {
             "updates": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1,
@@ -107,11 +108,12 @@ class TestOpportunity:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_missed_opportunity(
@@ -123,12 +125,13 @@ class TestOpportunity:
         time_scale,
         get_entity_update,
         water_network_name,
+        global_schema,
     ):
         scenario = {
             "updates": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1,
@@ -208,7 +211,7 @@ class TestOpportunity:
                 },
                 {
                     "time": 2,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 3,
@@ -222,11 +225,12 @@ class TestOpportunity:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )
 
     def test_total_length(
@@ -238,12 +242,13 @@ class TestOpportunity:
         time_scale,
         get_entity_update,
         water_network_name,
+        global_schema,
     ):
         scenario = {
             "updates": [
                 {
                     "time": 0,
-                    "data": {},
+                    "data": None,
                 },
                 {
                     "time": 1,
@@ -337,9 +342,10 @@ class TestOpportunity:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
             atol=0.01,
+            global_schema=global_schema,
         )

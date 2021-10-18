@@ -1,26 +1,25 @@
 import typing as t
+import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
 
 import numpy as np
 
+from movici_simulation_core.data_tracker.data_format import extract_dataset_data
 from .entity_group import EntityGroup
 from .index import Index
 from .property import (
-    SUB,
-    PUB,
-    INIT,
-    OPT,
     create_empty_property,
     PropertySpec,
     PropertyObject,
     PropertyOptions,
     create_empty_property_for_data,
+    SUBSCRIBE,
+    PUBLISH,
 )
-from ..types import NumpyPropertyData, ComponentData, EntityData, PropertyIdentifier, ValueType
-from ..core.data_format import extract_dataset_data
 from ..core.schema import propstring
+from ..types import NumpyPropertyData, ComponentData, EntityData, PropertyIdentifier, ValueType
 
 PropertyDict = t.Dict[PropertyIdentifier, PropertyObject]
 EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)
@@ -114,9 +113,6 @@ class TrackedState:
         """
         flag: one of SUB, INIT
         """
-        if not flag & (SUB | INIT):
-            raise ValueError("flag must be SUB or INIT")
-        flag |= INIT  # SUB also requires INIT properties to be available
         return all(
             prop.is_initialized() for _, _, _, prop in self.iter_properties() if flag & prop.flags
         )
@@ -142,27 +138,45 @@ class TrackedState:
         yield from self.properties.items()
 
     def reset_tracked_changes(self, flags):
-        if not flags & (SUB | PUB):
-            raise ValueError("flag must be SUB and/or PUB")
-        if flags & SUB:
-            flags |= INIT | OPT
+        if flags not in (SUBSCRIBE, PUBLISH):
+            raise ValueError("flag must be SUBSCRIBE and/or PUBLISH")
         reset_tracked_changes(self.all_properties(), flags)
 
     def get_pub_sub_filter(self):
-        pub_flags = PUB
-        sub_flags = SUB | INIT | OPT
+        warnings.warn(DeprecationWarning("use `get_data_mask` instead"))
         pub = defaultdict(dict)
         sub = defaultdict(dict)
         for dataset_name, entity_name, properties in self.iter_entities():
-            pub_filter = self._get_entity_filter(properties, flags=pub_flags)
+            pub_filter = self._get_entity_filter(properties, flags=PUBLISH)
             if pub_filter:
                 pub[dataset_name][entity_name] = pub_filter
 
-            sub_filter = self._get_entity_filter(properties, flags=sub_flags)
+            sub_filter = self._get_entity_filter(properties, flags=SUBSCRIBE)
             if sub_filter:
                 sub_filter["id"] = "*"
                 sub[dataset_name][entity_name] = sub_filter
         return {"pub": dict(pub), "sub": dict(sub)}
+
+    def get_data_mask(self):
+        pub = defaultdict(dict)
+        sub = defaultdict(dict)
+        for dataset_name, entity_name, properties in self.iter_entities():
+            pub_filter = self._get_entity_mask(properties, flags=PUBLISH)
+            if pub_filter:
+                pub[dataset_name][entity_name] = pub_filter
+
+            sub_filter = self._get_entity_mask(properties, flags=SUBSCRIBE)
+
+            if sub_filter:
+                sub[dataset_name][entity_name] = sub_filter
+        return {"pub": dict(pub), "sub": dict(sub)}
+
+    @staticmethod
+    def _get_entity_mask(properties: PropertyDict, flags: int):
+        return [
+            propstring(name, component)
+            for (component, name), _ in filter_props(properties, flags).items()
+        ]
 
     @staticmethod
     def _get_entity_filter(properties: PropertyDict, flags: int):
@@ -176,7 +190,7 @@ class TrackedState:
                 rv[name] = "*"
         return rv
 
-    def generate_update(self, flags=PUB):
+    def generate_update(self, flags=PUBLISH):
         rv = defaultdict(dict)
         for dataset_name, entity_type, properties in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
@@ -185,7 +199,7 @@ class TrackedState:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
-    def receive_update(self, update: t.Dict, process_undefined=False):
+    def receive_update(self, update: t.Dict, is_initial=False, process_undefined=False):
         general_section = update.pop("general", None) or {}  # {"general": None} should yield {}
 
         for dataset_name, dataset_data in extract_dataset_data(update):
@@ -198,7 +212,7 @@ class TrackedState:
                 handler = EntityDataHandler(
                     entity_group, index, self.track_unknown, process_undefined=process_undefined
                 )
-                handler.receive_update(entity_data)
+                handler.receive_update(entity_data, is_initial)
             self.process_general_section(dataset_name, general_section)
 
     def process_general_section(self, dataset_name, general_section):
@@ -274,21 +288,18 @@ class EntityDataHandler:
         self.track_unknown = track_unknown
         self.process_undefined = process_undefined
 
-    def receive_update(self, entity_data: EntityData):
+    def receive_update(self, entity_data: EntityData, is_initial=False):
         """Update the entity state with new external update data. The first time this is called,
         it will initialize the entity group, and set all the entity ids. Any future updates may not
         contain any additional entities
         """
         if "id" not in entity_data:
             raise ValueError("Invalid data, no ids provided")
-        if not self.is_initialized():
+        if is_initial:
             self.initialize(entity_data)
         else:
             self._process_new_ids(entity_data)
             self._apply_update(entity_data)
-
-    def is_initialized(self):
-        return len(self.index)
 
     def initialize(self, data: EntityData):
         self.index.set_ids(data["id"]["data"])
@@ -324,7 +335,7 @@ class EntityDataHandler:
         self.properties[identifier] = prop
         return prop
 
-    def generate_update(self, flags=PUB):
+    def generate_update(self, flags=PUBLISH):
         rv: t.Dict[str, dict] = defaultdict(dict)
         all_changes = self._get_all_changed_mask(flags)
 

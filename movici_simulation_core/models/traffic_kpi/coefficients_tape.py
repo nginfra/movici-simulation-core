@@ -51,9 +51,9 @@ class CoefficientsTape(CsvTape):
 
         for key, definitions in self.coefficient_names.items():
             for definition in definitions:
-                self.ensure_parameter(csv, definition.coefficient_name)
-                self.ensure_parameter(csv, definition.share_name)
-                self.ensure_parameter(csv, definition.load_capacity)
+                self.assert_parameter(definition.coefficient_name)
+                self.assert_parameter(definition.share_name)
+                self.assert_parameter(definition.load_capacity)
 
                 if key not in self.coefficients:
                     self.coefficients[key] = []

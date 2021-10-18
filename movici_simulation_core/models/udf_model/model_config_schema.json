@@ -1,0 +1,46 @@
+{
+  "name": "udf",
+  "schema": {
+    "properties": {
+      "additionalItems": false,
+      "functions": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "expression": {
+              "type": "string"
+            },
+            "output": {
+              "$ref": "#/definitions/attributeDef"
+            }
+          }
+        }
+      },
+      "inputs": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/definitions/attributeDef"
+        }
+      }
+    },
+    "definitions": {
+      "attributeDef": {
+        "type": "array",
+        "items": [
+          {
+            "type": ["string", "null"]
+          }
+        ]
+      }
+    }
+  },
+  "entity_categories": [
+    {
+      "name": "entity_group",
+      "required": true,
+      "require_one": true
+    }
+  ],
+  "strict_validation": true
+}

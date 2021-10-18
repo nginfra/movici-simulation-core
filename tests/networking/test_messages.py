@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from movici_simulation_core.networking.messages import (
@@ -15,6 +17,7 @@ from movici_simulation_core.networking.messages import (
     ClearDataMessage,
     DataMessage,
     ErrorMessage,
+    PathMessage,
 )
 
 
@@ -23,6 +26,7 @@ from movici_simulation_core.networking.messages import (
     [
         RegistrationMessage(pub={"a": None}, sub={"b": None}),
         UpdateMessage(1, "key", "address"),
+        UpdateMessage(1, "key", "address", origin="some_model"),
         UpdateMessage(1, None, None),
         UpdateSeriesMessage(updates=[UpdateMessage(1, None, None), UpdateMessage(1, "a", "b")]),
         ResultMessage("key", "address", next_time=1),
@@ -35,6 +39,8 @@ from movici_simulation_core.networking.messages import (
         ClearDataMessage("key"),
         DataMessage(b"some_data"),
         ErrorMessage(),
+        PathMessage(path=Path("/some/path")),
+        PathMessage(path=None),
     ],
 )
 def test_serialization_deserialization(message):
@@ -42,9 +48,9 @@ def test_serialization_deserialization(message):
 
 
 def test_dump_update_message():
-    assert dump_message(UpdateMessage(1, None, None)) == [
+    assert dump_message(UpdateMessage(1, None, None, origin="some_model")) == [
         b"UPDATE",
-        b'{"timestamp": 1, "key": null, "address": null}',
+        b'{"timestamp": 1, "key": null, "address": null, "origin": "some_model"}',
     ]
 
 
@@ -58,8 +64,8 @@ def test_dump_update_series():
         )
     ) == [
         b"UPDATE_SERIES",
-        b'{"timestamp": 1, "key": null, "address": null}',
-        b'{"timestamp": 2, "key": "some_key", "address": "some_address"}',
+        b'{"timestamp": 1, "key": null, "address": null, "origin": null}',
+        b'{"timestamp": 2, "key": "some_key", "address": "some_address", "origin": null}',
     ]
 
 
@@ -67,8 +73,8 @@ def test_load_update_series_message():
     assert load_message(
         *[
             b"UPDATE_SERIES",
-            b'{"timestamp": 1, "key": null, "address": null}',
-            b'{"timestamp": 2, "key": "some_key", "address": "some_address"}',
+            b'{"timestamp": 1, "key": null, "address": null, "origin": null}',
+            b'{"timestamp": 2, "key": "some_key", "address": "some_address", "origin": null}',
         ]
     ) == UpdateSeriesMessage(
         updates=[
@@ -89,10 +95,6 @@ def test_dump_update_data_message():
 def test_error_on_invalid_message_content():
     with pytest.raises(ValueError):
         ResultMessage(key=None, address="something")
-
-
-def test_update_series_message_calculates_timestamp_as_maximum_timestamp():
-    assert UpdateSeriesMessage([UpdateMessage(1), UpdateMessage(2)]).timestamp == 2
 
 
 def test_update_series_message_has_no_timestamp_when_emtpy():

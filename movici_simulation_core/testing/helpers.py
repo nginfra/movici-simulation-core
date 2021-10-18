@@ -1,4 +1,5 @@
 import typing as t
+from pathlib import Path
 
 import numpy as np
 
@@ -20,12 +21,16 @@ def get_property(name="prop", component=None, **kwargs):
     return PropertyField(**{**spec, **kwargs})
 
 
-def dataset_dicts_equal(a, b):
-    return not _dataset_dicts_equal_helper(a, b, {}, "")
+def compare_dataset_dicts(a, b, rtol=1e-5, atol=1e-8):
+    return _dataset_dicts_equal_helper(a, b, {}, rtol=rtol, atol=atol)
 
 
-def assert_dataset_dicts_equal(a, b):
-    errors = _dataset_dicts_equal_helper(a, b, {}, "")
+def dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
+    return not _dataset_dicts_equal_helper(a, b, {}, rtol=rtol, atol=atol)
+
+
+def assert_dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
+    errors = _dataset_dicts_equal_helper(a, b, {}, rtol=rtol, atol=atol)
     if errors:
         raise AssertionError("\n".join(f"{k or '/'}: {v}" for k, v in errors.items()))
 
@@ -35,12 +40,19 @@ def _dataset_dicts_equal_helper(
     b: t.Union[dict, np.ndarray, list],
     current_errors: t.Dict[str, str],
     current_path="",
+    rtol=1e-5,
+    atol=1e-8,
 ):
     if isinstance(a, dict) and isinstance(b, dict):
         if a.keys() == b.keys():
             for key in a.keys():
                 _dataset_dicts_equal_helper(
-                    a[key], b[key], current_errors, current_path=current_path + "/" + str(key)
+                    a[key],
+                    b[key],
+                    current_errors,
+                    current_path=current_path + "/" + str(key),
+                    rtol=rtol,
+                    atol=atol,
                 )
         else:
             missing_keys = a.keys() - b.keys()
@@ -54,16 +66,36 @@ def _dataset_dicts_equal_helper(
     elif isinstance(a, list) and isinstance(b, list):
         if len(a) != len(b):
             current_errors[current_path] = f"lists not of equal length {len(a)} vs {len(b)}"
-        elif len(a) and isinstance(a[0], (list, dict)) and isinstance(b[0], (list, dict)):
-            for idx, (i_a, i_b) in enumerate(zip(a, b)):
-                _dataset_dicts_equal_helper(i_a, i_b, current_errors, current_path + f"[{idx}]")
-        else:
-            if not np.array_equal(a, b):
-                current_errors[current_path] = "lists not equal"
+        for idx, (i_a, i_b) in enumerate(zip(a, b)):
+            _dataset_dicts_equal_helper(
+                i_a, i_b, current_errors, current_path + f"[{idx}]", rtol=rtol, atol=atol
+            )
+
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
+        if np.issubdtype(getattr(a, "dtype") or getattr(b, "dtype"), float) and not np.allclose(
+            a, b, rtol=rtol, atol=atol, equal_nan=True
+        ):
+            current_errors[current_path] = f"{a} not equal to {b}"
+
         if not np.array_equal(a, b):
-            current_errors[current_path] = "arrays not equal"
+            current_errors[current_path] = f"{a} not equal to {b}"
+    elif a is not None and b is not None and (isinstance(a, float) or isinstance(b, float)):
+        if not np.isclose(a, b, rtol=rtol, atol=atol):
+            current_errors[current_path] = f"{a} not close to {b}"
     else:
         if not a == b:
-            current_errors[current_path] = f"{a} and {b} differ"
+            current_errors[current_path] = f"{a} not equal to {b}"
+
     return current_errors
+
+
+def list_dir(path: Path):
+    return [file.name for file in path.iterdir()]
+
+
+def data_mask_compare(data_mask):
+    if isinstance(data_mask, dict):
+        return {k: data_mask_compare(v) for k, v in data_mask.items()}
+    elif isinstance(data_mask, list):
+        return set(data_mask)
+    return data_mask

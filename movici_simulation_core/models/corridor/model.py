@@ -3,15 +3,18 @@ from logging import Logger
 
 import numpy as np
 
-from model_engine import TimeStamp, Config, DataFetcher
 from movici_simulation_core.ae_wrapper.collections import GraphPath
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import model_util, ae_util
 from movici_simulation_core.models.common.entities import PointEntity, VirtualLinkEntity
+from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.settings import Settings
+from . import attributes
 from .entities import (
     CorridorEntity,
     CorridorTransportSegmentEntity,
@@ -19,15 +22,15 @@ from .entities import (
 )
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="corridor"):
     """
     Implementation of the corridor model
     """
 
     epsilon = 1e-12
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, model_config: dict) -> None:
+        super().__init__(model_config)
         self._corridor_entity: t.Optional[CorridorEntity] = None
         self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
         self._transport_nodes: t.Optional[PointEntity] = None
@@ -40,21 +43,19 @@ class Model(LegacyTrackedBaseModel):
         self.cargo_pcu = 2.0
         self.publish_corridor_geometry = False
 
-    def setup(
-        self, state: TrackedState, config: dict, scenario_config: Config, data_fetcher: DataFetcher
-    ) -> None:
+    def setup(self, state: TrackedState, settings: Settings, **_) -> None:
         self._logger = state.logger
-        self.cargo_pcu = config.get("cargo_pcu", self.cargo_pcu)
-        self.publish_corridor_geometry = config.get(
+        self.cargo_pcu = self.config.get("cargo_pcu", self.cargo_pcu)
+        self.publish_corridor_geometry = self.config.get(
             "publish_corridor_geometry", self.publish_corridor_geometry
         )
 
-        self._project = ProjectWrapper(scenario_config.TEMP_DIR)
+        self._project = ProjectWrapper(settings.temp_dir)
 
         self._corridor_entity = state.register_entity_group(
-            dataset_name=config["corridors"][0], entity=CorridorEntity
+            dataset_name=self.config["corridors"][0], entity=CorridorEntity
         )
-        self._register_transport_entities(state, config)
+        self._register_transport_entities(state, self.config)
 
     def _register_transport_entities(self, state: TrackedState, config: dict) -> None:
         transport_type = model_util.get_transport_type(config)
@@ -95,7 +96,7 @@ class Model(LegacyTrackedBaseModel):
             : len(self._transport_segments.index.ids)
         ]
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp) -> t.Optional[TimeStamp]:
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         if self._transport_segments.travel_time.has_changes():
             self._project.update_column(
                 "congested_time", self._transport_segments.travel_time.array
@@ -283,3 +284,7 @@ class Model(LegacyTrackedBaseModel):
         if self._project:
             self._project.close()
             self._project = None
+
+    @classmethod
+    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+        return attributes_from_dict(vars(attributes))

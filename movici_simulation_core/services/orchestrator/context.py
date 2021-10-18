@@ -8,8 +8,6 @@ from functools import singledispatchmethod
 from itertools import product
 
 from movici_simulation_core.exceptions import SimulationExit
-from movici_simulation_core.utils.data_mask import masks_overlap
-from .stopwatch import Stopwatch, ReportingStopwatch
 from movici_simulation_core.networking.messages import (
     Message,
     RegistrationMessage,
@@ -18,7 +16,11 @@ from movici_simulation_core.networking.messages import (
     NewTimeMessage,
     AcknowledgeMessage,
     UpdateSeriesMessage,
+    ErrorMessage,
 )
+from movici_simulation_core.utils.data_mask import masks_overlap
+from .interconnectivity import format_matrix
+from .stopwatch import Stopwatch, ReportingStopwatch
 
 
 @dataclass
@@ -27,8 +29,6 @@ class Context:
     timeline: TimelineController
     global_timer: Stopwatch = field(default=None)
     phase_timer: Stopwatch = field(default=None)
-    quitting: bool = False
-    failed: t.List[str] = field(default_factory=list)
     logger: logging.Logger = field(default_factory=logging.getLogger)
 
     def __post_init__(self):
@@ -39,11 +39,24 @@ class Context:
             on_reset=self.log_elapsed_phase_time
         )
 
+    @property
+    def failed(self):
+        return self.models.failed
+
+    def log_new_phase(self, phase: str):
+        self.logger.info(f"Entering {phase}")
+
+    def log_new_time(self):
+        self.logger.info(f"New time: {self.models.next_time}")
+
     def log_elapsed_phase_time(self, seconds: float):
-        self.logger.info(f"Previous phase finished in {seconds} seconds")
+        self.logger.info(f"Phase finished in {seconds:.1f} seconds")
 
     def log_elapsed_global_time(self, seconds: float):
-        self.logger.info(f"Total elapsed time: {seconds}")
+        self.logger.info(f"Total elapsed time: {seconds:.1f}")
+
+    def log_interconnectivity_matrix(self):
+        self.logger.info("Model interconnectivity matrix:\n" + format_matrix(self.models.values()))
 
     def finalize(self):
         self.phase_timer.reset()
@@ -63,6 +76,23 @@ class Context:
                 "Simulation unexpectedly ended due to a failure of models "
                 + ", ".join(f"'{model}'" for model in self.failed)
             )
+
+
+class Queue:
+    def __init__(self, iterable: t.Iterable[Message] = ()):
+        self._inner: t.Deque[Message] = deque(iterable)
+
+    def __len__(self):
+        return self._inner.__len__()
+
+    def __getitem__(self, item):
+        return self._inner.__getitem__(item)
+
+    def add(self, message):
+        self._inner.append(message)
+
+    def pop(self):
+        return self._inner.popleft()
 
 
 class MultipleUpdatesAwareQueue:
@@ -123,18 +153,22 @@ class ConnectedModel:
 
     waiting: bool = field(default=False, init=False)
     next_time: t.Optional[int] = field(default=None, init=False)
+    failed: bool = field(default=False, init=False)
 
     def __post_init__(self):
         self.timer = self.timer or ReportingStopwatch(
-            on_stop=lambda s: self.logger.info(f"Model '{self.name}' returned in {s} seconds "),
+            on_stop=lambda s: self.logger.info(
+                f"Model '{self.name}' returned in {s:.1f} seconds "
+            ),
             on_reset=lambda s: self.logger.info(
-                f"Total time spent in in model '{self.name}': {s} seconds "
+                f"Total time spent in in model '{self.name}': {s:.1f} seconds "
             ),
         )
 
     def queue_message(self, message):
         """add a message to the message queue"""
-        self.message_queue.add(message)
+        if not self.failed:
+            self.message_queue.add(message)
 
     def send_pending_message(
         self,
@@ -151,14 +185,19 @@ class ConnectedModel:
         self.message_queue = MultipleUpdatesAwareQueue()
 
     def handle_message(
-        self, event: Message, valid_events: t.Optional[t.Tuple[t.Type[Message]]] = None
+        self,
+        event: Message,
+        valid_events: t.Optional[t.Tuple[t.Type[Message]]] = None,
+        raise_on_invalid=True,
     ):
         if self.timer.running:
             self.timer.stop()
         self.waiting = False
 
         if valid_events is not None and not isinstance(event, valid_events):
-            raise SimulationExit
+            if raise_on_invalid:
+                raise SimulationExit
+            return
 
         self._handle(event)
 
@@ -190,14 +229,25 @@ class ConnectedModel:
                         timestamp=self.timeline.current_time,
                         key=event.key,
                         address=event.address,
+                        origin=event.origin,
                     )
                 )
+
+    @_handle.register
+    def _(self, event: ErrorMessage) -> None:
+        """When a model reports an error, set it to failed"""
+        self.failed = True
+        self.clear_queue()
 
 
 class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
     @property
     def waiting(self):
         return any(model.waiting for model in self.values())
+
+    @property
+    def waiting_for(self):
+        return [model for model in self.values() if model.waiting]
 
     @property
     def messages_pending(self):
@@ -209,6 +259,10 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
             return min(model.next_time for model in self.values() if model.next_time is not None)
         except ValueError:  # no model has a next_time
             return None
+
+    @property
+    def failed(self):
+        return [model.name for model in self.values() if model.failed]
 
     def queue_all(self, message: Message):
         """add a message to the queue of all models"""
@@ -242,6 +296,10 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
         """clear the queue for all models"""
         for model in self.values():
             model.clear_queue()
+
+    def start_model_timers(self):
+        for model in self.values():
+            model.timer.start()
 
     def reset_model_timers(self):
         for model in self.values():

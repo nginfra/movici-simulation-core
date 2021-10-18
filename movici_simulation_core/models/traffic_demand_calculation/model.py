@@ -2,20 +2,22 @@ import typing as t
 
 import numpy as np
 import pandas as pd
-from model_engine import TimeStamp, DataFetcher, Config
-from model_engine.model_driver.data_handlers import DType
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
-from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
+
+from movici_geo_query.geo_query import GeoQuery, QueryResult
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import (
     PUB,
-    SUB,
     UniformProperty,
     CSRProperty,
     INIT,
+    PUBLISH,
+    SUBSCRIBE,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common.csv_tape import CsvTape
 from movici_simulation_core.models.common.entities import (
     GeometryEntity,
@@ -26,13 +28,21 @@ from movici_simulation_core.models.traffic_demand_calculation.local_effect_calcu
     TransportPathingValueSum,
     NearestValue,
 )
-from boost_geo_query.geo_query import GeoQuery, QueryResult
-
-# seconds, entity_id, multiplier
-Investment = t.Tuple[int, int, float]
+from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.settings import Settings
 
 
-class Model(LegacyTrackedBaseModel):
+class Investment(t.NamedTuple):
+    seconds: int
+    entity_id: int
+    multiplier: float
+
+
+DEFAULT_DATA_TYPE = DataType(float, (), False)
+DEFAULT_CSR_DATA_TYPE = DataType(float, (), True)
+
+
+class Model(TrackedModel, name="traffic_demand_calculation"):
     """
     Implementation of the demand estimation model.
     Reads a csv with scenario parameters.
@@ -42,6 +52,7 @@ class Model(LegacyTrackedBaseModel):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
+    auto_reset = PUBLISH
     _demand_property: CSRProperty
     _demand_entity: GeometryEntity
     _total_inward_demand_property: t.Optional[UniformProperty] = None
@@ -53,7 +64,7 @@ class Model(LegacyTrackedBaseModel):
 
     _local_factor_calculators: t.List[LocalEffectsCalculator]
 
-    _investments: t.List
+    _investments: t.List[Investment]
     _investment_idx: int
 
     _new_timesteps_first_update: bool = True
@@ -68,29 +79,30 @@ class Model(LegacyTrackedBaseModel):
     def setup(
         self,
         state: TrackedState,
-        config: dict,
-        scenario_config: Config,
-        data_fetcher: DataFetcher,
+        settings: Settings,
+        schema: AttributeSchema,
+        init_data_handler: InitDataHandler,
         **_,
     ):
-        self.set_demand_entity(config, state)
+        self.set_demand_entity(state, schema)
 
-        self.setup_local_calculators(config=config, scenario_config=scenario_config, state=state)
-        self.set_global_parameters(config, data_fetcher)
+        self.setup_local_calculators(settings=settings, state=state, schema=schema)
+        self.set_global_parameters(init_data_handler)
 
-        self._investments = config.get("investment_multipliers", [])
+        self._investments = [Investment(*i) for i in self.config.get("investment_multipliers", [])]
         self._investment_idx = 0
 
         # We remove auto reset for SUB because
         #  we are subbing and pubbing same properties.
         self.auto_reset = PUB
 
-    def set_demand_entity(self, config, state):
+    def set_demand_entity(self, state: TrackedState, schema: AttributeSchema):
+        config = self.config
         ds_name, demand_entity = config["demand_entity"][0]
         self._demand_entity = state.register_entity_group(
             dataset_name=ds_name, entity=PointEntity(name=demand_entity)
         )
-        prop_spec = property_mapping[tuple(config["demand_property"])]
+        prop_spec = schema.get_spec(config["demand_property"], DEFAULT_CSR_DATA_TYPE)
         self._demand_property = state.register_property(
             dataset_name=ds_name,
             entity_name=demand_entity,
@@ -102,7 +114,7 @@ class Model(LegacyTrackedBaseModel):
 
         sum_prop_config_in = config.get("total_inward_demand_property")
         if sum_prop_config_in:
-            sum_prop_spec = property_mapping[tuple(sum_prop_config_in)]
+            sum_prop_spec = schema.get_spec(sum_prop_config_in, DEFAULT_DATA_TYPE)
             self._total_inward_demand_property = state.register_property(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
@@ -112,7 +124,7 @@ class Model(LegacyTrackedBaseModel):
 
         sum_prop_config_out = config.get("total_outward_demand_property")
         if sum_prop_config_out:
-            sum_prop_spec = property_mapping[tuple(sum_prop_config_out)]
+            sum_prop_spec = schema.get_spec(sum_prop_config_out, DEFAULT_DATA_TYPE)
             self._total_outward_demand_property = state.register_property(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
@@ -120,7 +132,8 @@ class Model(LegacyTrackedBaseModel):
                 flags=PUB,
             )
 
-    def set_global_parameters(self, config, data_fetcher):
+    def set_global_parameters(self, data_handler: InitDataHandler):
+        config = self.config
         self._current_parameters = {}
         self._global_parameters = config.get("global_parameters", [])
         self._global_elasticities = config.get("global_elasticities", [])
@@ -132,9 +145,12 @@ class Model(LegacyTrackedBaseModel):
             raise RuntimeError(
                 "global_parameters should have the same length of global_elasticities"
             )
-        self._initialize_scenario_parameters_tape(data_fetcher, config["scenario_parameters"][0])
+        self._initialize_scenario_parameters_tape(data_handler, config["scenario_parameters"][0])
 
-    def setup_local_calculators(self, config: dict, scenario_config: Config, state: TrackedState):
+    def setup_local_calculators(
+        self, settings: Settings, state: TrackedState, schema: AttributeSchema
+    ):
+        config = self.config
         self._local_factor_calculators = []
 
         if "local_entity_groups" not in config or "local_properties" not in config:
@@ -155,7 +171,7 @@ class Model(LegacyTrackedBaseModel):
             config["local_elasticities"],
         ):
             ds_name, entity_name = entity
-            prop_spec = property_mapping[tuple(prop)]
+            prop_spec = schema.get_spec(prop, DEFAULT_DATA_TYPE)
 
             registered_prop = state.register_property(
                 dataset_name=ds_name,
@@ -173,18 +189,18 @@ class Model(LegacyTrackedBaseModel):
                 entity_name=entity_name,
                 geom=geom,
                 elasticity=elasticity,
-                scenario_config=scenario_config,
+                settings=settings,
             )
             self._local_factor_calculators.append(calculator)
 
-    def _initialize_scenario_parameters_tape(self, data_fetcher: DataFetcher, name: str):
-        dtype, data = data_fetcher.get(name)
-        if dtype != DType.CSV:
+    def _initialize_scenario_parameters_tape(self, data_handler: InitDataHandler, name: str):
+        dtype, data = data_handler.get(name)
+        if dtype != FileType.CSV:
             raise RuntimeError("Given non-csv as CSV input")
         csv: pd.DataFrame = pd.read_csv(data)
         self._scenario_parameters_tape = CsvTape()
         self._scenario_parameters_tape.initialize(csv)
-        self._scenario_parameters_tape.proceed_to(TimeStamp(0))
+        self._scenario_parameters_tape.proceed_to(Moment(0))
 
     def initialize(self, state: TrackedState):
         for param in self._global_parameters:
@@ -210,34 +226,35 @@ class Model(LegacyTrackedBaseModel):
                 mappings[entity] = mapping
             calculator.initialize(mapping.indices)
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp):
-        self._proceed_tapes(time_stamp)
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+
+        self._proceed_tapes(moment)
 
         if not self._any_changes() and not self._new_timesteps_first_update:
-            state.reset_tracked_changes(SUB)
+            state.reset_tracked_changes(SUBSCRIBE)
             self._new_timesteps_first_update = False
-            return TimeStamp(time=time_stamp.time + 1)
+            return Moment(moment.timestamp + 1)
 
-        multiplication_factor = self._compute_multiplication_factor(time_stamp)
+        multiplication_factor = self._compute_multiplication_factor(moment)
 
         demand_matrix = self._get_matrix(self._demand_property.csr)
         demand_matrix *= multiplication_factor
 
-        # Reset our PUB | INIT which is also SUB underwater before we publish results
-        state.reset_tracked_changes(SUB)
+        # Reset our PUB | INIT which is also SUBSCRIBE underwater before we publish results
+        state.reset_tracked_changes(SUBSCRIBE)
 
         self._set_demands(demand_matrix, self._demand_property.csr)
         self._update_demand_sum(demand_matrix)
 
         self._new_timesteps_first_update = False
 
-        return self._get_next_timestep_from_tapes()
+        return self._get_next_moment_from_tapes()
 
-    def _proceed_tapes(self, time_stamp: TimeStamp):
+    def _proceed_tapes(self, moment: Moment):
         if self._scenario_parameters_tape is not None:
-            self._scenario_parameters_tape.proceed_to(time_stamp)
+            self._scenario_parameters_tape.proceed_to(moment)
 
-    def _compute_multiplication_factor(self, time_stamp: TimeStamp):
+    def _compute_multiplication_factor(self, moment: Moment):
         global_factor = 1.0
         if (
             self._scenario_parameters_tape is not None
@@ -249,15 +266,15 @@ class Model(LegacyTrackedBaseModel):
             shape=(matrix_dimension, matrix_dimension), fill_value=global_factor, dtype=np.float64
         )
         self._add_local_property_effects_to_factor(multiplication_factor)
-        self._add_investments_to_factor(time_stamp, multiplication_factor)
+        self._add_investments_to_factor(moment, multiplication_factor)
         return multiplication_factor
 
-    def _get_next_timestep_from_tapes(self) -> t.Optional[TimeStamp]:
+    def _get_next_moment_from_tapes(self) -> t.Optional[Moment]:
         if self._scenario_parameters_tape is None:
             return None
         return self._scenario_parameters_tape.get_next_timestamp()
 
-    def new_time(self, state: TrackedState, time_stamp: TimeStamp):
+    def new_time(self, state: TrackedState, moment: Moment):
         self._new_timesteps_first_update = True
 
     def _any_changes(self) -> False:
@@ -277,13 +294,13 @@ class Model(LegacyTrackedBaseModel):
                 multiplication_factor, force_update=self._new_timesteps_first_update
             )
 
-    def _add_investments_to_factor(self, timestamp: TimeStamp, multiplication_factor: np.ndarray):
+    def _add_investments_to_factor(self, moment: Moment, multiplication_factor: np.ndarray):
         while not self._investment_idx >= len(self._investments):
             next_investment = self._investments[self._investment_idx]
-            if next_investment[0] <= timestamp.seconds:
-                idx = self._demand_entity.index[[next_investment[1]]]
-                multiplication_factor[idx] *= next_investment[2]
-                multiplication_factor[:, idx] *= next_investment[2]
+            if next_investment.seconds <= moment.seconds:
+                idx = self._demand_entity.index[[next_investment.entity_id]]
+                multiplication_factor[idx] *= next_investment.multiplier
+                multiplication_factor[:, idx] *= next_investment.multiplier
             else:
                 break
             self._investment_idx += 1

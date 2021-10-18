@@ -5,13 +5,13 @@ import typing as t
 import zmq
 
 from .messages import Message, ModelMessage, load_message, dump_message, MultipartMessage
-from ..exceptions import InvalidMessage
+from ..exceptions import InvalidMessage, StreamDone
 
 T = t.TypeVar("T")
 
 
 @dataclasses.dataclass
-class SocketAdapter(t.Generic[T]):
+class BaseSocket(t.Generic[T]):
     socket: zmq.Socket
 
     def send(self, payload: T):
@@ -21,21 +21,23 @@ class SocketAdapter(t.Generic[T]):
         raise NotImplementedError
 
 
-def get_message_socket(socket_type: int, context=None, **kwargs):
+def get_message_socket(socket_type: int, context=None, ident: t.Optional[bytes] = None, **kwargs):
     try:
-        adapter: t.Callable[[zmq.Socket], MessageSocketAdapter] = {
-            zmq.REQ: MessageReqSocketAdapter,
-            zmq.ROUTER: MessageRouterSocketAdapter,
-            zmq.DEALER: MessageDealerSocketAdapter,
+        adapter: t.Callable[[zmq.Socket], MessageSocket] = {
+            zmq.REQ: MessageReqSocket,
+            zmq.ROUTER: MessageRouterSocket,
+            zmq.DEALER: MessageDealerSocket,
         }[socket_type]
     except KeyError:
         raise TypeError("Only support REQ, ROUTER and DEALER sockets") from None
     context = context or zmq.Context.instance()
     socket = context.socket(socket_type, **kwargs)
+    if ident is not None:
+        socket.set(zmq.IDENTITY, ident)
     return adapter(socket)
 
 
-class MessageSocketAdapter(SocketAdapter[T]):
+class MessageSocket(BaseSocket[T]):
     def send(self, payload: T):
         """serialize identifier and message into MultipartMessage"""
         return self.socket.send_multipart(self._serialize(payload))
@@ -71,8 +73,11 @@ class MessageSocketAdapter(SocketAdapter[T]):
     def bind(self, addr: str):
         return self.socket.bind(addr)
 
+    def close(self, linger: int = -1):
+        return self.socket.close(linger)
 
-class MessageRouterSocketAdapter(MessageSocketAdapter[ModelMessage]):
+
+class MessageRouterSocket(MessageSocket[ModelMessage]):
     def make_send(self, identifier: str):
         """create a send function that a can be used to send a message to a specific client
         connected to the ZMQ Router
@@ -92,7 +97,7 @@ class MessageRouterSocketAdapter(MessageSocketAdapter[ModelMessage]):
         return ident.decode(), self.parse_bytes(content)
 
 
-class MessageReqSocketAdapter(MessageSocketAdapter[Message]):
+class MessageReqSocket(MessageSocket[Message]):
     def _serialize(self, payload: Message) -> MultipartMessage:
         return dump_message(payload)
 
@@ -100,7 +105,7 @@ class MessageReqSocketAdapter(MessageSocketAdapter[Message]):
         return self.parse_bytes(payload)
 
 
-class MessageDealerSocketAdapter(MessageSocketAdapter[Message]):
+class MessageDealerSocket(MessageSocket[Message]):
     def _serialize(self, payload: Message) -> MultipartMessage:
         return [b"", *dump_message(payload)]
 
@@ -110,7 +115,7 @@ class MessageDealerSocketAdapter(MessageSocketAdapter[Message]):
 
 
 class Stream(t.Generic[T]):
-    def __init__(self, socket: SocketAdapter[T], logger: logging.Logger = None):
+    def __init__(self, socket: BaseSocket[T], logger: logging.Logger = None):
         self.handler = None
         self.socket = socket
         self.logger = logger
@@ -118,19 +123,32 @@ class Stream(t.Generic[T]):
     def set_handler(self, handler: t.Callable[[T], None]) -> None:
         self.handler = handler
 
+    def _log(self, level: t.Union[int, str], msg, **kwargs):
+        if self.logger is not None:
+            if isinstance(level, int):
+                self.logger.log(level, msg, **kwargs)
+            else:
+                getattr(self.logger, level.lower())(msg, **kwargs)
+
     def run(self):
         while True:
             try:
                 received = self.recv()
+                self._log("debug", f"Stream received: {received}")
             except InvalidMessage as e:
-                if self.logger is not None:
-                    self.logger.warning(str(e))
+                self._log("warning", str(e))
                 continue
             if self.handler:
-                self.handler(received)
+                try:
+                    self.handler(received)
+                except StreamDone:
+                    return
 
     def recv(self) -> T:
         return self.socket.recv()
 
     def send(self, payload: T):
-        return self.socket.send(payload)
+        self._log("debug", f"Sending: {payload}")
+        rv = self.socket.send(payload)
+        self._log("debug", f"Sent: {payload}")
+        return rv

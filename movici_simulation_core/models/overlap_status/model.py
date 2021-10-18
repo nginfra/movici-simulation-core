@@ -1,29 +1,33 @@
 import typing as t
 
-from model_engine import TimeStamp
-from movici_simulation_core.legacy_base_model.base import LegacyTrackedBaseModel
-from movici_simulation_core.legacy_base_model.config_helpers import property_mapping
-from movici_simulation_core.data_tracker.property import PropertySpec, SUB
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.schema import (
+    AttributeSchema,
+    DataType,
+    attributes_from_dict,
+)
+from movici_simulation_core.data_tracker.property import PropertySpec, OPT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
-from .dataset import OverlapEntity
+from movici_simulation_core.utils.moment import Moment
+from . import dataset as ds
 from .overlap_status import OverlapStatus
 from ..common.model_util import try_get_geometry_type
 
 
-class Model(LegacyTrackedBaseModel):
+class Model(TrackedModel, name="overlap_status"):
     """
     Implementation of the overlap status model
     """
 
     overlap_status: t.Union[OverlapStatus, None] = None
 
-    def setup(self, state: TrackedState, config: dict, **_):
-        self.check_input_lengths(config)
-        self.parse_config(state, config)
+    def setup(self, state: TrackedState, schema, **_):
+        self.check_input_lengths()
+        self.parse_config(state, schema)
 
-    @staticmethod
-    def check_input_lengths(config):
+    def check_input_lengths(self):
+        config = self.config
         keys = [
             "to_entity_groups",
             "to_geometry_types",
@@ -38,16 +42,14 @@ class Model(LegacyTrackedBaseModel):
             raise NotReady
         self.overlap_status.resolve_connections()
 
-    def update(self, state: TrackedState, time_stamp: TimeStamp):
+    def update(self, state: TrackedState, moment: Moment):
         self.overlap_status.update()
 
-    def parse_config(
-        self,
-        state: TrackedState,
-        config: dict,
-    ) -> None:
-
-        overlap_entity = state.register_entity_group(config["output_dataset"][0], OverlapEntity())
+    def parse_config(self, state: TrackedState, schema: AttributeSchema) -> None:
+        config = self.config
+        overlap_entity = state.register_entity_group(
+            config["output_dataset"][0], ds.OverlapEntity()
+        )
         to_entities = []
         to_check_properties = []
         for (ds_name, entity_name), prop, geometry in zip(
@@ -63,11 +65,11 @@ class Model(LegacyTrackedBaseModel):
             if prop is None or prop == (None, None):
                 to_check_properties.append(None)
             else:
-                to_spec = property_mapping[tuple(prop)]
+                to_spec = schema.get_spec(prop, default_data_type=DataType(bool))
                 self.ensure_uniform_property(ds_name, entity_name, to_spec)
                 to_check_properties.append(
                     state.register_property(
-                        dataset_name=ds_name, entity_name=entity_name, spec=to_spec, flags=SUB
+                        dataset_name=ds_name, entity_name=entity_name, spec=to_spec, flags=OPT
                     )
                 )
 
@@ -80,10 +82,10 @@ class Model(LegacyTrackedBaseModel):
         if from_prop is None:
             from_check_property = None
         else:
-            from_spec = property_mapping[tuple(from_prop)]
+            from_spec = schema.get_spec(from_prop, default_data_type=DataType(bool))
             self.ensure_uniform_property(from_ds_name, from_entity_name, from_spec)
             from_check_property = state.register_property(
-                dataset_name=from_ds_name, entity_name=from_entity_name, spec=from_spec, flags=SUB
+                dataset_name=from_ds_name, entity_name=from_entity_name, spec=from_spec, flags=OPT
             )
 
         self.overlap_status = OverlapStatus(
@@ -106,3 +108,7 @@ class Model(LegacyTrackedBaseModel):
             )
         if len(spec.data_type.unit_shape):
             raise ValueError(f"property {ds}/{entity}/{spec.full_name} should be one-dimensional")
+
+    @classmethod
+    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+        return attributes_from_dict(vars(ds))

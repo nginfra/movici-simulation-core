@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.data_format import (
+from movici_simulation_core.data_tracker.data_format import (
     create_array,
     EntityInitDataFormat,
     parse_list,
@@ -16,6 +16,7 @@ from movici_simulation_core.core.schema import (
     DataType,
     UNDEFINED,
     DEFAULT_ROWPTR_KEY,
+    AttributeSchema,
 )
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 
@@ -58,9 +59,9 @@ def array_init_data():
 
 
 def test_init_data_format(list_init_data, array_init_data):
-    schema = [PropertySpec("bla", DataType(float, (), False))]
+    schema = AttributeSchema([PropertySpec("bla", DataType(float, (), False))])
     fmt = EntityInitDataFormat(schema)
-    result = fmt.loads(list_init_data)
+    result = fmt.load_bytes(list_init_data)
     assert_dataset_dicts_equal(result, array_init_data)
 
 
@@ -176,7 +177,7 @@ def test_infer_datatype(data, expected):
 
 
 def test_dump_dataset(list_init_data, array_init_data):
-    fmt = EntityInitDataFormat([])
+    fmt = EntityInitDataFormat()
     result = fmt.dumps(array_init_data)
     assert json.loads(result) == json.loads(list_init_data)
 

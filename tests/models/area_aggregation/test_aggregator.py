@@ -14,7 +14,7 @@ from movici_simulation_core.models.area_aggregation.aggregators import (
     func_min,
     func_max,
 )
-from boost_geo_query.geo_query import QueryResult
+from movici_geo_query.geo_query import QueryResult
 
 
 @pytest.fixture

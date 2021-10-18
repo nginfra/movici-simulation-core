@@ -1,175 +1,109 @@
-import math
-import time
+import typing as t
 from collections import deque
-from dataclasses import dataclass
-from logging import Logger
-from typing import Optional, List, Dict, cast, Deque, Union
 
 import numpy as np
 
-from model_engine import TimeStamp
-from model_engine.dataset_manager.data_entity import DataEntityHandler
-from model_engine.dataset_manager.dataset_handler import DataSet
-from model_engine.dataset_manager.exception import IncompleteInitializationData
-from model_engine.dataset_manager.numba_functions import csr_item
+from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.models.time_window_status.dataset import (
     TimeWindowEntity,
     TimeWindowStatusEntity,
+    Connection,
+    ScheduleEvent,
 )
-
-
-@dataclass
-class Connection:
-    connected_entities: Union[TimeWindowStatusEntity, TimeWindowEntity]
-    connected_indices: List[int]
-
-
-@dataclass
-class ScheduleEvent:
-    time_step: int
-    is_start: bool
-    connection_index: int
+from movici_simulation_core.utils.moment import TimelineInfo, Moment
 
 
 class TimeWindowStatus:
     def __init__(
         self,
-        time_window_dataset: DataSet,
-        status_datasets: List[DataSet],
-        logger: Logger,
-        time_reference: float,
-        time_scale: float,
-    ) -> None:
-        self._logger = logger
-        self._time_window_dataset = time_window_dataset
-        self._status_datasets: Dict[str, DataSet] = {}
-        for ds in status_datasets:
-            self._status_datasets[ds.name] = ds
+        source_entities: TimeWindowEntity,
+        target_entities: t.List[TimeWindowStatusEntity],
+        timeline_info: TimelineInfo,
+    ):
+        self.source_entities = source_entities
+        self.target_entities = target_entities
+        self.timeline_info = timeline_info
+        self.schedule: t.Optional[TimeSeries[ScheduleEvent]] = None
 
-        self._time_reference = time_reference
-        self._time_scale = time_scale
+    @property
+    def self_targets(self):
+        return [e for e in self.target_entities if self.source_entities.is_similiar(e)]
 
-        self._connections: List[Connection] = []
-        self._full_schedule: List[ScheduleEvent] = []
-        self._schedule: Deque[ScheduleEvent] = deque()
-        self._entity_event_counts: Dict[
-            Union[TimeWindowStatusEntity, TimeWindowEntity], np.ndarray
-        ] = {}
+    @property
+    def foreign_targets(self):
+        return [e for e in self.target_entities if not self.source_entities.is_similiar(e)]
 
-        self._first_update = True
-
-        for ds in status_datasets + [time_window_dataset]:
-            if not ds.is_complete_for_init():
-                raise IncompleteInitializationData()
-            ds.reset_track_update()
-
-        self._window_in_same_entities = (
-            len(status_datasets) == 1 and status_datasets[0] == time_window_dataset
+    def can_initialize(self):
+        # can only initialize if there are no foreign target entity groups, or if the source
+        # connection data is available
+        return not self.foreign_targets or (
+            self.source_entities.connection_to_dataset.is_initialized()
+            and self.source_entities.connection_to_references.is_initialized()
         )
 
-        self._resolve_connections()
-        self._resolve_schedule()
+    def initialize(self):
+        self.source_entities.initialize_connections()
+        for target in self.target_entities:
+            target.initialize_event_count()
 
-    def update(self, time_stamp: TimeStamp) -> Optional[TimeStamp]:
-        if self._first_update:
-            self._initialize_statuses()
-            self._first_update = False
+        self.resolve_connections()
+        self.resolve_schedule()
+        self.update_statuses()
 
-        if not self._schedule:
+    def update(self, moment: Moment):
+        if not self.schedule:
             return
 
-        while self._schedule and time_stamp.time >= self._schedule[0].time_step:
-            self._update_statuses(self._schedule.popleft())
+        for _, event in self.schedule.pop_until(moment.timestamp):
+            self.process_event(event)
+        self.update_statuses()
 
-        self._publish_statuses()
+        return Moment(self.schedule.next_time) if self.schedule.next_time is not None else None
 
-        if not self._schedule:
-            return
+    def resolve_connections(self):
+        for entity in self.self_targets:
+            for i in range(len(entity)):
+                self.source_entities.add_connection(i, Connection(entity, [i]))
 
-        return TimeStamp(time=self._schedule[0].time_step)
+        for idx, dataset in enumerate(self.source_entities.connection_to_dataset.array):
+            to_references = self.source_entities.connection_to_references.csr.slice([idx]).data
+            for target in self.foreign_targets:
+                connected_indices = np.flatnonzero(np.in1d(target.reference.array, to_references))
+                if len(connected_indices) > 0:
+                    self.source_entities.add_connection(idx, Connection(target, connected_indices))
 
-    def _resolve_connections(self):
-        if self._connections:
-            return
-
-        connection_entities = cast(TimeWindowEntity, self._get_entity(self._time_window_dataset))
-
-        if self._window_in_same_entities:
-            for index, _ in enumerate(connection_entities.ids):
-                self._connections.append(Connection(connection_entities, [index]))
-            return
-
-        for i, dataset_name in enumerate(connection_entities.connection_to_dataset.data):
-            references = csr_item(
-                connection_entities.connection_to_references.data,
-                connection_entities.connection_to_references.indptr,
-                i,
-            )
-            connected_entities = cast(
-                TimeWindowStatusEntity, self._get_entity(self._status_datasets[dataset_name])
-            )
-            connected_indices = np.where(np.in1d(connected_entities.reference.data, references))[0]
-            self._connections.append(Connection(connected_entities, connected_indices))
-
-    def _resolve_schedule(self):
-        time_window_entities = cast(TimeWindowEntity, self._get_entity(self._time_window_dataset))
-        for i, (time_window_begin, time_window_end) in enumerate(
-            zip(
-                time_window_entities.time_window_begin.data,
-                time_window_entities.time_window_end.data,
-            )
+    def resolve_schedule(self):
+        if (
+            self.source_entities.time_window_begin is None
+            or self.source_entities.time_window_end is None
         ):
-            if (
-                time_window_begin == time_window_entities.time_window_begin.undefined
-                or time_window_end == time_window_entities.time_window_end.undefined
-            ):
-                continue
+            self.schedule = deque()
+            return
 
-            begin = self._calculate_time_step(time_window_begin)
-            end = self._calculate_time_step(time_window_end)
-
-            self._full_schedule.append(ScheduleEvent(begin, True, i))
-            self._full_schedule.append(ScheduleEvent(end, False, i))
-
-        self._full_schedule = list(sorted(self._full_schedule, key=lambda x: x.time_step))
-        for elem in self._full_schedule:
-            self._schedule.append(elem)
-
-    def _initialize_statuses(self):
-        all_connection_entities = set()
-        for connection in self._connections:
-            if connection.connected_entities not in self._entity_event_counts:
-                self._entity_event_counts[connection.connected_entities] = np.zeros_like(
-                    connection.connected_entities.ids, dtype=np.int16
-                )
-            all_connection_entities.add(connection.connected_entities)
-        for connected_entities in all_connection_entities:
-            time_window_status = connected_entities.time_window_status.data
-            connected_entities.time_window_status = np.zeros(len(time_window_status), dtype=bool)
-
-    def _update_statuses(self, event: ScheduleEvent):
-        connection = self._connections[event.connection_index]
-        event_counts = self._entity_event_counts[connection.connected_entities]
-        event_counts[connection.connected_indices] += 1 if event.is_start else -1
-
-    def _publish_statuses(self):
-        for entities, maintenance_counts in self._entity_event_counts.items():
-            time_window_status = maintenance_counts > 0
-            entities.time_window_status = time_window_status
-
-    def _calculate_time_step(self, date: str):
-        return math.ceil(
-            (self._date_string_to_timestamp(date) - self._time_reference) / self._time_scale
+        unsorted_events: t.List[t.Tuple[int, ScheduleEvent]] = []
+        defined = ~(
+            self.source_entities.time_window_begin.is_undefined()
+            | self.source_entities.time_window_end.is_undefined()
         )
+        for i, time_window_begin, time_window_end in zip(
+            np.arange(len(self.source_entities))[defined],
+            self.source_entities.time_window_begin.array[defined],
+            self.source_entities.time_window_end.array[defined],
+        ):
 
-    @staticmethod
-    def _date_string_to_timestamp(date: str) -> float:
-        # Another slower way would be:
-        # return (datetime.strptime(date, "%Y-%m-%d").timestamp()
+            begin = self.timeline_info.string_to_timestamp(time_window_begin)
+            end = self.timeline_info.string_to_timestamp(time_window_end)
 
-        year, month, day = date.split("-")
-        return time.mktime((int(year), int(month), int(day), 0, 0, 0, 0, 0, 0))
+            unsorted_events.append((begin, ScheduleEvent(True, i)))
+            unsorted_events.append((end, ScheduleEvent(False, i)))
+        self.schedule = TimeSeries(sorted(unsorted_events, key=lambda e: e[0]))
 
-    @staticmethod
-    def _get_entity(dataset: DataSet) -> DataEntityHandler:
-        return list(dataset.data.values())[0]
+    def process_event(self, event: ScheduleEvent):
+        connections = self.source_entities.connections[event.source_index]
+        for connection in connections:
+            target = connection.connected_entities
+            target.event_count[connection.connected_indices] += 1 if event.is_start else -1
+
+    def update_statuses(self):
+        for entity_group in self.target_entities:
+            entity_group.update_status()

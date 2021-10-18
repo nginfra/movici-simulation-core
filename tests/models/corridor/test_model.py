@@ -1,8 +1,7 @@
 import pytest
 
-from model_engine import testing
-from movici_simulation_core.legacy_base_model.base import model_factory
 from movici_simulation_core.models.corridor.model import Model
+from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
@@ -42,6 +41,7 @@ class TestCorridor:
         model_name,
         road_network_name,
         corridor_dataset_name,
+        global_schema,
     ):
         scenario = {
             "updates": [
@@ -76,7 +76,7 @@ class TestCorridor:
                         }
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -112,7 +112,7 @@ class TestCorridor:
                                 "id": [1, 2],
                                 "transport.passenger_vehicle_flow": [5, 15],
                                 "transport.cargo_vehicle_flow": [2, 3],
-                                "traffic_properties": {"average_time": [23, 16.1429]},
+                                "traffic_properties": {"average_time": [23.0, 16.1429]},
                                 "transport.passenger_car_unit": [9, 21],
                                 "transport.co2_emission.hours": [64.1304, 116.3044],
                                 "transport.nox_emission.hours": [153.2609, 257.6087],
@@ -139,7 +139,7 @@ class TestCorridor:
                         }
                     },
                 },
-                {"time": 1, "data": {}},
+                {"time": 1, "data": None},
                 {
                     "time": 2,
                     "data": {
@@ -163,9 +163,10 @@ class TestCorridor:
         }
 
         scenario.update(config)
-        testing.ModelDriver.run_scenario(
-            model=model_factory(Model),
-            name=model_name,
+        ModelTester.run_scenario(
+            model=Model,
+            model_name=model_name,
             scenario=scenario,
-            atol=0.01,
+            rtol=0.01,
+            global_schema=global_schema,
         )

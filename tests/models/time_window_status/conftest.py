@@ -1,6 +1,21 @@
 import pytest
 
+from movici_simulation_core.core.schema import AttributeSchema, DataType, PropertySpec
 from ..conftest import get_dataset
+
+
+@pytest.fixture
+def global_schema(global_schema: AttributeSchema):
+    global_schema.add_attributes(
+        [
+            PropertySpec("begin", DataType(str)),
+            PropertySpec("end", DataType(str)),
+            PropertySpec("job_begin", DataType(str)),
+            PropertySpec("job_end", DataType(str)),
+            PropertySpec("status", DataType(bool)),
+        ]
+    )
+    return global_schema
 
 
 @pytest.fixture
@@ -10,18 +25,14 @@ def maintenance_agenda(maintenance_agenda_dataset_name):
         "name": maintenance_agenda_dataset_name,
         "type": "maintenance_agenda",
         "display_name": "Test Maintenance Agenda",
-        "general": {"enum": {"maintenance_job_entities": {"type": ["replacement"]}}},
         "data": {
             "maintenance_job_entities": {
-                "maintenance.window_begin.date": ["2020-01-01", "2020-02-01"],
-                "maintenance.window_end.date": ["2020-01-10", "2020-02-10"],
-                "maintenance.job_begin.date": ["2020-03-01", "2020-04-01"],
-                "maintenance.job_end.date": ["2020-04-01", "2020-04-02"],
-                "maintenance.job_duration.days": [200, 40],
+                "begin": ["2020-01-01", "2020-02-01"],
+                "end": ["2020-01-10", "2020-02-10"],
+                "job_begin": ["2020-03-01", "2020-04-01"],
+                "job_end": ["2020-04-01", "2020-04-02"],
                 "id": [0, 1],
-                "type": [0, 0],
                 "connection_properties": {
-                    "to_dataset_type": ["road_network", "mv_network"],
                     "to_dataset": ["a_road_network", "an_mv_network"],
                     "to_references": [["100"], ["500", "501"]],
                 },

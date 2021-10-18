@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from movici_simulation_core.core.schema import UNDEFINED
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.property import UniformProperty, DataType
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -8,7 +9,7 @@ from movici_simulation_core.models.common.entities import PointEntity, LineEntit
 from movici_simulation_core.models.overlap_status.overlap_status import (
     OverlapStatus,
 )
-from boost_geo_query.geometry import PointGeometry, LinestringGeometry, ClosedPolygonGeometry
+from movici_geo_query.geometry import PointGeometry, LinestringGeometry, ClosedPolygonGeometry
 
 
 def get_point_entity(point_collection: PointGeometry) -> PointEntity:
@@ -172,7 +173,6 @@ def uniform_property(array, dtype):
         "to_entities_active_status",
         "connection_from_indices",
         "connection_to_indices",
-        "undefined_value",
         "expected_status",
     ],
     [
@@ -181,7 +181,6 @@ def uniform_property(array, dtype):
             uniform_property([1, 0, 0, 0], dtype=bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            -128,
             uniform_property([1, 1, 0], dtype=bool),
         ),
         (
@@ -189,7 +188,6 @@ def uniform_property(array, dtype):
             uniform_property([1, 0, 0, 0], dtype=bool),
             np.array([], dtype=np.int64),
             np.array([], dtype=np.int64),
-            -128,
             uniform_property([], dtype=bool),
         ),
         (
@@ -197,7 +195,6 @@ def uniform_property(array, dtype):
             uniform_property([1, 0, 0, 0], dtype=bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            -128,
             uniform_property([1, 1, 0], dtype=bool),
         ),
         (
@@ -205,7 +202,6 @@ def uniform_property(array, dtype):
             None,
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            -128,
             uniform_property([1, 0, 0], dtype=bool),
         ),
         (
@@ -213,7 +209,6 @@ def uniform_property(array, dtype):
             None,
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            -128,
             uniform_property([1, 1, 1], dtype=bool),
         ),
         (
@@ -221,16 +216,14 @@ def uniform_property(array, dtype):
             None,
             np.array([], dtype=np.int64),
             np.array([], dtype=np.int64),
-            -128,
             uniform_property([], dtype=bool),
         ),
         (
-            uniform_property([-128, 1, 1, 1], dtype=bool),
-            uniform_property([1, -128, 0, 0], dtype=bool),
+            uniform_property([UNDEFINED[bool], 1, 1, 1], dtype=bool),
+            uniform_property([1, UNDEFINED[bool], 0, 0], dtype=bool),
             np.array([0, 0, 1, 1]),
             np.array([0, 1, 0, 1]),
-            -128,
-            uniform_property([-128, -128, 1, -128], dtype=bool),
+            uniform_property([UNDEFINED[bool], UNDEFINED[bool], 1, UNDEFINED[bool]], dtype=bool),
         ),
     ],
     ids=[
@@ -248,7 +241,6 @@ def test_can_calculate_overlap_status(
     to_entities_active_status,
     connection_from_indices,
     connection_to_indices,
-    undefined_value,
     expected_status,
 ):
     output = OverlapStatus._calculate_active_overlaps(
@@ -256,10 +248,10 @@ def test_can_calculate_overlap_status(
         connection_from_indices=connection_from_indices,
         to_active_status=to_entities_active_status,
         connection_to_indices=connection_to_indices,
-        undefined_value=undefined_value,
+        undefined_value=UNDEFINED[bool],
     )
 
-    assert np.all(output == expected_status)
+    np.testing.assert_array_equal(output, expected_status)
 
 
 @pytest.mark.parametrize(

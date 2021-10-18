@@ -35,10 +35,10 @@ def test_format_matrix():
     subscribed_models = create_subscribed_models({"a": ["c"], "b": ["a", "c"], "c": []})
     assert format_matrix(subscribed_models, title="title") == "\n".join(
         [
-            "title|0|1|2|",
-            "a    | |X| |",
-            "b    | | | |",
-            "c    |X|X| |",
+            "title  |0|1|2|",
+            "0|a    | |X| |",
+            "1|b    | | | |",
+            "2|c    |X|X| |",
         ]
     )
 
@@ -48,17 +48,17 @@ def test_format_len_10_matrix():
 
     assert format_matrix(subscribed_models, title="title") == "\n".join(
         [
-            "title  |0|1|2|3|4|5|6|7|8|9|",
-            "model_0| | | | | | | | | | |",
-            "model_1|X| | | | | | | | | |",
-            "model_2| |X| | | | | | | | |",
-            "model_3| | |X| | | | | | | |",
-            "model_4| | | |X| | | | | | |",
-            "model_5| | | | |X| | | | | |",
-            "model_6| | | | | |X| | | | |",
-            "model_7| | | | | | |X| | | |",
-            "model_8| | | | | | | |X| | |",
-            "model_9| | | | | | | | |X| |",
+            "title    |0|1|2|3|4|5|6|7|8|9|",
+            "0|model_0| | | | | | | | | | |",
+            "1|model_1|X| | | | | | | | | |",
+            "2|model_2| |X| | | | | | | | |",
+            "3|model_3| | |X| | | | | | | |",
+            "4|model_4| | | |X| | | | | | |",
+            "5|model_5| | | | |X| | | | | |",
+            "6|model_6| | | | | |X| | | | |",
+            "7|model_7| | | | | | |X| | | |",
+            "8|model_8| | | | | | | |X| | |",
+            "9|model_9| | | | | | | | |X| |",
         ]
     )
 
@@ -68,17 +68,17 @@ def test_format_large_matrix():
 
     assert format_matrix(subscribed_models, title="title") == "\n".join(
         [
-            "title   | 0| 1| 2| 3| 4| 5| 6| 7| 8| 9|10|",
-            "model_0 |  |  |  |  |  |  |  |  |  |  |  |",
-            "model_1 | X|  |  |  |  |  |  |  |  |  |  |",
-            "model_2 |  | X|  |  |  |  |  |  |  |  |  |",
-            "model_3 |  |  | X|  |  |  |  |  |  |  |  |",
-            "model_4 |  |  |  | X|  |  |  |  |  |  |  |",
-            "model_5 |  |  |  |  | X|  |  |  |  |  |  |",
-            "model_6 |  |  |  |  |  | X|  |  |  |  |  |",
-            "model_7 |  |  |  |  |  |  | X|  |  |  |  |",
-            "model_8 |  |  |  |  |  |  |  | X|  |  |  |",
-            "model_9 |  |  |  |  |  |  |  |  | X|  |  |",
-            "model_10|  |  |  |  |  |  |  |  |  | X|  |",
+            "title      | 0| 1| 2| 3| 4| 5| 6| 7| 8| 9|10|",
+            " 0|model_0 |  |  |  |  |  |  |  |  |  |  |  |",
+            " 1|model_1 | X|  |  |  |  |  |  |  |  |  |  |",
+            " 2|model_2 |  | X|  |  |  |  |  |  |  |  |  |",
+            " 3|model_3 |  |  | X|  |  |  |  |  |  |  |  |",
+            " 4|model_4 |  |  |  | X|  |  |  |  |  |  |  |",
+            " 5|model_5 |  |  |  |  | X|  |  |  |  |  |  |",
+            " 6|model_6 |  |  |  |  |  | X|  |  |  |  |  |",
+            " 7|model_7 |  |  |  |  |  |  | X|  |  |  |  |",
+            " 8|model_8 |  |  |  |  |  |  |  | X|  |  |  |",
+            " 9|model_9 |  |  |  |  |  |  |  |  | X|  |  |",
+            "10|model_10|  |  |  |  |  |  |  |  |  | X|  |",
         ]
     )

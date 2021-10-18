@@ -1,6 +1,4 @@
-model-engine>=1.3.5
-movici-sdk>=0.4.2
 shapely>=1.7.1
 aequilibrae==0.7.2+movici.4
 pyproj>=3.0.1
-boost-geo-query>=1.0.1
+movici-geo-query>=1.0.1

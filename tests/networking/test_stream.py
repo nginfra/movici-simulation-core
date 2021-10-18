@@ -12,11 +12,11 @@ from movici_simulation_core.networking.messages import (
     QuitMessage,
 )
 from movici_simulation_core.networking.stream import (
-    MessageRouterSocketAdapter,
+    MessageRouterSocket,
     Stream,
-    MessageDealerSocketAdapter,
+    MessageDealerSocket,
     get_message_socket,
-    MessageReqSocketAdapter,
+    MessageReqSocket,
 )
 from movici_simulation_core.exceptions import InvalidMessage
 
@@ -46,7 +46,7 @@ def set_messages(model, socket, serialize_message):
 
 @pytest.fixture
 def req_socket_adapter(socket):
-    return MessageReqSocketAdapter(socket)
+    return MessageReqSocket(socket)
 
 
 @pytest.fixture
@@ -78,7 +78,7 @@ class TestRouterSocket:
 
     @pytest.fixture
     def socket_adapter(self, socket):
-        return MessageRouterSocketAdapter(socket)
+        return MessageRouterSocket(socket)
 
     def test_send(self, socket_adapter, model):
         socket_adapter.send((model, AcknowledgeMessage()))
@@ -113,7 +113,7 @@ class TestDealerSocket:
 
     @pytest.fixture
     def socket_adapter(self, socket):
-        return MessageDealerSocketAdapter(socket)
+        return MessageDealerSocket(socket)
 
     def test_receive_on_dealer_socket_adapter(self, set_messages, socket_adapter):
         set_messages([AcknowledgeMessage()])
@@ -134,7 +134,7 @@ class TestReqSocket:
 
     @pytest.fixture
     def socket_adapter(self, socket):
-        return MessageReqSocketAdapter(socket)
+        return MessageReqSocket(socket)
 
     def test_receive_on_req_socket_adapter(self, set_messages, socket_adapter):
         set_messages([AcknowledgeMessage()])
@@ -168,15 +168,20 @@ def test_stream_logs_on_invalid_message(model, req_socket_adapter, set_messages)
 @pytest.mark.parametrize(
     "socket_type, cls",
     [
-        (zmq.REQ, MessageReqSocketAdapter),
-        (zmq.ROUTER, MessageRouterSocketAdapter),
-        (zmq.DEALER, MessageDealerSocketAdapter),
+        (zmq.REQ, MessageReqSocket),
+        (zmq.ROUTER, MessageRouterSocket),
+        (zmq.DEALER, MessageDealerSocket),
     ],
 )
 def test_get_message_socket(socket_type, cls):
     socket = get_message_socket(socket_type)
     assert type(socket) is cls
     assert socket.socket.type == socket_type
+
+
+def test_get_message_socket_identity():
+    socket = get_message_socket(zmq.REQ, ident=b"some_ident")
+    assert socket.socket.get(zmq.IDENTITY) == b"some_ident"
 
 
 def test_context_manager(req_socket_adapter, socket):
