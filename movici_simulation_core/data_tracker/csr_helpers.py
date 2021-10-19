@@ -66,7 +66,7 @@ def row_wise_max(data, row_ptr, empty_row=None):
     return impl
 
 
-@generated_jit(cache=True)
+@generated_jit
 def row_wise_min(data, row_ptr, empty_row=None):
     assert_numeric_array(data)
 

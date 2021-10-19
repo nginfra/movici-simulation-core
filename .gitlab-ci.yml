@@ -41,6 +41,11 @@ test-numba:
   only:
     refs:
       - master
+  variables:
+    KUBERNETES_MEMORY_REQUEST: 1536Mi
+    KUBERNETES_MEMORY_LIMIT: 1536Mi
+    KUBERNETES_CPU_REQUEST: 1000m
+    KUBERNETES_CPU_LIMIT: 2000m
   script:
     - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - pip install -e .[models] --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
