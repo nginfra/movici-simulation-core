@@ -39,9 +39,14 @@ def model(model_config):
     return DataCollector(model_config)
 
 
-def test_picks_strategy(model):
+@pytest.fixture
+def logger():
+    return Mock()
+
+
+def test_picks_strategy(model, logger):
     settings = Settings(storage="disk")
-    assert isinstance(model.get_storage_strategy(settings), LocalStorageStrategy)
+    assert isinstance(model.get_storage_strategy(settings, logger), LocalStorageStrategy)
 
 
 def test_local_storage_strategy_stores_update(tmp_path):
@@ -59,9 +64,9 @@ MISSING = object()
     "sub_mask, expected",
     [(None, None), ("*", None), (MISSING, None), ({"dataset": None}, {"dataset": None})],
 )
-def test_get_datamask(model, sub_mask, expected, settings):
+def test_get_datamask(model, logger, settings, sub_mask, expected):
     model.config = {"gather_filter": sub_mask} if sub_mask is not MISSING else {}
-    assert model.initialize(settings) == {"pub": {}, "sub": expected}
+    assert model.initialize(settings, logger) == {"pub": {}, "sub": expected}
 
 
 def run_updates(model, updates: t.Sequence[t.Tuple[int, UpdateData]]):

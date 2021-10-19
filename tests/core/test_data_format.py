@@ -182,6 +182,12 @@ def test_dump_dataset(list_init_data, array_init_data):
     assert json.loads(result) == json.loads(list_init_data)
 
 
+def test_can_dump_entity_group(list_init_data, array_init_data):
+    fmt = EntityInitDataFormat()
+    result = fmt.dumps(array_init_data["data"])
+    assert json.loads(result) == json.loads(list_init_data)["data"]
+
+
 @pytest.mark.parametrize(
     "data",
     [

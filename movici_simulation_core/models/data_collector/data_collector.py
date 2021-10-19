@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
+
 import itertools
 import shutil
 import typing as t
@@ -45,8 +47,8 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.iteration = itertools.count()
         self.current_time = None
 
-    def initialize(self, settings: Settings, **_) -> DataMask:
-        self.strategy = self.get_storage_strategy(settings)
+    def initialize(self, settings: Settings, logger: logging.Logger, **_) -> DataMask:
+        self.strategy = self.get_storage_strategy(settings, logger)
         self.strategy.initialize()
         self.state = TrackedState(track_unknown=SUB)
         self.aggregate = self.config.get("aggregate_updates", self.aggregate)
@@ -97,12 +99,12 @@ class DataCollector(SimpleModel, name="data_collector"):
         fut = self.pool.submit(fn, *args, **kwargs)
         self.futures.add(fut)
 
-    def get_storage_strategy(self, settings: Settings):
+    def get_storage_strategy(self, settings: Settings, logger: logging.Logger):
         try:
             strategy_cls = self.strategies[settings.storage]
         except KeyError:
             raise ValueError(f"Unsupported storage method '{settings.storage}'")
-        return strategy_cls.choose(self.config, settings)
+        return strategy_cls.choose(model_config=self.config, settings=settings, logger=logger)
 
     @classmethod
     def add_storage_strategy(cls, name, strategy: t.Type[StorageStrategy]):
@@ -111,7 +113,9 @@ class DataCollector(SimpleModel, name="data_collector"):
 
 class StorageStrategy:
     @classmethod
-    def choose(cls, config: dict, settings: Settings) -> StorageStrategy:
+    def choose(
+        cls, model_config: dict, settings: Settings, logger: logging.Logger
+    ) -> StorageStrategy:
         raise NotImplementedError
 
     def initialize(self):
@@ -130,8 +134,8 @@ class LocalStorageStrategy(StorageStrategy):
         self.filename_template = filename_template
 
     @classmethod
-    def choose(cls, config: dict, settings: Settings) -> StorageStrategy:
-        directory = config.get("storage_dir") or settings.storage_dir
+    def choose(cls, model_config: dict, settings: Settings, **_) -> StorageStrategy:
+        directory = model_config.get("storage_dir") or settings.storage_dir
         if directory is None:
             raise ValueError("No storage_dir set")
         return LocalStorageStrategy(directory)
