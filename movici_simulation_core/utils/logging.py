@@ -7,8 +7,8 @@ import warnings
 from movici_simulation_core.utils.settings import Settings
 
 
-def get_logger(settings: Settings, capture_warnings=True):
-    logger = logging.getLogger(settings.name)
+def get_logger(settings: Settings, name=None, capture_warnings=True):
+    logger = logging.getLogger(name or settings.name)
     logger.setLevel(settings.log_level)
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(settings.log_format, style="{"))

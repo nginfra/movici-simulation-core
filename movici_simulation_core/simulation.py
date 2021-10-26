@@ -452,7 +452,9 @@ class ModelRunner:
 
     def close(self):
         self.socket.close(linger=1000)  # ms
-        self.init_data_handler.close()
-        self.update_handler.close()
+        if self.init_data_handler:
+            self.init_data_handler.close()
+        if self.update_handler:
+            self.update_handler.close()
         if zmq.Context._instance is not None:
             zmq.Context.instance().term()
