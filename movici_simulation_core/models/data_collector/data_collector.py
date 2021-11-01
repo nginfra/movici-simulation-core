@@ -66,7 +66,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         if data is None:
             return None, None
         self.state.receive_update(data)
-        self.maybe_flush(moment, message.origin, self.aggregate is False)
+        self.maybe_flush(moment, message.origin, not self.aggregate)
         return None, None
 
     def new_time(self, new_time: Moment, **_):
@@ -80,6 +80,8 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.pool.shutdown()
 
     def maybe_flush(self, moment: Moment, origin, trigger):
+        if exc := self.futures.exception():
+            raise exc
         if trigger:
             self.flush(moment, origin)
 

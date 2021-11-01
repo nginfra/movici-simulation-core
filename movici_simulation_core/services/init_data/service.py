@@ -1,5 +1,4 @@
 import logging
-import typing as t
 from functools import singledispatchmethod
 from pathlib import Path
 
@@ -20,9 +19,6 @@ class InitDataService(Service):
     socket: MessageRouterSocket
     logger: logging.Logger
     root: Path
-
-    def __init__(self):
-        self.store: t.Dict[str, dict] = {}
 
     @classmethod
     def install(cls, sim: Simulation):
