@@ -1192,3 +1192,84 @@ class TestCargoWithInducedDemand:
             rtol=0.01,
             global_schema=global_schema,
         )
+
+
+class TestMaxIterations:
+    @pytest.fixture
+    def init_data(
+        self,
+        road_network_name,
+        road_network_for_traffic,
+        water_network_name,
+        scenario_parameters_csv_path,
+        waterways,
+    ):
+        return [
+            {"name": road_network_name, "data": road_network_for_traffic},
+            {"name": water_network_name, "data": waterways},
+        ]
+
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name, water_network_name):
+        return {
+            "name": model_name,
+            "type": "traffic_demand_calculation",
+            "demand_entity": [[road_network_name, "virtual_node_entities"]],
+            "demand_property": [None, "transport.cargo_demand"],
+            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
+            "local_properties": [
+                ["traffic_properties", "average_time"],
+            ],
+            "local_mapping_type": ["route"],
+            "local_geometries": ["line"],
+            "local_prop_is_iterative": [True],
+            "local_elasticities": [2],
+            "max_iterations": 2,
+        }
+
+    @pytest.fixture
+    def tester(self, model_config, global_schema, init_data, road_network_name):
+        tester = ModelTester(TrafficDemandCalculation(model_config), global_schema=global_schema)
+        for item in init_data:
+            tester.add_init_data(item["name"], item["data"])
+        tester.initialize()
+        tester.update(
+            0,
+            {
+                road_network_name: {
+                    "virtual_node_entities": {
+                        "id": [10, 11, 12],
+                        "transport.cargo_demand": [
+                            [0, 0, 1],
+                            [2, 0, 0],
+                            [3, 0, 0],
+                        ],
+                    },
+                }
+            },
+        )
+        return tester
+
+    @pytest.fixture
+    def average_time_update(self, road_network_name):
+        def _make_update(value):
+            return {
+                road_network_name: {
+                    "road_segment_entities": {
+                        "id": [101, 102, 103, 104],
+                        "traffic_properties": {"average_time": [value] * 4},
+                    }
+                }
+            }
+
+        return _make_update
+
+    def test_demand_calculation(self, tester, average_time_update):
+        tester.update(0, average_time_update(1))
+        tester.new_time(1)
+        results = [
+            tester.update(1, average_time_update(2)),
+            tester.update(2, average_time_update(3)),
+            tester.update(1, average_time_update(4)),
+        ]
+        assert [r[0] is None for r in results] == [False, False, True]

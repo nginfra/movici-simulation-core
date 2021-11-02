@@ -76,6 +76,11 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         "extended_route": InducedDemand,
     }
 
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
+        self.update_count = 0
+        self.max_iterations = model_config.get("max_iterations", 10_000_000)
+
     def setup(
         self,
         state: TrackedState,
@@ -223,6 +228,8 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self._update_demand_sum(demand_matrix)
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        if self.update_count >= self.max_iterations:
+            return None
 
         self.proceed_tape(moment)
 
@@ -236,14 +243,14 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         # property because we are subscribing and publishing to the same property which is not
         # fully supported. Secondly this also forces the model to only publish an update on the
         # first time it is called per timestep/timestamp.
-        if not self.demand_estimation.has_changes() and not self._new_timesteps_first_update:
+        if not self.demand_estimation.has_changes() and self.update_count > 0:
             state.reset_tracked_changes(SUBSCRIBE)
-            self._new_timesteps_first_update = False
+            self.update_count += 1
             return Moment(moment.timestamp + 1)
 
         demand_matrix = self._get_demand_matrix(self._demand_property.csr)
         updated = self.demand_estimation.update(
-            demand_matrix, self._new_timesteps_first_update, moment=moment
+            demand_matrix, self.update_count == 0, moment=moment
         )
 
         # Reset SUBSCRIBE before we publish results, so that all tracked changes are attributed to
@@ -253,7 +260,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self._set_demand_matrix(updated, self._demand_property.csr)
         self._update_demand_sum(updated)
 
-        self._new_timesteps_first_update = False
+        self.update_count += 1
 
         return self._get_next_moment_from_tapes()
 
@@ -267,7 +274,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         return self._scenario_parameters_tape.get_next_timestamp()
 
     def new_time(self, state: TrackedState, moment: Moment):
-        self._new_timesteps_first_update = True
+        self.update_count = 0
 
     @staticmethod
     def _get_demand_matrix(csr_array: TrackedCSRArray):
