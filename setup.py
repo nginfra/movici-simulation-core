@@ -55,7 +55,8 @@ setup(
             f"time_window_status = {MODEL_PATH}.time_window_status.model:Model",
             f"traffic_assignment_calculation"
             f" = {MODEL_PATH}.traffic_assignment_calculation.model:Model",
-            f"traffic_demand_calculation = {MODEL_PATH}.traffic_demand_calculation.model:Model",
+            f"traffic_demand_calculation"
+            f" = {MODEL_PATH}.traffic_demand_calculation.model:TrafficDemandCalculation",
             f"traffic_kpi = {MODEL_PATH}.traffic_kpi.model:Model",
             f"udf = {MODEL_PATH}.udf_model.udf_model:UDFModel",
             f"unit_conversions = {MODEL_PATH}.unit_conversions.model:Model",

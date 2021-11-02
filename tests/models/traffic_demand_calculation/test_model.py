@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from movici_simulation_core.models.traffic_demand_calculation.model import Model
+from movici_simulation_core.models.traffic_demand_calculation.model import TrafficDemandCalculation
 from movici_simulation_core.testing.model_tester import ModelTester
 from ..conftest import get_dataset
 
@@ -119,7 +119,7 @@ class TestCargoDemand:
         }
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -197,7 +197,7 @@ class TestPassengerDemand:
         }
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -291,7 +291,7 @@ class TestCargoDemandSum:
         }
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -348,7 +348,7 @@ class TestCargoWithLocalParameters:
                             "virtual_node_entities": {
                                 "id": [10, 11, 12],
                                 "transport.cargo_demand": [
-                                    [6, 0, 0],
+                                    [0, 6, 0],
                                     [10, 0, 0],
                                     [0, 0, 0],
                                 ],
@@ -396,7 +396,7 @@ class TestCargoWithLocalParameters:
                             "virtual_node_entities": {
                                 "id": [10, 11],
                                 "transport.cargo_demand": [
-                                    [121.5 * 16, 0, 0],
+                                    [0, 121.5 * 16, 0],
                                     [202.5 * 16, 0, 0],
                                 ],
                             }
@@ -408,7 +408,7 @@ class TestCargoWithLocalParameters:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -526,7 +526,7 @@ class TestCargoWithLoadFactor:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -671,7 +671,7 @@ class TestCargoWithNonIterativeLocalParameters:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -681,92 +681,109 @@ class TestCargoWithNonIterativeLocalParameters:
 
 class TestCargoDemandWithInvestment:
     @pytest.fixture
-    def model_config(
-        self,
-        model_name,
-        road_network_name,
-        scenario_parameters_csv_name,
-    ):
-        return {
-            "name": model_name,
-            "type": "traffic_demand_calculation",
-            "demand_entity": [[road_network_name, "virtual_node_entities"]],
-            "demand_property": [None, "transport.cargo_demand"],
-            "total_inward_demand_property": [],
-            "total_outward_demand_property": [],
-            "scenario_parameters": [scenario_parameters_csv_name],
-            "global_parameters": ["gp1", "gp2"],
-            "global_elasticities": [2, -1],
-            "local_entity_groups": [],
-            "local_properties": [],
-            "local_geometries": [],
-            "local_geometry_entities": [],
-            "local_elasticities": [],
-            "investment_multipliers": [[0, 10, 2], [2, 11, 1.5], [2, 11, 2]],
-        }
+    def scenario_parameters_csv(self, scenario_parameters_csv_name, tmp_path):
+        data = [["seconds", "gp1"], [0, 1], [1, 1]]
+        file = tmp_path / (scenario_parameters_csv_name + ".csv")
+        file.write_text("\n".join(",".join(str(i) for i in row) for row in data))
+        return file
 
-    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
-        scenario = {
-            "updates": [
-                {
-                    "time": 0,
-                    "data": {
-                        road_network_name: {
-                            "virtual_node_entities": {
-                                "id": [10, 11, 12],
-                                "transport.cargo_demand": [
-                                    [6, 0, 0],
-                                    [10, 0, 0],
-                                    [0, 0, 0],
-                                ],
-                            }
-                        }
-                    },
-                },
-                {"time": 2, "data": None},
-                {"time": 3, "data": None},
-            ],
-            "expected_results": [
-                {
-                    "time": 0,
-                    "data": {
-                        road_network_name: {
-                            "virtual_node_entities": {
-                                "id": [10, 11],
-                                "transport.cargo_demand": [
-                                    [6 * 2 * 2, 0, 0],
-                                    [10 * 2, 0, 0],
-                                ],
-                            }
-                        }
-                    },
-                    "next_time": 2,
-                },
-                {
-                    "time": 2,
-                    "data": {
-                        road_network_name: {
-                            "virtual_node_entities": {
-                                "id": [10, 11],
-                                "transport.cargo_demand": [
-                                    [121.5 * 2 * 2, 0, 0],
-                                    [202.5 * 2 * 1.5 * 2, 0, 0],
-                                ],
-                            }
-                        }
-                    },
-                },
-                {"time": 3, "data": None},
-            ],
-        }
-        scenario.update(config)
-        ModelTester.run_scenario(
-            model=Model,
-            model_name=model_name,
-            scenario=scenario,
-            rtol=0.01,
-            global_schema=global_schema,
+    @pytest.fixture
+    def model(self, road_network_name, scenario_parameters_csv_name):
+        return TrafficDemandCalculation(
+            {
+                "demand_entity": [[road_network_name, "virtual_node_entities"]],
+                "demand_property": [None, "transport.cargo_demand"],
+                "scenario_parameters": [scenario_parameters_csv_name],
+                "global_parameters": ["gp1"],
+                "global_elasticities": [1],
+                "investment_multipliers": [[0, 10, 2], [2, 11, 1.5], [2, 11, 2]],
+            }
         )
+
+    @pytest.fixture
+    def tester(
+        self,
+        model,
+        road_network_name,
+        road_network_for_traffic,
+        scenario_parameters_csv_name,
+        scenario_parameters_csv,
+        global_schema,
+    ):
+        tester = ModelTester(model, global_schema=global_schema)
+        tester.add_init_data(road_network_name, road_network_for_traffic)
+        tester.add_init_data(scenario_parameters_csv_name, scenario_parameters_csv)
+        return tester
+
+    @pytest.fixture
+    def assert_demand_equals(self, road_network_name):
+        def _assert(update, expected_demand):
+            demand = update[road_network_name]["virtual_node_entities"]["transport.cargo_demand"]
+            assert demand == expected_demand
+
+        return _assert
+
+    def test_single_investment(self, model, tester, road_network_name, assert_demand_equals):
+        model.config["investment_multipliers"] = [[0, 10, 2]]
+
+        tester.initialize()
+        result, next_time = tester.update(
+            0,
+            {
+                road_network_name: {
+                    "virtual_node_entities": {
+                        "id": [10, 11, 12],
+                        "transport.cargo_demand": [
+                            [0, 2, 0],
+                            [3, 0, 0],
+                            [4, 0, 0],
+                        ],
+                    }
+                }
+            },
+        )
+        assert_demand_equals(
+            result,
+            [
+                [0, 2 * 2, 0],
+                [3 * 2, 0, 0],
+                [4 * 2, 0, 0],
+            ],
+        )
+        assert next_time == 1
+
+        assert tester.update(1, None) == (None, None)
+
+    def test_multiple_investments(self, model, tester, road_network_name, assert_demand_equals):
+        model.config["investment_multipliers"] = [[0, 10, 2], [1, 11, 1.5], [1, 11, 2]]
+
+        tester.initialize()
+        tester.update(
+            0,
+            {
+                road_network_name: {
+                    "virtual_node_entities": {
+                        "id": [10, 11, 12],
+                        "transport.cargo_demand": [
+                            [0, 2, 0],
+                            [3, 0, 0],
+                            [4, 1, 0],
+                        ],
+                    }
+                }
+            },
+        )
+        result, next_time = tester.update(1, None)
+
+        assert_demand_equals(
+            result,
+            [
+                [0, 2 * 2 * 1.5 * 2, 0],
+                [3 * 2 * 1.5 * 2, 0, 0],
+                [4 * 2, 1 * 1.5 * 2, 0],
+            ],
+        )
+        assert next_time is None
 
 
 class TestCargoWithLocalRouting:
@@ -913,7 +930,7 @@ class TestCargoWithLocalRouting:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -1064,7 +1081,7 @@ class TestCargoWithLocalRoutingIterative:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,
@@ -1169,7 +1186,7 @@ class TestCargoWithInducedDemand:
 
         scenario.update(config)
         ModelTester.run_scenario(
-            model=Model,
+            model=TrafficDemandCalculation,
             model_name=model_name,
             scenario=scenario,
             rtol=0.01,

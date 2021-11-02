@@ -24,8 +24,8 @@ def csv_tape(csv_df):
 @pytest.mark.parametrize(
     "timeline_info, expected",
     [
-        (TimelineInfo(0, 1, 0), [0, 1, 5, 10]),
-        (TimelineInfo(0, 0.5, 0), [0, 2, 10, 20]),
+        (TimelineInfo(0, time_scale=1), [0, 1, 5, 10]),
+        (TimelineInfo(0, time_scale=0.5), [0, 2, 10, 20]),
         (None, [0, 1, 5, 10]),
     ],
 )

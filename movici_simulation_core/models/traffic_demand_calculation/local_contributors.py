@@ -1,6 +1,6 @@
+import dataclasses
+import logging
 import typing as t
-from abc import abstractmethod
-from logging import Logger
 from pathlib import Path
 
 import numba
@@ -8,7 +8,7 @@ import numpy as np
 
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.arrays import TrackedArray
+from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.property import UniformProperty, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import ae_util
@@ -19,135 +19,154 @@ from movici_simulation_core.models.common.entities import (
     GeometryEntity,
 )
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
+from movici_simulation_core.models.traffic_demand_calculation.common import (
+    LocalContributor,
+    LocalMapper,
+)
+from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
 
 
-class LocalEffectsCalculator:
-    _logger: t.Optional[Logger]
-    _elasticity: t.Optional[float]
-    _indices: t.Optional[np.ndarray]
-    _property: t.Optional[UniformProperty]
+@dataclasses.dataclass
+class LocalParameterInfo:
+    target_dataset: str
+    target_entity_group: str
+    target_geometry: str
+    target_property: UniformProperty
+    elasticity: float
 
-    def __init__(self):
-        self._logger = None
-        self._elasticity = None
-        self._indices = None
-        self._property = None
 
-    @abstractmethod
-    def setup(
-        self,
-        *,
-        state: TrackedState,
-        prop: UniformProperty,
-        ds_name: str,
-        entity_name: str,
-        geom: str,
-        elasticity: float,
-        settings: Settings,
-        schema: AttributeSchema,
-    ):
-        ...
+class LocalEffectsContributor(LocalContributor):
+    _indices: t.Optional[np.ndarray] = None
+    old_value: t.Optional[np.ndarray] = None
 
-    @abstractmethod
-    def initialize(self, indices: np.ndarray):
-        ...
+    def __init__(self, info: LocalParameterInfo):
+        self.info = info
+        self._property = info.target_property
+        self._elasticity = info.elasticity
 
-    @abstractmethod
-    def update_matrix(self, matrix: np.ndarray, force_update: bool = False):
-        ...
+    def update_demand(self, matrix: np.ndarray, force_update: bool = False, **_) -> np.ndarray:
+        if self.old_value is None:
+            self.old_value = self.calculate_values()
+            return matrix
 
-    @abstractmethod
-    def get_target_entity(self) -> GeometryEntity:
-        ...
+        if not self.has_changes() and not force_update:
+            return matrix
 
-    def property_has_changes(self) -> bool:
+        new_values = self.calculate_values()
+
+        factor = self.calculate_contribution(new_values, self.old_value)
+        self.old_value = new_values
+        return factor * matrix
+
+    def has_changes(self) -> bool:
         return self._property.has_changes()
 
-    def shutdown(self):
-        pass
+    def calculate_values(self):
+        """Calculate parameter values P[] so that P_ij can be reconstructed, this can be a 1d-array
+        which together with self._indices can reconstruct P_ij (See eg. `NearestValue`) or a
+        2d-array containing every P_ij (See `RouteCostFactor`). P_ij will then be used to calculate
+        the contribution (P_ij/P_ij_old)**elasticity to the demand change factor
+        """
+        raise NotImplementedError
+
+    def calculate_contribution(self, new_values, old_values):
+        """Calculate the contribution (P_ij/P_ij_old)**elasticity to the demand change factor"""
+        raise NotImplementedError
 
 
-class NearestValue(LocalEffectsCalculator):
-    def __init__(self):
-        super().__init__()
-        self._old_prop_value: t.Optional[TrackedArray] = None
-        self._target_entity: t.Optional[GeometryEntity] = None
+class NearestValue(LocalEffectsContributor):
+    _target_entity: t.Optional[GeometryEntity] = None
 
     def setup(
         self,
         state: TrackedState,
-        prop: UniformProperty,
-        ds_name: str,
-        entity_name: str,
-        geom: str,
-        elasticity: float,
         **_,
     ):
-        self._property = prop
-        self._elasticity = elasticity
-        self._logger = state.logger
+        ds_name = self.info.target_dataset
+        geom = self.info.target_geometry
+        entity_name = self.info.target_entity_group
 
         self._target_entity = state.register_entity_group(
             dataset_name=ds_name,
             entity=try_get_geometry_type(geom)(name=entity_name),
         )
 
-    def initialize(self, indices: np.ndarray):
-        self._indices = indices
+    @property
+    def new_value(self):
+        if self._property is None or self._property.array is None:
+            return None
+        return self._property.array
 
-    def update_matrix(self, matrix: np.ndarray, force_update: bool = False):
-        if self._old_prop_value is None:
-            self._old_prop_value = self._property.array.copy()
-            return
+    def set_old_value(self):
+        self.old_value = self._property.array.copy()
 
-        if not self._property.has_changes() and not force_update:
-            return
+    def initialize(self, mapper: LocalMapper):
+        self._indices = mapper.get_nearest(self._target_entity)
 
-        update_multiplication_factor_nearest(
-            matrix,
-            self._indices,
-            self._property.array,
-            self._old_prop_value,
-            self._elasticity,
+    def calculate_values(self):
+        return self._property.array.copy()
+
+    def calculate_contribution(self, new_values, old_values):
+        return calculate_localized_contribution_1d(
+            new_values, old_values, self._indices, self._elasticity
         )
-        self._old_prop_value = self._property.array.copy()
-
-    def get_target_entity(self) -> GeometryEntity:
-        return self._target_entity
 
 
-class TransportPathingValueSum(LocalEffectsCalculator):
+@numba.njit(cache=True)
+def calculate_localized_contribution_1d(values, old_values, indices, elasticity):
+    size = len(indices)
+    rv = np.ones((size, size), np.float64)
+    for i in range(size):
+        for j in range(size):
+            # symmetry: factor for ij == ji so we only need to iterate through half of the ij_pairs
+            # and fill up both ij and ji at the same time
+            if i < j:
+                continue
+            ratio_i = get_ratio_for_node(i, values, old_values, indices)
+            ratio_j = get_ratio_for_node(j, values, old_values, indices)
+            factor = (ratio_i * ratio_j) ** elasticity
+            rv[i][j] = rv[j][i] = factor
+    return rv
+
+
+@numba.njit(cache=True)
+def get_ratio_for_node(node_i, values, old_values, indices):
+    closest = indices[node_i]
+
+    val = values[closest]
+    old_val = old_values[closest]
+    if val == 0 or old_val == 0:
+        return 1
+    return val / old_val
+
+
+class RouteCostFactor(LocalEffectsContributor):
     """
     This effect calculator computes the paths between pairs of demand nodes
     connected by a route.
     It calculates the sum of the given _property on this route and returns that.
     """
 
-    def __init__(self):
-        super().__init__()
-        self._property: t.Optional[UniformProperty] = None
-        self._transport_segments: t.Optional[TransportSegmentEntity] = None
-        self._transport_nodes: t.Optional[PointEntity] = None
-        self._demand_nodes: t.Optional[PointEntity] = None
-        self._demand_links: t.Optional[VirtualLinkEntity] = None
-        self._project: t.Optional[ProjectWrapper] = None
-        self._old_summed_values: t.Optional[np.ndarray] = None
+    _logger: logging.Logger = None
+
+    _transport_segments: t.Optional[TransportSegmentEntity] = None
+    _transport_nodes: t.Optional[PointEntity] = None
+    _demand_nodes: t.Optional[PointEntity] = None
+    _demand_links: t.Optional[VirtualLinkEntity] = None
+    _project: t.Optional[ProjectWrapper] = None
 
     def setup(
         self,
         state: TrackedState,
-        prop: UniformProperty,
-        ds_name: str,
-        entity_name: str,
-        geom: str,
-        elasticity: float,
         settings: Settings,
         **_,
     ):
+        ds_name = self.info.target_dataset
+        entity_name = self.info.target_entity_group
+        geom = self.info.target_geometry
+
         self._project = ProjectWrapper(Path(settings.temp_dir, ds_name))
-        self._property = prop
-        self._elasticity = elasticity
 
         if geom != "line":
             raise RuntimeError(f"Local property routing has to have line type, not {geom}")
@@ -169,12 +188,11 @@ class TransportPathingValueSum(LocalEffectsCalculator):
         self._demand_links = state.register_entity_group(
             ds_name, VirtualLinkEntity(name="virtual_link_entities")
         )
-
         self._logger = state.logger
 
-    def initialize(self, indices: np.ndarray):
+    def initialize(self, mapper: LocalMapper):
         self._transport_segments.ensure_ready()
-        self._indices = indices
+        self._indices = mapper.get_nearest(self._demand_nodes)
 
         ae_util.fill_project(
             self._project,
@@ -186,40 +204,23 @@ class TransportPathingValueSum(LocalEffectsCalculator):
 
         self._project.add_column("cost_field")
 
-    def update_matrix(self, matrix: np.ndarray, force_update: bool = False):
-        updated = self.update_graph(force_update=force_update)
-
-        if not updated:
-            return
-
-        (
-            new_values_matrix,
-            old_values_matrix,
-        ) = self.get_new_and_old_summed_value_along_paths()
-        update_multiplication_factor_matrix(
-            matrix, new_values_matrix, old_values_matrix, self._elasticity
-        )
-
-    def update_graph(self, force_update: bool = False) -> bool:
-        if self._old_summed_values is None:
-            self._update_graph()
-            self._old_summed_values = self._get_new_summed_values_along_paths()
-            return False
-
-        if self._property.has_changes() or force_update:
-            self._update_graph()
-            return True
-
-        return False
-
-    def _update_graph(self):
+    def calculate_values(self):
         self._project.update_column("cost_field", self._property.array)
         self._project.build_graph(
             cost_field="cost_field",
             block_centroid_flows=True,
         )
+        return self._get_local_route_cost()
 
-    def _get_new_summed_values_along_paths(self) -> np.ndarray:
+    def calculate_contribution(self, new_values, old_values):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rv = new_values / old_values
+        rv[~np.isfinite(rv)] = 1  # set to 1 in case of division by 0 or NaN
+        nonzero = np.nonzero(rv)
+        rv[nonzero] = rv[nonzero] ** self._elasticity
+        return rv
+
+    def _get_local_route_cost(self) -> np.ndarray:
         """
         For N _demand_nodes, these have N nearest, with possible duplicates
         We get M unique nearest, calculate MxM routes from all to all
@@ -250,12 +251,6 @@ class TransportPathingValueSum(LocalEffectsCalculator):
         orig_idx = self._array_index_in_array(unique_indices, self._indices)
         return summed_values[:, orig_idx][orig_idx, :]
 
-    def get_new_and_old_summed_value_along_paths(self) -> (np.ndarray, np.ndarray):
-        old = self._old_summed_values
-        new = self._get_new_summed_values_along_paths()
-        self._old_summed_values = new
-        return new, old
-
     @staticmethod
     def _array_index_in_array(x: np.ndarray, y: np.ndarray):
         """
@@ -266,49 +261,43 @@ class TransportPathingValueSum(LocalEffectsCalculator):
         sorted_index = np.searchsorted(sorted_x, y)
         return sorted_index
 
-    def get_target_entity(self) -> PointEntity:
-        return self._demand_nodes
-
-    def shutdown(self):
+    def close(self):
         if self._project:
             self._project.close()
             self._project = None
 
 
-class InducedDemand(LocalEffectsCalculator):
+class InducedDemand(LocalEffectsContributor):
     """
     This effect calculator computes the fastest routes for each OD pair.
     If a roads nb_lanes changed, we multiply any demand that routes through that road by some
     factor. Then our multiplier is lanes_m_new/lanes_m_old ** elasticity
+
+    property should be the 'transport.layout' UniformProperty
     """
 
-    def __init__(self):
-        super().__init__()
-        self._property: t.Optional[UniformProperty] = None  # layout property
-        self._cost_property: t.Optional[UniformProperty] = None
-        self._transport_segments: t.Optional[TransportSegmentEntity] = None
-        self._transport_nodes: t.Optional[PointEntity] = None
-        self._demand_nodes: t.Optional[PointEntity] = None
-        self._demand_links: t.Optional[VirtualLinkEntity] = None
-        self._project: t.Optional[ProjectWrapper] = None
-        self._old_lanes_meters: t.Optional[np.ndarray] = None
-        self._length_property: t.Optional[UniformProperty] = None
+    _logger: logging.Logger
+
+    _transport_segments: t.Optional[TransportSegmentEntity] = None
+    _transport_nodes: t.Optional[PointEntity] = None
+    _demand_nodes: t.Optional[PointEntity] = None
+    _demand_links: t.Optional[VirtualLinkEntity] = None
+    _project: t.Optional[ProjectWrapper] = None
+    _cost_property: t.Optional[UniformProperty] = None
+    _length_property: t.Optional[UniformProperty] = None
 
     def setup(
         self,
         state: TrackedState,
-        prop: UniformProperty,  # layout property
-        ds_name: str,
-        entity_name: str,
-        geom: str,
-        elasticity: float,
         settings: Settings,
         schema: AttributeSchema,
         **_,
     ):
+        ds_name = self.info.target_dataset
+        entity_name = self.info.target_entity_group
+        geom = self.info.target_geometry
+
         self._project = ProjectWrapper(Path(settings.temp_dir, ds_name))
-        self._property = prop
-        self._elasticity = elasticity
 
         if geom != "line":
             raise RuntimeError(f"Local property routing has to have line type, not {geom}")
@@ -344,12 +333,11 @@ class InducedDemand(LocalEffectsCalculator):
         self._demand_links = state.register_entity_group(
             ds_name, VirtualLinkEntity(name="virtual_link_entities")
         )
-
         self._logger = state.logger
 
-    def initialize(self, indices: np.ndarray):
+    def initialize(self, mapper: LocalMapper):
         self._transport_segments.ensure_ready()
-        self._indices = indices
+        self._indices = mapper.get_nearest(self._demand_nodes)
 
         ae_util.fill_project(
             self._project,
@@ -361,40 +349,23 @@ class InducedDemand(LocalEffectsCalculator):
 
         self._project.add_column("cost_field")
 
-    def update_matrix(self, matrix: np.ndarray, force_update: bool = False):
-        updated = self.update_graph(force_update=force_update)
-
-        if not updated:
-            return
-
-        (
-            new_values_matrix,
-            old_values_matrix,
-        ) = self.get_new_and_old_summed_value_along_paths()
-        update_multiplication_factor_matrix(
-            matrix, new_values_matrix, old_values_matrix, self._elasticity
-        )
-
-    def update_graph(self, force_update: bool = False) -> bool:
-        if self._old_lanes_meters is None:
-            self._update_graph()
-            self._old_lanes_meters = self._get_new_summed_values_along_paths()
-            return False
-
-        if self._property.has_changes() or force_update:
-            self._update_graph()
-            return True
-
-        return False
-
-    def _update_graph(self):
+    def calculate_values(self):
         self._project.update_column("cost_field", self._cost_property.array)
         self._project.build_graph(
             cost_field="cost_field",
             block_centroid_flows=True,
         )
+        return self._get_local_route_cost()
 
-    def _get_new_summed_values_along_paths(self) -> np.ndarray:
+    def calculate_contribution(self, new_values, old_values):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rv = new_values / old_values
+        rv[~np.isfinite(rv)] = 1  # set to 1 in case of division by 0 or NaN
+        nonzero = np.nonzero(rv)
+        rv[nonzero] = rv[nonzero] ** self._elasticity
+        return rv
+
+    def _get_local_route_cost(self) -> np.ndarray:
         """
         For N _demand_nodes, these have N nearest, with possible duplicates
         We get M unique nearest, calculate MxM routes from all to all
@@ -424,16 +395,9 @@ class InducedDemand(LocalEffectsCalculator):
                     self._length_property[roads_indices][:, np.newaxis],
                 )
                 summed_values[i][j] = value.sum()
-
         # rebuild requested sized matrix of shape=(len(self._closest_idx), len(self._closest_idx))
         orig_idx = self._array_index_in_array(unique_indices, self._indices)
         return summed_values[:, orig_idx][orig_idx, :]
-
-    def get_new_and_old_summed_value_along_paths(self) -> (np.ndarray, np.ndarray):
-        old = self._old_lanes_meters
-        new = self._get_new_summed_values_along_paths()
-        self._old_lanes_meters = new
-        return new, old
 
     @staticmethod
     def _array_index_in_array(x: np.ndarray, y: np.ndarray):
@@ -445,48 +409,32 @@ class InducedDemand(LocalEffectsCalculator):
         sorted_index = np.searchsorted(sorted_x, y)
         return sorted_index
 
-    def get_target_entity(self) -> PointEntity:
-        return self._demand_nodes
-
-    def shutdown(self):
+    def close(self):
         if self._project:
             self._project.close()
             self._project = None
 
 
-@numba.njit(cache=True)
-def update_multiplication_factor_matrix(
-    multiplication_factor: np.ndarray, matrix: np.ndarray, matrix_old: np.ndarray, elasticity
-):
-    dim_i, dim_j = multiplication_factor.shape
-    for i in range(dim_i):
-        for j in range(dim_j):
-            numerator = matrix[i][j]
-            denominator = matrix_old[i][j]
-            if denominator == 0:
-                if numerator != 0:
-                    raise RuntimeError("Cost-value became zero, can't divide by 0")
-                continue
-            multiplication_factor[i][j] *= (numerator / denominator) ** elasticity
+class Investment(t.NamedTuple):
+    seconds: int
+    entity_id: int
+    multiplier: float
 
 
-@numba.njit(cache=True)
-def update_multiplication_factor_nearest(
-    multiplication_factor: np.ndarray, closest_entity_index, prop, old_prop, elasticity
-):
-    dim_i, dim_j = multiplication_factor.shape
-    for i in range(dim_i):
-        for j in range(dim_j):
-            i_closest = closest_entity_index[i]
-            j_closest = closest_entity_index[j]
+class InvestmentContributor(LocalContributor):
+    def __init__(self, investments: t.Sequence[Investment], demand_node_index: Index):
+        self.index = demand_node_index
+        self.investments: t.List[Investment] = list(reversed(investments))
 
-            prop_i = prop[i_closest]
-            old_prop_i = old_prop[i_closest]
+    def has_changes(self):
+        return False
 
-            prop_j = prop[j_closest]
-            old_prop_j = old_prop[j_closest]
-
-            if old_prop_i != 0:
-                multiplication_factor[i][j] *= (prop_i / old_prop_i) ** elasticity
-            if old_prop_j != 0:
-                multiplication_factor[i][j] *= (prop_j / old_prop_j) ** elasticity
+    def update_demand(self, matrix: np.ndarray, force_update: bool = False, *, moment: Moment):
+        while self.investments and self.investments[-1].seconds <= moment.seconds:
+            investment = self.investments.pop()
+            idx = self.index[[investment.entity_id]]
+            affected_entries = np.zeros_like(matrix, dtype=bool)
+            affected_entries[idx] = 1
+            affected_entries[:, idx] = 1
+            matrix[affected_entries] *= investment.multiplier
+        return matrix
