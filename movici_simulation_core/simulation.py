@@ -321,6 +321,7 @@ class ServiceRunner:
             target=self.entry_point,
             args=(send,),
             daemon=self.service.daemon,
+            name="Process-" + self.service.name,
         )
         proc.start()
         poll_success = recv.poll(self.TIMEOUT)
@@ -378,8 +379,7 @@ class ModelRunner:
 
     def start(self):
         proc = Process(
-            target=self.entry_point,
-            daemon=False,
+            target=self.entry_point, daemon=False, name="Process-" + self.model_info.name
         )
         proc.start()
         self.model_info.process = proc
