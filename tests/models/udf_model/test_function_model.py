@@ -5,7 +5,7 @@ import typing as t
 import pytest
 
 from movici_simulation_core.core.schema import AttributeSchema, PropertySpec, DataType
-from movici_simulation_core.data_tracker.property import UniformProperty, SUB
+from movici_simulation_core.data_tracker.property import UniformProperty, SUB, REQUIRED
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.udf_model import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.udf_model.udf_model import (
@@ -13,6 +13,7 @@ from movici_simulation_core.models.udf_model.udf_model import (
     get_udf_infos,
     UDFInfo,
     UDFModel,
+    prepare_optional_attributes,
 )
 from movici_simulation_core.testing.helpers import data_mask_compare
 from movici_simulation_core.testing.model_schema import model_config_validator
@@ -27,6 +28,8 @@ def schema():
             PropertySpec("in_b", DataType(float)),
             PropertySpec("in_csr", DataType(float, csr=True)),
             PropertySpec("in_csr2", DataType(float, csr=True)),
+            PropertySpec("undef", DataType(float)),
+            PropertySpec("undef_csr", DataType(float, csr=True)),
             PropertySpec("out_csr", DataType(float, csr=True)),
             PropertySpec("in_2d", DataType(float, (2,))),
         ]
@@ -42,6 +45,7 @@ def init_data():
                 "in_a": [1.0, 2.0, 3.0],
                 "in_b": [1.1, 2.2, 3.3],
                 "in_csr": [[10, 11], [20, 22], []],
+                "undef_csr": [[10], [], None],
                 "in_csr2": [[100, 110], [200, 220], []],
             }
         }
@@ -101,6 +105,21 @@ class TestConfigParsing:
                 expression="a*c",
             ),
         ]
+
+    @pytest.mark.parametrize(
+        "optional",
+        [["a"], ["a", "b"], ["a", "a"]],
+    )
+    def test_prepare_optional_attributes(self, optional, config, state, schema):
+        config["optional"] = optional
+        inputs = get_input_attributes(config, schema, state)
+        prepare_optional_attributes(config, inputs)
+        unique_opts = set(optional)
+        for k, v in inputs.items():
+            if k in unique_opts:
+                assert not v.flags & REQUIRED
+            else:
+                assert v.flags & REQUIRED
 
 
 def test_model_data_mask(config):
@@ -166,6 +185,7 @@ def test_model_with_one_function(create_model_tester):
             "inputs": {"a": [None, "in_a"], "b": [None, "in_b"]},
             "functions": [
                 {
+                    "optional": ["a"],
                     "expression": "a+b",
                     "output": [None, "out_d"],
                 },
@@ -216,7 +236,7 @@ def test_can_produce_and_use_intermediate_results(create_model_tester):
     }
 
 
-def test_with_csr_aggreration(create_model_tester):
+def test_with_csr_aggregation(create_model_tester):
     tester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -267,6 +287,76 @@ def test_with_csr_to_csr(create_model_tester):
     }
 
 
-def test_model_config_schema(config):
+def test_default(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"a": [None, "in_a"], "undef": [None, "undef"]},
+            "optional": ["undef"],
+            "functions": [
+                {
+                    "expression": "default(undef, a)",
+                    "output": [None, "out"],
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out": [1, 2, 3],
+            }
+        }
+    }
+
+
+def test_default_csr_to_csr(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"a": [None, "undef_csr"]},
+            "optional": ["a"],
+            "functions": [
+                {
+                    "expression": "default(a, 0)",
+                    "output": [None, "out_csr"],
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out_csr": [[10], [], [0]],
+            }
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    "config_",
+    [
+        None,
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"a": [None, "undef_csr"]},
+            "optional": ["a"],
+            "functions": [
+                {
+                    "expression": "default(a, 0)",
+                    "output": [None, "out_csr"],
+                },
+            ],
+        },
+    ],
+)
+def test_model_config_schema(config_, config):
+    config = config_ or config
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
     assert model_config_validator(schema)(config)

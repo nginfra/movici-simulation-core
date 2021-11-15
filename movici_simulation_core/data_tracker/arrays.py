@@ -201,5 +201,14 @@ class TrackedCSRArray:
     def __truediv__(self, other):
         return self.__bin_op__(other, operator.truediv)
 
+    def copy(self):
+        return TrackedCSRArray(
+            data=self.data.copy(),
+            row_ptr=self.row_ptr.copy(),
+            rtol=self.rtol,
+            atol=self.atol,
+            equal_nan=self.equal_nan,
+        )
+
 
 TrackedArrayType = t.Union[TrackedArray, TrackedCSRArray]

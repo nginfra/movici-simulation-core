@@ -6,7 +6,7 @@ import operator
 import re
 import typing as t
 
-from movici_simulation_core.models.udf_model.functions import sum_func, min_func, max_func
+from movici_simulation_core.models.udf_model import functions
 
 TOKENS = {
     "*": r"\*",
@@ -270,7 +270,7 @@ class UDFCompiler(NodeVisitor):
     @visit.register
     def _(self, node: Func):
         try:
-            func = {"sum": sum_func, "max": max_func, "min": min_func}[node.val]
+            func = functions.functions[node.val]
         except KeyError as e:
             raise NameError(f"{node.val} is not a valid function name") from e
         args = tuple(arg.accept_node(self) for arg in node.args)

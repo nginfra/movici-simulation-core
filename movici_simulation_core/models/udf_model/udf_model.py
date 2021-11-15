@@ -13,6 +13,7 @@ from movici_simulation_core.data_tracker.property import (
     PropertyObject,
     UniformProperty,
     CSRProperty,
+    REQUIRED,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.udf_model import compiler
@@ -24,6 +25,7 @@ class UDFModel(TrackedModel, name="udf"):
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
         self.inputs = get_input_attributes(self.config, state=state, schema=schema)
+        prepare_optional_attributes(self.config, self.inputs)
         self.udfs = [info.make_udf(state, schema=schema) for info in get_udf_infos(self.config)]
 
     def update(self, **_):
@@ -88,6 +90,11 @@ def get_input_attributes(config: dict, schema: AttributeSchema, state: TrackedSt
         )
         for key, val in inputs.items()
     }
+
+
+def prepare_optional_attributes(config, inputs: t.Dict[str, PropertyObject]):
+    for attr in config.get("optional", []):
+        inputs[attr].flags &= ~REQUIRED  # unset the REQUIRED bit
 
 
 def get_udf_infos(config):

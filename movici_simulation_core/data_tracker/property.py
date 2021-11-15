@@ -579,6 +579,8 @@ def convert_nested_list_to_csr(
     indptr = [0]
     data = []
     for entry in nested_list:
+        if entry is None:
+            entry = [data_type.undefined]
         data.extend(entry)
         indptr.append(len(data))
     return ensure_array(data, data_type), np.array(indptr, dtype="<i4")

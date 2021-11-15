@@ -22,6 +22,9 @@
         "additionalProperties": {
           "$ref": "#/definitions/attributeDef"
         }
+      },
+      "optional": {
+        "type": "array"
       }
     },
     "definitions": {
