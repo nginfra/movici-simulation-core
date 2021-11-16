@@ -96,7 +96,12 @@ class SimulationResults:
 
 
 class ResultDataset:
-    def __init__(self, init_data, updates, timeline_info: t.Optional[TimelineInfo] = None):
+    def __init__(
+        self,
+        init_data: dict,
+        updates: t.Iterable[t.Dict],
+        timeline_info: t.Optional[TimelineInfo] = None,
+    ):
         self.name = (
             init_data.get("name", None)
             or [
@@ -105,6 +110,9 @@ class ResultDataset:
                 if isinstance(val, dict) and key not in ("general",)
             ][0]
         )
+        self.metadata = {
+            k: v for k, v in init_data.items() if (k == "general" or not isinstance(v, dict))
+        }
         self.state = TimeProgressingState()
         self.state.add_init_data(init_data)
         self.state.add_updates_to_timeline(updates)
@@ -162,6 +170,7 @@ class TimeProgressingState(TrackedState):
 
     def add_init_data(self, init_data: t.Dict):
         self.receive_update(init_data)
+        self.last_timestamp = -1
 
     def add_updates_to_timeline(self, updates: t.Iterable[t.Dict]):
         sorted_updates = sorted(updates, key=lambda u: (u.get("timestamp"), u.get("iteration")))
@@ -173,7 +182,14 @@ class TimeProgressingState(TrackedState):
         for stream in self.streams.values():
             self._move_updates_to(stream, timestamp)
 
-    def get_timestamps(self, dataset, entity_group) -> t.List[int]:
+    def get_timestamps(self, dataset, entity_group=None) -> t.List[int]:
+        if entity_group is None:
+            timestamps = set()
+            for (ds, _), stream in self.streams.items():
+                if ds == dataset:
+                    timestamps.update(upd.timestamp for upd in stream)
+            return sorted(timestamps)
+
         if not self.properties.get(dataset, {}).get(entity_group):
             return []
         if (stream := self.streams.get((dataset, entity_group))) is None:

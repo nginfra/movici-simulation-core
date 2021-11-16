@@ -5,7 +5,7 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.core.plugins import Extensible, Plugin
+from movici_simulation_core.core.plugins import Extensible, Plugin, Model
 from movici_simulation_core.types import PropertyIdentifier
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 
@@ -52,7 +52,7 @@ class AttributeSchema(Extensible):
                     f"Data type {attr.data_type} is incompatible with "
                     f"data type {current.data_type}"
                 )
-            if current.enum_name != attr.enum_name:
+            if attr.enum_name and (current.enum_name != attr.enum_name):
                 raise TypeError(
                     f"Duplicate registration of attribute '{attr.full_name}':\n"
                     f"Enum name {attr.enum_name} does not match with "
@@ -75,6 +75,9 @@ class AttributeSchema(Extensible):
 
     def register_attributes(self, attributes: t.Iterable[PropertySpec]):
         self.add_attributes(attributes)
+
+    def register_model_type(self, identifier: str, model_type: t.Type[Model]):
+        self.add_attributes(model_type.get_schema_attributes())
 
     def add_from_namespace(self, ns):
         try:
@@ -117,7 +120,6 @@ class PropertySpec:
 
 T = t.TypeVar("T", bool, int, float, str)
 
-
 UNDEFINED = {
     bool: np.iinfo(np.dtype("<i1")).min,
     int: np.iinfo(np.dtype("<i4")).min,
@@ -131,6 +133,13 @@ NP_TYPES = {
     float: np.dtype("f8"),
     str: np.dtype("<U8"),
 }
+
+
+def get_undefined(dtype):
+    return {
+        **UNDEFINED,
+        **{np_type: UNDEFINED[py_type] for py_type, np_type in NP_TYPES.items()},
+    }.get(dtype)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -175,7 +184,15 @@ def get_rowptr(d: dict):
 
 
 def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
-    pytypes = {"i": int, "f": float, "U": str, "b": bool}
+    pytypes = {"f": float, "U": str, "b": bool}
+
+    def get_pytype(dtype: np.dtype):
+        if pytype := pytypes.get(dtype.kind):
+            return pytype
+        if "i1" in dtype.str:
+            return bool
+        return int
+
     if isinstance(attr_data, dict):
         data = attr_data["data"]
         is_csr = has_rowptr_key(attr_data)
@@ -186,7 +203,7 @@ def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRAr
         data = attr_data
         is_csr = False
     return DataType(
-        pytypes[data.dtype.kind],
+        get_pytype(data.dtype),
         data.shape[1:],
         is_csr,
     )

@@ -47,16 +47,19 @@ class EntityInitDataFormat:
             for key, val in obj.items()
         }
 
+    def dump_dict(self, dataset: dict):
+        return {
+            key: (
+                dump_dataset_data(val)
+                if isinstance(val, dict) and key not in self.non_data_dict_keys
+                else val
+            )
+            for key, val in dataset.items()
+        }
+
     def dumps(self, dataset: dict, **kwargs) -> str:
         return json.dumps(
-            {
-                key: (
-                    dump_dataset_data(val)
-                    if isinstance(val, dict) and key not in self.non_data_dict_keys
-                    else val
-                )
-                for key, val in dataset.items()
-            },
+            self.dump_dict(dataset),
             **kwargs,
         )
 

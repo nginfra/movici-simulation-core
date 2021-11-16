@@ -606,6 +606,21 @@ def test_can_grow_entity_group_with_new_entities():
     assert np.array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
 
 
+@pytest.mark.parametrize(
+    "track_unknown, expected",
+    [
+        (None, 0),
+        (True, OPT),
+        (False, 0),
+        (SUB, SUB),
+    ],
+)
+def test_interpret_track_unknown(track_unknown, expected):
+    kwargs = {} if track_unknown is None else {"track_unknown": track_unknown}
+    state = TrackedState(**kwargs)
+    assert state.track_unknown == expected
+
+
 def test_can_add_new_entity_groups_and_properties_in_update():
     state = TrackedState(track_unknown=OPT)
     state.register_property(

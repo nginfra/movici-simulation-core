@@ -6,7 +6,6 @@ import traceback
 import typing as t
 from multiprocessing import Process
 
-import pkg_resources
 import zmq
 from zmq import Socket
 
@@ -30,6 +29,7 @@ from movici_simulation_core.networking.stream import (
 )
 from movici_simulation_core.utils.logging import get_logger
 from movici_simulation_core.utils.moment import TimelineInfo, set_timeline_info
+from movici_simulation_core.utils.plugin import configure_global_plugins
 from movici_simulation_core.utils.settings import Settings
 
 DEFAULT_SERVICE_ADDRESS = "tcp://127.0.0.1"
@@ -128,7 +128,7 @@ class Simulation(Extensible):
             self.settings.log_level = "DEBUG"
 
         if use_global_plugins:
-            self._configure_global_plugins()
+            configure_global_plugins(self)
 
     @property
     def active_models(self):
@@ -137,11 +137,6 @@ class Simulation(Extensible):
     @property
     def active_services(self):
         return [mod for mod in self.active_modules.values() if isinstance(mod, ServiceInfo)]
-
-    def _configure_global_plugins(self):
-        for entry_point in pkg_resources.iter_entry_points("movici.plugins"):
-            plugin: Plugin = entry_point.load()
-            plugin.install(self)
 
     def configure(self, config: dict):
         """Configure a simulation by scenario config. All model types and additional services that

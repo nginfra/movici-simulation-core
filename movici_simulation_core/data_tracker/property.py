@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import dataclasses as dc
+import functools
 import typing as t
 
 import numpy as np
@@ -20,6 +21,7 @@ from ..core.schema import (
     has_rowptr_key,
     get_rowptr,
     infer_data_type_from_array,
+    get_undefined,
 )
 
 if t.TYPE_CHECKING:
@@ -90,7 +92,6 @@ class PropertyField:
 
 
 field = PropertyField
-
 
 T = t.TypeVar("T", bool, int, float, str)
 
@@ -584,3 +585,27 @@ def convert_nested_list_to_csr(
         data.extend(entry)
         indptr.append(len(data))
     return ensure_array(data, data_type), np.array(indptr, dtype="<i4")
+
+
+def get_property_aggregate(prop: PropertyObject, func: callable) -> t.Optional[bool, int, float]:
+    data = prop.array if isinstance(prop, UniformProperty) else prop.csr.data
+
+    if data is None or (undefined := get_undefined(data.dtype)) is None:
+        return None
+    return get_array_aggregate(np.asarray(data), func, exclude=undefined)
+
+
+def get_array_aggregate(array, func, exclude=None):
+    try:
+        if exclude is not None:
+            array = array[array != exclude]
+        rv = func(array)
+        rv = None if np.isnan(rv) else rv
+        return rv
+    except (TypeError, ValueError):
+        # Things like unicode arrays or zero length arrays don't have min/max
+        return None
+
+
+property_min = functools.partial(get_property_aggregate, func=np.nanmin)
+property_max = functools.partial(get_property_aggregate, func=np.nanmax)

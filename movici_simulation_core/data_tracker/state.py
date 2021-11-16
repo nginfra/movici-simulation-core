@@ -6,7 +6,6 @@ from logging import WARN
 
 import numpy as np
 
-from movici_simulation_core.data_tracker.data_format import extract_dataset_data
 from .entity_group import EntityGroup
 from .index import Index
 from .property import (
@@ -17,8 +16,10 @@ from .property import (
     create_empty_property_for_data,
     SUBSCRIBE,
     PUBLISH,
+    OPT,
 )
 from ..core.schema import propstring
+from ..data_tracker.data_format import extract_dataset_data
 from ..types import NumpyPropertyData, ComponentData, EntityData, PropertyIdentifier, ValueType
 
 PropertyDict = t.Dict[PropertyIdentifier, PropertyObject]
@@ -28,6 +29,7 @@ EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)
 class TrackedState:
     properties: t.Dict[str, t.Dict[str, PropertyDict]]
     index: t.Dict[str, t.Dict[str, Index]]
+    track_unknown: int
 
     def __init__(self, logger=None, track_unknown=0):
         """
@@ -40,6 +42,9 @@ class TrackedState:
         self.properties = {}
         self.index = {}
         self.logger = logger
+
+        if isinstance(track_unknown, bool):
+            track_unknown = track_unknown * OPT
         self.track_unknown = track_unknown
 
     def log(self, level, message):
@@ -281,7 +286,11 @@ def parse_special_values(
 
 class EntityDataHandler:
     def __init__(
-        self, properties: PropertyDict, index: Index, track_unknown=0, process_undefined=False
+        self,
+        properties: PropertyDict,
+        index: Index,
+        track_unknown: t.Union[int, bool] = 0,
+        process_undefined=False,
     ):
         self.properties = properties
         self.index = index
