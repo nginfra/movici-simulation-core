@@ -180,11 +180,10 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         if "local_entity_groups" not in config or "local_properties" not in config:
             return rv
 
-        for entity, prop, geom, iterative, mapping_type, elasticity in zip(
+        for entity, prop, geom, mapping_type, elasticity in zip(
             config.get("local_entity_groups", []),
             config.get("local_properties", []),
             config.get("local_geometries", []),
-            config.get("local_prop_is_iterative", itertools.repeat(True)),
             config.get("local_mapping_type", itertools.repeat("nearest")),
             config.get("local_elasticities", []),
         ):
@@ -196,7 +195,6 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
                 entity_name=entity_name,
                 spec=prop_spec,
                 flags=INIT,
-                atol=1e-8 if iterative else float("inf"),
             )
             info = LocalParameterInfo(
                 target_dataset=ds_name,
@@ -232,21 +230,6 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             return None
 
         self.proceed_tape(moment)
-
-        # NORMALLY, you would do something like this:
-        # if nothing changed, just lookup the next moment (or timestamp) that our coefficients
-        # would change and return that
-        # if not self._any_changes():
-        #     return self._get_next_timestep_from_tapes()
-
-        # Instead we have this as we fiddle around with our state's auto resetting of the changed
-        # property because we are subscribing and publishing to the same property which is not
-        # fully supported. Secondly this also forces the model to only publish an update on the
-        # first time it is called per timestep/timestamp.
-        if not self.demand_estimation.has_changes() and self.update_count > 0:
-            state.reset_tracked_changes(SUBSCRIBE)
-            self.update_count += 1
-            return Moment(moment.timestamp + 1)
 
         demand_matrix = self._get_demand_matrix(self._demand_property.csr)
         updated = self.demand_estimation.update(

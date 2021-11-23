@@ -1,5 +1,5 @@
 from __future__ import annotations
-import itertools
+
 import typing as t
 from collections import defaultdict
 
@@ -32,11 +32,6 @@ class DemandEstimation:
         for param in self.local_params:
             param.initialize(mapper)
 
-    def has_changes(self):
-        return any(
-            param.has_changes() for param in itertools.chain(self.global_params, self.local_params)
-        )
-
     def update(
         self, matrix: np.ndarray, force_update: bool = False, *, moment: Moment
     ) -> np.ndarray:
@@ -56,8 +51,7 @@ class DemandEstimation:
 
 
 class Contributor:
-    def has_changes(self):
-        return NotImplementedError
+    pass
 
 
 class GlobalContributor(Contributor):

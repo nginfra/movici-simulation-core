@@ -184,6 +184,12 @@ def get_rowptr(d: dict):
 
 
 def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
+    """given array data, either as an np.ndarray, TrackedCSRArray or a "data"/"row_ptr" dictionary
+    infer the `DataType` of that array data
+    """
+    # "i" is missing the dictionary below. We need to treat "i" differently because both int and
+    # bool are of type "i": int is "<i4" and bool is "|i1". `get_pytype` below handles that
+    # distinction
     pytypes = {"f": float, "U": str, "b": bool}
 
     def get_pytype(dtype: np.dtype):

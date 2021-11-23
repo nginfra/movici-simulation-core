@@ -82,6 +82,12 @@ class ConnectedModel:
         self.timer.start()
         self.busy = True
 
+    def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
+        self.logger.error(
+            f"Received invalid message {message} from model '{self.name}'. Expected one of"
+            ",".join(m.__name__ for m in valid_messages)
+        )
+
 
 class BaseModelState(State[ConnectedModel], ABC):
     valid_commands: t.Tuple[t.Type[Command], ...] = ()
@@ -114,7 +120,7 @@ class WaitingForMessage(BaseModelState):
 
     def process_command(self, msg: Command):
         if not isinstance(msg, self.valid_commands):
-            self.handle_invalid(msg)
+            self.handle_invalid(msg, self.valid_commands)
             return
 
         if isinstance(msg, NewTimeMessage):
@@ -132,7 +138,7 @@ class WaitingForMessage(BaseModelState):
         self.context.busy = False
 
         if not isinstance(msg, self.valid_responses):
-            self.handle_invalid(msg)
+            self.handle_invalid(msg, self.valid_responses)
         else:
             self._handle_response(msg)
 
@@ -187,10 +193,8 @@ class WaitingForMessage(BaseModelState):
         self.context.quit = None
         self.context.pending_updates = []
 
-    def handle_invalid(self, msg: Message):
-        # TODO: what if a model sends an invalid message after it's received a QuitMessage. Another
-        #   QuitMessage should not be sent
-
+    def handle_invalid(self, msg: Message, valid_messages: t.Iterable[t.Type[Message]]):
+        self.context.log_invalid(msg, valid_messages)
         self.context.failed = True
         if not self.context.quit:
             self.context.quit = QuitMessage()

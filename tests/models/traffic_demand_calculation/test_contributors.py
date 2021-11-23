@@ -273,9 +273,6 @@ class TestInvestmentContributor:
     def contributor(self, investments, demand_node_index):
         return InvestmentContributor([Investment(*tup) for tup in investments], demand_node_index)
 
-    def test_never_announce_changes(self, contributor):
-        assert not contributor.has_changes()
-
     @pytest.mark.parametrize(
         "investments, seconds, expected, exp_remaining",
         [

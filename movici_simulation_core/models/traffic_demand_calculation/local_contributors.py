@@ -426,9 +426,6 @@ class InvestmentContributor(LocalContributor):
         self.index = demand_node_index
         self.investments: t.List[Investment] = list(reversed(investments))
 
-    def has_changes(self):
-        return False
-
     def update_demand(self, matrix: np.ndarray, force_update: bool = False, *, moment: Moment):
         while self.investments and self.investments[-1].seconds <= moment.seconds:
             investment = self.investments.pop()

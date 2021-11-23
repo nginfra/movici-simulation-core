@@ -618,10 +618,6 @@ class TestCargoWithNonIterativeLocalParameters:
                         }
                     },
                 },
-                {
-                    "time": 3,
-                    "data": None,
-                },
             ],
             "expected_results": [
                 {
@@ -649,11 +645,6 @@ class TestCargoWithNonIterativeLocalParameters:
                 },
                 {
                     "time": 2,
-                    "data": None,
-                    "next_time": 3,
-                },
-                {
-                    "time": 3,
                     "data": {
                         road_network_name: {
                             "virtual_node_entities": {
@@ -866,7 +857,6 @@ class TestCargoWithLocalRouting:
                         }
                     },
                 },
-                {"time": 2, "data": None},
                 {
                     "time": 3,
                     "data": {
@@ -891,11 +881,6 @@ class TestCargoWithLocalRouting:
                 },
                 {
                     "time": 0,
-                    "data": None,
-                    "next_time": 1,
-                },
-                {
-                    "time": 2,
                     "data": {
                         water_network_name: {
                             "virtual_node_entities": {
