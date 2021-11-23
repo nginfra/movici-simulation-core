@@ -7,10 +7,10 @@ from movici_simulation_core.networking.messages import ModelMessage, Message
 from movici_simulation_core.networking.stream import Stream
 from .context import (
     Context,
-    TimelineController,
-    ModelCollection,
-    ConnectedModel,
 )
+from .timeline import TimelineController
+from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
+from movici_simulation_core.services.orchestrator.connected_model import ConnectedModel
 from .fsm import FSM, FSMDone
 from .states import StartInitializingPhase
 

@@ -23,8 +23,8 @@ class Message:
 
 @dataclasses.dataclass
 class RegistrationMessage(Message):
-    pub: dict
-    sub: dict
+    pub: t.Optional[dict]
+    sub: t.Optional[dict]
 
 
 class BaseUpdateMessage:
@@ -129,6 +129,10 @@ class GetDataMessage(Message):
 class PutDataMessage(Message):
     key: str
     data: bytes = dataclasses.field(repr=False)
+    size: int = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        self.size = len(self.data)
 
     @classmethod
     def from_bytes(cls, raw_message: MultipartMessage) -> Message:
@@ -147,6 +151,10 @@ class ClearDataMessage(Message):
 @dataclasses.dataclass
 class DataMessage(Message):
     data: bytes = dataclasses.field(repr=False)
+    size: int = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        self.size = len(self.data)
 
     @classmethod
     def from_bytes(cls, raw_message: MultipartMessage) -> Message:

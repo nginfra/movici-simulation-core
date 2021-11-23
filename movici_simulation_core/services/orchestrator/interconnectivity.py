@@ -27,7 +27,7 @@ def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):
 
     def model_row(model):
         return first_column(box(model_nums[model.name]) + model.name) + "".join(
-            box(match if sub in model.subscribers else "") for sub in models
+            box(match if sub in model.publishes_to else "") for sub in models
         )
 
     def first_column(val: t.Any = ""):

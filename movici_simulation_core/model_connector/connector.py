@@ -81,6 +81,7 @@ class ModelConnector:
         return RegistrationMessage(pub=self.data_mask["pub"], sub=self.data_mask["sub"])
 
     def new_time(self, message: NewTimeMessage):
+        self.updates.clear()
         self.model.new_time(message)
 
     def update(self, update: UpdateMessage) -> ResultMessage:

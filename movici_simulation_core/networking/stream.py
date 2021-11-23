@@ -150,5 +150,4 @@ class Stream(t.Generic[T]):
     def send(self, payload: T):
         self._log("debug", f"Sending: {payload}")
         rv = self.socket.send(payload)
-        self._log("debug", f"Sent: {payload}")
         return rv

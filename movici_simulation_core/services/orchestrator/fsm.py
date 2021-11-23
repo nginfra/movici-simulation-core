@@ -79,10 +79,15 @@ class FSM(t.Generic[T, E]):
         send_silent(self.runner, event)
 
     def transition(self):
-        for cond, new_state in self.state.transitions():
-            if cond(context=self.context):
-                self.state = new_state(context=self.context)
-                return
+        if new_state := next_state(self.state):
+            self.state = new_state(self.context)
+
+
+def next_state(state: State) -> t.Optional[t.Type[State]]:
+    for cond, new_state in state.transitions():
+        if cond(state.context):
+            return new_state
+    return None
 
 
 class Event:
@@ -92,6 +97,10 @@ class Event:
 class State(ABC, t.Generic[T]):
     def __init__(self, context: T):
         self.context = context
+        self.on_enter()
+
+    def on_enter(self):
+        pass
 
     @abstractmethod
     def run(self):

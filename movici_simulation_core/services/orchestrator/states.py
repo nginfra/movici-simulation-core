@@ -1,18 +1,8 @@
 from __future__ import annotations
 
-import time
-import typing as t
 from abc import ABC
 
-from movici_simulation_core.exceptions import SimulationExit
-from movici_simulation_core.networking.messages import (
-    Message,
-    RegistrationMessage,
-    ResultMessage,
-    AcknowledgeMessage,
-    QuitMessage,
-    ErrorMessage,
-)
+from movici_simulation_core.networking.messages import QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
     State,
@@ -29,7 +19,7 @@ class OrchestratorCondition(Condition[Context], ABC):
 
 class AllModelsReady(OrchestratorCondition):
     def met(self) -> bool:
-        return not (self.context.models.waiting or self.context.models.messages_pending)
+        return not self.context.models.busy
 
 
 class AllModelsDone(OrchestratorCondition):
@@ -48,8 +38,6 @@ class OrchestratorState(State[Context]):
 
 class StartInitializingPhase(OrchestratorState):
     def run(self):
-        self.context.models.wait_for_all()
-        self.context.models.start_model_timers()
         self.context.global_timer.start()
         self.context.phase_timer.start()
         self.context.log_new_phase("Initializing Phase")
@@ -59,27 +47,15 @@ class StartInitializingPhase(OrchestratorState):
 
 
 class WaitForModels(OrchestratorState, ABC):
-    valid_messages: t.Optional[t.Tuple[t.Type[Message]]] = None
-    raise_on_invalid = True
-
     def run(self):
         ident, msg = yield
-        self.context.last_return = time.monotonic()
 
         if not (model := self.context.models.get(ident)):
             return
-
-        try:
-            model.handle_message(msg, self.valid_messages, raise_on_invalid=self.raise_on_invalid)
-        except SimulationExit:
-            model.failed = True
-        else:
-            self.context.models.send_pending_messages()
+        model.recv_event(msg)
 
 
 class ModelsRegistration(WaitForModels):
-    valid_messages = (RegistrationMessage, ErrorMessage)
-
     def transitions(self) -> TransitionsT:
         return [
             (Failed, StartFinalizingPhase),
@@ -100,17 +76,14 @@ class StartRunningPhase(OrchestratorState):
 
 class NewTime(OrchestratorState):
     def run(self):
-        self.context.timeline.queue_for_next_time(self.context.models)
         self.context.log_new_time()
-        self.context.models.send_pending_messages()
+        self.context.timeline.queue_for_next_time(self.context.models)
 
     def transitions(self) -> TransitionsT:
         return [(Always, WaitForResults)]
 
 
 class WaitForResults(WaitForModels):
-    valid_messages = (ResultMessage, AcknowledgeMessage, ErrorMessage)
-
     def transitions(self) -> TransitionsT:
         return [
             (Failed, StartFinalizingPhase),
@@ -123,18 +96,13 @@ class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Finalizing Phase")
-        self.context.models.clear_queue()
         self.context.models.queue_all(QuitMessage())
-        self.context.models.send_pending_messages()
 
     def transitions(self) -> TransitionsT:
         return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]
 
 
 class FinalizingWaitForModels(WaitForModels):
-    valid_messages = (AcknowledgeMessage, ErrorMessage)
-    raise_on_invalid = False
-
     def transitions(self) -> TransitionsT:
         return [(AllModelsReady, EndFinalizingPhase)]
 

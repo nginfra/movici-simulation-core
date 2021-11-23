@@ -1,6 +1,7 @@
 import typing as t
 
-from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
+from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
+from movici_simulation_core.services.orchestrator.connected_model import ConnectedModel
 from movici_simulation_core.services.orchestrator.interconnectivity import (
     format_matrix,
 )

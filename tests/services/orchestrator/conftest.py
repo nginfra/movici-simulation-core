@@ -3,7 +3,8 @@ from unittest.mock import MagicMock, Mock
 import pytest
 import time
 
-from movici_simulation_core.services.orchestrator.context import ModelCollection, Context
+from movici_simulation_core.services.orchestrator.context import Context
+from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
 
 
 class Clock:

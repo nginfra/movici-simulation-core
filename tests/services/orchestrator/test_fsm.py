@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from unittest.mock import Mock
 
 import pytest
 
@@ -28,6 +29,13 @@ class DummyState(State[DummyContext]):
         if self.is_final:
             raise FSMDone
 
+    on_enter = Mock()
+
+
+@pytest.fixture(autouse=True)
+def reset_mock():
+    DummyState.on_enter.reset_mock()
+
 
 class EventState(State[DummyContext]):
     is_final = False
@@ -38,6 +46,16 @@ class EventState(State[DummyContext]):
         self.context.events.append(event)
         if self.is_final:
             raise FSMDone
+
+
+def test_calls_on_enter_when_starting():
+    class StateA(DummyState):
+        is_final = True
+        on_enter = Mock()
+
+    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm.start()
+    StateA.on_enter.call_count == 1
 
 
 def test_fsm_runs_a_state():
@@ -60,6 +78,35 @@ def test_fsm_does_a_transition():
     fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
     fsm.start()
     assert fsm.context.states == [StateA, StateB]
+
+
+def test_fsm_calls_on_enter_on_transition():
+    class StateA(DummyState):
+        def transitions(self) -> TransitionsT:
+            return [(Always, StateB)]
+
+    class StateB(DummyState):
+        is_final = True
+        on_enter = Mock()
+
+    assert StateA.on_enter is not StateB.on_enter
+
+    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm.start()
+    assert StateB.on_enter.call_count == 1
+
+
+def test_fsm_doensnt_call_on_enter_when_not_transitioning():
+    class StateA(DummyState):
+        def run(self):
+            super().run()
+            self.is_final = True
+
+    context = DummyContext()
+    fsm = FSM(StateA, context=context, raise_on_done=False)
+    fsm.start()
+    assert context.states == [StateA, StateA]
+    assert StateA.on_enter.call_count == 1
 
 
 def test_evented_state_handles_event():

@@ -29,7 +29,7 @@ if t.TYPE_CHECKING:
 
 # Base property pub/sub flags
 # These are used internally when checking for attributes, model developers should use the combined
-# flags below
+# flags below such as INIT, SUB, OPT and PUB
 INITIALIZE = 1
 SUBSCRIBE = 1 << 1
 REQUIRED = 1 << 2
