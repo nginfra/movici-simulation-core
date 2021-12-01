@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import typing as t
 from collections import defaultdict
 
@@ -76,6 +77,7 @@ class LocalContributor(Contributor):
         state: TrackedState,
         settings: Settings,
         schema: AttributeSchema,
+        logger: logging.Logger
     ):
         pass
 

@@ -23,6 +23,7 @@ from movici_simulation_core.models.traffic_demand_calculation.common import (
     LocalContributor,
     LocalMapper,
 )
+from movici_simulation_core.models.traffic_demand_calculation.network import Network
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
 
@@ -154,19 +155,18 @@ class RouteCostFactor(LocalEffectsContributor):
     _transport_nodes: t.Optional[PointEntity] = None
     _demand_nodes: t.Optional[PointEntity] = None
     _demand_links: t.Optional[VirtualLinkEntity] = None
-    _project: t.Optional[ProjectWrapper] = None
+    _network: t.Optional[Network] = None
 
     def setup(
         self,
         state: TrackedState,
         settings: Settings,
+        logger: logging.Logger,
         **_,
     ):
         ds_name = self.info.target_dataset
         entity_name = self.info.target_entity_group
         geom = self.info.target_geometry
-
-        self._project = ProjectWrapper(Path(settings.temp_dir, ds_name))
 
         if geom != "line":
             raise RuntimeError(f"Local property routing has to have line type, not {geom}")
@@ -188,28 +188,21 @@ class RouteCostFactor(LocalEffectsContributor):
         self._demand_links = state.register_entity_group(
             ds_name, VirtualLinkEntity(name="virtual_link_entities")
         )
-        self._logger = state.logger
+        self._logger = logger
 
     def initialize(self, mapper: LocalMapper):
         self._transport_segments.ensure_ready()
         self._indices = mapper.get_nearest(self._demand_nodes)
 
-        ae_util.fill_project(
-            self._project,
-            demand_nodes=self._demand_nodes,
-            demand_links=self._demand_links,
+        self._network = Network(
+            virtual_nodes=self._demand_nodes,
+            virtual_links=self._demand_links,
             transport_nodes=self._transport_nodes,
-            transport_segments=self._transport_segments,
+            transport_links=self._transport_segments,
         )
-
-        self._project.add_column("cost_field")
 
     def calculate_values(self):
-        self._project.update_column("cost_field", self._property.array)
-        self._project.build_graph(
-            cost_field="cost_field",
-            block_centroid_flows=True,
-        )
+        self._network.update_cost_factor(self._property.array)
         return self._get_local_route_cost()
 
     def calculate_contribution(self, new_values, old_values):
@@ -227,29 +220,18 @@ class RouteCostFactor(LocalEffectsContributor):
         Then we sample that back to N nearest
         """
         ids = self._demand_nodes.index.ids
-        segment_index = self._transport_segments.index
 
         unique_indices = np.unique(self._indices)
-        nb_unique_nodes = len(unique_indices)
-        summed_values = np.zeros(shape=(nb_unique_nodes, nb_unique_nodes), dtype=np.float64)
-        for i, from_idx in enumerate(unique_indices):
-            paths = self._project.get_shortest_paths(ids[from_idx], ids[unique_indices])
-            for j, (to_idx, path) in enumerate(zip(unique_indices, paths)):
-                if i == j:
-                    continue
-                if path is None:
-                    self._logger.debug(
-                        f"Nodes {ids[from_idx]}-{ids[to_idx]} "
-                        f"do not have a valid path between them."
-                    )
-                    continue
-
-                roads_indices = segment_index[path.links][1:-1]
-                summed_values[i][j] = self._property[roads_indices].sum()
+        dists = self._network.all_shortest_paths(ids[unique_indices])
+        for (x, y) in zip(*np.where(dists == np.inf)):
+            self._logger.debug(
+                f"Nodes {ids[x]}-{ids[y]} " f"do not have a valid path between them."
+            )
+        dists[np.where(dists == np.inf)] = 1e14
 
         # rebuild requested sized matrix of shape=(len(self._closest_idx), len(self._closest_idx))
         orig_idx = self._array_index_in_array(unique_indices, self._indices)
-        return summed_values[:, orig_idx][orig_idx, :]
+        return dists[:, orig_idx][orig_idx, :]
 
     @staticmethod
     def _array_index_in_array(x: np.ndarray, y: np.ndarray):
@@ -260,11 +242,6 @@ class RouteCostFactor(LocalEffectsContributor):
         sorted_x = x[index]
         sorted_index = np.searchsorted(sorted_x, y)
         return sorted_index
-
-    def close(self):
-        if self._project:
-            self._project.close()
-            self._project = None
 
 
 class InducedDemand(LocalEffectsContributor):

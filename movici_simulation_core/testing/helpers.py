@@ -3,7 +3,11 @@ from pathlib import Path
 
 import numpy as np
 
+from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
+from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.property import PropertySpec, DataType, PropertyField
+from movici_simulation_core.data_tracker.state import TrackedState
 
 
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
@@ -19,6 +23,20 @@ def get_property(name="prop", component=None, **kwargs):
         spec=PropertySpec(name=name, component=component, data_type=DataType(int, (), False))
     )
     return PropertyField(**{**spec, **kwargs})
+
+
+T = t.TypeVar("T", bound=EntityGroup)
+
+
+def create_entity_group_with_data(entity_type: t.Union[T, t.Type[T]], data: dict) -> T:
+    DATASET = "dummy"
+    state = TrackedState()
+    entity_group = state.register_entity_group(DATASET, entity_type)
+    schema = AttributeSchema(prop.spec for prop in entity_type.all_properties().values())
+    state.receive_update(
+        EntityInitDataFormat(schema).load_json({DATASET: {entity_group.__entity_name__: data}})
+    )
+    return entity_group
 
 
 def compare_dataset_dicts(a, b, rtol=1e-5, atol=1e-8):

@@ -178,7 +178,7 @@ class Parser:
         return node
 
     def atom(self):
-        """ factor : num | function_or_name | "(" expr ")" """
+        """factor : num | function_or_name | "(" expr ")" """
         token = self.current_token
         if self.expect("num"):
             return Num(token.text)
@@ -193,7 +193,7 @@ class Parser:
         self.error()
 
     def function_or_name(self):
-        """ function_or_name : name "(" expr? ("," expr)*  ")" | name """
+        """function_or_name : name "(" expr? ("," expr)*  ")" | name"""
         token = self.current_token
 
         if self.expect("name"):

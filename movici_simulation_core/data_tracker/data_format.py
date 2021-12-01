@@ -236,9 +236,9 @@ def dump_tracked_csr_array(csr: TrackedCSRArray, data_type=None):
     ]
 
 
-def dump_uniform_attribute(attribute_dict, data_type):
+def dump_uniform_attribute(attribute_dict, data_type: DataType):
     array = attribute_dict["data"]
-    rv = array.tolist()
+    rv = array.astype(data_type.py_type).tolist()
     for idx in np.flatnonzero(is_undefined_uniform(array, data_type)):
         rv[idx] = None
     return rv

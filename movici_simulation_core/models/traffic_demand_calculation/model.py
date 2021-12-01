@@ -1,4 +1,5 @@
 import itertools
+import logging
 import typing as t
 
 import numpy as np
@@ -87,6 +88,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         settings: Settings,
         schema: AttributeSchema,
         init_data_handler: InitDataHandler,
+        logger: logging.Logger,
         **_,
     ):
         self.configure_demand_nodes(state, schema)
@@ -94,7 +96,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         global_contributors = self.get_global_elasticity_contributors(init_data_handler)
         scenario_multipliers = self.get_scenario_multipliers()
         local_contributors = self.get_local_contributors(
-            settings=settings, state=state, schema=schema
+            settings=settings, state=state, schema=schema, logger=logger
         )
         investments = self.get_investment_contributors()
 
@@ -173,7 +175,11 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         ]
 
     def get_local_contributors(
-        self, settings: Settings, state: TrackedState, schema: AttributeSchema
+        self,
+        settings: Settings,
+        state: TrackedState,
+        schema: AttributeSchema,
+        logger: logging.Logger,
     ) -> t.List[LocalContributor]:
         config = self.config
         rv = []
@@ -204,11 +210,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
                 elasticity=elasticity,
             )
             calculator = self._local_mapping_type_to_calculators_dict[mapping_type](info)
-            calculator.setup(
-                state=state,
-                settings=settings,
-                schema=schema,
-            )
+            calculator.setup(state=state, settings=settings, schema=schema, logger=logger)
             rv.append(calculator)
         return rv
 

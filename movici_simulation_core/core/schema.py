@@ -8,6 +8,7 @@ import numpy as np
 from movici_simulation_core.core.plugins import Extensible, Plugin, Model
 from movici_simulation_core.types import PropertyIdentifier
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
+from movici_simulation_core.utils.plugin import configure_global_plugins
 
 
 class AttributeSchema(Extensible):
@@ -87,6 +88,14 @@ class AttributeSchema(Extensible):
 
         except TypeError as e:
             raise TypeError("Could not read from namespace") from e
+
+
+def get_global_schema():
+    schema = AttributeSchema()
+    configure_global_plugins(
+        schema,
+    )
+    return schema
 
 
 def attribute_plugin_from_dict(d: dict):

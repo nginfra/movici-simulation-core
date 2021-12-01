@@ -9,7 +9,8 @@ from movici_simulation_core.utils.settings import Settings
 
 def get_logger(settings: Settings, name=None, capture_warnings=True):
     logger = logging.getLogger(name or settings.name)
-    logger.setLevel(settings.log_level)
+    level = logging.getLevelName(settings.log_level.upper())
+    logger.setLevel(level)
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter(settings.log_format, style="{"))
     logger.addHandler(handler)

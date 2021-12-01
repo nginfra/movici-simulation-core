@@ -1,6 +1,5 @@
 import numpy as np
 import numpy.typing as npt
-from pandas.core.indexes.base import InvalidIndexError
 
 from movici_simulation_core.data_tracker.index import Index
 
@@ -15,11 +14,8 @@ class IdGenerator:
         self.index = Index()
 
     def get_new_ids(self, original_ids: npt.ArrayLike) -> np.ndarray:
-        try:
-            self.index.add_ids(original_ids)
-            return self.index[original_ids] + 1
-        except InvalidIndexError:
-            raise ValueError("Index is non unique")
+        self.index.add_ids(original_ids)
+        return self.index[original_ids] + 1
 
     def query_new_ids(self, original_ids: npt.ArrayLike) -> np.ndarray:
         index = self.index[original_ids]

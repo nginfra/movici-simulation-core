@@ -1,3 +1,4 @@
+import logging
 from unittest.mock import Mock
 
 import numpy as np
@@ -217,7 +218,7 @@ class TestRouteCostFactor:
         self, road_network_name, update_data, parameter_info, state, mapper
     ) -> RouteCostFactor:
         calc = RouteCostFactor(parameter_info)
-        calc.setup(state, Settings())
+        calc.setup(state, Settings(), logging.getLogger())
 
         state.receive_update(update_data)
         calc.initialize(mapper)
@@ -227,7 +228,12 @@ class TestRouteCostFactor:
     def test_calculate_values(self, calculator, property, input_val):
         base_path_travel_costs = np.array([[0, 0, 2], [0, 0, 2], [1, 1, 0]])
         property[:] = input_val
-        assert np.array_equal(calculator.calculate_values(), base_path_travel_costs * input_val)
+        np.testing.assert_allclose(
+            calculator.calculate_values(),
+            base_path_travel_costs * input_val,
+            rtol=1e-10,
+            atol=1e-11,
+        )
 
     def test_update_demand(self, calculator, property):
         base_costs = np.array([[0, 0, 2], [0, 0, 2], [1, 1, 0]])
@@ -239,7 +245,7 @@ class TestRouteCostFactor:
 
         expected = np.ones_like(input_matrix)
         expected[np.nonzero(base_costs)] = 2 ** 2  # (2*bc/bc) ** elasticity
-        np.testing.assert_array_equal(result, expected)
+        np.testing.assert_allclose(result, expected, rtol=1e-10, atol=1e-11)
 
 
 def test_demand_estimation_global_parameters_update_demand(simple_demand):

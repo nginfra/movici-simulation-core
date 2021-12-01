@@ -60,7 +60,7 @@ class EntityGroup:
         return self.state.get_property(identifier)
 
     @classmethod
-    def all_properties(cls):
+    def all_properties(cls) -> t.Dict[str, PropertyField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
         return dict(itertools.chain.from_iterable(b.properties.items() for b in reversed(bases)))
 
