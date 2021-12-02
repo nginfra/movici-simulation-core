@@ -226,18 +226,14 @@ class Model(TrackedModel, name="traffic_kpi"):
             return _scenario_parameters
 
     def _initialize_scenario_parameters_tape(self, data_handler: InitDataHandler, name: str):
-        dtype, data = data_handler.get(name)
-        if dtype != FileType.CSV:
-            raise RuntimeError("Given non-csv as CSV input")
+        dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
         csv: pd.DataFrame = pd.read_csv(data)
         self.scenario_parameters_tape = CsvTape()
         self.scenario_parameters_tape.initialize(csv)
         self.scenario_parameters_tape.proceed_to(Moment(0))
 
     def initialize_coefficients(self, data_handler: InitDataHandler, name: str):
-        dtype, data = data_handler.get(name)
-        if dtype != FileType.CSV:
-            raise RuntimeError("Given non-csv as CSV input")
+        dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
         csv: pd.DataFrame = pd.read_csv(data)
         self.coefficients_tape.initialize(csv)
 

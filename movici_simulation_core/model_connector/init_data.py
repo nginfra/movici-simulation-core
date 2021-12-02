@@ -5,6 +5,8 @@ import os
 import pathlib
 import typing as t
 
+import msgpack
+
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.networking.client import RequestClient, Sockets
@@ -18,6 +20,16 @@ class InitDataHandler:
     def get_type_and_path(self, path) -> t.Tuple[FileType, DatasetPath]:
         dtype = FileType.from_extension(path.suffix)
         return dtype, DatasetPath(path)
+
+    def ensure_ftype(self, name: str, ftype: FileType):
+        result_ftype, path = self.get(name)
+        if result_ftype is None:
+            raise ValueError(f"Error retrieving dataset {name}: Not found")
+        if result_ftype != ftype:
+            raise ValueError(
+                f"Error retrieving dataset {name}: Expected {ftype.name}, got {result_ftype.name}"
+            )
+        return result_ftype, path
 
 
 @dataclasses.dataclass
@@ -64,7 +76,7 @@ class DatasetPath(pathlib.Path):
     _flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
 
     def read_dict(self):
-        return NotImplementedError
+        raise NotImplementedError
 
 
 class _JsonPath(DatasetPath):
@@ -74,21 +86,47 @@ class _JsonPath(DatasetPath):
         return EntityInitDataFormat(self.schema).load_bytes(self.read_bytes())
 
 
-def JsonPath(path, schema: t.Optional[AttributeSchema] = None):
-    """JsonPath is a subclass of `pathlib.Path` that points to JSON dataset file. It has one
+class _MsgpackPath(DatasetPath):
+    schema: t.Optional[AttributeSchema] = None
+
+    def read_dict(self):
+        return EntityInitDataFormat(self.schema).load_json(msgpack.unpackb(self.read_bytes()))
+
+
+def _serialized_dict_path(cls, docstr=None):
+    # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
+    # initialization method. So instead we use a custom factory function posing as a class
+    # constructor, to set additional attributes
+    def constructor(path, schema: t.Optional[AttributeSchema] = None):
+        obj = cls(path)
+        obj.schema = schema
+        return obj
+
+    if docstr is not None:
+        constructor.__doc__ = docstr
+    return constructor
+
+
+JsonPath = _serialized_dict_path(
+    _JsonPath,
+    docstr="""JsonPath is a subclass of `pathlib.Path` that points to JSON dataset file. It has one
     additional method `read_dict` that returns a dictionary of the dataset, assuming entity based
     data
 
     :param path: The location of the the dataset file
     :param schema: An attribute schema for interpreting the entity based data.
-    """
-    # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
-    # initialization method. So instead we use a custom factory function posing as a class
-    # constructor, to set additional attributes
+    """,
+)
+MsgpackPath = _serialized_dict_path(
+    _MsgpackPath,
+    docstr="""MsgpackPath is a subclass of `pathlib.Path` that points to msgpack dataset file.
+    It has one additional method `read_dict` that returns a dictionary of the dataset, assuming
+    :param path: The location of the the dataset file
+    entity based data
 
-    obj = _JsonPath(path)
-    obj.schema = schema
-    return obj
+    :param schema: An attribute schema for interpreting the entity based data.
+    """,
+)
 
 
 class FileType(enum.Enum):

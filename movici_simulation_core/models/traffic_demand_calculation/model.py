@@ -159,9 +159,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     @staticmethod
     def get_global_parameters_tape(data_handler: InitDataHandler, name: str) -> CsvTape:
-        dtype, data = data_handler.get(name)
-        if dtype != FileType.CSV:
-            raise RuntimeError("Given non-csv as CSV input")
+        dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
         csv: pd.DataFrame = pd.read_csv(data)
         tape = CsvTape()
         tape.initialize(csv)

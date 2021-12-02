@@ -6,6 +6,7 @@ from movici_simulation_core.model_connector.init_data import (
     DatasetPath,
     JsonPath,
     FileType,
+    MsgpackPath,
 )
 
 
@@ -20,4 +21,6 @@ class SchemaAwareInitDataHandler(InitDataHandler):
             return None, None
         if dtype == FileType.JSON:
             path = JsonPath(path, self.schema)
+        if dtype == FileType.MSGPACK:
+            path = MsgpackPath(path, self.schema)
         return dtype, path

@@ -67,9 +67,7 @@ class Model(TrackedModel, name="unit_conversions"):
         pass
 
     def initialize_coefficients(self, data_handler: InitDataHandler, name: str):
-        dtype, data = data_handler.get(name)
-        if dtype != FileType.CSV:
-            raise RuntimeError("Given non-csv as CSV input")
+        dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
         csv: pd.DataFrame = pd.read_csv(data)
         self.coefficients_tape.initialize(csv)
 
