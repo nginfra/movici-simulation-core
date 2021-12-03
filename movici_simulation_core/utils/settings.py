@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     class Config:
         env_prefix = "movici_"
         fields = {
-            "log_level": {"env": ["log_level", "loglevel"]},
-            "log_format": {"env": ["log_format", "logformat"]},
+            "log_level": {"env": ["movici_log_level", "movici_loglevel"]},
+            "log_format": {"env": ["movici_log_format", "movici_logformat"]},
         }
 
     def apply_scenario_config(self, config: dict):

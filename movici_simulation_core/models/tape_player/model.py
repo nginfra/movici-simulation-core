@@ -1,6 +1,7 @@
 import dataclasses
 import typing as t
 
+import msgpack
 import ujson as json
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
@@ -13,7 +14,7 @@ from movici_simulation_core.core.schema import (
 from movici_simulation_core.data_tracker.data_format import load_from_json
 from movici_simulation_core.data_tracker.property import PUB
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.model_connector.init_data import InitDataHandler
+from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.utils.moment import Moment, get_timeline_info
 
@@ -32,10 +33,16 @@ class Model(TrackedModel, name="tape_player"):
         self.timeline = TimeSeries()
 
         for tape_name in self.config.get("tabular", []):
-            _, tapefile_path = init_data_handler.get(tape_name)
+            ftype, tapefile_path = init_data_handler.get(tape_name)
             if tapefile_path is None:
                 raise ValueError(f"Tapefile dataset {tape_name} not found!")
-            tapefile = json.loads(tapefile_path.read_text())
+            if ftype == FileType.JSON:
+                tapefile = json.loads(tapefile_path.read_text())
+            elif ftype == FileType.MSGPACK:
+                tapefile = msgpack.unpackb(tapefile_path.read_bytes())
+            else:
+                raise TypeError(f"Invalid data type for tabular data '{tape_name}: {ftype.name}")
+
             self.process_tape(tapefile, schema)
 
         for info in self.pub_attributes:
