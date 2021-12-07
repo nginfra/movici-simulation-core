@@ -191,31 +191,13 @@ def test_is_ready_for2(
     assert state.is_ready_for(ready_flags) == expected
 
 
-def test_pub_sub_filter():
+def test_get_data_mask():
     state = TrackedState()
     state.register_dataset("pub_dataset", [Pub])
     state.register_dataset("sub_dataset", [Sub])
-    assert state.get_pub_sub_filter() == {
-        "pub": {
-            "pub_dataset": {
-                "pub_entities": {
-                    "pub_prop": "*",
-                    "component": {
-                        "comp_prop": "*",
-                    },
-                }
-            }
-        },
-        "sub": {
-            "sub_dataset": {
-                "sub_entities": {
-                    "id": "*",
-                    "sub_prop": "*",
-                    "init_prop": "*",
-                    "opt_prop": "*",
-                }
-            }
-        },
+    assert state.get_data_mask() == {
+        "pub": {"pub_dataset": {"pub_entities": ["pub_prop", "component/comp_prop"]}},
+        "sub": {"sub_dataset": {"sub_entities": ["sub_prop", "init_prop", "opt_prop"]}},
     }
 
 

@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import abc
 import dataclasses
 import dataclasses as dc
-import functools
-import typing as t
 
+import abc
+import functools
 import numpy as np
+import typing as t
 
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
 from .csr_helpers import generate_update, remove_undefined_csr, isclose
 from .data_format import is_undefined_uniform, is_undefined_csr
 from .index import Index
-from ..types import UniformPropertyData, CSRPropertyData, NumpyPropertyData
 from .unicode_helpers import determine_new_unicode_dtype
 from ..core.schema import (
     PropertySpec,
@@ -23,6 +22,7 @@ from ..core.schema import (
     infer_data_type_from_array,
     get_undefined,
 )
+from ..types import UniformPropertyData, CSRPropertyData, NumpyPropertyData
 
 if t.TYPE_CHECKING:
     from .entity_group import EntityGroup

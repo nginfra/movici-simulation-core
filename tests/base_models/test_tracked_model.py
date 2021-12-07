@@ -1,5 +1,6 @@
 import json
 import typing as t
+from movici_simulation_core.core.schema import AttributeSchema
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -66,9 +67,19 @@ def model(entity_group):
 
 
 @pytest.fixture
-def get_adapter(settings):
+def get_adapter(settings, entity_group):
     def _get_adapter(model, override_settings=None):
-        return TrackedModelAdapter(model, settings=override_settings or settings, logger=Mock())
+        adapter = TrackedModelAdapter(model, settings=override_settings or settings, logger=Mock())
+        adapter.set_schema(
+            AttributeSchema(
+                [
+                    entity_group.init_prop.spec,
+                    entity_group.pub_prop.spec,
+                    entity_group.sub_prop.spec,
+                ]
+            )
+        )
+        return adapter
 
     return _get_adapter
 

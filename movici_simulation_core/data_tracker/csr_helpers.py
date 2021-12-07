@@ -6,6 +6,7 @@ from numba.core.types import real_domain, complex_domain, number_domain
 from numba.np.numpy_support import type_can_asarray
 
 from .numba_extensions import generated_jit
+from .unicode_helpers import largest_unicode_dtype
 
 
 @numba.njit(cache=True)
@@ -15,7 +16,7 @@ def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         rv[i] = (data_row.shape == row.shape) and np.all(
-            isclose(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
+            isclose_numba(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
         )
     return rv
 
@@ -25,7 +26,7 @@ def rows_contain(data, row_ptr, val, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
-        rv[i] = np.any(isclose(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
+        rv[i] = np.any(isclose_numba(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
     return rv
 
 
@@ -36,7 +37,7 @@ def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         for item in vals:
-            if np.any(isclose(data_row, item, rtol=rtol, atol=atol, equal_nan=equal_nan)):
+            if np.any(isclose_numba(data_row, item, rtol=rtol, atol=atol, equal_nan=equal_nan)):
                 rv[i] = True
                 break
     return rv
@@ -148,7 +149,7 @@ def update_csr_array(
 
         if changes is not None:
             is_equal = (old_row.shape == new_row.shape) and np.all(
-                isclose(old_row, new_row, rtol, atol, equal_nan)
+                isclose_numba(old_row, new_row, rtol, atol, equal_nan)
             )
             changes[pos] = not is_equal
         set_row(new_data, new_row_ptr, pos, new_row)
@@ -176,7 +177,7 @@ def remove_undefined_csr(
         idx = row_ptr[i]
         idx2 = row_ptr[i + 1]
         data_field = data[idx:idx2]
-        if len(data_field) == 1 and np.all(isclose(data_field, undefined, equal_nan=True)):
+        if len(data_field) == 1 and np.all(isclose_numba(data_field, undefined, equal_nan=True)):
             continue
         new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
         new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field
@@ -239,14 +240,22 @@ def generate_update(data, row_ptr, mask, changed, undefined):
     return upd_data, upd_row_ptr
 
 
-@generated_jit(cache=True)
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Versatile function to determine whether two arrays, or an array and a value are close.
     Uses `np.isclose` for numeric values and arrays, and custom implementations for
-    string and unicode arrays. When using this function for string comparisons,
-    this function may be slower than expected because numba may fall back to python
-    mode
+    string and unicode arrays. This converts unicode arrays so that they are of uniform size and
+    can be properly used in numba jit-compiled functions
     """
+    if dtype := largest_unicode_dtype(a, b):
+        if isinstance(a, np.ndarray):
+            a = np.asarray(a, dtype=dtype)
+        if isinstance(b, np.ndarray):
+            b = np.asarray(b, dtype=dtype)
+    return isclose_numba(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+
+
+@generated_jit(cache=True, nopython=True)
+def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     inexact_domain = real_domain | complex_domain
     if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
         getattr(b, "dtype", None) in inexact_domain or b in inexact_domain

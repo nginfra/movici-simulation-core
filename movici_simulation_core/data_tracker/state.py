@@ -1,10 +1,9 @@
-import typing as t
-import warnings
 from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
 
 import numpy as np
+import typing as t
 
 from .entity_group import EntityGroup
 from .index import Index
@@ -146,21 +145,6 @@ class TrackedState:
         if flags not in (SUBSCRIBE, PUBLISH):
             raise ValueError("flag must be SUBSCRIBE and/or PUBLISH")
         reset_tracked_changes(self.all_properties(), flags)
-
-    def get_pub_sub_filter(self):
-        warnings.warn(DeprecationWarning("use `get_data_mask` instead"))
-        pub = defaultdict(dict)
-        sub = defaultdict(dict)
-        for dataset_name, entity_name, properties in self.iter_entities():
-            pub_filter = self._get_entity_filter(properties, flags=PUBLISH)
-            if pub_filter:
-                pub[dataset_name][entity_name] = pub_filter
-
-            sub_filter = self._get_entity_filter(properties, flags=SUBSCRIBE)
-            if sub_filter:
-                sub_filter["id"] = "*"
-                sub[dataset_name][entity_name] = sub_filter
-        return {"pub": dict(pub), "sub": dict(sub)}
 
     def get_data_mask(self):
         pub = defaultdict(dict)
