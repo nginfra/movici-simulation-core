@@ -335,7 +335,9 @@ class ServiceRunner:
         inst = self.service.cls()
         inst.setup(settings=self.settings, stream=stream, logger=logger, socket=socket)
         conn.send(port)
-        inst.run()
+        result = inst.run()
+        if result not in (None, 0):
+            sys.exit(result)
 
     @staticmethod
     def _get_bound_socket(name, addr=DEFAULT_SERVICE_ADDRESS) -> t.Tuple[zmq.Socket, int]:

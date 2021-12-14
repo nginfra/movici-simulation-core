@@ -84,8 +84,8 @@ class ConnectedModel:
 
     def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
         self.logger.error(
-            f"Received invalid message {message} from model '{self.name}'. Expected one of"
-            ",".join(m.__name__ for m in valid_messages)
+            f"Received invalid message {message} from model '{self.name}'. Expected one of "
+            + ", ".join(m.__name__ for m in valid_messages)
         )
 
 
@@ -168,12 +168,15 @@ class WaitingForMessage(BaseModelState):
     def _(self, msg: AcknowledgeMessage) -> None:
         """when a model sends an accepted message, don't do extra logic"""
         self.context.ack = True
+        if not self.context.pending_updates:
+            self.notify_subscribers()
 
     @_handle_response.register
     def _(self, msg: ResultMessage) -> None:
         """When a result comes set the model's next_time and possibly add a message to the
         subscribers queues"""
         self.context.timeline.set_next_time(self.context, msg.next_time)
+        command = None
         if msg.has_data:
             command = UpdateMessage(
                 timestamp=self.context.timeline.current_time,
@@ -181,10 +184,7 @@ class WaitingForMessage(BaseModelState):
                 address=msg.address,
                 origin=msg.origin,
             )
-        else:
-            command = NoUpdateMessage()
-        for model in self.context.publishes_to:
-            model.recv_event(command)
+        self.notify_subscribers(command)
 
     @_handle_response.register
     def _(self, msg: ErrorMessage) -> None:
@@ -200,6 +200,11 @@ class WaitingForMessage(BaseModelState):
             self.context.quit = QuitMessage()
             self.context.pending_updates = []
             self.next_state = ProcessPendingQuit
+
+    def notify_subscribers(self, command: t.Optional[Command] = None):
+        command = command or NoUpdateMessage()
+        for model in self.context.publishes_to:
+            model.recv_event(command)
 
 
 class Idle(WaitingForMessage):

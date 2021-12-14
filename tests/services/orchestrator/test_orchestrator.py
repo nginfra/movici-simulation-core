@@ -596,3 +596,140 @@ def test_invalid_response_in_finalizing_doesnt_trigger_another_quit(run_orchestr
         ("model_a", UpdateMessage(0)),
         ("model_a", QuitMessage()),
     ]
+
+
+def test_acknowledge_message_triggers_pending_model_with_NoUpdateMessage(run_orchestrator):
+    results = run_orchestrator(
+        ["a", "b", "c"],
+        [
+            # SETUP UNTIL T>0
+            ("a", RegistrationMessage(pub={"c": None}, sub={})),
+            ("b", RegistrationMessage(pub={"c": None}, sub={})),
+            ("c", RegistrationMessage(pub={}, sub={"c": None})),
+            # Models respond to new time
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+            ("a", ResultMessage(next_time=1)),
+            ("b", ResultMessage()),
+            ("c", ResultMessage()),
+            # END SETUP
+            # new time = 1
+            ("a", AcknowledgeMessage()),
+            # Model a is very fast to respond
+            ("a", ResultMessage(key="a", address="a", next_time=2)),
+            ("c", AcknowledgeMessage()),
+            # model c has now pending updates but waits for b
+            # Model b is slow to respond to new time, model c still expects Update/NoUpdate from b
+            # the AcknowledgeMessage sends a NoUpdate to c
+            ("b", AcknowledgeMessage()),
+            # Now c is called and sends a Result back
+            ("c", ResultMessage()),
+            # FINISHING UP THE SIMULATION
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+            ("a", ResultMessage()),
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+        ],
+    )
+    assert results == [
+        # SETUP
+        ("a", NewTimeMessage(0)),
+        ("b", NewTimeMessage(0)),
+        ("c", NewTimeMessage(0)),
+        ("a", UpdateMessage(0)),
+        ("b", UpdateMessage(0)),
+        ("c", UpdateMessage(0)),
+        # END SETUP
+        ("a", NewTimeMessage(1)),
+        ("b", NewTimeMessage(1)),
+        ("c", NewTimeMessage(1)),
+        ("a", UpdateMessage(1)),
+        ("c", UpdateMessage(timestamp=1, key="a", address="a")),
+        # FINISHING UP THE SIMULATION
+        ("a", NewTimeMessage(2)),
+        ("b", NewTimeMessage(2)),
+        ("c", NewTimeMessage(2)),
+        ("a", UpdateMessage(2)),
+        ("a", QuitMessage()),
+        ("b", QuitMessage()),
+        ("c", QuitMessage()),
+    ]
+
+
+def test_acknowledge_message_doesnt_trigger_pending_model_when_dependency_should_calculate(
+    run_orchestrator,
+):
+    results = run_orchestrator(
+        ["a", "b", "c"],
+        [
+            # SETUP UNTIL T>0
+            ("a", RegistrationMessage(pub={"c": None}, sub={})),
+            ("b", RegistrationMessage(pub={"c": None}, sub={})),
+            ("c", RegistrationMessage(pub={}, sub={"c": None})),
+            # Models respond to new time
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+            ("a", ResultMessage(next_time=1)),
+            ("b", ResultMessage(next_time=1)),
+            ("c", ResultMessage()),
+            # END SETUP
+            # new time = 1
+            ("a", AcknowledgeMessage()),
+            # Model a is very fast to respond
+            ("a", ResultMessage(key="a", address="a", next_time=2)),
+            ("c", AcknowledgeMessage()),
+            # model c has now pending updates but waits for b
+            # Model b is slow to respond to new time, model c still expects Update/NoUpdate from b
+            # the AcknowledgeMessage does not send NoUpdate to c
+            ("b", AcknowledgeMessage()),
+            # First b must send its result
+            ("b", ResultMessage(key="b", address="b")),
+            # Now c is called and sends a Result back
+            ("c", ResultMessage()),
+            # FINISHING UP THE SIMULATION
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+            ("a", ResultMessage()),
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+            ("c", AcknowledgeMessage()),
+        ],
+    )
+    assert results == [
+        # SETUP
+        ("a", NewTimeMessage(0)),
+        ("b", NewTimeMessage(0)),
+        ("c", NewTimeMessage(0)),
+        ("a", UpdateMessage(0)),
+        ("b", UpdateMessage(0)),
+        ("c", UpdateMessage(0)),
+        # END SETUP
+        ("a", NewTimeMessage(1)),
+        ("b", NewTimeMessage(1)),
+        ("c", NewTimeMessage(1)),
+        ("a", UpdateMessage(1)),
+        ("b", UpdateMessage(1)),
+        (
+            "c",
+            UpdateSeriesMessage(
+                [
+                    UpdateMessage(timestamp=1, key="a", address="a"),
+                    UpdateMessage(timestamp=1, key="b", address="b"),
+                ]
+            ),
+        ),
+        # FINISHING UP THE SIMULATION
+        ("a", NewTimeMessage(2)),
+        ("b", NewTimeMessage(2)),
+        ("c", NewTimeMessage(2)),
+        ("a", UpdateMessage(2)),
+        ("a", QuitMessage()),
+        ("b", QuitMessage()),
+        ("c", QuitMessage()),
+    ]

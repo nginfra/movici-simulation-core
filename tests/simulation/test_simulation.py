@@ -177,7 +177,7 @@ class TestServiceRunnerEntryPoint:
     def test_entry_point_calls_service(self, settings):
         class MockService:
             setup = Mock()
-            run = Mock()
+            run = Mock(return_value=0)
 
         ServiceRunner(ServiceInfo("service", MockService), settings).entry_point(Mock())
         assert MockService.setup.call_count == 1

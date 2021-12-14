@@ -76,7 +76,9 @@ class Orchestrator(Service):
             self.fsm.start()
             self.stream.run()
         except FSMDone:
-            pass
+            if self.context.failed:
+                return 1
+            return 0
 
     @classmethod
     def install(cls, sim: Simulation):
