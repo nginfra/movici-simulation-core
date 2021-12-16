@@ -1,5 +1,5 @@
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, PUB, OPT
+from movici_simulation_core.data_tracker.attribute import field, PUB, OPT
 from movici_simulation_core.models.unit_conversions.attributes import (
     Transport_TotalOutwardCargoDemandVehicles,
     Transport_TotalInwardCargoDemandVehicles,

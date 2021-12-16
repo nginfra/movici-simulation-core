@@ -1,7 +1,7 @@
 import pytest
 
-from movici_simulation_core.core.schema import PropertySpec, DataType
-from movici_simulation_core.data_tracker.property import INIT, SUB
+from movici_simulation_core.core.schema import AttributeSpec, DataType
+from movici_simulation_core.data_tracker.attribute import INIT, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.models.area_aggregation.model import Model
@@ -18,23 +18,24 @@ def source_entity_group2(road_network_name):
     return [road_network_name, "road_segment_entities"]
 
 
-source_properties1 = [None, "source_a"]
-target_properties1 = [None, "target_a"]
+source_attributes1 = [None, "source_a"]
+target_attributes1 = [None, "target_a"]
 
-source_properties2 = [None, "source_b"]
-target_properties2 = [None, "target_b"]
+source_attributes2 = [None, "source_b"]
+target_attributes2 = [None, "target_b"]
 
 
 @pytest.fixture
 def additional_attributes():
     return [
-        PropertySpec("source_a", DataType(float, (), False)),
-        PropertySpec("source_b", DataType(float, (), False)),
-        PropertySpec("target_a", DataType(float, (), False)),
-        PropertySpec("target_b", DataType(float, (), False)),
-        PropertySpec("str_prop", DataType(str, (), False)),
-        PropertySpec("csr_prop", DataType(int, (), True)),
-        PropertySpec("multi_dimensional", DataType(float, (2,), False)),
+        AttributeSpec("source_a", DataType(float, (), False)),
+        AttributeSpec("source_b", DataType(float, (), False)),
+        AttributeSpec("target_a", DataType(float, (), False)),
+        AttributeSpec("target_b", DataType(float, (), False)),
+        AttributeSpec("str_attr", DataType(str, (), False)),
+        AttributeSpec("csr_attr", DataType(int, (), True)),
+        AttributeSpec("multi_dimensional", DataType(float, (2,), False)),
+        AttributeSpec("knotweed.stem_density", DataType(float, (), False)),
     ]
 
 
@@ -70,21 +71,21 @@ def target_entity_group(area_dataset_name):
 def create_model_config(
     model_name,
     source_entities,
-    source_props,
+    source_attrs,
     source_geom,
     functions,
     target_entity,
-    target_props,
+    target_attrs,
     interval=None,
 ):
     return {
         "name": model_name,
         "type": "area_aggregation",
         "source_entity_groups": source_entities,
-        "source_properties": source_props,
+        "source_properties": source_attrs,
         "source_geometry_types": source_geom,
         "aggregation_functions": functions,
-        "target_properties": target_props,
+        "target_properties": target_attrs,
         "target_entity_group": target_entity,
         "output_interval": interval,
     }
@@ -122,17 +123,17 @@ def model_config(
     output_interval,
 ):
     source_entities = [source_entity_group1, source_entity_group2]
-    source_props = [source_properties1, source_properties2]
+    source_attrs = [source_attributes1, source_attributes2]
     source_geom = source_geom
-    target_props = [target_properties1, target_properties2]
+    target_attrs = [target_attributes1, target_attributes2]
     config = create_model_config(
         model_name=model_name,
         source_entities=source_entities,
-        source_props=source_props,
+        source_attrs=source_attrs,
         source_geom=source_geom,
         functions=aggregation_functions,
         target_entity=target_entity_group,
-        target_props=target_props,
+        target_attrs=target_attrs,
         interval=output_interval,
     )
     return config
@@ -151,7 +152,7 @@ def test_model_setup_fills_state(model, state):
     assert len(model.aggregators) == 2
     assert len(model.src_entities) == 2
 
-    assert len(state.all_properties()) >= 9
+    assert len(state.all_attributes()) >= 9
     assert state.is_ready_for(INIT) is False
     assert state.is_ready_for(SUB) is False
 
@@ -245,16 +246,16 @@ class TestAreaAggregation:
         )
 
 
-class TestMultiplePropertiesOneEntity:
+class TestMultipleAttributesOneEntity:
     @pytest.fixture
     def source_entity_group2(self, source_entity_group1):
         return source_entity_group1
 
-    source_properties1 = [None, "source_a"]
-    target_properties1 = [None, "target_a"]
+    source_attributes1 = [None, "source_a"]
+    target_attributes1 = [None, "target_a"]
 
-    source_properties2 = [None, "source_b"]
-    target_properties2 = [None, "target_b"]
+    source_attributes2 = [None, "source_b"]
+    target_attributes2 = [None, "target_b"]
 
     @pytest.fixture
     def source_geom(self):
@@ -273,7 +274,7 @@ class TestMultiplePropertiesOneEntity:
             {"name": area_dataset_name, "data": area_dataset},
         ]
 
-    def test_multiple_props_in_one_entity_group(
+    def test_multiple_attrs_in_one_entity_group(
         self, config, model_name, area_dataset_name, knotweed_dataset_name, global_schema
     ):
         scenario = {
@@ -358,11 +359,11 @@ class TestTimeIntegration:
     def source_entity_group2(self, source_entity_group1):
         return source_entity_group1
 
-    source_properties1 = [None, "source_a"]
-    target_properties1 = [None, "target_a"]
+    source_attributes1 = [None, "source_a"]
+    target_attributes1 = [None, "target_a"]
 
-    source_properties2 = [None, "source_b"]
-    target_properties2 = [None, "target_b"]
+    source_attributes2 = [None, "source_b"]
+    target_attributes2 = [None, "target_b"]
 
     @pytest.fixture
     def source_geom(self):
@@ -480,8 +481,8 @@ class TestTimeIntegration:
         )
 
 
-def valid_prop():
-    return [target_properties1]
+def valid_attr():
+    return [target_attributes1]
 
 
 def valid_target_entity_group():
@@ -494,57 +495,57 @@ def valid_source_entity_group():
 
 class TestModelInputChecking:
     @pytest.mark.parametrize(
-        ["source_prop", "target_prop", "target_entity", "error_contains"],
+        ["source_attr", "target_attr", "target_entity", "error_contains"],
         [
             (
-                [[None, "str_prop"]],
-                valid_prop(),
+                [[None, "str_attr"]],
+                valid_attr(),
                 valid_target_entity_group(),
                 "has string type",
             ),
             (
-                [target_properties1, target_properties1],
-                valid_prop(),
+                [target_attributes1, target_attributes1],
+                valid_attr(),
                 valid_target_entity_group(),
                 "must have the same length",
             ),
             (
-                [[None, "csr_prop"]],
-                valid_prop(),
+                [[None, "csr_attr"]],
+                valid_attr(),
                 valid_target_entity_group(),
                 "should be of uniform data",
             ),
             (
                 [[None, "multi_dimensional"]],
-                valid_prop(),
+                valid_attr(),
                 valid_target_entity_group(),
                 "should be one-dimensional",
             ),
             (
-                valid_prop(),
-                valid_prop(),
+                valid_attr(),
+                valid_attr(),
                 [["more", "than", "two"]],
                 "exactly 1 dataset_name",
             ),
             (
-                valid_prop(),
-                valid_prop(),
+                valid_attr(),
+                valid_attr(),
                 ["single", "list"],
                 "exactly 1 dataset_name",
             ),
         ],
     )
     def test_model_raises_when_given_wrong_types(
-        self, source_prop, target_prop, target_entity, error_contains, global_schema
+        self, source_attr, target_attr, target_entity, error_contains, global_schema
     ):
         model_config = create_model_config(
             model_name="model_name",
             source_entities=valid_source_entity_group(),
-            source_props=source_prop,
+            source_attrs=source_attr,
             source_geom=["point"],
             functions=["max"],
             target_entity=target_entity,
-            target_props=target_prop,
+            target_attrs=target_attr,
         )
         state = TrackedState()
         model = Model(model_config)

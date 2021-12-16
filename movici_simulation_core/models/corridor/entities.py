@@ -5,7 +5,7 @@ from movici_simulation_core.core.attributes import (
     ConnectionProperties_ToIds,
 )
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, PUB, OPT, SUB
+from movici_simulation_core.data_tracker.attribute import field, PUB, OPT, SUB
 from movici_simulation_core.models.common.entities import TransportSegmentEntity, PointEntity
 from movici_simulation_core.models.corridor.attributes import (
     TrafficProperties_AverageTime,

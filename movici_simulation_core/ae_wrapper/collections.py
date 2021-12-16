@@ -6,7 +6,7 @@ import numpy.typing as npt
 from aequilibrae import PathResults
 
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.property import ensure_csr_data
+from movici_simulation_core.data_tracker.attribute import ensure_csr_data
 
 PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray], np.ndarray]
 LinestringCollection = t.List[t.List[t.List[float]]]

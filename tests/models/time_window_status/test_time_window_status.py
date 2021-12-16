@@ -3,7 +3,7 @@ import typing as t
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import PropertySpec, DataType, AttributeSchema
+from movici_simulation_core.core.schema import AttributeSpec, DataType, AttributeSchema
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -41,12 +41,12 @@ def _get_entity(dataset_name: str, entity_name: str, cls: t.Type[T], state: Trac
 def get_source_entity(state):
     def _get(dataset_name: str, entity_name: str) -> TimeWindowEntity:
         source = _get_entity(dataset_name, entity_name, cls=TimeWindowEntity, state=state)
-        source.time_window_begin = state.register_property(
-            dataset_name, entity_name, PropertySpec("begin", data_type=DataType(str))
+        source.time_window_begin = state.register_attribute(
+            dataset_name, entity_name, AttributeSpec("begin", data_type=DataType(str))
         )
 
-        source.time_window_end = state.register_property(
-            dataset_name, entity_name, PropertySpec("end", data_type=DataType(str))
+        source.time_window_end = state.register_attribute(
+            dataset_name, entity_name, AttributeSpec("end", data_type=DataType(str))
         )
 
         return source
@@ -58,8 +58,8 @@ def get_source_entity(state):
 def get_target_entity(state):
     def _get(dataset_name: str, entity_name: str) -> TimeWindowStatusEntity:
         target = _get_entity(dataset_name, entity_name, cls=TimeWindowStatusEntity, state=state)
-        target.time_window_status = state.register_property(
-            dataset_name, entity_name, PropertySpec("status", data_type=DataType(bool))
+        target.time_window_status = state.register_attribute(
+            dataset_name, entity_name, AttributeSpec("status", data_type=DataType(bool))
         )
         return target
 
@@ -119,9 +119,9 @@ def create_target_data(state, target_entity, create_init_data):
 def global_schema(global_schema: AttributeSchema):
     global_schema.add_attributes(
         [
-            PropertySpec("begin", data_type=DataType(str)),
-            PropertySpec("end", data_type=DataType(str)),
-            PropertySpec("status", data_type=DataType(bool)),
+            AttributeSpec("begin", data_type=DataType(str)),
+            AttributeSpec("end", data_type=DataType(str)),
+            AttributeSpec("status", data_type=DataType(bool)),
         ]
     )
     return global_schema
@@ -208,8 +208,8 @@ def test_resolve_multiple_foreign_connections(
     timeline_info,
 ):
     target_2 = get_target_entity("dataset_c", "target")
-    target_2.time_window_status = state.register_property(
-        "dataset_c", "target", PropertySpec("status", data_type=DataType(bool))
+    target_2.time_window_status = state.register_attribute(
+        "dataset_c", "target", AttributeSpec("status", data_type=DataType(bool))
     )
 
     create_source_data(

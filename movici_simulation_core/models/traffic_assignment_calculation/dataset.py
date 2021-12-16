@@ -1,4 +1,4 @@
-from movici_simulation_core.data_tracker.property import (
+from movici_simulation_core.data_tracker.attribute import (
     field,
     SUB,
     PUB,

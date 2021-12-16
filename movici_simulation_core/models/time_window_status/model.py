@@ -2,7 +2,7 @@ import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.property import PUB, OPT
+from movici_simulation_core.data_tracker.attribute import PUB, OPT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.utils.moment import Moment
@@ -25,13 +25,13 @@ class Model(TrackedModel, name="time_window_status"):
         source_entity_group = state.register_entity_group(
             source_dataset, TimeWindowEntity(source_entity_name)
         )
-        source_entity_group.time_window_begin = state.register_property(
+        source_entity_group.time_window_begin = state.register_attribute(
             source_dataset,
             source_entity_name,
             schema.get_spec(self.config["time_window_begin"], DataType(str)),
             flags=OPT,
         )
-        source_entity_group.time_window_end = state.register_property(
+        source_entity_group.time_window_end = state.register_attribute(
             source_dataset,
             source_entity_name,
             schema.get_spec(self.config["time_window_end"], DataType(str)),
@@ -42,7 +42,7 @@ class Model(TrackedModel, name="time_window_status"):
             target_entity_group = state.register_entity_group(
                 target_dataset, TimeWindowStatusEntity(target_entity_name)
             )
-            target_entity_group.time_window_status = state.register_property(
+            target_entity_group.time_window_status = state.register_attribute(
                 target_dataset,
                 target_entity_name,
                 schema.get_spec(self.config["time_window_status"], DataType(bool)),

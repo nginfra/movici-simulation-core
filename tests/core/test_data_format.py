@@ -12,7 +12,7 @@ from movici_simulation_core.data_tracker.data_format import (
     dump_update,
 )
 from movici_simulation_core.core.schema import (
-    PropertySpec,
+    AttributeSpec,
     DataType,
     UNDEFINED,
     DEFAULT_ROWPTR_KEY,
@@ -29,7 +29,7 @@ def list_init_data():
             "data": {
                 "some_entities": {
                     "bla": [4.0, 5.0, 6.0],
-                    "csr_prop": [[1, 2], [3], []],
+                    "csr_attr": [[1, 2], [3], []],
                     "component": {
                         "unknown_str": ["a", "b", "c"],
                     },
@@ -48,7 +48,7 @@ def array_init_data():
                 "bla": {
                     "data": np.array([4, 5, 6], dtype=float),
                 },
-                "csr_prop": {
+                "csr_attr": {
                     "data": np.array([1, 2, 3], dtype=int),
                     DEFAULT_ROWPTR_KEY: np.array([0, 2, 3, 3], dtype=int),
                 },
@@ -58,8 +58,20 @@ def array_init_data():
     }
 
 
-def test_init_data_format(list_init_data, array_init_data):
-    schema = AttributeSchema([PropertySpec("bla", DataType(float, (), False))])
+@pytest.fixture
+def schema():
+    return AttributeSchema(
+        [
+            AttributeSpec("bla", DataType(float, (), False)),
+            AttributeSpec("csr_attr", DataType(int, (), True)),
+            AttributeSpec(
+                component="component", name="unknown_str", data_type=DataType(str, (), False)
+            ),
+        ]
+    )
+
+
+def test_init_data_format(list_init_data, array_init_data, schema):
     fmt = EntityInitDataFormat(schema)
     result = fmt.load_bytes(list_init_data)
     assert_dataset_dicts_equal(result, array_init_data)

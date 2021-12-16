@@ -6,16 +6,18 @@ import typing as t
 import numpy as np
 
 from .index import Index
-from .property import PropertyField
-from ..types import PropertyIdentifier
+from .attribute import PropertyField, AttributeField
+from ..types import AttributeIdentifier
+from ..utils import lifecycle
 
 if t.TYPE_CHECKING:
     from .state import StateProxy
 
 
+@lifecycle.has_deprecations
 class EntityGroup:
     state: StateProxy = None
-    properties: t.Dict[str, PropertyField] = {}
+    attributes: t.Dict[str, AttributeField] = {}
     __entity_name__: t.Optional[str] = None
 
     def __init__(self, name: str = None):
@@ -24,8 +26,11 @@ class EntityGroup:
 
     def __init_subclass__(cls, **kwargs):
         cls.__entity_name__ = kwargs.get("name", cls.__entity_name__)
-        cls.properties = {
-            key: value for key, value in vars(cls).items() if isinstance(value, PropertyField)
+        # TODO: PropertyField is deprecated
+        cls.attributes = {
+            key: value
+            for key, value in vars(cls).items()
+            if isinstance(value, (PropertyField, AttributeField))
         }
 
     def __len__(self):
@@ -56,13 +61,22 @@ class EntityGroup:
     def register(self, state: StateProxy):
         self.state = state
 
-    def get_property(self, identifier: PropertyIdentifier):
-        return self.state.get_property(identifier)
+    def get_attribute(self, identifier: AttributeIdentifier):
+        return self.state.get_attribute(identifier)
+
+    @lifecycle.deprecated(alternative="EntityGroup.get_attribute")
+    def get_property(self, identifier: AttributeIdentifier):
+        return self.get_attribute(identifier)
 
     @classmethod
-    def all_properties(cls) -> t.Dict[str, PropertyField]:
+    def all_attributes(cls) -> t.Dict[str, AttributeField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
-        return dict(itertools.chain.from_iterable(b.properties.items() for b in reversed(bases)))
+        return dict(itertools.chain.from_iterable(b.attributes.items() for b in reversed(bases)))
+
+    @lifecycle.deprecated(alternative="EntityGroup.all_attributes")
+    @classmethod
+    def all_properties(cls) -> t.Dict[str, AttributeField]:
+        return cls.all_attributes()
 
     @property
     def index(self) -> Index:

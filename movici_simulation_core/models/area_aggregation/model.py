@@ -4,15 +4,15 @@ import numpy as np
 
 from movici_geo_query.geo_query import GeoQuery, QueryResult
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import AttributeSchema, DataType
+from movici_simulation_core.core.schema import AttributeSchema, DataType, AttributeSpec
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import PUB, PropertySpec, INIT
+from movici_simulation_core.data_tracker.attribute import PUB, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.entities import PolygonEntity, GeometryEntity, LineEntity
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.utils.moment import Moment
-from .aggregators import functions, PropertyAggregator
+from .aggregators import functions, AttributeAggregator
 
 
 class Model(TrackedModel, name="area_aggregation"):
@@ -21,7 +21,7 @@ class Model(TrackedModel, name="area_aggregation"):
     """
 
     output_interval: t.Optional[int]
-    aggregators: t.List[PropertyAggregator]
+    aggregators: t.List[AttributeAggregator]
     target_entity: t.Optional[t.Union[PolygonEntity, EntityGroup]]
     src_entities: t.List[t.Union[GeometryEntity, EntityGroup]]
     previous_timestamp: t.Optional[Moment]
@@ -45,10 +45,10 @@ class Model(TrackedModel, name="area_aggregation"):
             state=state,
             source_geometries=config["source_geometry_types"],
             source_entities=config["source_entity_groups"],
-            source_props=config["source_properties"],
+            source_attrs=config["source_properties"],
             funcs=config["aggregation_functions"],
             target_entity=config["target_entity_group"],
-            target_props=config["target_properties"],
+            target_attrs=config["target_properties"],
             schema=schema,
         )
 
@@ -57,10 +57,10 @@ class Model(TrackedModel, name="area_aggregation"):
         state: TrackedState,
         source_geometries,
         source_entities,
-        source_props,
+        source_attrs,
         funcs,
         target_entity,
-        target_props,
+        target_attrs,
         schema: AttributeSchema,
     ):
         target_ds_name, target_entity_name = target_entity[0]
@@ -68,8 +68,8 @@ class Model(TrackedModel, name="area_aggregation"):
             dataset_name=target_ds_name, entity=PolygonEntity(name=target_entity_name)
         )
 
-        for geom, src_entity, src_prop, func, target_prop in zip(
-            source_geometries, source_entities, source_props, funcs, target_props
+        for geom, src_entity, src_attr, func, target_attr in zip(
+            source_geometries, source_entities, source_attrs, funcs, target_attrs
         ):
             src_ds_name, src_entity_name = src_entity
             self.src_entities.append(
@@ -79,40 +79,40 @@ class Model(TrackedModel, name="area_aggregation"):
                 )
             )
 
-            target_spec = schema.get_spec(target_prop, DataType(float))
-            self.ensure_uniform_property(target_ds_name, target_entity_name, target_spec)
-            target_prop = state.register_property(
+            target_spec = schema.get_spec(target_attr, DataType(float))
+            self.ensure_uniform_attribute(target_ds_name, target_entity_name, target_spec)
+            target_prop = state.register_attribute(
                 dataset_name=target_ds_name,
                 entity_name=target_entity_name,
                 spec=target_spec,
                 flags=PUB,
             )
 
-            src_spec = schema.get_spec(src_prop, DataType(float))
-            self.ensure_uniform_property(target_ds_name, target_entity_name, src_spec)
-            src_prop = state.register_property(
+            src_spec = schema.get_spec(src_attr, DataType(float))
+            self.ensure_uniform_attribute(target_ds_name, target_entity_name, src_spec)
+            src_prop = state.register_attribute(
                 dataset_name=src_ds_name, entity_name=src_entity_name, spec=src_spec, flags=INIT
             )
 
             ensure_function(func)
-            aggregator = PropertyAggregator(source=src_prop, target=target_prop, func=func)
+            aggregator = AttributeAggregator(source=src_prop, target=target_prop, func=func)
             self.aggregators.append(aggregator)
 
     @staticmethod
-    def ensure_uniform_property(ds, entity, spec: PropertySpec):
+    def ensure_uniform_attribute(ds, entity, spec: AttributeSpec):
         if spec.data_type.py_type == str:
             raise ValueError(
-                f"Can't aggregated property {ds}/{entity}/{spec.full_name} "
+                f"Can't aggregate attribute {ds}/{entity}/{spec.full_name} "
                 f"as it has string type"
             )
         if spec.data_type.csr is True:
             raise ValueError(
-                f"property {ds}/{entity}/{spec.full_name} in the aggregator "
+                f"attribute {ds}/{entity}/{spec.full_name} in the aggregator "
                 f"should be of uniform data type"
             )
         if len(spec.data_type.unit_shape):
             raise ValueError(
-                f"property {ds}/{entity}/{spec.full_name} in the aggregator "
+                f"attribute {ds}/{entity}/{spec.full_name} in the aggregator "
                 f"should be one-dimensional"
             )
 

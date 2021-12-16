@@ -2,6 +2,7 @@ from typing import Iterable, Dict
 
 import pytest
 
+from movici_simulation_core.core.schema import AttributeSpec
 from movici_simulation_core.models.overlap_status.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
 
@@ -62,6 +63,23 @@ def model_config(
     }
 
 
+@pytest.fixture
+def additional_attributes():
+    from movici_simulation_core.core.schema import DataType
+
+    return [
+        AttributeSpec("knotweed.stem_density", DataType(float, (), False)),
+        AttributeSpec(
+            "node_id", component="oneside_element_properties", data_type=DataType(int, (), False)
+        ),
+        AttributeSpec(
+            "is_working_properly",
+            component="operation_status_properties",
+            data_type=DataType(bool, (), False),
+        ),
+    ]
+
+
 class TestOverlapStatus:
     def test_overlap(
         self,
@@ -84,7 +102,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -92,7 +110,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -100,7 +118,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
-                                properties=[False, False, False, False, False],
+                                attributes=[False, False, False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -113,7 +131,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -126,7 +144,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -139,7 +157,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -152,7 +170,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -165,7 +183,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -252,7 +270,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         },
                     },
@@ -263,7 +281,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         },
                     },
@@ -313,7 +331,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -321,7 +339,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -329,7 +347,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
-                                properties=[False, False, False, False, False],
+                                attributes=[False, False, False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -342,7 +360,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -355,7 +373,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -368,7 +386,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -381,7 +399,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -394,7 +412,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -473,7 +491,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         },
                     },
@@ -484,7 +502,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         },
                     },
@@ -501,7 +519,7 @@ class TestOverlapStatus:
             global_schema=global_schema,
         )
 
-    def test_overlap_without_status_property(
+    def test_overlap_without_status_attribute(
         self,
         config,
         model_name,
@@ -525,7 +543,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -533,7 +551,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -541,7 +559,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
-                                properties=[False, False, False, False, False],
+                                attributes=[False, False, False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -554,7 +572,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -567,7 +585,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -580,7 +598,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -593,7 +611,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -606,7 +624,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -720,7 +738,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[True, False, False],
+                                attributes=[True, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -728,7 +746,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -736,7 +754,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
-                                properties=[False, False, False, False, False],
+                                attributes=[False, False, False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -749,7 +767,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -762,7 +780,7 @@ class TestOverlapStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -775,7 +793,7 @@ class TestOverlapStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -788,7 +806,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -872,7 +890,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         },
                     },
@@ -883,7 +901,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [2],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         }
                     },
@@ -927,7 +945,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -940,7 +958,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -953,7 +971,7 @@ class TestOverlapStatus:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -1001,7 +1019,7 @@ class TestOverlapStatus:
                         overlap_dataset_name: {
                             "overlap_entities": get_overlap_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                             ),
                         }
                     },
@@ -1065,7 +1083,7 @@ class TestOverlapWithoutActualOverlaps:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -1078,7 +1096,7 @@ class TestOverlapWithoutActualOverlaps:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[True],
+                                attributes=[True],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -1091,7 +1109,7 @@ class TestOverlapWithoutActualOverlaps:
                         water_network_name: {
                             "water_pipe_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 component_name="operation_status_properties",
                                 key_name="is_working_properly",
                             ),
@@ -1120,8 +1138,8 @@ class TestOverlapWithoutActualOverlaps:
 def get_overlap_update(get_entity_update):
     def _factory(
         ids: Iterable,
-        properties: Iterable,
+        attributes: Iterable,
     ) -> Dict:
-        return get_entity_update(ids, properties, component_name=None, key_name="overlap.active")
+        return get_entity_update(ids, attributes, component_name=None, key_name="overlap.active")
 
     return _factory

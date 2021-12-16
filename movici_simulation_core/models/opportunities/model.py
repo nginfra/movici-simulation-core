@@ -7,9 +7,9 @@ from movici_simulation_core.core.schema import (
     AttributeSchema,
     DataType,
     attributes_from_dict,
-    PropertySpec,
+    AttributeSpec,
 )
-from movici_simulation_core.data_tracker.property import UniformProperty, PUB, OPT
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB, OPT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.utils.moment import Moment
 from . import dataset
@@ -20,22 +20,22 @@ class Model(TrackedModel, name="opportunity"):
     """
     Implementation of the opportunities model
     Takes in a line entity and a overlap status dataset
-    If input property A is on at the same time as the overlap is active,
+    If input attribute A is on at the same time as the overlap is active,
     the opportunity was taken.
     If only the overlap was active, the opportunity was missed.
     """
 
     overlap_entity: t.Optional[OverlapEntity]
     opportunity_entity: t.Optional[LineEntity]
-    opportunity_taken_property: t.Optional[UniformProperty]
-    total_length_property: t.Optional[UniformProperty]
+    opportunity_taken_attribute: t.Optional[UniformAttribute]
+    total_length_attribute: t.Optional[UniformAttribute]
     cost_per_meter: t.Optional[float]
 
     def __init__(self, model_config: dict):
         super().__init__(model_config)
         self.overlap_entity = None
         self.opportunity_entity = None
-        self.opportunity_taken_property = None
+        self.opportunity_taken_attribute = None
         self.cost_per_meter = None
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
@@ -44,7 +44,7 @@ class Model(TrackedModel, name="opportunity"):
     def initialize(self, state: TrackedState):
         self.opportunity_entity.opportunity[:] = 0
         self.opportunity_entity.missed_opportunity[:] = 0
-        self.total_length_property[:] = 0
+        self.total_length_attribute[:] = 0
 
     def update(self, state: TrackedState, moment: Moment):
         self.update_opportunities()
@@ -58,18 +58,18 @@ class Model(TrackedModel, name="opportunity"):
         self.opportunity_entity = state.register_entity_group(
             dataset_name=dataset_name, entity=LineEntity(name=entity_name)
         )
-        prop = config["opportunity_taken_property"][0]
-        self.opportunity_taken_property = state.register_property(
+        attr = config["opportunity_taken_property"][0]
+        self.opportunity_taken_attribute = state.register_attribute(
             dataset_name=dataset_name,
             entity_name=entity_name,
-            spec=schema.get_spec(prop, default_data_type=DataType(bool)),
+            spec=schema.get_spec(attr, default_data_type=DataType(bool)),
             flags=OPT,
         )
-        prop = config["total_length_property"][0]
-        self.total_length_property = state.register_property(
+        attr = config["total_length_property"][0]
+        self.total_length_attribute = state.register_attribute(
             dataset_name=dataset_name,
             entity_name=entity_name,
-            spec=schema.get_spec(prop, default_data_type=DataType(float)),
+            spec=schema.get_spec(attr, default_data_type=DataType(float)),
             flags=PUB,
         )
         self.cost_per_meter = config["cost_per_meter"]
@@ -102,19 +102,19 @@ class Model(TrackedModel, name="opportunity"):
             self.opportunity_entity.length[active] * self.cost_per_meter
         )
 
-        # missed = once opportunity & never self.opportunity_taken_property
+        # missed = once opportunity & never self.opportunity_taken_attribute
         # can be temporarily set, will be unset as overlap actives come in
         self.opportunity_entity.missed_opportunity[active] = 0
 
-        defined = ~self.opportunity_taken_property.is_undefined()
-        taken = defined & self.opportunity_taken_property.array > 0
+        defined = ~self.opportunity_taken_attribute.is_undefined()
+        taken = defined & self.opportunity_taken_attribute.array > 0
         self.opportunity_entity.missed_opportunity[active] = (
             self.opportunity_entity.length[active] * self.cost_per_meter
         )
         self.opportunity_entity.missed_opportunity[taken & active] = 0
 
-        self.total_length_property[taken] = self.opportunity_entity.length[taken]
+        self.total_length_attribute[taken] = self.opportunity_entity.length[taken]
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(dataset))

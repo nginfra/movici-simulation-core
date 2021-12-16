@@ -36,6 +36,7 @@ def largest_unicode_dtype(a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2
         ):
             return obj.dtype.itemsize // 4
         return None
+
     lengths = [size for i in (a, b) if (size := unicode_length(i)) is not None]
     if not lengths:
         return None

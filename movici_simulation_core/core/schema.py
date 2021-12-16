@@ -6,14 +6,15 @@ import typing as t
 import numpy as np
 
 from movici_simulation_core.core.plugins import Extensible, Plugin, Model
-from movici_simulation_core.types import PropertyIdentifier
+from movici_simulation_core.types import AttributeIdentifier
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
+from movici_simulation_core.utils import lifecycle
 from movici_simulation_core.utils.plugin import configure_global_plugins
 
 
 class AttributeSchema(Extensible):
-    def __init__(self, attributes: t.Optional[t.Iterable[PropertySpec]] = None):
-        self.attributes: t.Dict[PropertyIdentifier, PropertySpec] = {}
+    def __init__(self, attributes: t.Optional[t.Iterable[AttributeSpec]] = None):
+        self.attributes: t.Dict[AttributeIdentifier, AttributeSpec] = {}
         attributes = attributes or ()
         for attr in attributes:
             self.add_attribute(attr)
@@ -26,7 +27,7 @@ class AttributeSchema(Extensible):
 
     def get_spec(
         self,
-        identifier: PropertyIdentifier,
+        identifier: AttributeIdentifier,
         default_data_type: t.Union[DataType, t.Callable[[], DataType], None],
         cache=False,
     ):
@@ -36,16 +37,16 @@ class AttributeSchema(Extensible):
             return None
         component, name = identifier
         data_type = default_data_type() if callable(default_data_type) else default_data_type
-        spec = PropertySpec(name=name, component=component, data_type=data_type)
+        spec = AttributeSpec(name=name, component=component, data_type=data_type)
         if cache:
             self.add_attribute(spec)
         return spec
 
-    def add_attributes(self, attributes: t.Iterable[PropertySpec]):
+    def add_attributes(self, attributes: t.Iterable[AttributeSpec]):
         for attr in attributes:
             self.add_attribute(attr)
 
-    def add_attribute(self, attr: PropertySpec):
+    def add_attribute(self, attr: AttributeSpec):
         if current := self.get(attr.key):
             if current.data_type != attr.data_type:
                 raise TypeError(
@@ -74,7 +75,7 @@ class AttributeSchema(Extensible):
     def use(self, plugin):
         plugin.install(self)
 
-    def register_attributes(self, attributes: t.Iterable[PropertySpec]):
+    def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         self.add_attributes(attributes)
 
     def register_model_type(self, identifier: str, model_type: t.Type[Model]):
@@ -83,7 +84,7 @@ class AttributeSchema(Extensible):
     def add_from_namespace(self, ns):
         try:
             self.add_attributes(
-                attr for attr in vars(ns).values() if isinstance(attr, PropertySpec)
+                attr for attr in vars(ns).values() if isinstance(attr, AttributeSpec)
             )
 
         except TypeError as e:
@@ -108,11 +109,11 @@ def attribute_plugin_from_dict(d: dict):
 
 
 def attributes_from_dict(d: dict):
-    return filter(lambda i: isinstance(i, PropertySpec), d.values())
+    return filter(lambda i: isinstance(i, AttributeSpec), d.values())
 
 
 @dataclasses.dataclass(frozen=True)
-class PropertySpec:
+class AttributeSpec:
     name: str
     data_type: DataType = dataclasses.field(compare=False)
     component: t.Optional[str] = None
@@ -120,11 +121,16 @@ class PropertySpec:
 
     @property
     def full_name(self):
-        return propstring(self.name, self.component)
+        return attrstring(self.name, self.component)
 
     @property
-    def key(self) -> PropertyIdentifier:
+    def key(self) -> AttributeIdentifier:
         return (self.component, self.name)
+
+
+@lifecycle.deprecated(alternative="AttributeSpec")
+class PropertySpec(AttributeSpec):
+    pass
 
 
 T = t.TypeVar("T", bool, int, float, str)
@@ -173,8 +179,13 @@ class DataType(t.Generic[T]):
         return result
 
 
+def attrstring(attribute_name: str, component: t.Optional[str] = None):
+    return f"{component}/{attribute_name}" if component else attribute_name
+
+
+@lifecycle.deprecated(alternative="attrstring")
 def propstring(property_name: str, component: t.Optional[str] = None):
-    return f"{component}/{property_name}" if component else property_name
+    return attrstring(property_name, component)
 
 
 ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr"}

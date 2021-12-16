@@ -7,7 +7,7 @@ from abc import abstractmethod
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.data_tracker.data_format import load_update, dump_update
-from movici_simulation_core.data_tracker.property import INITIALIZE, SUBSCRIBE, PUBLISH, REQUIRED
+from movici_simulation_core.data_tracker.attribute import INITIALIZE, SUBSCRIBE, PUBLISH, REQUIRED
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.model_connector.connector import (
@@ -147,7 +147,7 @@ class TrackedModelAdapter(ModelAdapterBase):
                 "Model called with timestamp >0 while\n"
                 + f"initialized      : {self.model_initialized}\n"
                 + f"ready_for_updates: {self.model_ready_for_update}\n"
-                + self.format_uninitialized_properties()
+                + self.format_uninitialized_attributes()
             )
 
     def close(self, message: QuitMessage):
@@ -157,16 +157,16 @@ class TrackedModelAdapter(ModelAdapterBase):
                 "Model called with shutdown while\n"
                 + f"initialized: {self.model_initialized}\n"
                 + f"ready_for_updates:{self.model_ready_for_update}\n"
-                + self.format_uninitialized_properties()
+                + self.format_uninitialized_attributes()
             )
 
-    def format_uninitialized_properties(self) -> str:
-        def uninitialized_properties():
-            for ds, entity, (comp, prop_name), prop in self.state.iter_properties():
-                if (prop.flags & REQUIRED) and not prop.is_initialized():
-                    yield "/".join((ds, entity, comp or "", prop_name))
+    def format_uninitialized_attributes(self) -> str:
+        def uninitialized_attributes():
+            for ds, entity, (comp, attr_name), attr in self.state.iter_attributes():
+                if (attr.flags & REQUIRED) and not attr.is_initialized():
+                    yield "/".join((ds, entity, comp or "", attr_name))
 
-        return "\n".join(f"Uninitialized property: {prop}" for prop in uninitialized_properties())
+        return "\n".join(f"Uninitialized attribute: {attr}" for attr in uninitialized_attributes())
 
 
 class TrackedModel(Model):
@@ -177,10 +177,10 @@ class TrackedModel(Model):
 
     Attributes:
         auto_reset  By default, the TrackedModelAdapter resets tracking information of the
-                    state for PUB and/or SUB properties at the appropriate time, so that the model
-                    receives a SUB update only once, and PUB properties are published
+                    state for PUB and/or SUB attributes at the appropriate time, so that the model
+                    receives a SUB update only once, and PUB attributes are published
                     only once. By setting `auto_reset` to `0`, `PUB`, `SUB` or `PUB|SUB`. A model
-                    can limit this automatic behaviour and gain full control over which properties
+                    can limit this automatic behaviour and gain full control over which attributes
                     are reset and when. However, when overriding the default behaviour, a model
                     must be very careful in implementing this appropriately.
     """
@@ -199,16 +199,16 @@ class TrackedModel(Model):
         logger: logging.Logger,
     ):
         """In `setup`, a model receives a `state` object, it's `config` and other parameters. The
-        goal of `setup` is to prepare the `state` by giving it information of the properties it
-        needs to track (by subscribing (INIT/SUB/OPT) or publishing (PUB) properties) from which
-        datasets. These properties may be grouped together in `EntityGroup` classes or created
+        goal of `setup` is to prepare the `state` by giving it information of the attributes it
+        needs to track (by subscribing (INIT/SUB/OPT) or publishing (PUB) attributes) from which
+        datasets. These attributes may be grouped together in `EntityGroup` classes or created
         directly. The main entry points for registering are:
          * `state.add_dataset()` for registering a bunch of `EntityGroup` classes for a certain
            dataset name at once
          * `state.add_entity_group()` for registering a single `EntityGroup` class (or instance)
            for a dataset name
-         * `state.create_property()` for registering a single property in a dataset/entity_group
-           combination
+         * `state.register_attribute()` for registering a single attribute in a
+           dataset/entity_group combination
 
         During `setup` there is no data available in the `state`. These will be downloaded
         automatically by the `TrackedModelAdapter`. However, additional datasets may be
@@ -217,19 +217,19 @@ class TrackedModel(Model):
         :param state: The model's TrackedState object, managed by the `TrackedModelAdapter`
         :param settings: global settings
         :param schema: The AttributeSchema with all registered attributes
-        :param init_data_handler: a `InitDataHandler` that may be used to retrieve additional
+        :param init_data_handler: an `InitDataHandler` that may be used to retrieve additional
             datasets
         :param logger: a `logging.Logger` instance
         """
         ...
 
     def initialize(self, state: TrackedState):
-        """The `initialize` method is called when all of the `state`'s `INIT` property arrays are
+        """The `initialize` method is called when all of the `state`'s `INIT` attribute arrays are
         filled with data. This may be during the model engines initialization phase or during
-        `t=0`. Data that is required for the model to initialize property may be published in
+        `t=0`. Data that is required for the model to initialize attribute may be published in
         another model's t0-update, and the `TrackedModelAdapter` can wait for this to happen
         before calling `initialize`. When the simulation progresses to `t>0` before the model's
-        INIT properties have been filled, an Exception is raised, indicating that the model was
+        INIT attributes have been filled, an Exception is raised, indicating that the model was
         not ready yet.
 
         `Model.initialize` may raise `NotReady` to indicate that it does not have its required
@@ -244,8 +244,8 @@ class TrackedModel(Model):
     @abstractmethod
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         """The `update` method is called for every update coming from the model engine. However
-        it is only called the first time once all PUB properties have their arrays filled with
-        data. When the simulation progresses to `t>0` before the model's SUB properties have been
+        it is only called the first time once all PUB attributes have their arrays filled with
+        data. When the simulation progresses to `t>0` before the model's SUB attributes have been
         filled, an Exception is raised, indicating that the model was not ready yet.
 
         :param state: The model's TrackedState object, managed by the `TrackedModelAdapter`

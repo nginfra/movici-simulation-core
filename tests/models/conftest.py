@@ -1,12 +1,9 @@
 import json
+import pytest
 import shutil
 import typing as t
 from pathlib import Path
 
-import pytest
-
-from movici_simulation_core.core.attributes import GlobalAttributes
-from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.model_connector.init_data import (
     DirectoryInitDataHandler,
 )
@@ -35,16 +32,9 @@ def global_timeline_info():
 
 
 @pytest.fixture
-def additional_attributes():
-    return []
-
-
-@pytest.fixture
-def global_schema(additional_attributes):
-    schema = AttributeSchema(attributes=additional_attributes)
-    schema.use(GlobalAttributes)
-    schema.use(CommonAttributes)
-    return schema
+def global_schema(global_schema):
+    global_schema.use(CommonAttributes)
+    return global_schema
 
 
 @pytest.fixture
@@ -231,25 +221,25 @@ def overlap_dataset(overlap_dataset_name):
 def get_entity_update():
     def _factory(
         ids: t.Iterable,
-        properties: t.Iterable,
+        attributes: t.Iterable,
         key_name: str,
         component_name: t.Optional[str] = None,
     ) -> dict:
         if not isinstance(ids, t.Iterable):
             ids = [ids]
         entities = {"id": list(ids)}
-        for key, prop, component in [
-            (key_name, properties, component_name),
+        for key, attr, component in [
+            (key_name, attributes, component_name),
         ]:
-            if prop is not None:
-                if not isinstance(prop, t.Iterable):
-                    prop = [prop for _ in ids]
+            if attr is not None:
+                if not isinstance(attr, t.Iterable):
+                    attr = [attr for _ in ids]
                 if component is None:
-                    entities[key] = prop
+                    entities[key] = attr
                 else:
                     if component not in entities:
                         entities[component] = {}
-                    entities[component][key] = prop
+                    entities[component][key] = attr
 
         return entities
 

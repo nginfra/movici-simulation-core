@@ -1,7 +1,7 @@
 import typing as t
 
 import numpy as np
-from movici_simulation_core.data_tracker.property import UniformProperty
+from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_geo_query.geo_query import QueryResult
 
 SECONDS_PER_MINUTE = 60
@@ -67,11 +67,11 @@ def func_integral_days(previous_source, weights, dt, previous_target, **_) -> np
     return func_integral(previous_source, weights, dt, previous_target, scale=SECONDS_PER_DAY)
 
 
-class PropertyAggregator:
+class AttributeAggregator:
     def __init__(
         self,
-        source: UniformProperty,
-        target: UniformProperty,
+        source: UniformAttribute,
+        target: UniformAttribute,
         func: str,
         mapping: QueryResult = None,
         default_special_value=-9999,
@@ -131,6 +131,6 @@ class PropertyAggregator:
         self.previous_source = self.source.array.copy()
 
     @staticmethod
-    def ensure_special_value(prop, special_value):
-        if prop.options.special is None:
-            prop.options.special = special_value
+    def ensure_special_value(attr, special_value):
+        if attr.options.special is None:
+            attr.options.special = special_value

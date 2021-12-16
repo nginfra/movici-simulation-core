@@ -7,7 +7,7 @@ import pytest
 from movici_simulation_core.core.schema import DataType
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.data_tracker.property import UniformProperty, CSRProperty
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, CSRAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.csv_tape import CsvTape
 from movici_simulation_core.models.common.entities import GeometryEntity
@@ -86,8 +86,8 @@ def test_scalar_parameter(curr_factor, value, expected):
 
 class TestNearestValueContributor:
     @pytest.fixture
-    def property(self):
-        return UniformProperty(np.arange(1, 6, dtype=float), data_type=DataType(float))
+    def attribute(self):
+        return UniformAttribute(np.arange(1, 6, dtype=float), data_type=DataType(float))
 
     @pytest.fixture
     def mapping_indices(self):
@@ -100,12 +100,12 @@ class TestNearestValueContributor:
         return mock
 
     @pytest.fixture
-    def parameter_info(self, property):
+    def parameter_info(self, attribute):
         return LocalParameterInfo(
             target_dataset="dataset",
             target_entity_group="entities",
             target_geometry="line",
-            target_property=property,
+            target_attribute=attribute,
             elasticity=2,
         )
 
@@ -122,8 +122,8 @@ class TestNearestValueContributor:
 
     def test_setup(self, calculator, state):
         assert isinstance(
-            state.properties["dataset"]["entities"][("shape_properties", "linestring_2d")],
-            CSRProperty,
+            state.attributes["dataset"]["entities"][("shape_properties", "linestring_2d")],
+            CSRAttribute,
         )
         assert isinstance(calculator._target_entity, GeometryEntity)
 
@@ -136,16 +136,16 @@ class TestNearestValueContributor:
         np.testing.assert_array_equal(result, input_matrix)
 
     @pytest.mark.parametrize("force", [True, False])
-    def test_demand_stays_equal_on_no_change_property(self, calculator, force):
+    def test_demand_stays_equal_on_no_change_attribute(self, calculator, force):
         input_matrix = np.array([[0, 1], [1, 0]])
         calculator.update_demand(input_matrix)
         result = calculator.update_demand(input_matrix, force_update=force)
         np.testing.assert_array_equal(result, input_matrix)
 
-    def test_update_demand(self, calculator, property):
+    def test_update_demand(self, calculator, attribute):
         input_matrix = np.array([[0, 1], [1, 0]])
         calculator.update_demand(input_matrix)
-        property[:] = [4, 4, 4, 4, 4]
+        attribute[:] = [4, 4, 4, 4, 4]
         result = calculator.update_demand(input_matrix)
         exp = (4 / 1 * 4 / 2) ** 2
         np.testing.assert_array_equal(
@@ -185,8 +185,8 @@ class TestRouteCostFactor:
         return TrackedState()
 
     @pytest.fixture
-    def property(self, state, road_network_name):
-        return UniformProperty(np.ones((4,)), DataType(float))
+    def attribute(self, state, road_network_name):
+        return UniformAttribute(np.ones((4,)), DataType(float))
 
     @pytest.fixture
     def mapping_indices(self):
@@ -199,12 +199,12 @@ class TestRouteCostFactor:
         return mock
 
     @pytest.fixture
-    def parameter_info(self, road_network_name, property):
+    def parameter_info(self, road_network_name, attribute):
         return LocalParameterInfo(
             target_dataset=road_network_name,
             target_entity_group="road_segment_entities",
             target_geometry="line",
-            target_property=property,
+            target_attribute=attribute,
             elasticity=2,
         )
 
@@ -225,9 +225,9 @@ class TestRouteCostFactor:
         return calc
 
     @pytest.mark.parametrize("input_val", [2, 3])
-    def test_calculate_values(self, calculator, property, input_val):
+    def test_calculate_values(self, calculator, attribute, input_val):
         base_path_travel_costs = np.array([[0, 0, 2], [0, 0, 2], [1, 1, 0]])
-        property[:] = input_val
+        attribute[:] = input_val
         np.testing.assert_allclose(
             calculator.calculate_values(),
             base_path_travel_costs * input_val,
@@ -235,12 +235,12 @@ class TestRouteCostFactor:
             atol=1e-11,
         )
 
-    def test_update_demand(self, calculator, property):
+    def test_update_demand(self, calculator, attribute):
         base_costs = np.array([[0, 0, 2], [0, 0, 2], [1, 1, 0]])
         input_matrix = np.ones_like(base_costs, dtype=float)
 
         calculator.update_demand(input_matrix)
-        property[:] = 2
+        attribute[:] = 2
         result = calculator.update_demand(input_matrix)
 
         expected = np.ones_like(input_matrix)

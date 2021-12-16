@@ -10,11 +10,11 @@ from movici_simulation_core.core.attributes import (
     DisplayName,
 )
 
-from movici_simulation_core.core.schema import PropertySpec, DataType
+from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, PUB
+from movici_simulation_core.data_tracker.attribute import field, PUB
 
-Overlap_Active = PropertySpec("overlap.active", data_type=DataType(bool))
+Overlap_Active = AttributeSpec("overlap.active", data_type=DataType(bool))
 
 
 class OverlapEntity(EntityGroup, name="overlap_entities"):

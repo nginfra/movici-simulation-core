@@ -4,16 +4,14 @@ from unittest.mock import Mock, call
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import UNDEFINED
+from movici_simulation_core.core.schema import UNDEFINED, AttributeSpec, DataType
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import (
-    PropertyField,
-    DataType,
+from movici_simulation_core.data_tracker.attribute import (
+    AttributeField,
     PUB,
     SUB,
     INIT,
     OPT,
-    PropertySpec,
     INITIALIZE,
     SUBSCRIBE,
     PUBLISH,
@@ -24,28 +22,30 @@ from movici_simulation_core.data_tracker.state import (
     ensure_path,
     StateProxy,
     EntityDataHandler,
-    filter_props,
+    filter_attrs,
 )
 from movici_simulation_core.testing.helpers import (
     dataset_data_to_numpy,
-    get_property,
+    get_attribute,
     dataset_dicts_equal,
 )
 
 
 class MyEntity(EntityGroup, name="my_entities"):
-    prop = PropertyField(spec=PropertySpec("prop", data_type=DataType(int, (), False)), flags=PUB)
+    attr = AttributeField(
+        spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB
+    )
 
 
 class Pub(EntityGroup, name="pub_entities"):
-    pub_prop = get_property(name="pub_prop", flags=PUB)
-    component_prop = get_property(name="comp_prop", component="component", flags=PUB)
+    pub_attr = get_attribute(name="pub_attr", flags=PUB)
+    component_attr = get_attribute(name="comp_attr", component="component", flags=PUB)
 
 
 class Sub(EntityGroup, name="sub_entities"):
-    sub_prop = get_property(name="sub_prop", flags=SUB)
-    init_prop = get_property(name="init_prop", flags=INIT)
-    opt_prop = get_property(name="opt_prop", flags=OPT)
+    sub_attr = get_attribute(name="sub_attr", flags=SUB)
+    init_attr = get_attribute(name="init_attr", flags=INIT)
+    opt_attr = get_attribute(name="opt_attr", flags=OPT)
 
 
 @pytest.fixture
@@ -66,17 +66,17 @@ def entity(state, dataset_name):
 
 
 def test_can_add_dataset(state: TrackedState, dataset_name):
-    assert state.properties.keys() == {dataset_name}
-    assert len(state.properties[dataset_name]) == 1
-    assert state.properties[dataset_name].keys() == {"my_entities"}
+    assert state.attributes.keys() == {dataset_name}
+    assert len(state.attributes[dataset_name]) == 1
+    assert state.attributes[dataset_name].keys() == {"my_entities"}
 
 
 def test_can_add_dataset_with_multiple_entities(state: TrackedState):
     class OtherEntity(EntityGroup, name="other_entities"):
-        sub_prop = get_property(name="sub_prop", flags=SUB)
+        sub_attr = get_attribute(name="sub_attr", flags=SUB)
 
     state.register_dataset("large_dataset", [MyEntity, OtherEntity])
-    assert {k for k in state.properties["large_dataset"].keys()} == {
+    assert {k for k in state.attributes["large_dataset"].keys()} == {
         "my_entities",
         "other_entities",
     }
@@ -105,31 +105,31 @@ def test_raises_on_nameless_entity_group(state, entity_group):
 @pytest.mark.parametrize("entity_group", [MyEntity, MyEntity("bla")])
 def test_register_entity_group_to_existing_dataset(state, dataset_name, entity_group):
     state.register_entity_group(dataset_name, entity_group)
-    assert entity_group.__entity_name__ in state.properties[dataset_name]
+    assert entity_group.__entity_name__ in state.attributes[dataset_name]
 
 
-def test_can_create_property(state, dataset_name):
-    prop_name = "new_prop"
-    spec = PropertySpec(prop_name, data_type=DataType(int, (), False))
-    state.register_property(
+def test_can_create_attribute(state, dataset_name):
+    attr_name = "new_attr"
+    spec = AttributeSpec(attr_name, data_type=DataType(int, (), False))
+    state.register_attribute(
         dataset_name,
         MyEntity.__entity_name__,
         spec=spec,
         flags=OPT,
     )
-    assert spec.key in state.properties[dataset_name][MyEntity.__entity_name__]
+    assert spec.key in state.attributes[dataset_name][MyEntity.__entity_name__]
 
 
-def test_can_get_property(state, dataset_name):
-    prop_name = "new_prop"
-    spec = PropertySpec(prop_name, data_type=DataType(int, (), False))
-    state.register_property(
+def test_can_get_attribute(state, dataset_name):
+    attr_name = "new_attr"
+    spec = AttributeSpec(attr_name, data_type=DataType(int, (), False))
+    state.register_attribute(
         dataset_name,
         MyEntity.__entity_name__,
         spec=spec,
         flags=OPT,
     )
-    assert state.get_property(dataset_name, MyEntity.__entity_name__, spec.key).flags == OPT
+    assert state.get_attribute(dataset_name, MyEntity.__entity_name__, spec.key).flags == OPT
 
 
 @pytest.mark.parametrize(
@@ -145,8 +145,8 @@ def test_returns_none_when_not_found(state, dataset, entity_type):
 
 def test_is_ready_for(state):
     class FakeEntity(EntityGroup):
-        sub = get_property(name="sub_prop", flags=SUB)
-        pub = get_property(name="pub_prop", flags=PUB)
+        sub = get_attribute(name="sub_attr", flags=SUB)
+        pub = get_attribute(name="pub_attr", flags=PUB)
 
     entity = FakeEntity(name="a")
     state.register_entity_group("some_dataset", entity)
@@ -159,34 +159,34 @@ def test_is_ready_for(state):
 
 
 @pytest.mark.parametrize(
-    ["prop_flag", "initial_data", "ready_flags", "expected"],
+    ["attr_flag", "initial_data", "ready_flags", "expected"],
     [
         (INIT, None, INITIALIZE, False),
         (INIT, None, SUBSCRIBE, False),  # can only be ready for SUB if also ready for INIT
         (SUB, None, INITIALIZE, True),
-        (INIT, dataset_data_to_numpy({"id": [1], "prop": [1]}), INITIALIZE, True),
+        (INIT, dataset_data_to_numpy({"id": [1], "attr": [1]}), INITIALIZE, True),
         (
             INIT,
-            dataset_data_to_numpy({"id": [1, 2], "prop": [1, UNDEFINED[int]]}),
+            dataset_data_to_numpy({"id": [1, 2], "attr": [1, UNDEFINED[int]]}),
             INITIALIZE,
             False,
         ),
-        (SUB, dataset_data_to_numpy({"id": [1], "prop": [1]}), SUBSCRIBE, True),
+        (SUB, dataset_data_to_numpy({"id": [1], "attr": [1]}), SUBSCRIBE, True),
         (INIT, dataset_data_to_numpy({"id": [1]}), INITIALIZE, False),
     ],
 )
 def test_is_ready_for2(
-    dataset_name, state, prop_flag: int, initial_data: dict, ready_flags: int, expected: bool
+    dataset_name, state, attr_flag: int, initial_data: dict, ready_flags: int, expected: bool
 ):
-    prop = state.register_property(
+    attr = state.register_attribute(
         dataset_name,
         MyEntity.__entity_name__,
-        spec=PropertySpec("prop", data_type=DataType(int, (), False)),
-        flags=prop_flag,
+        spec=AttributeSpec("attr", data_type=DataType(int, (), False)),
+        flags=attr_flag,
     )
     if initial_data:
         EntityDataHandler(
-            state._get_entity_group(dataset_name, MyEntity.__entity_name__), prop.index
+            state._get_entity_group(dataset_name, MyEntity.__entity_name__), attr.index
         ).receive_update(initial_data)
     assert state.is_ready_for(ready_flags) == expected
 
@@ -196,28 +196,28 @@ def test_get_data_mask():
     state.register_dataset("pub_dataset", [Pub])
     state.register_dataset("sub_dataset", [Sub])
     assert state.get_data_mask() == {
-        "pub": {"pub_dataset": {"pub_entities": ["pub_prop", "component/comp_prop"]}},
-        "sub": {"sub_dataset": {"sub_entities": ["sub_prop", "init_prop", "opt_prop"]}},
+        "pub": {"pub_dataset": {"pub_entities": ["pub_attr", "component/comp_attr"]}},
+        "sub": {"sub_dataset": {"sub_entities": ["sub_attr", "init_attr", "opt_attr"]}},
     }
 
 
 @pytest.fixture
 def tracked_entity(state, dataset_name):
     class SomeEntity(EntityGroup, name="some_entities"):
-        pub_prop = get_property(name="pub_prop", flags=PUB)
-        sub_prop = get_property(name="sub_prop", flags=SUB)
-        init_prop = get_property(name="init_prop", flags=INIT)
-        opt_prop = get_property(name="opt_prop", flags=OPT)
+        pub_attr = get_attribute(name="pub_attr", flags=PUB)
+        sub_attr = get_attribute(name="sub_attr", flags=SUB)
+        init_attr = get_attribute(name="init_attr", flags=INIT)
+        opt_attr = get_attribute(name="opt_attr", flags=OPT)
 
     entity = SomeEntity()
     state.register_entity_group(dataset_name, entity)
     state.receive_update(
         {dataset_name: {entity.__entity_name__: dataset_data_to_numpy({"id": [1, 2, 3]})}}
     )
-    for field in entity.properties.values():
-        prop = entity.get_property(field.key)
-        prop[0] = 1
-        assert np.any(prop.changed)
+    for field in entity.attributes.values():
+        attr = entity.get_attribute(field.key)
+        attr[0] = 1
+        assert np.any(attr.changed)
 
     return entity
 
@@ -225,11 +225,11 @@ def tracked_entity(state, dataset_name):
 @pytest.mark.parametrize(
     "flag, reset_fields, not_reset_fields",
     [
-        (PUBLISH, ("pub_prop",), ("sub_prop", "init_prop", "opt_prop")),
+        (PUBLISH, ("pub_attr",), ("sub_attr", "init_attr", "opt_attr")),
         (
             SUBSCRIBE,
-            ("sub_prop", "init_prop", "opt_prop"),
-            ("pub_prop",),
+            ("sub_attr", "init_attr", "opt_attr"),
+            ("pub_attr",),
         ),
     ],
 )
@@ -248,7 +248,7 @@ def update(dataset_name, entity):
         dataset_name: {
             MyEntity.__entity_name__: {
                 "id": {"data": np.array([9])},
-                MyEntity.prop.spec.name: {"data": np.array([47])},
+                MyEntity.attr.spec.name: {"data": np.array([47])},
             }
         }
     }
@@ -260,7 +260,7 @@ def other_update(dataset_name, entity):
         dataset_name: {
             MyEntity.__entity_name__: {
                 "id": {"data": np.array([9])},
-                MyEntity.prop.spec.name: {"data": np.array([42])},
+                MyEntity.attr.spec.name: {"data": np.array([42])},
             }
         }
     }
@@ -268,7 +268,7 @@ def other_update(dataset_name, entity):
 
 def test_receive_update_sets_data(state, entity, update):
     state.receive_update(update)
-    assert entity.prop[0] == 47
+    assert entity.attr[0] == 47
 
 
 def test_first_update_creates_index(state, entity, update):
@@ -278,14 +278,14 @@ def test_first_update_creates_index(state, entity, update):
 
 def test_receive_initial_doesnt_mark_as_changed(state, entity, update):
     state.receive_update(update, is_initial=True)
-    assert not entity.prop.changed
+    assert not entity.attr.changed
     assert not state.generate_update()
 
 
 def test_tracks_changes_on_update(state, entity, update, other_update):
     state.receive_update(update)
     state.receive_update(other_update)
-    assert np.any(entity.prop.changed)
+    assert np.any(entity.attr.changed)
     assert state.generate_update()
 
 
@@ -328,20 +328,20 @@ class TestEntityUpdateHandler:
                 dataset_name: {
                     entity_type: {
                         "id": [1, 2, 3],
-                        "prop": [4, 5, 6],
+                        "attr": [4, 5, 6],
                     },
                 }
             }
         )
 
     @pytest.fixture
-    def update_with_new_prop(self, dataset_name, entity_type):
+    def update_with_new_attr(self, dataset_name, entity_type):
         return dataset_data_to_numpy(
             {
                 dataset_name: {
                     entity_type: {
                         "id": [1, 2, 3],
-                        "new_prop": [4, 5, 6],
+                        "new_attr": [4, 5, 6],
                     },
                 }
             }
@@ -350,9 +350,9 @@ class TestEntityUpdateHandler:
     @pytest.fixture
     def entity_group(self, entity_type):
         class MyEntity(EntityGroup, name=entity_type):
-            prop = get_property(name="prop", flags=PUB)
-            component_prop = get_property(name="component_prop", component="component", flags=PUB)
-            non_changed_prop = get_property(name="non_changed", flags=PUB)
+            attr = get_attribute(name="attr", flags=PUB)
+            component_attr = get_attribute(name="component_attr", component="component", flags=PUB)
+            non_changed_attr = get_attribute(name="non_changed", flags=PUB)
 
         entity_group = MyEntity()
         return entity_group
@@ -365,38 +365,38 @@ class TestEntityUpdateHandler:
         return state
 
     @pytest.fixture
-    def get_property_from_state(self, state, entity_group, dataset_name):
-        def _get_property(identifier):
-            return state.get_property(dataset_name, entity_group.__entity_name__, identifier)
+    def get_attribute_from_state(self, state, entity_group, dataset_name):
+        def _get_attribute(identifier):
+            return state.get_attribute(dataset_name, entity_group.__entity_name__, identifier)
 
-        return _get_property
+        return _get_attribute
 
-    def test_initialization(self, get_property_from_state):
-        assert get_property_from_state((None, "prop")).is_initialized()
+    def test_initialization(self, get_attribute_from_state):
+        assert get_attribute_from_state((None, "attr")).is_initialized()
 
-    def test_initializes_with_empty_property_when_not_supplied(self, get_property_from_state):
-        assert np.all(get_property_from_state((None, "non_changed")).is_undefined())
+    def test_initializes_with_empty_attribute_when_not_supplied(self, get_attribute_from_state):
+        assert np.all(get_attribute_from_state((None, "non_changed")).is_undefined())
 
-    def test_later_added_property_is_initialized(
-        self, state, get_property_from_state, update_with_new_prop, dataset_name, entity_group
+    def test_later_added_attribute_is_initialized(
+        self, state, get_attribute_from_state, update_with_new_attr, dataset_name, entity_group
     ):
-        prop = get_property("new_prop")
-        state.register_property(dataset_name, entity_group.__entity_name__, prop.spec, prop.flags)
-        state.receive_update(update_with_new_prop)
-        assert np.all(get_property_from_state((None, "new_prop")).is_initialized())
+        attr = get_attribute("new_attr")
+        state.register_attribute(dataset_name, entity_group.__entity_name__, attr.spec, attr.flags)
+        state.receive_update(update_with_new_attr)
+        assert np.all(get_attribute_from_state((None, "new_attr")).is_initialized())
 
     def test_generate_update(self, initial_data, dataset_name, entity_group, state):
-        entity_group.prop[0] = 42
-        entity_group.component_prop[1] = 43
+        entity_group.attr[0] = 42
+        entity_group.component_attr[1] = 43
         update = state.generate_update()[dataset_name][entity_group.__entity_name__]
-        undefined = entity_group.prop.data_type.undefined
+        undefined = entity_group.attr.data_type.undefined
         assert dataset_dicts_equal(
             update,
             {
                 "id": {"data": [1, 2]},
-                "prop": {"data": [42, undefined]},
+                "attr": {"data": [42, undefined]},
                 "component": {
-                    "component_prop": {"data": [undefined, 43]},
+                    "component_attr": {"data": [undefined, 43]},
                 },
             },
         )
@@ -407,10 +407,10 @@ def state_proxy(state, dataset_name, entity):
     return StateProxy(state, dataset_name, entity.__entity_name__)
 
 
-def test_state_proxy_can_get_property(state_proxy, update):
+def test_state_proxy_can_get_attribute(state_proxy, update):
     state_proxy.state.receive_update(update)
-    prop = state_proxy.get_property(MyEntity.prop.key)
-    assert prop[0] == 47
+    attr = state_proxy.get_attribute(MyEntity.attr.key)
+    assert attr[0] == 47
 
 
 def test_state_proxy_can_get_index(state_proxy, update):
@@ -421,55 +421,55 @@ def test_state_proxy_can_get_index(state_proxy, update):
 
 
 @pytest.mark.parametrize(
-    ["flag", "props"],
+    ["flag", "attrs"],
     [
-        (SUBSCRIBE, ["sub_prop", "init_prop", "opt_prop", "either_prop"]),
-        (INITIALIZE, ["init_prop"]),
-        (REQUIRED, ["sub_prop", "init_prop", "either_prop"]),
-        (PUBLISH, ["pub_prop", "either_prop"]),
+        (SUBSCRIBE, ["sub_attr", "init_attr", "opt_attr", "either_attr"]),
+        (INITIALIZE, ["init_attr"]),
+        (REQUIRED, ["sub_attr", "init_attr", "either_attr"]),
+        (PUBLISH, ["pub_attr", "either_attr"]),
     ],
 )
-def test_can_filter_properties_by_flag(dataset_name, flag, props):
+def test_can_filter_attributes_by_flag(dataset_name, flag, attrs):
     class AllFlags(EntityGroup, name="all_flags_entities"):
-        pub_prop = get_property(name="pub_prop", flags=PUB)
-        sub_prop = get_property(name="sub_prop", flags=SUB)
-        init_prop = get_property(name="init_prop", flags=INIT)
-        opt_prop = get_property(name="opt_prop", flags=OPT)
-        either = get_property(name="either_prop", flags=PUB | SUB)
+        pub_attr = get_attribute(name="pub_attr", flags=PUB)
+        sub_attr = get_attribute(name="sub_attr", flags=SUB)
+        init_attr = get_attribute(name="init_attr", flags=INIT)
+        opt_attr = get_attribute(name="opt_attr", flags=OPT)
+        either = get_attribute(name="either_attr", flags=PUB | SUB)
 
     state = TrackedState()
     state.register_dataset(dataset_name, [AllFlags])
-    properties = state.properties[dataset_name][AllFlags.__entity_name__]
+    attributes = state.attributes[dataset_name][AllFlags.__entity_name__]
 
-    assert set(filter_props(properties, flag).keys()) == set((None, prop) for prop in props)
+    assert set(filter_attrs(attributes, flag).keys()) == set((None, attr) for attr in attrs)
 
 
 def test_set_special_value_on_init_data(state, entity, dataset_name):
-    init_data = {"general": {"special": {"my_entities..prop": -100}}, dataset_name: {}}
+    init_data = {"general": {"special": {"my_entities..attr": -100}}, dataset_name: {}}
     state.receive_update(init_data)
-    assert entity.prop.options.special == -100
+    assert entity.attr.options.special == -100
 
 
 def test_set_enum_on_init_data(state, entity, dataset_name):
-    entity.prop.options.enum_name = "bla"
+    entity.attr.options.enum_name = "bla"
     init_data = {"general": {"enum": {"bla": ["a", "b"]}}, dataset_name: {}}
     state.receive_update(init_data)
-    assert entity.prop.options.enum == ["a", "b"]
+    assert entity.attr.options.enum == ["a", "b"]
 
 
 def test_logs_on_double_general_section_assignment_conflict(state, entity, dataset_name):
-    entity.prop.options.enum_name = "bla"
+    entity.attr.options.enum_name = "bla"
 
     state.logger = Mock()
     state.receive_update(
         {
-            "general": {"special": {"my_entities..prop": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
     state.receive_update(
         {
-            "general": {"special": {"my_entities..prop": -99}, "enum": {"bla": ["c"]}},
+            "general": {"special": {"my_entities..attr": -99}, "enum": {"bla": ["c"]}},
             dataset_name: {},
         }
     )
@@ -477,11 +477,11 @@ def test_logs_on_double_general_section_assignment_conflict(state, entity, datas
     assert state.logger.log.call_args_list == [
         call(
             WARN,
-            f"Special value already set for {dataset_name}/{entity.__entity_name__}/prop",
+            f"Special value already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
         call(
             WARN,
-            f"Enum already set for {dataset_name}/{entity.__entity_name__}/prop",
+            f"Enum already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
     ]
 
@@ -489,18 +489,18 @@ def test_logs_on_double_general_section_assignment_conflict(state, entity, datas
 def test_does_not_log_when_double_general_section_assignment_equal_values(
     state, entity, dataset_name
 ):
-    entity.prop.options.enum_name = "bla"
+    entity.attr.options.enum_name = "bla"
 
     state.logger = Mock()
     state.receive_update(
         {
-            "general": {"special": {"my_entities..prop": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
     state.receive_update(
         {
-            "general": {"special": {"my_entities..prop": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
@@ -542,32 +542,32 @@ def test_can_hash_detached_entity_groups(e1, e2, length):
     assert len({e1, e2}) == length
 
 
-def test_resets_changes_with_recurring_properties():
+def test_resets_changes_with_recurring_attributes():
     state = TrackedState()
     e1 = state.register_entity_group("dataset", MyEntity("e1"))
     e2 = state.register_entity_group("dataset", MyEntity("e2"))
-    e1.prop.initialize(1)
-    e2.prop.initialize(1)
-    e1.prop[0] = 1
-    e2.prop[0] = 1
-    assert np.array_equal(e1.prop.changed, [True])
-    assert np.array_equal(e2.prop.changed, [True])
+    e1.attr.initialize(1)
+    e2.attr.initialize(1)
+    e1.attr[0] = 1
+    e2.attr[0] = 1
+    assert np.array_equal(e1.attr.changed, [True])
+    assert np.array_equal(e2.attr.changed, [True])
     state.reset_tracked_changes(PUB)
-    assert np.array_equal(e1.prop.changed, [False])
-    assert np.array_equal(e2.prop.changed, [False])
+    assert np.array_equal(e1.attr.changed, [False])
+    assert np.array_equal(e2.attr.changed, [False])
 
 
 def test_can_grow_entity_group_with_new_entities():
     state = TrackedState()
-    state.register_property(
-        "dataset", "some_entities", PropertySpec("some_prop", DataType(int, (), False))
+    state.register_attribute(
+        "dataset", "some_entities", AttributeSpec("some_attr", DataType(int, (), False))
     )
     state.receive_update(
         {
             "dataset": {
                 "some_entities": {
                     "id": {"data": np.array([2])},
-                    "some_prop": {"data": np.array([10])},
+                    "some_attr": {"data": np.array([10])},
                 }
             }
         }
@@ -577,13 +577,13 @@ def test_can_grow_entity_group_with_new_entities():
             "dataset": {
                 "some_entities": {
                     "id": {"data": np.array([1])},
-                    "some_prop": {"data": np.array([20])},
+                    "some_attr": {"data": np.array([20])},
                 }
             }
         }
     )
     assert np.array_equal(
-        state.get_property("dataset", "some_entities", (None, "some_prop")).array, [10, 20]
+        state.get_attribute("dataset", "some_entities", (None, "some_attr")).array, [10, 20]
     )
     assert np.array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
 
@@ -603,17 +603,17 @@ def test_interpret_track_unknown(track_unknown, expected):
     assert state.track_unknown == expected
 
 
-def test_can_add_new_entity_groups_and_properties_in_update():
+def test_can_add_new_entity_groups_and_attributes_in_update():
     state = TrackedState(track_unknown=OPT)
-    state.register_property(
-        "dataset", "some_entities", PropertySpec("some_prop", DataType(int, (), False))
+    state.register_attribute(
+        "dataset", "some_entities", AttributeSpec("some_attr", DataType(int, (), False))
     )
     state.receive_update(
         {
             "dataset": {
                 "some_entities": {
                     "id": {"data": np.array([2])},
-                    "some_prop": {"data": np.array([10])},
+                    "some_attr": {"data": np.array([10])},
                 }
             }
         }
@@ -623,13 +623,13 @@ def test_can_add_new_entity_groups_and_properties_in_update():
             "dataset": {
                 "other_entities": {
                     "id": {"data": np.array([1])},
-                    "other_prop": {"data": np.array([20])},
+                    "other_attr": {"data": np.array([20])},
                 }
             }
         }
     )
     assert np.array_equal(
-        state.get_property("dataset", "other_entities", (None, "other_prop")).array, [20]
+        state.get_attribute("dataset", "other_entities", (None, "other_attr")).array, [20]
     )
     assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
 
@@ -641,7 +641,7 @@ def test_can_grow_entity_group():
             "dataset": {
                 "some_entities": {
                     "id": {"data": np.array([2])},
-                    "some_prop": {"data": np.array([10])},
+                    "some_attr": {"data": np.array([10])},
                 }
             }
         }
@@ -651,67 +651,67 @@ def test_can_grow_entity_group():
             "dataset": {
                 "some_entities": {
                     "id": {"data": np.array([1])},
-                    "other_prop": {"data": np.array([20])},
+                    "other_attr": {"data": np.array([20])},
                 }
             }
         }
     )
     np.testing.assert_array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
     np.testing.assert_array_equal(
-        state.get_property("dataset", "some_entities", (None, "some_prop")).array,
+        state.get_attribute("dataset", "some_entities", (None, "some_attr")).array,
         [10, UNDEFINED[int]],
     )
     np.testing.assert_array_equal(
-        state.get_property("dataset", "some_entities", (None, "other_prop")).array,
+        state.get_attribute("dataset", "some_entities", (None, "other_attr")).array,
         [UNDEFINED[int], 20],
     )
 
 
-def test_can_inherit_properties():
+def test_can_inherit_attributes():
     class Derived(MyEntity):
-        also_prop = PropertyField(
-            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        also_attr = AttributeField(
+            spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {prop.key for prop in Derived.all_properties().values()} == {
-        (None, "prop"),
-        (None, "also_prop"),
+    assert {attr.key for attr in Derived.all_attributes().values()} == {
+        (None, "attr"),
+        (None, "also_attr"),
     }
 
 
-def test_can_override_properties():
+def test_can_override_attributes():
     class Derived(MyEntity):
-        prop = PropertyField(
-            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        attr = AttributeField(
+            spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [prop.key for prop in Derived.all_properties().values()] == [(None, "also_prop")]
+    assert [attr.key for attr in Derived.all_attributes().values()] == [(None, "also_attr")]
 
 
 def test_cascading_inheritance():
     class Derived(MyEntity):
-        prop = PropertyField(
-            spec=PropertySpec("also_prop", data_type=DataType(int, (), False)), flags=PUB
+        attr = AttributeField(
+            spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
     class DoubleDerived(Derived):
-        other_prop = PropertyField(
-            spec=PropertySpec("other_prop", data_type=DataType(int, (), False)), flags=PUB
+        other_attr = AttributeField(
+            spec=AttributeSpec("other_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {prop.key for prop in DoubleDerived.all_properties().values()} == {
-        (None, "also_prop"),
-        (None, "other_prop"),
+    assert {attr.key for attr in DoubleDerived.all_attributes().values()} == {
+        (None, "also_attr"),
+        (None, "other_attr"),
     }
 
 
-def test_can_duplicate_prop():
+def test_can_duplicate_attr():
     class Derived(MyEntity):
-        prop_2 = PropertyField(
-            spec=PropertySpec("prop", data_type=DataType(int, (), False)), flags=PUB
+        attr_2 = AttributeField(
+            spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [prop.key for prop in Derived.all_properties().values()] == [
-        (None, "prop"),
-        (None, "prop"),
+    assert [attr.key for attr in Derived.all_attributes().values()] == [
+        (None, "attr"),
+        (None, "attr"),
     ]

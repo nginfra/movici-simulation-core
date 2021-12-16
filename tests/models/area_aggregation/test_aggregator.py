@@ -2,9 +2,11 @@ import typing as t
 
 import numpy as np
 import pytest
-from movici_simulation_core.data_tracker.property import UniformProperty, DataType, PUB
+from movici_simulation_core.core.schema import DataType
+
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB
 from movici_simulation_core.models.area_aggregation.aggregators import (
-    PropertyAggregator,
+    AttributeAggregator,
     func_avg,
     func_sum,
     func_integral,
@@ -21,7 +23,7 @@ from movici_geo_query.geo_query import QueryResult
 def int_data():
     def get(data: t.List[int]):
         data_type = DataType(int, (), False)
-        return UniformProperty(data=data, data_type=data_type, flags=PUB)
+        return UniformAttribute(data=data, data_type=data_type, flags=PUB)
 
     return get
 
@@ -30,7 +32,7 @@ def int_data():
 def float_data():
     def get(data: t.List[float]):
         data_type = DataType(float, (), False)
-        return UniformProperty(data=data, data_type=data_type, flags=PUB)
+        return UniformAttribute(data=data, data_type=data_type, flags=PUB)
 
     return get
 
@@ -84,7 +86,7 @@ def aggregator(float_data):
         source = float_data([0, 5, 7])
         target = float_data([2, 0, 6])
         mapping = QueryResult(indices=np.array([0, 1, 0, 1, 2]), row_ptr=np.array([0, 2, 2, 5]))
-        return PropertyAggregator(
+        return AttributeAggregator(
             source=source,
             target=target,
             func=func,
@@ -124,7 +126,7 @@ def simple_aggregator(float_data):
         source = float_data([0, 5, 7])
         target = float_data([2, 0, 6])
         mapping = QueryResult(indices=np.array([0, 1, 2]), row_ptr=np.array([0, 1, 2, 3]))
-        return PropertyAggregator(
+        return AttributeAggregator(
             source=source,
             target=target,
             func=func,

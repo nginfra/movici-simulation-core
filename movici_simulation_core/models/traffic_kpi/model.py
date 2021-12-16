@@ -4,7 +4,7 @@ import pandas as pd
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.property import UniformProperty, PUB
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
@@ -34,9 +34,9 @@ class Model(TrackedModel, name="traffic_kpi"):
     segments: t.Optional[TransportSegments]
     coefficients_tape: t.Optional[CoefficientsTape]
 
-    ec_prop: UniformProperty
-    co2_prop: UniformProperty
-    nox_prop: UniformProperty
+    ec_attr: UniformAttribute
+    co2_attr: UniformAttribute
+    nox_attr: UniformAttribute
 
     _cargo_scenario_parameters: t.List[str]
     _passenger_scenario_parameters: t.List[str]
@@ -245,8 +245,8 @@ class Model(TrackedModel, name="traffic_kpi"):
             dataset_name=dataset_name,
             entity=TransportSegments(name=entity_name),
         )
-        # also add our properties
-        self.ec_prop = state.register_property(
+        # also add our attributes
+        self.ec_attr = state.register_attribute(
             dataset_name,
             entity_name,
             schema.get_spec(
@@ -255,14 +255,14 @@ class Model(TrackedModel, name="traffic_kpi"):
             flags=PUB,
         )
 
-        self.co2_prop = state.register_property(
+        self.co2_attr = state.register_attribute(
             dataset_name,
             entity_name,
             schema.get_spec(config["co2_emission_property"], default_data_type=DataType(float)),
             flags=PUB,
         )
 
-        self.nox_prop = state.register_property(
+        self.nox_attr = state.register_attribute(
             dataset_name,
             entity_name,
             schema.get_spec(config["nox_emission_property"], default_data_type=DataType(float)),
@@ -317,28 +317,28 @@ class Model(TrackedModel, name="traffic_kpi"):
         return Moment(min_time)
 
     def reset_values(self):
-        self.ec_prop[:] = 0
-        self.co2_prop[:] = 0
-        self.nox_prop[:] = 0
+        self.ec_attr[:] = 0
+        self.co2_attr[:] = 0
+        self.nox_attr[:] = 0
 
-    def _add_contributions_for(self, flow: UniformProperty, flow_category: str):
+    def _add_contributions_for(self, flow: UniformAttribute, flow_category: str):
         if not flow.is_initialized():
             return
         self._add_contributions(
-            self.co2_prop, flow, self.segments.length, flow_category, CO2, multiplier=1.0e-6
+            self.co2_attr, flow, self.segments.length, flow_category, CO2, multiplier=1.0e-6
         )
         self._add_contributions(
-            self.nox_prop, flow, self.segments.length, flow_category, NOX, multiplier=1.0e-6
+            self.nox_attr, flow, self.segments.length, flow_category, NOX, multiplier=1.0e-6
         )
         self._add_contributions(
-            self.ec_prop, flow, self.segments.length, flow_category, ENERGY, multiplier=1.0e-3
+            self.ec_attr, flow, self.segments.length, flow_category, ENERGY, multiplier=1.0e-3
         )
 
     def _add_contributions(
         self,
-        output: UniformProperty,
-        flows: UniformProperty,
-        lengths: UniformProperty,
+        output: UniformAttribute,
+        flows: UniformAttribute,
+        lengths: UniformAttribute,
         category: str,
         kpi: str,
         multiplier: float = 1,

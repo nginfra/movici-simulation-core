@@ -10,7 +10,7 @@ import zmq
 from zmq import Socket
 
 from movici_simulation_core.core.plugins import Service, Plugin, Model, Extensible
-from movici_simulation_core.core.schema import PropertySpec, AttributeSchema
+from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
 from movici_simulation_core.exceptions import StartupFailure
 from movici_simulation_core.model_connector.connector import (
     ModelConnector,
@@ -269,8 +269,8 @@ class Simulation(Extensible):
 
     def register_model_type(self, identifier: str, model_type: t.Type[Model]):
         """Register a `Model` type to use in a simulation. Upon registration, this method also
-        registers any attributes (ie `PropertySpec`s) from the models `Model.get_schema_attributes`
-        method.
+        registers any attributes (ie `AttributeSpec`s) from the models
+        `Model.get_schema_attributes` method.
 
         :param identifier: A unique identifier for a model type. When configuring the `Simulation`
         using `Simulation.configure`, this identifier must match the `type` key of the model config
@@ -279,10 +279,10 @@ class Simulation(Extensible):
         self.model_types[identifier] = ModelTypeInfo(identifier, cls=model_type)
         self.schema.add_attributes(model_type.get_schema_attributes())
 
-    def register_attributes(self, attributes: t.Iterable[PropertySpec]):
+    def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         """Register attributes for this Simulation.
 
-        :param attributes: an iterable of `PropertySpec` objects
+        :param attributes: an iterable of `AttributeSpec` objects
         """
         self.schema.add_attributes(attributes)
 

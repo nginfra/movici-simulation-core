@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import UNDEFINED
+from movici_simulation_core.core.schema import UNDEFINED, DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.property import UniformProperty, DataType
+from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common.entities import PointEntity, LineEntity, PolygonEntity
 from movici_simulation_core.models.overlap_status.overlap_status import (
@@ -163,8 +163,8 @@ def test_can_calculate_overlap_point(
     )
 
 
-def uniform_property(array, dtype):
-    return UniformProperty(array, DataType(dtype, (), False))
+def uniform_attribute(array, dtype):
+    return UniformAttribute(array, DataType(dtype, (), False))
 
 
 @pytest.mark.parametrize(
@@ -177,53 +177,53 @@ def uniform_property(array, dtype):
     ],
     [
         (
-            uniform_property([1, 1, 1, 1], dtype=bool),
-            uniform_property([1, 0, 0, 0], dtype=bool),
+            uniform_attribute([1, 1, 1, 1], dtype=bool),
+            uniform_attribute([1, 0, 0, 0], dtype=bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            uniform_property([1, 1, 0], dtype=bool),
+            uniform_attribute([1, 1, 0], dtype=bool),
         ),
         (
-            uniform_property([1, 1, 1, 1], dtype=bool),
-            uniform_property([1, 0, 0, 0], dtype=bool),
+            uniform_attribute([1, 1, 1, 1], dtype=bool),
+            uniform_attribute([1, 0, 0, 0], dtype=bool),
             np.array([], dtype=np.int64),
             np.array([], dtype=np.int64),
-            uniform_property([], dtype=bool),
+            uniform_attribute([], dtype=bool),
         ),
         (
             None,
-            uniform_property([1, 0, 0, 0], dtype=bool),
+            uniform_attribute([1, 0, 0, 0], dtype=bool),
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            uniform_property([1, 1, 0], dtype=bool),
+            uniform_attribute([1, 1, 0], dtype=bool),
         ),
         (
-            uniform_property([1, 0, 1, 1], dtype=bool),
-            None,
-            np.array([0, 1, 1]),
-            np.array([0, 0, 1]),
-            uniform_property([1, 0, 0], dtype=bool),
-        ),
-        (
-            None,
+            uniform_attribute([1, 0, 1, 1], dtype=bool),
             None,
             np.array([0, 1, 1]),
             np.array([0, 0, 1]),
-            uniform_property([1, 1, 1], dtype=bool),
+            uniform_attribute([1, 0, 0], dtype=bool),
+        ),
+        (
+            None,
+            None,
+            np.array([0, 1, 1]),
+            np.array([0, 0, 1]),
+            uniform_attribute([1, 1, 1], dtype=bool),
         ),
         (
             None,
             None,
             np.array([], dtype=np.int64),
             np.array([], dtype=np.int64),
-            uniform_property([], dtype=bool),
+            uniform_attribute([], dtype=bool),
         ),
         (
-            uniform_property([UNDEFINED[bool], 1, 1, 1], dtype=bool),
-            uniform_property([1, UNDEFINED[bool], 0, 0], dtype=bool),
+            uniform_attribute([UNDEFINED[bool], 1, 1, 1], dtype=bool),
+            uniform_attribute([1, UNDEFINED[bool], 0, 0], dtype=bool),
             np.array([0, 0, 1, 1]),
             np.array([0, 1, 0, 1]),
-            uniform_property([UNDEFINED[bool], UNDEFINED[bool], 1, UNDEFINED[bool]], dtype=bool),
+            uniform_attribute([UNDEFINED[bool], UNDEFINED[bool], 1, UNDEFINED[bool]], dtype=bool),
         ),
     ],
     ids=[

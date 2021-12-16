@@ -8,7 +8,7 @@ from movici_simulation_core.data_tracker.data_format import (
     EntityInitDataFormat,
     extract_dataset_data,
 )
-from movici_simulation_core.core.schema import UNDEFINED
+from movici_simulation_core.core.schema import UNDEFINED, AttributeSpec, DataType
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.postprocessing.results import (
     merge_updates,
@@ -35,7 +35,7 @@ def init_data(dataset_a, entity_1):
         dataset_a: {
             entity_1: {
                 "id": {"data": np.array([1, 2])},
-                "prop": {"data": np.array([10, 20])},
+                "attr": {"data": np.array([10, 20])},
             }
         }
     }
@@ -49,7 +49,7 @@ def update_0(dataset_a, entity_1):
         dataset_a: {
             entity_1: {
                 "id": {"data": np.array([1])},
-                "prop": {"data": np.array([11])},
+                "attr": {"data": np.array([11])},
             }
         },
     }
@@ -63,10 +63,20 @@ def update_1(dataset_a, entity_1):
         dataset_a: {
             entity_1: {
                 "id": {"data": np.array([2])},
-                "prop": {"data": np.array([22])},
+                "attr": {"data": np.array([22])},
             }
         },
     }
+
+
+@pytest.fixture
+def additional_attributes():
+    return [
+        AttributeSpec("attr", DataType(int, (), False)),
+        AttributeSpec("new_attr", DataType(int, (), False)),
+        AttributeSpec("str_attr", DataType(str, (), False)),
+        AttributeSpec("csr_attr", DataType(int, (), True)),
+    ]
 
 
 def test_merge_updates(dataset_a, entity_1):
@@ -75,7 +85,7 @@ def test_merge_updates(dataset_a, entity_1):
             dataset_a: {
                 entity_1: {
                     "id": {"data": np.array([1])},
-                    "prop": {"data": np.array([10])},
+                    "attr": {"data": np.array([10])},
                 }
             }
         },
@@ -83,7 +93,7 @@ def test_merge_updates(dataset_a, entity_1):
             dataset_a: {
                 entity_1: {
                     "id": {"data": np.array([2])},
-                    "prop": {"data": np.array([21])},
+                    "attr": {"data": np.array([21])},
                 }
             }
         },
@@ -94,7 +104,7 @@ def test_merge_updates(dataset_a, entity_1):
             dataset_a: {
                 entity_1: {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 21])},
+                    "attr": {"data": np.array([10, 21])},
                 }
             }
         },
@@ -105,7 +115,7 @@ def test_time_progressing_state(init_data, update_0, update_1, dataset_a, entity
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update_0, update_1])
-    data = state.get_property(dataset_a, entity_1, (None, "prop"))
+    data = state.get_attribute(dataset_a, entity_1, (None, "attr"))
     assert np.array_equal(data.array, [11, 22])
 
     state.move_to(0)
@@ -122,14 +132,14 @@ def test_time_progressing_state_with_new_id(init_data, dataset_a, entity_1):
         dataset_a: {
             entity_1: {
                 "id": {"data": np.array([3])},
-                "prop": {"data": np.array([31])},
+                "attr": {"data": np.array([31])},
             }
         },
     }
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_property(dataset_a, entity_1, (None, "prop"))
+    data = state.get_attribute(dataset_a, entity_1, (None, "attr"))
     assert np.array_equal(data.array, [10, 20, 31])
 
     state.move_to(0)
@@ -145,14 +155,14 @@ def test_time_progressing_state_with_new_attribute(init_data, dataset_a, entity_
         dataset_a: {
             entity_1: {
                 "id": {"data": np.array([1])},
-                "prop_2": {"data": np.array([31])},
+                "attr_2": {"data": np.array([31])},
             }
         },
     }
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_property(dataset_a, entity_1, (None, "prop_2"))
+    data = state.get_attribute(dataset_a, entity_1, (None, "attr_2"))
     assert np.array_equal(data.array, [31, UNDEFINED[int]])
 
     state.move_to(0)
@@ -168,14 +178,14 @@ def test_time_progressing_state_with_new_entity_group(init_data, dataset_a, enti
         dataset_a: {
             "entity_2": {
                 "id": {"data": np.array([1])},
-                "prop": {"data": np.array([12])},
+                "attr": {"data": np.array([12])},
             }
         },
     }
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_property(dataset_a, "entity_2", (None, "prop"))
+    data = state.get_attribute(dataset_a, "entity_2", (None, "attr"))
     assert np.array_equal(data.array, [12])
 
     state.move_to(0)
@@ -212,7 +222,7 @@ class TestReversableUpdate:
                 "id": {
                     "data": np.array([1]),
                 },
-                "prop": {
+                "attr": {
                     "data": np.array([10]),
                 },
             },
@@ -267,7 +277,7 @@ class TestSimulationResults:
                         "id": {
                             "data": np.array([1, 2]),
                         },
-                        "new_prop": {
+                        "new_attr": {
                             "data": np.array([11, 12]),
                         },
                     },
@@ -283,8 +293,10 @@ class TestSimulationResults:
         return TimelineInfo(reference, 1, 0)
 
     @pytest.fixture
-    def get_simulation_results(self, timeline_info):
-        return functools.partial(SimulationResults, timeline_info=timeline_info)
+    def get_simulation_results(self, timeline_info, global_schema):
+        return functools.partial(
+            SimulationResults, timeline_info=timeline_info, attributes=global_schema
+        )
 
     @pytest.fixture
     def simulation_results(self, init_data_dir, updates_dir, get_simulation_results):
@@ -297,7 +309,7 @@ class TestSimulationResults:
             result,
             {
                 "id": {"data": np.array([1, 2])},
-                "prop": {"data": np.array([11, 20])},
+                "attr": {"data": np.array([11, 20])},
             },
         )
 
@@ -311,7 +323,7 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1, 2]),
                             },
-                            "new_prop": {
+                            "new_attr": {
                                 "data": np.array([11, 12]),
                             },
                         },
@@ -319,8 +331,8 @@ class TestSimulationResults:
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
-                    "new_prop": {"data": np.array([11, 12])},
+                    "attr": {"data": np.array([10, 20])},
+                    "new_attr": {"data": np.array([11, 12])},
                 },
                 0,
             ),
@@ -331,7 +343,7 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1, 2]),
                             },
-                            "new_prop": {
+                            "new_attr": {
                                 "data": np.array([11, UNDEFINED[int]]),
                             },
                         },
@@ -339,8 +351,8 @@ class TestSimulationResults:
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
-                    "new_prop": {"data": np.array([11, UNDEFINED[int]])},
+                    "attr": {"data": np.array([10, 20])},
+                    "new_attr": {"data": np.array([11, UNDEFINED[int]])},
                 },
                 0,
             ),
@@ -351,7 +363,7 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1, 2]),
                             },
-                            "new_prop": {
+                            "new_attr": {
                                 "data": np.array([11, 12]),
                             },
                         },
@@ -359,8 +371,8 @@ class TestSimulationResults:
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
-                    "new_prop": {"data": np.array([11, 12])},
+                    "attr": {"data": np.array([10, 20])},
+                    "new_attr": {"data": np.array([11, 12])},
                 },
                 1,
             ),
@@ -372,7 +384,7 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1, 2]),
                             },
-                            "prop": {
+                            "attr": {
                                 "data": np.array([11, 12]),
                             },
                         },
@@ -380,7 +392,7 @@ class TestSimulationResults:
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
+                    "attr": {"data": np.array([10, 20])},
                 },
                 0,
             ),
@@ -391,7 +403,7 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1]),
                             },
-                            "str_prop": {
+                            "str_attr": {
                                 "data": np.array(["str"]),
                             },
                         },
@@ -399,8 +411,8 @@ class TestSimulationResults:
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
-                    "str_prop": {"data": np.array(["str", UNDEFINED[str]])},
+                    "attr": {"data": np.array([10, 20])},
+                    "str_attr": {"data": np.array(["str", UNDEFINED[str]])},
                 },
                 0,
             ),
@@ -411,14 +423,14 @@ class TestSimulationResults:
                             "id": {
                                 "data": np.array([1]),
                             },
-                            "csr_prop": {"data": np.array([1]), "row_ptr": np.array([0, 1])},
+                            "csr_attr": {"data": np.array([1]), "row_ptr": np.array([0, 1])},
                         },
                     },
                 },
                 {
                     "id": {"data": np.array([1, 2])},
-                    "prop": {"data": np.array([10, 20])},
-                    "csr_prop": {
+                    "attr": {"data": np.array([10, 20])},
+                    "csr_attr": {
                         "data": np.array([1, UNDEFINED[int]]),
                         "indptr": np.array([0, 1, 2]),
                     },
@@ -446,7 +458,7 @@ class TestSimulationResults:
 
     def test_slice_single_attribute(self, simulation_results, dataset_a, entity_1):
         dataset = simulation_results.get_dataset(dataset_a)
-        result = dataset.slice(entity_1, attribute="prop")
+        result = dataset.slice(entity_1, attribute="attr")
         assert_dataset_dicts_equal(
             result,
             {
@@ -466,17 +478,17 @@ class TestSimulationResults:
             result,
             {
                 "timestamps": [0, 1],
-                "data": {"prop": [20, 22]},
+                "data": {"attr": [20, 22]},
             },
         )
 
     def test_slice_single_entity_with_key(self, simulation_results, dataset_a, entity_1):
         dataset = simulation_results.get_dataset(dataset_a)
-        result = dataset.slice(entity_1, entity_selector=20, key="prop")
+        result = dataset.slice(entity_1, entity_selector=20, key="attr")
         assert_dataset_dicts_equal(
             result,
             {
                 "timestamps": [0, 1],
-                "data": {"prop": [20, 22]},
+                "data": {"attr": [20, 22]},
             },
         )

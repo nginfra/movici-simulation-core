@@ -8,10 +8,10 @@ import pandas as pd
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.property import (
+from movici_simulation_core.data_tracker.attribute import (
     PUB,
-    UniformProperty,
-    CSRProperty,
+    UniformAttribute,
+    CSRAttribute,
     INIT,
     PUBLISH,
     SUBSCRIBE,
@@ -61,11 +61,11 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
     auto_reset = PUBLISH
 
     demand_estimation: DemandEstimation
-    _demand_property: CSRProperty
+    _demand_attribute: CSRAttribute
     _demand_entity: GeometryEntity
 
-    _total_inward_demand_property: t.Optional[UniformProperty] = None
-    _total_outward_demand_property: t.Optional[UniformProperty] = None
+    _total_inward_demand_attribute: t.Optional[UniformAttribute] = None
+    _total_outward_demand_attribute: t.Optional[UniformAttribute] = None
 
     _scenario_parameters_tape: t.Optional[CsvTape] = None
 
@@ -110,7 +110,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self._demand_entity = state.register_entity_group(
             dataset_name=ds_name, entity=PointEntity(name=demand_entity)
         )
-        self._demand_property = state.register_property(
+        self._demand_attribute = state.register_attribute(
             dataset_name=ds_name,
             entity_name=demand_entity,
             spec=schema.get_spec(config["demand_property"], DEFAULT_CSR_DATA_TYPE),
@@ -119,19 +119,19 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             atol=config.get("atol", 1e-8),
         )
 
-        if sum_prop_config_in := config.get("total_inward_demand_property"):
-            self._total_inward_demand_property = state.register_property(
+        if sum_attr_config_in := config.get("total_inward_demand_property"):
+            self._total_inward_demand_attribute = state.register_attribute(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
-                spec=schema.get_spec(sum_prop_config_in, DEFAULT_DATA_TYPE),
+                spec=schema.get_spec(sum_attr_config_in, DEFAULT_DATA_TYPE),
                 flags=PUB,
             )
 
-        if sum_prop_config_out := config.get("total_outward_demand_property"):
-            self._total_outward_demand_property = state.register_property(
+        if sum_attr_config_out := config.get("total_outward_demand_property"):
+            self._total_outward_demand_attribute = state.register_attribute(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
-                spec=schema.get_spec(sum_prop_config_out, DEFAULT_DATA_TYPE),
+                spec=schema.get_spec(sum_attr_config_out, DEFAULT_DATA_TYPE),
                 flags=PUB,
             )
 
@@ -184,7 +184,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         if "local_entity_groups" not in config or "local_properties" not in config:
             return rv
 
-        for entity, prop, geom, mapping_type, elasticity in zip(
+        for entity, attr, geom, mapping_type, elasticity in zip(
             config.get("local_entity_groups", []),
             config.get("local_properties", []),
             config.get("local_geometries", []),
@@ -192,19 +192,19 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             config.get("local_elasticities", []),
         ):
             ds_name, entity_name = entity
-            prop_spec = schema.get_spec(prop, DEFAULT_DATA_TYPE)
+            attr_spec = schema.get_spec(attr, DEFAULT_DATA_TYPE)
 
-            registered_prop = state.register_property(
+            registered_attr = state.register_attribute(
                 dataset_name=ds_name,
                 entity_name=entity_name,
-                spec=prop_spec,
+                spec=attr_spec,
                 flags=INIT,
             )
             info = LocalParameterInfo(
                 target_dataset=ds_name,
                 target_entity_group=entity_name,
                 target_geometry=geom,
-                target_property=registered_prop,
+                target_attribute=registered_attr,
                 elasticity=elasticity,
             )
             calculator = self._local_mapping_type_to_calculators_dict[mapping_type](info)
@@ -222,7 +222,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         mapper = LocalMapper(demand_geometry)
         self.demand_estimation.initialize(mapper)
 
-        demand_matrix = self._get_demand_matrix(self._demand_property.csr)
+        demand_matrix = self._get_demand_matrix(self._demand_attribute.csr)
         self._update_demand_sum(demand_matrix)
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
@@ -231,7 +231,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
         self.proceed_tape(moment)
 
-        demand_matrix = self._get_demand_matrix(self._demand_property.csr)
+        demand_matrix = self._get_demand_matrix(self._demand_attribute.csr)
         updated = self.demand_estimation.update(
             demand_matrix, self.update_count == 0, moment=moment
         )
@@ -240,7 +240,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         # our model's calculation
         state.reset_tracked_changes(SUBSCRIBE)
 
-        self._set_demand_matrix(updated, self._demand_property.csr)
+        self._set_demand_matrix(updated, self._demand_attribute.csr)
         self._update_demand_sum(updated)
 
         self.update_count += 1
@@ -278,11 +278,11 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         demand_csr.changed += np.amax(changed, axis=1)
 
     def _update_demand_sum(self, demand_matrix: np.ndarray):
-        if self._total_outward_demand_property is not None:
-            self._total_outward_demand_property[:] = np.sum(demand_matrix, axis=1)
+        if self._total_outward_demand_attribute is not None:
+            self._total_outward_demand_attribute[:] = np.sum(demand_matrix, axis=1)
 
-        if self._total_inward_demand_property is not None:
-            self._total_inward_demand_property[:] = np.sum(demand_matrix, axis=0)
+        if self._total_inward_demand_attribute is not None:
+            self._total_inward_demand_attribute[:] = np.sum(demand_matrix, axis=0)
 
     def shutdown(self, state: TrackedState) -> None:
         self.demand_estimation.close()

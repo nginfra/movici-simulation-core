@@ -10,7 +10,7 @@ from pathlib import Path
 
 from movici_simulation_core.base_models.simple_model import SimpleModel
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.property import SUB, SUBSCRIBE
+from movici_simulation_core.data_tracker.attribute import SUB, SUBSCRIBE
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.data_collector.concurrent import (
     LimitedThreadPoolExecutor,

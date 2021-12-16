@@ -55,9 +55,9 @@ def model() -> Model:
     return corridor_model
 
 
-def test_node_properties(model: Model):
+def test_node_attributes(model: Model):
 
-    model._add_node_properties(
+    model._add_node_attributes(
         corridor_index=2, passenger_demand=10, cargo_demand=20, pcu_demand=30
     )
 
@@ -65,7 +65,7 @@ def test_node_properties(model: Model):
     assert model._corridor_entity.cargo_flow[2] == 20
     assert model._corridor_entity.passenger_car_unit[2] == 30
 
-    model._add_node_properties(corridor_index=2, passenger_demand=1, cargo_demand=2, pcu_demand=3)
+    model._add_node_attributes(corridor_index=2, passenger_demand=1, cargo_demand=2, pcu_demand=3)
 
     assert model._corridor_entity.passenger_flow[2] == 11
     assert model._corridor_entity.cargo_flow[2] == 22

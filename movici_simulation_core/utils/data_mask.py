@@ -4,10 +4,10 @@ import typing as t
 def validate_mask(data_mask: t.Optional[dict]):
     """determines whether the dataset filter has the correct shape, it must be lists inside
     dictionaries inside a dictionary. eg.:
-    {"some_dataset": {"some_entity_group": ["property1", "component_a/property2"]}}
+    {"some_dataset": {"some_entity_group": ["attribute1", "component_a/attribute2"]}}
     Also, at every level, the filter may be filled. these are invalid filters eg:
       * {"some_dataset": {}}
-      * {"some_dataset": {"some_entity_group": ["property1"], "empty_group": []}}
+      * {"some_dataset": {"some_entity_group": ["attribute1"], "empty_group": []}}
     """
     if data_mask == {}:
         return True

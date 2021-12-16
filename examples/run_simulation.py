@@ -9,8 +9,8 @@ import numpy as np
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.core.schema import PropertySpec, DataType
-from movici_simulation_core.data_tracker.property import PUB, SUB
+from movici_simulation_core.core.schema import AttributeSpec, DataType
+from movici_simulation_core.data_tracker.attribute import PUB, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.model_connector.init_data import InitDataHandler
 from movici_simulation_core.utils.moment import TimelineInfo, Moment
@@ -31,8 +31,8 @@ class DummyModel(TrackedModel):
         **_
     ):
         mode = PUB if self.mode == "pub" else SUB
-        self.prop = state.register_property(
-            "dataset", "entity", PropertySpec("attr", DataType(float, (), False)), flags=mode
+        self.attr = state.register_attribute(
+            "dataset", "entity", AttributeSpec("attr", DataType(float, (), False)), flags=mode
         )
 
     def initialize(self, state: TrackedState):
@@ -47,10 +47,8 @@ class DummyModel(TrackedModel):
         )
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-        if self.prop.flags & PUB:
-            # raise ValueError
-
-            self.prop[0] = 1.0
+        if self.attr.flags & PUB:
+            self.attr[0] = 1.0
         else:
             (Path(tempfile.tempdir) / "test.json").write_text(
                 EntityInitDataFormat().dumps(state.to_dict())

@@ -5,7 +5,7 @@ import numpy as np
 from movici_simulation_core.ae_wrapper.collections import NodeCollection, LinkCollection
 from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
-from movici_simulation_core.data_tracker.property import UniformProperty
+from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.models.common.entities import (
     PointEntity,
     TransportSegmentEntity,
@@ -21,25 +21,27 @@ def calculate_capacities(capacities: np.ndarray, layouts: np.ndarray) -> np.ndar
     return np.maximum(capacities * lanes, eps)
 
 
-def get_capacities_from_property(
-    capacity_property: UniformProperty,
-    layout_property: t.Optional[UniformProperty] = None,
+def get_capacities_from_attribute(
+    capacity_attribute: UniformAttribute,
+    layout_attribute: t.Optional[UniformAttribute] = None,
 ) -> np.ndarray:
-    capacities = capacity_property.array.copy()
-    capacities[capacity_property.is_special() | capacity_property.is_undefined()] = float("inf")
+    capacities = capacity_attribute.array.copy()
+    capacities[capacity_attribute.is_special() | capacity_attribute.is_undefined()] = float("inf")
 
-    if layout_property is None:
+    if layout_attribute is None:
         layout_array = np.ones((len(capacities), 1), dtype=np.int32)
     else:
-        layout_array = layout_property.array
+        layout_array = layout_attribute.array
 
     capacities = calculate_capacities(capacities, layout_array)
     return capacities
 
 
-def get_max_speeds_from_property(max_speed_property: UniformProperty) -> np.ndarray:
-    max_speeds = max_speed_property.array.copy()
-    max_speeds[max_speed_property.is_special() | max_speed_property.is_undefined()] = float("inf")
+def get_max_speeds_from_attribute(max_speed_attribute: UniformAttribute) -> np.ndarray:
+    max_speeds = max_speed_attribute.array.copy()
+    max_speeds[max_speed_attribute.is_special() | max_speed_attribute.is_undefined()] = float(
+        "inf"
+    )
 
     return max_speeds
 
@@ -71,8 +73,8 @@ def get_links(segments: TransportSegmentEntity) -> LinkCollection:
 
     directions = get_transport_directions(segments)
 
-    max_speeds = get_max_speeds_from_property(segments.max_speed)
-    capacities = get_capacities_from_property(segments.capacity, segments.layout)
+    max_speeds = get_max_speeds_from_attribute(segments.max_speed)
+    capacities = get_capacities_from_attribute(segments.capacity, segments.layout)
 
     return LinkCollection(
         ids=segments.index.ids,
@@ -104,12 +106,12 @@ def get_demand_links(segments: VirtualLinkEntity) -> LinkCollection:
     for i in range(len(linestring_csr.row_ptr) - 1):
         geometries.append(linestring_csr.get_row(i)[:, :2])
     if segments.max_speed.has_data():
-        max_speeds = get_max_speeds_from_property(segments.max_speed)
+        max_speeds = get_max_speeds_from_attribute(segments.max_speed)
     else:
         max_speeds = np.full(len(geometries), float("inf"))
 
     if segments.capacity.has_data():
-        capacities = get_capacities_from_property(segments.capacity)
+        capacities = get_capacities_from_attribute(segments.capacity)
     else:
         capacities = np.full(len(geometries), float("inf"))
 

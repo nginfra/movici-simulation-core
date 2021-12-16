@@ -9,10 +9,10 @@ from movici_simulation_core.core.schema import (
     AttributeSchema,
     infer_data_type_from_array,
     DataType,
-    PropertySpec,
+    AttributeSpec,
 )
 from movici_simulation_core.data_tracker.data_format import load_from_json
-from movici_simulation_core.data_tracker.property import PUB
+from movici_simulation_core.data_tracker.attribute import PUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common.time_series import TimeSeries
@@ -46,7 +46,7 @@ class Model(TrackedModel, name="tape_player"):
             self.process_tape(tapefile, schema)
 
         for info in self.pub_attributes:
-            state.register_property(info.dataset, info.entity_group, info.spec, flags=PUB)
+            state.register_attribute(info.dataset, info.entity_group, info.spec, flags=PUB)
         self.timeline.sort()
 
     def initialize(self, state: TrackedState):
@@ -81,7 +81,7 @@ class AttributeInfo:
 
     @property
     def spec(self):
-        return PropertySpec(self.name, self.data_type, self.component)
+        return AttributeSpec(self.name, self.data_type, self.component)
 
 
 def iter_attribute_info(data: dict, dataset=None, entity_group=None, component=None, exclude=()):

@@ -7,12 +7,12 @@ import numpy as np
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.property import (
+from movici_simulation_core.data_tracker.attribute import (
     SUB,
     PUB,
-    PropertyObject,
-    UniformProperty,
-    CSRProperty,
+    AttributeObject,
+    UniformAttribute,
+    CSRAttribute,
     REQUIRED,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -20,7 +20,7 @@ from movici_simulation_core.models.udf_model import compiler
 
 
 class UDFModel(TrackedModel, name="udf"):
-    inputs: t.Dict[str, PropertyObject]
+    inputs: t.Dict[str, AttributeObject]
     udfs: t.List[UDF]
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
@@ -45,7 +45,7 @@ class UDFInfo:
     output_component: t.Optional[str] = None
 
     def get_output_attribute(self, state: TrackedState, schema: AttributeSchema, replace_sub=True):
-        prop = state.register_property(
+        attr = state.register_attribute(
             self.dataset,
             self.entity_group,
             schema.get_spec(
@@ -54,8 +54,8 @@ class UDFInfo:
             flags=PUB,
         )
         if replace_sub:
-            prop.flags = PUB
-        return prop
+            attr.flags = PUB
+        return attr
 
     def make_udf(self, state: TrackedState, schema: AttributeSchema, replace_sub=True):
         func = compiler.compile(self.expression)
@@ -68,13 +68,13 @@ class UDF:
         self.func = func
         self.output = output_attr
 
-    def run(self, inputs: t.Dict[str, PropertyObject]):
+    def run(self, inputs: t.Dict[str, AttributeObject]):
         result = self.func(
-            {k: (v.array if isinstance(v, UniformProperty) else v.csr) for k, v in inputs.items()}
+            {k: (v.array if isinstance(v, UniformAttribute) else v.csr) for k, v in inputs.items()}
         )
-        if isinstance(self.output, CSRProperty):
+        if isinstance(self.output, CSRAttribute):
             self.output.update(result, np.arange(len(self.output)))
-        elif isinstance(self.output, UniformProperty):
+        elif isinstance(self.output, UniformAttribute):
             self.output[:] = result
 
 
@@ -82,7 +82,7 @@ def get_input_attributes(config: dict, schema: AttributeSchema, state: TrackedSt
     dataset, entity_group = config["entity_group"][0]
     inputs = config["inputs"]
     return {
-        key: state.register_property(
+        key: state.register_attribute(
             dataset,
             entity_group,
             schema.get_spec(val, default_data_type=DataType(float)),
@@ -92,7 +92,7 @@ def get_input_attributes(config: dict, schema: AttributeSchema, state: TrackedSt
     }
 
 
-def prepare_optional_attributes(config, inputs: t.Dict[str, PropertyObject]):
+def prepare_optional_attributes(config, inputs: t.Dict[str, AttributeObject]):
     for attr in config.get("optional", []):
         inputs[attr].flags &= ~REQUIRED  # unset the REQUIRED bit
 

@@ -17,7 +17,7 @@ from movici_simulation_core.data_tracker.data_format import (
     EntityInitDataFormat,
     dump_update,
 )
-from movici_simulation_core.core.schema import PropertySpec, AttributeSchema
+from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
 from movici_simulation_core.model_connector.connector import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import (
     InitDataHandler,
@@ -105,7 +105,7 @@ def read_schema(schema: t.Any) -> AttributeSchema:
     if isinstance(schema, AttributeSchema):
         return schema
     rv = AttributeSchema()
-    if isinstance(schema, t.Sequence) and len(schema) > 0 and isinstance(schema[0], PropertySpec):
+    if isinstance(schema, t.Sequence) and len(schema) > 0 and isinstance(schema[0], AttributeSpec):
         rv.add_attributes(schema)
     elif hasattr(schema, "install"):
         rv.use(schema)
@@ -134,8 +134,8 @@ class ModelTester:
         :param init_data_handler:
         :param tmp_dir:
         :param global_schema: Can be one of
-          - An sequence (eg, list or tuple) of PropertySpec objects
-          - A Namespace (ie module, containing PropertySpec objects
+          - An sequence (eg, list or tuple) of AttributeSpec objects
+          - A Namespace (ie module, containing AttributeSpec objects
           - A `Plugin` that registers attributes
         """
         self.tmp_dir = Path(tmp_dir or tempfile.mkdtemp())

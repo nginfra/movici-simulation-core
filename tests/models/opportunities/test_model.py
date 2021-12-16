@@ -1,5 +1,6 @@
 import pytest
 
+from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.models.opportunities.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
 
@@ -30,6 +31,11 @@ def model_config(model_name, overlap_dataset_name, road_network_name):
         ],
         "cost_per_meter": [10.0],
     }
+
+
+@pytest.fixture
+def additional_attributes():
+    return [AttributeSpec("maintenance.under_maintenance", DataType(bool))]
 
 
 class TestOpportunity:

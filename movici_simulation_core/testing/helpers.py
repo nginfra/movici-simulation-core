@@ -3,11 +3,12 @@ from pathlib import Path
 
 import numpy as np
 
-from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.core.schema import AttributeSchema, DataType, AttributeSpec
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import PropertySpec, DataType, PropertyField
+from movici_simulation_core.data_tracker.attribute import AttributeField
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.utils import lifecycle
 
 
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
@@ -18,11 +19,17 @@ def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
     return {"data": np.asarray(data)}
 
 
-def get_property(name="prop", component=None, **kwargs):
+def get_attribute(name="attr", component=None, **kwargs):
     spec = dict(
-        spec=PropertySpec(name=name, component=component, data_type=DataType(int, (), False))
+        spec=AttributeSpec(name=name, component=component, data_type=DataType(int, (), False))
     )
-    return PropertyField(**{**spec, **kwargs})
+    spec.update(kwargs)
+    return AttributeField(**spec)
+
+
+@lifecycle.deprecated(alternative="get_attribute")
+def get_property(name="prop", component=None, **kwargs):
+    return get_attribute(name, component, **kwargs)
 
 
 T = t.TypeVar("T", bound=EntityGroup)
@@ -32,7 +39,8 @@ def create_entity_group_with_data(entity_type: t.Union[T, t.Type[T]], data: dict
     DATASET = "dummy"
     state = TrackedState()
     entity_group = state.register_entity_group(DATASET, entity_type)
-    schema = AttributeSchema(prop.spec for prop in entity_type.all_properties().values())
+    schema = AttributeSchema(attr.spec for attr in entity_type.all_attributes().values())
+    schema.add_attribute(AttributeSpec("id", DataType(int)))
     state.receive_update(
         EntityInitDataFormat(schema).load_json({DATASET: {entity_group.__entity_name__: data}})
     )

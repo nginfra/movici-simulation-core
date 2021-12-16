@@ -6,7 +6,7 @@ import numpy as np
 from movici_simulation_core.ae_wrapper.collections import GraphPath
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
+from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.state import TrackedState
@@ -131,7 +131,7 @@ class Model(TrackedModel, name="corridor"):
                             f"Nodes {from_id}-{to_id} doesnt have a valid path between them."
                         )
                         continue
-                    self._calculate_properties_for(
+                    self._calculate_attributes_for(
                         corridor_index,
                         from_id,
                         to_id,
@@ -144,7 +144,7 @@ class Model(TrackedModel, name="corridor"):
 
         self._calculate_average_travel_time(num_connections)
 
-    def _calculate_properties_for(
+    def _calculate_attributes_for(
         self,
         corridor_index: int,
         from_id: int,
@@ -160,7 +160,7 @@ class Model(TrackedModel, name="corridor"):
         cargo_demand = self._demand_nodes.cargo_demand.csr.get_row(from_idx)[to_idx]
         pcu_demand = self.cargo_pcu * cargo_demand + passenger_demand
 
-        self._add_node_properties(corridor_index, passenger_demand, cargo_demand, pcu_demand)
+        self._add_node_attributes(corridor_index, passenger_demand, cargo_demand, pcu_demand)
 
         if path.links is None:
             return
@@ -169,19 +169,19 @@ class Model(TrackedModel, name="corridor"):
         if len(roads_indices) == 0:
             return
 
-        self._add_link_properties(corridor_index, roads_indices, pcu_demand)
+        self._add_link_attributes(corridor_index, roads_indices, pcu_demand)
 
         if publish_corridor_geometry:
             self._calculate_geometry(corridor_index, roads_indices)
 
-    def _add_node_properties(
+    def _add_node_attributes(
         self, corridor_index: int, passenger_demand: float, cargo_demand: float, pcu_demand: float
     ) -> None:
         self._corridor_entity.passenger_flow[corridor_index] += passenger_demand
         self._corridor_entity.cargo_flow[corridor_index] += cargo_demand
         self._corridor_entity.passenger_car_unit[corridor_index] += pcu_demand
 
-    def _add_link_properties(
+    def _add_link_attributes(
         self, corridor_index: int, roads_indices: np.ndarray, pcu_demand: float
     ) -> None:
         self._calculate_energy_kpis(corridor_index, roads_indices, pcu_demand)
@@ -286,5 +286,5 @@ class Model(TrackedModel, name="corridor"):
             self._project = None
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))

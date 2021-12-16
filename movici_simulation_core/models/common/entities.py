@@ -22,7 +22,7 @@ from movici_simulation_core.core.attributes import (
     Reference,
 )
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, OPT, CSRProperty, INIT
+from movici_simulation_core.data_tracker.attribute import field, OPT, CSRAttribute, INIT
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.models.common.attributes import (
     Transport_MaxSpeed,
@@ -57,10 +57,10 @@ class PointEntity(GeometryEntity):
 class LineEntity(GeometryEntity):
     _linestring2d = field(ShapeProperties_Linestring2d, flags=OPT)
     _linestring3d = field(ShapeProperties_Linestring3d, flags=OPT)
-    _linestring: t.Optional[CSRProperty] = None
+    _linestring: t.Optional[CSRAttribute] = None
 
     @property
-    def linestring(self) -> CSRProperty:
+    def linestring(self) -> CSRAttribute:
         if not self._linestring:
             if self._linestring3d.is_initialized():
                 self._linestring = self._linestring3d

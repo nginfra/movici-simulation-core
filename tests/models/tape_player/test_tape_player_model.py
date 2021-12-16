@@ -1,5 +1,6 @@
 import pytest
 
+from movici_simulation_core.core.schema import AttributeSpec
 from movici_simulation_core.models.tape_player.model import Model
 from movici_simulation_core.testing.helpers import data_mask_compare
 from movici_simulation_core.testing.model_tester import ModelTester
@@ -61,8 +62,20 @@ def model(tape_dataset_name):
 
 
 @pytest.fixture
-def model_tester(model, target_dataset, tape_dataset_name, tape_dataset, init_data, tmp_path):
-    tester = ModelTester(model, tmp_dir=tmp_path)
+def additional_attributes():
+    from movici_simulation_core.core.schema import DataType
+
+    return [
+        AttributeSpec("attribute", DataType(int, (), False)),
+        AttributeSpec("another_attribute", DataType(int, (), False)),
+    ]
+
+
+@pytest.fixture
+def model_tester(
+    model, target_dataset, tape_dataset_name, tape_dataset, init_data, tmp_path, global_schema
+):
+    tester = ModelTester(model, tmp_dir=tmp_path, global_schema=global_schema)
     tester.add_init_data(target_dataset, init_data)
     tester.add_init_data(tape_dataset_name, tape_dataset)
     return tester

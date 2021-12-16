@@ -3,8 +3,8 @@ import typing as t
 import pandas as pd
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
-from movici_simulation_core.data_tracker.property import UniformProperty
+from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
+from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
 from ...model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
@@ -118,9 +118,9 @@ class Model(TrackedModel, name="unit_conversions"):
 
     @staticmethod
     def _update_cargo_value(
-        from_prop: UniformProperty, to_prop: UniformProperty, od_type, tape: CsvTape
+        from_attr: UniformAttribute, to_attr: UniformAttribute, od_type, tape: CsvTape
     ):
-        if from_prop.is_initialized():
+        if from_attr.is_initialized():
             coef = 0.0
             if od_type == "roads":
                 coef += tape["load_capacity_truck_medium"] * tape["share_truck_medium"]
@@ -134,16 +134,16 @@ class Model(TrackedModel, name="unit_conversions"):
                 coef += tape["load_capacity_train_diesel"] * tape["share_large_train_diesel"]
             else:
                 raise RuntimeError(f"od_type {od_type} should be one of roads, waterways, tracks")
-            to_prop[:] = from_prop.array * coef
+            to_attr[:] = from_attr.array * coef
 
     @staticmethod
     def _update_passenger_value(
-        from_prop: UniformProperty, to_prop: UniformProperty, tape: CsvTape
+        from_attr: UniformAttribute, to_attr: UniformAttribute, tape: CsvTape
     ):
-        if from_prop.is_initialized():
+        if from_attr.is_initialized():
             coef = tape["load_capacity_passenger_car"] * tape["share_passenger_car"]
-            to_prop[:] = from_prop.array * coef
+            to_attr[:] = from_attr.array * coef
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))

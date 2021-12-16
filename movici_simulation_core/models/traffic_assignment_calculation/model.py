@@ -7,7 +7,7 @@ from movici_simulation_core.ae_wrapper.collections import (
 )
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper, AssignmentParameters
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import PropertySpec, attributes_from_dict
+from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.state import TrackedState
 from ...model_connector.init_data import InitDataHandler
@@ -23,7 +23,7 @@ from . import dataset as ds
 
 class Model(TrackedModel, name="traffic_assignment_calculation"):
     """
-    Calculates traffic properties on roads
+    Calculates traffic attributes on roads
     """
 
     vdf_alpha: t.Union[float, str]
@@ -126,7 +126,7 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
         self._transport_segments.average_time[:] = results.congested_time[:real_link_len]
 
         # Aequilibrae does not like 0 capacity, so we have to post correct
-        capacities = ae_util.get_capacities_from_property(self._transport_segments.capacity)
+        capacities = ae_util.get_capacities_from_attribute(self._transport_segments.capacity)
         correction_indices = capacities <= ae_util.eps
         self._transport_segments.passenger_flow[correction_indices] = 0
         self._transport_segments.cargo_flow[correction_indices] = 0
@@ -138,7 +138,7 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
     def _process_link_changes(self):
         changed = False
         if self._transport_segments.max_speed.has_changes():
-            max_speeds = ae_util.get_max_speeds_from_property(self._transport_segments.max_speed)
+            max_speeds = ae_util.get_max_speeds_from_attribute(self._transport_segments.max_speed)
             self.project.update_column("speed_ab", max_speeds)
             self.project.update_column("speed_ba", max_speeds)
             changed = True
@@ -155,7 +155,7 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
             self._transport_segments.capacity.has_changes()
             or self._transport_segments.layout.has_changes()
         ):
-            capacities = ae_util.get_capacities_from_property(
+            capacities = ae_util.get_capacities_from_attribute(
                 self._transport_segments.capacity, self._transport_segments.layout
             )
             self.project.update_column("capacity_ab", capacities)
@@ -220,5 +220,5 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
         return alpha_fill
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(ds))

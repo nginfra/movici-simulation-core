@@ -5,8 +5,9 @@ from movici_simulation_core.core.schema import (
     AttributeSchema,
     DataType,
     attributes_from_dict,
+    AttributeSpec,
 )
-from movici_simulation_core.data_tracker.property import PropertySpec, OPT
+from movici_simulation_core.data_tracker.attribute import OPT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.utils.moment import Moment
@@ -51,8 +52,8 @@ class Model(TrackedModel, name="overlap_status"):
             config["output_dataset"][0], ds.OverlapEntity()
         )
         to_entities = []
-        to_check_properties = []
-        for (ds_name, entity_name), prop, geometry in zip(
+        to_check_attributes = []
+        for (ds_name, entity_name), attr, geometry in zip(
             config["to_entity_groups"],
             config.get("to_check_status_properties", [None] * len(config["to_entity_groups"])),
             config["to_geometry_types"],
@@ -62,53 +63,53 @@ class Model(TrackedModel, name="overlap_status"):
                     dataset_name=ds_name, entity=try_get_geometry_type(geometry)(name=entity_name)
                 )
             )
-            if prop is None or prop == (None, None):
-                to_check_properties.append(None)
+            if attr is None or attr == (None, None):
+                to_check_attributes.append(None)
             else:
-                to_spec = schema.get_spec(prop, default_data_type=DataType(bool))
-                self.ensure_uniform_property(ds_name, entity_name, to_spec)
-                to_check_properties.append(
-                    state.register_property(
+                to_spec = schema.get_spec(attr, default_data_type=DataType(bool))
+                self.ensure_uniform_attribute(ds_name, entity_name, to_spec)
+                to_check_attributes.append(
+                    state.register_attribute(
                         dataset_name=ds_name, entity_name=entity_name, spec=to_spec, flags=OPT
                     )
                 )
 
         from_ds_name, from_entity_name = config["from_entity_group"][0]
         from_geometry = try_get_geometry_type(config["from_geometry_type"])
-        from_prop = config.get("from_check_status_property")
+        from_attr = config.get("from_check_status_property")
         from_entity = state.register_entity_group(
             dataset_name=from_ds_name, entity=from_geometry(name=from_entity_name)
         )
-        if from_prop is None:
-            from_check_property = None
+        if from_attr is None:
+            from_check_attribute = None
         else:
-            from_spec = schema.get_spec(from_prop, default_data_type=DataType(bool))
-            self.ensure_uniform_property(from_ds_name, from_entity_name, from_spec)
-            from_check_property = state.register_property(
+            from_spec = schema.get_spec(from_attr, default_data_type=DataType(bool))
+            self.ensure_uniform_attribute(from_ds_name, from_entity_name, from_spec)
+            from_check_attribute = state.register_attribute(
                 dataset_name=from_ds_name, entity_name=from_entity_name, spec=from_spec, flags=OPT
             )
 
         self.overlap_status = OverlapStatus(
             from_entity=from_entity,
-            from_check_property=from_check_property,
+            from_check_attribute=from_check_attribute,
             to_entities=to_entities,
-            to_check_properties=to_check_properties,
+            to_check_attributes=to_check_attributes,
             overlap_entity=overlap_entity,
             distance_threshold=config.get("distance_threshold"),
             display_name_template=config.get("display_name_template"),
         )
 
     @staticmethod
-    def ensure_uniform_property(ds, entity, spec: PropertySpec):
+    def ensure_uniform_attribute(ds, entity, spec: AttributeSpec):
         if spec.data_type.py_type == str:
-            raise ValueError(f"Property {ds}/{entity}/{spec.full_name} can't have string type")
+            raise ValueError(f"Attribute {ds}/{entity}/{spec.full_name} can't have string type")
         if spec.data_type.csr is True:
             raise ValueError(
-                f"property {ds}/{entity}/{spec.full_name} should be of uniform data type"
+                f"attribute {ds}/{entity}/{spec.full_name} should be of uniform data type"
             )
         if len(spec.data_type.unit_shape):
-            raise ValueError(f"property {ds}/{entity}/{spec.full_name} should be one-dimensional")
+            raise ValueError(f"attribute {ds}/{entity}/{spec.full_name} should be one-dimensional")
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(ds))

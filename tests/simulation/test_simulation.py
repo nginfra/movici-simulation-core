@@ -12,9 +12,9 @@ import pytest
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core import Service
-from movici_simulation_core.core.schema import PropertySpec, DataType
+from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.property import PUB, SUB
+from movici_simulation_core.data_tracker.attribute import PUB, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import StartupFailure
 from movici_simulation_core.networking.messages import ModelMessage, ErrorMessage
@@ -43,12 +43,12 @@ class SimpleModel(TrackedModel):
         super().__init__(config)
         self.mode = config["mode"]
         self.output_file = config.get("output")
-        self.prop = None
+        self.attr = None
 
     def setup(self, state: TrackedState, **_):
         mode = PUB if self.mode == "pub" else SUB
-        self.prop = state.register_property(
-            "dataset", "entity", PropertySpec("attr", DataType(float, (), False)), flags=mode
+        self.attr = state.register_attribute(
+            "dataset", "entity", AttributeSpec("attr", DataType(float, (), False)), flags=mode
         )
 
     def initialize(self, state: TrackedState):
@@ -65,8 +65,8 @@ class SimpleModel(TrackedModel):
         )
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-        if self.prop.flags & PUB:
-            self.prop[0] = 1.0
+        if self.attr.flags & PUB:
+            self.attr[0] = 1.0
         else:
             Path(self.output_file).write_text(EntityInitDataFormat().dumps(state.to_dict()))
 
@@ -268,11 +268,11 @@ class TestSimulation:
         assert isinstance(simulation.active_modules["model"], expected_info)
 
     def test_add_model_adds_schema_attributes(self, simulation):
-        spec = PropertySpec("attr", data_type=DataType(float, (), False))
+        spec = AttributeSpec("attr", data_type=DataType(float, (), False))
 
         class ModelWithAttributes(DummyModel):
             @classmethod
-            def get_schema_attributes(cls) -> t.Sequence[PropertySpec]:
+            def get_schema_attributes(cls) -> t.Sequence[AttributeSpec]:
                 return [spec]
 
         simulation.add_model("model", ModelWithAttributes)
@@ -323,11 +323,11 @@ class TestSimulation:
         assert simulation.model_types["dummy"] == ModelTypeInfo("dummy", DummyModel)
 
     def test_register_model_updates_schema(self, simulation):
-        spec = PropertySpec("attr", data_type=DataType(float, (), False))
+        spec = AttributeSpec("attr", data_type=DataType(float, (), False))
 
         class ModelWithAttributes(DummyModel):
             @classmethod
-            def get_schema_attributes(cls) -> t.Sequence[PropertySpec]:
+            def get_schema_attributes(cls) -> t.Sequence[AttributeSpec]:
                 return [spec]
 
         simulation.register_model_type("dummy", ModelWithAttributes)
@@ -337,8 +337,8 @@ class TestSimulation:
         assert len(simulation.schema) == 0
         simulation.register_attributes(
             [
-                PropertySpec("attr", data_type=DataType(float, (), False)),
-                PropertySpec("attr2", data_type=DataType(float, (), False)),
+                AttributeSpec("attr", data_type=DataType(float, (), False)),
+                AttributeSpec("attr2", data_type=DataType(float, (), False)),
             ]
         )
         assert len(simulation.schema) == 2
@@ -347,8 +347,8 @@ class TestSimulation:
         assert len(simulation.schema) == 0
         simulation.register_attributes(
             [
-                PropertySpec("attr", data_type=DataType(float, (), False)),
-                PropertySpec("attr", data_type=DataType(float, (), False)),
+                AttributeSpec("attr", data_type=DataType(float, (), False)),
+                AttributeSpec("attr", data_type=DataType(float, (), False)),
             ]
         )
         assert len(simulation.schema) == 1
@@ -356,13 +356,13 @@ class TestSimulation:
     @pytest.mark.parametrize(
         "incompatible",
         [
-            PropertySpec("attr", data_type=DataType(int, (), False)),
-            PropertySpec("attr", data_type=DataType(float, (), False), enum_name="bla"),
+            AttributeSpec("attr", data_type=DataType(int, (), False)),
+            AttributeSpec("attr", data_type=DataType(float, (), False), enum_name="bla"),
         ],
     )
     def test_register_incompatible_attributes(self, simulation, incompatible):
         attrs = [
-            PropertySpec("attr", data_type=DataType(float, (), False)),
+            AttributeSpec("attr", data_type=DataType(float, (), False)),
             incompatible,
         ]
         with pytest.raises(TypeError):

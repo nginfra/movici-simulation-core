@@ -1,5 +1,6 @@
 import pytest
 
+from movici_simulation_core.core.schema import AttributeSpec
 from movici_simulation_core.models.time_window_status.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
 
@@ -41,6 +42,22 @@ def model_config(model_name, road_network_name, mv_network_name):
     }
 
 
+@pytest.fixture
+def additional_attributes():
+    from movici_simulation_core.core.schema import DataType
+
+    return [
+        AttributeSpec(
+            "node_id", component="oneside_element_properties", data_type=DataType(int, (), False)
+        ),
+        AttributeSpec(
+            "is_working_properly",
+            component="operation_status_properties",
+            data_type=DataType(bool, (), False),
+        ),
+    ]
+
+
 class TestTimeWindowStatus:
     def test_maintenance_window(
         self,
@@ -65,14 +82,14 @@ class TestTimeWindowStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[True, False, False],
+                                attributes=[True, False, False],
                                 key_name="status",
                             ),
                         },
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
-                                properties=[False, False, False, False, False],
+                                attributes=[False, False, False, False, False],
                                 key_name="status",
                             ),
                         },
@@ -85,7 +102,7 @@ class TestTimeWindowStatus:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 key_name="status",
                             )
                         }
@@ -98,7 +115,7 @@ class TestTimeWindowStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2, 4],
-                                properties=[True, True],
+                                attributes=[True, True],
                                 key_name="status",
                             ),
                         }
@@ -111,7 +128,7 @@ class TestTimeWindowStatus:
                         mv_network_name: {
                             "electrical_node_entities": get_entity_update(
                                 [2, 4],
-                                properties=[False, False],
+                                attributes=[False, False],
                                 key_name="status",
                             ),
                         }
@@ -180,7 +197,7 @@ class TestTimeWindowStatusSameEntity:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[True, False, False],
+                                attributes=[True, False, False],
                                 key_name="status",
                             ),
                         },
@@ -195,7 +212,7 @@ class TestTimeWindowStatusSameEntity:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 key_name="status",
                             )
                         }
@@ -266,7 +283,7 @@ class TestTimeWindowUndefinedWindow:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, True, False],
+                                attributes=[False, True, False],
                                 key_name="status",
                             ),
                         },
@@ -279,7 +296,7 @@ class TestTimeWindowUndefinedWindow:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [2],
-                                properties=[False],
+                                attributes=[False],
                                 key_name="status",
                             )
                         }
@@ -353,7 +370,7 @@ class TestTimeWindowInEntitiesDataset:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 2, 3],
-                                properties=[False, False, False],
+                                attributes=[False, False, False],
                                 key_name="status",
                             ),
                         },
@@ -366,7 +383,7 @@ class TestTimeWindowInEntitiesDataset:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1, 3],
-                                properties=[True, True],
+                                attributes=[True, True],
                                 key_name="status",
                             ),
                         },
@@ -379,7 +396,7 @@ class TestTimeWindowInEntitiesDataset:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [1],
-                                properties=[False],
+                                attributes=[False],
                                 key_name="status",
                             ),
                         },
@@ -392,7 +409,7 @@ class TestTimeWindowInEntitiesDataset:
                         road_network_name: {
                             "road_segment_entities": get_entity_update(
                                 [3],
-                                properties=[False],
+                                attributes=[False],
                                 key_name="status",
                             )
                         }

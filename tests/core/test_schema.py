@@ -6,7 +6,7 @@ from movici_simulation_core.core.schema import (
     DataType,
     infer_data_type_from_array,
     AttributeSchema,
-    PropertySpec,
+    AttributeSpec,
     NP_TYPES,
 )
 
@@ -49,7 +49,7 @@ def test_read_schema_from_namespace():
     ],
 )
 def test_get_spec(name, default_data_type, expected):
-    schema = AttributeSchema([PropertySpec("existing", DataType(float))])
+    schema = AttributeSchema([AttributeSpec("existing", DataType(float))])
     spec = schema.get_spec((None, name), default_data_type)
     data_type = spec.data_type if spec is not None else None
     assert data_type == expected

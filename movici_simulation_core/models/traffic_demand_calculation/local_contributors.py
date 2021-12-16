@@ -9,7 +9,7 @@ import numpy as np
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.data_tracker.property import UniformProperty, INIT
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, INIT
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.common import ae_util
 from movici_simulation_core.models.common.entities import (
@@ -33,7 +33,7 @@ class LocalParameterInfo:
     target_dataset: str
     target_entity_group: str
     target_geometry: str
-    target_property: UniformProperty
+    target_attribute: UniformAttribute
     elasticity: float
 
 
@@ -43,7 +43,7 @@ class LocalEffectsContributor(LocalContributor):
 
     def __init__(self, info: LocalParameterInfo):
         self.info = info
-        self._property = info.target_property
+        self._attribute = info.target_attribute
         self._elasticity = info.elasticity
 
     def update_demand(self, matrix: np.ndarray, force_update: bool = False, **_) -> np.ndarray:
@@ -61,7 +61,7 @@ class LocalEffectsContributor(LocalContributor):
         return factor * matrix
 
     def has_changes(self) -> bool:
-        return self._property.has_changes()
+        return self._attribute.has_changes()
 
     def calculate_values(self):
         """Calculate parameter values P[] so that P_ij can be reconstructed, this can be a 1d-array
@@ -95,18 +95,18 @@ class NearestValue(LocalEffectsContributor):
 
     @property
     def new_value(self):
-        if self._property is None or self._property.array is None:
+        if self._attribute is None or self._attribute.array is None:
             return None
-        return self._property.array
+        return self._attribute.array
 
     def set_old_value(self):
-        self.old_value = self._property.array.copy()
+        self.old_value = self._attribute.array.copy()
 
     def initialize(self, mapper: LocalMapper):
         self._indices = mapper.get_nearest(self._target_entity)
 
     def calculate_values(self):
-        return self._property.array.copy()
+        return self._attribute.array.copy()
 
     def calculate_contribution(self, new_values, old_values):
         return calculate_localized_contribution_1d(
@@ -146,7 +146,7 @@ class RouteCostFactor(LocalEffectsContributor):
     """
     This effect calculator computes the paths between pairs of demand nodes
     connected by a route.
-    It calculates the sum of the given _property on this route and returns that.
+    It calculates the sum of the given _attribute on this route and returns that.
     """
 
     _logger: logging.Logger = None
@@ -169,7 +169,7 @@ class RouteCostFactor(LocalEffectsContributor):
         geom = self.info.target_geometry
 
         if geom != "line":
-            raise RuntimeError(f"Local property routing has to have line type, not {geom}")
+            raise RuntimeError(f"Local attribute routing has to have line type, not {geom}")
 
         self._transport_segments = state.register_entity_group(
             ds_name,
@@ -202,7 +202,7 @@ class RouteCostFactor(LocalEffectsContributor):
         )
 
     def calculate_values(self):
-        self._network.update_cost_factor(self._property.array)
+        self._network.update_cost_factor(self._attribute.array)
         return self._get_local_route_cost()
 
     def calculate_contribution(self, new_values, old_values):
@@ -250,7 +250,7 @@ class InducedDemand(LocalEffectsContributor):
     If a roads nb_lanes changed, we multiply any demand that routes through that road by some
     factor. Then our multiplier is lanes_m_new/lanes_m_old ** elasticity
 
-    property should be the 'transport.layout' UniformProperty
+    attribute should be the 'transport.layout' UniformAttribute
     """
 
     _logger: logging.Logger
@@ -260,8 +260,8 @@ class InducedDemand(LocalEffectsContributor):
     _demand_nodes: t.Optional[PointEntity] = None
     _demand_links: t.Optional[VirtualLinkEntity] = None
     _project: t.Optional[ProjectWrapper] = None
-    _cost_property: t.Optional[UniformProperty] = None
-    _length_property: t.Optional[UniformProperty] = None
+    _cost_attribute: t.Optional[UniformAttribute] = None
+    _length_attribute: t.Optional[UniformAttribute] = None
 
     def setup(
         self,
@@ -277,20 +277,20 @@ class InducedDemand(LocalEffectsContributor):
         self._project = ProjectWrapper(Path(settings.temp_dir, ds_name))
 
         if geom != "line":
-            raise RuntimeError(f"Local property routing has to have line type, not {geom}")
+            raise RuntimeError(f"Local attribute routing has to have line type, not {geom}")
 
-        prop_spec = schema.get_spec(
+        attr_spec = schema.get_spec(
             ("traffic_properties", "average_time"), default_data_type=DataType(float)
         )
-        self._cost_property = state.register_property(
-            dataset_name=ds_name, entity_name=entity_name, spec=prop_spec, flags=INIT
+        self._cost_attribute = state.register_attribute(
+            dataset_name=ds_name, entity_name=entity_name, spec=attr_spec, flags=INIT
         )
 
-        prop_spec = schema.get_spec(
+        attr_spec = schema.get_spec(
             ("line_properties", "length"), default_data_type=DataType(float)
         )
-        self._length_property = state.register_property(
-            dataset_name=ds_name, entity_name=entity_name, spec=prop_spec, flags=INIT
+        self._length_attribute = state.register_attribute(
+            dataset_name=ds_name, entity_name=entity_name, spec=attr_spec, flags=INIT
         )
 
         self._transport_segments = state.register_entity_group(
@@ -327,7 +327,7 @@ class InducedDemand(LocalEffectsContributor):
         self._project.add_column("cost_field")
 
     def calculate_values(self):
-        self._project.update_column("cost_field", self._cost_property.array)
+        self._project.update_column("cost_field", self._cost_attribute.array)
         self._project.build_graph(
             cost_field="cost_field",
             block_centroid_flows=True,
@@ -368,8 +368,8 @@ class InducedDemand(LocalEffectsContributor):
 
                 roads_indices = segment_index[path.links][1:-1]
                 value = np.multiply(
-                    self._property[roads_indices],
-                    self._length_property[roads_indices][:, np.newaxis],
+                    self._attribute[roads_indices],
+                    self._length_attribute[roads_indices][:, np.newaxis],
                 )
                 summed_values[i][j] = value.sum()
         # rebuild requested sized matrix of shape=(len(self._closest_idx), len(self._closest_idx))

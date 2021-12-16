@@ -1,6 +1,6 @@
 import pytest
 
-from movici_simulation_core.core.schema import AttributeSchema, DataType, PropertySpec
+from movici_simulation_core.core.schema import AttributeSchema, DataType, AttributeSpec
 from ..conftest import get_dataset
 
 
@@ -8,11 +8,11 @@ from ..conftest import get_dataset
 def global_schema(global_schema: AttributeSchema):
     global_schema.add_attributes(
         [
-            PropertySpec("begin", DataType(str)),
-            PropertySpec("end", DataType(str)),
-            PropertySpec("job_begin", DataType(str)),
-            PropertySpec("job_end", DataType(str)),
-            PropertySpec("status", DataType(bool)),
+            AttributeSpec("begin", DataType(str)),
+            AttributeSpec("end", DataType(str)),
+            AttributeSpec("job_begin", DataType(str)),
+            AttributeSpec("job_end", DataType(str)),
+            AttributeSpec("status", DataType(bool)),
         ]
     )
     return global_schema

@@ -8,7 +8,7 @@ from movici_simulation_core.utils.settings import Settings
 
 if t.TYPE_CHECKING:
     from movici_simulation_core.model_connector.connector import ModelAdapterBase
-    from movici_simulation_core.core.schema import PropertySpec
+    from movici_simulation_core.core.schema import AttributeSpec
 
 
 class Plugin:
@@ -54,7 +54,7 @@ class Model(Plugin):
         raise NotImplementedError
 
     @classmethod
-    def get_schema_attributes(cls) -> t.Iterable[PropertySpec]:
+    def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return ()
 
     def __init_subclass__(cls, **kwargs):
@@ -68,7 +68,7 @@ class Model(Plugin):
 
 
 class Extensible:
-    def register_attributes(self, attributes: t.Iterable[PropertySpec]):
+    def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         pass
 
     def register_model_type(self, identifier: str, model_type: t.Type[Model]):

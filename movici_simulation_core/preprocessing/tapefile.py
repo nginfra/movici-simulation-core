@@ -138,8 +138,8 @@ class InterpolatingTapefile:
         {
           "entity_group_name": {
             "id": [4, 5, 6],
-            "some_property": [102, 40, 201]
-            "some_other_property": [7, 6, 21]
+            "some_attribute": [102, 40, 201]
+            "some_other_attribute": [7, 6, 21]
           }
         }
         """

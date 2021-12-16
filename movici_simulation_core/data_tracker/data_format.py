@@ -15,7 +15,7 @@ from movici_simulation_core.core.schema import (
 )
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.unicode_helpers import get_unicode_dtype
-from movici_simulation_core.types import NumpyPropertyData
+from movici_simulation_core.types import NumpyAttributeData
 
 
 class EntityInitDataFormat:
@@ -116,7 +116,7 @@ def load_from_json(
     return reader.load_json(data)
 
 
-def parse_list(data: list, data_type: DataType) -> NumpyPropertyData:
+def parse_list(data: list, data_type: DataType) -> NumpyAttributeData:
     if data_type.csr:
         return parse_csr_list(data, data_type)
     return parse_uniform_list(data, data_type)
@@ -151,11 +151,11 @@ def infer_data_type_from_list(data: list):
     return DataType(pytype, unit_shape=(), csr=csr)
 
 
-def parse_uniform_list(data: list, data_type: DataType) -> NumpyPropertyData:
+def parse_uniform_list(data: list, data_type: DataType) -> NumpyAttributeData:
     return {"data": create_array(data, data_type)}
 
 
-def parse_csr_list(data: t.List[list], data_type: DataType) -> NumpyPropertyData:
+def parse_csr_list(data: t.List[list], data_type: DataType) -> NumpyAttributeData:
     flattened = []
     row_ptr = [0]
     for item in data:
@@ -249,7 +249,7 @@ def is_undefined_uniform(data, data_type):
 
     # reduce over all but the first axis, e.g. an array with shape (10,2,3) should be
     # reduced to a result array of shape (10,) by reducing over axes (1,2). An single
-    # entity's property is considered undefined if the item is undefined in all its dimensions
+    # entity's attribute is considered undefined if the item is undefined in all its dimensions
     reduction_axes = tuple(range(1, len(undefs.shape)))
     return np.minimum.reduce(undefs, axis=reduction_axes)
 

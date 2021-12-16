@@ -12,8 +12,8 @@ import numpy as np
 from movici_simulation_core.core.schema import (
     DEFAULT_ROWPTR_KEY,
     infer_data_type_from_array,
-    PropertySpec,
-    propstring,
+    AttributeSpec,
+    attrstring,
     AttributeSchema,
 )
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
@@ -21,11 +21,11 @@ from movici_simulation_core.data_tracker.data_format import (
     extract_dataset_data,
     EntityInitDataFormat,
 )
-from movici_simulation_core.data_tracker.property import (
+from movici_simulation_core.data_tracker.attribute import (
     OPT,
-    create_empty_property,
-    CSRProperty,
-    UniformProperty,
+    create_empty_attribute,
+    CSRAttribute,
+    UniformAttribute,
 )
 from movici_simulation_core.data_tracker.state import TrackedState, iter_entity_data
 from movici_simulation_core.types import EntityData
@@ -46,7 +46,7 @@ class SimulationResults:
         init_data_dir: Path,
         updates_dir: Path,
         update_pattern=r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\.json",
-        attributes: t.Union[AttributeSchema, t.Sequence[PropertySpec]] = (),
+        attributes: t.Union[AttributeSchema, t.Sequence[AttributeSpec]] = (),
         timeline_info: TimelineInfo = None,
     ):
         self.update_pattern = update_pattern
@@ -190,7 +190,7 @@ class TimeProgressingState(TrackedState):
                     timestamps.update(upd.timestamp for upd in stream)
             return sorted(timestamps)
 
-        if not self.properties.get(dataset, {}).get(entity_group):
+        if not self.attributes.get(dataset, {}).get(entity_group):
             return []
         if (stream := self.streams.get((dataset, entity_group))) is None:
             return [0]
@@ -300,12 +300,12 @@ class ReversibleUpdate:
             if (component, prop_name) == (None, "id"):
                 continue
             try:
-                attr = state.get_property(self.dataset, self.entity_group, (component, prop_name))
+                attr = state.get_attribute(self.dataset, self.entity_group, (component, prop_name))
             except ValueError:
                 num_entities = len(state.get_index(self.dataset, self.entity_group)) or len(
                     self.update["id"]["data"]
                 )
-                attr = create_empty_property(
+                attr = create_empty_attribute(
                     infer_data_type_from_array(data),
                     num_entities,
                 )
@@ -432,7 +432,9 @@ class SingleAttributeSlicingStrategy(SlicingStrategy):
         data = []
         ids = self.state.get_index(self.dataset, self.entity_group).ids
         try:
-            prop = self.state.get_property(self.dataset, self.entity_group, (component, attribute))
+            prop = self.state.get_attribute(
+                self.dataset, self.entity_group, (component, attribute)
+            )
         except ValueError:
             pass
         else:
@@ -460,18 +462,18 @@ class SingleEntitySlicingStrategy(SlicingStrategy):
             raise ValueError(f"Entity not found where {key}=={entity_selector}")
 
         timestamps = self.state.get_timestamps(self.dataset, self.entity_group)
-        all_props = self.state.properties.get(self.dataset, {}).get(self.entity_group, {})
-        data = {propstring(key[1], key[0]): [] for key in all_props}
+        all_props = self.state.attributes.get(self.dataset, {}).get(self.entity_group, {})
+        data = {attrstring(key[1], key[0]): [] for key in all_props}
 
         for timestamp in timestamps:
             self.state.move_to(timestamp)
             for key, prop in all_props.items():
                 result = prop.slice([index])
-                if isinstance(prop, UniformProperty):
+                if isinstance(prop, UniformAttribute):
                     result = result[0]
                 else:
                     result = result.data
-                data[propstring(key[1], key[0])].append(result)
+                data[attrstring(key[1], key[0])].append(result)
 
         return {
             "timestamps": timestamps,
@@ -484,11 +486,11 @@ class SingleEntitySlicingStrategy(SlicingStrategy):
             return index[[entity_selector]][0]
         try:
             # TODO: support components
-            key_prop = self.state.get_property(self.dataset, self.entity_group, (None, key))
+            key_prop = self.state.get_attribute(self.dataset, self.entity_group, (None, key))
         except ValueError:
             return -1
-        if isinstance(key_prop, CSRProperty):
-            raise ValueError("Can only use UniformProperty as key")
+        if isinstance(key_prop, CSRAttribute):
+            raise ValueError("Can only use UniformAttribute as key")
         self.state.move_to(0)
         matches = np.flatnonzero(key_prop.array == entity_selector)
         if len(matches) == 0:

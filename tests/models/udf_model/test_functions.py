@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from movici_simulation_core.core.schema import UNDEFINED, DataType
-from movici_simulation_core.data_tracker.property import ensure_csr_data
+from movici_simulation_core.data_tracker.attribute import ensure_csr_data
 from movici_simulation_core.models.udf_model.functions import (
     sum_func,
     max_func,

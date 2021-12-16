@@ -4,8 +4,8 @@ import typing as t
 
 import pytest
 
-from movici_simulation_core.core.schema import AttributeSchema, PropertySpec, DataType
-from movici_simulation_core.data_tracker.property import UniformProperty, SUB, REQUIRED
+from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
+from movici_simulation_core.data_tracker.attribute import UniformAttribute, SUB, REQUIRED
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.udf_model import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.udf_model.udf_model import (
@@ -24,14 +24,15 @@ from movici_simulation_core.testing.model_tester import ModelTester
 def schema():
     return AttributeSchema(
         [
-            PropertySpec("in_a", DataType(float)),
-            PropertySpec("in_b", DataType(float)),
-            PropertySpec("in_csr", DataType(float, csr=True)),
-            PropertySpec("in_csr2", DataType(float, csr=True)),
-            PropertySpec("undef", DataType(float)),
-            PropertySpec("undef_csr", DataType(float, csr=True)),
-            PropertySpec("out_csr", DataType(float, csr=True)),
-            PropertySpec("in_2d", DataType(float, (2,))),
+            AttributeSpec("id", DataType(int)),
+            AttributeSpec("in_a", DataType(float)),
+            AttributeSpec("in_b", DataType(float)),
+            AttributeSpec("in_csr", DataType(float, csr=True)),
+            AttributeSpec("in_csr2", DataType(float, csr=True)),
+            AttributeSpec("undef", DataType(float)),
+            AttributeSpec("undef_csr", DataType(float, csr=True)),
+            AttributeSpec("out_csr", DataType(float, csr=True)),
+            AttributeSpec("in_2d", DataType(float, (2,))),
         ]
     )
 
@@ -79,9 +80,9 @@ class TestConfigParsing:
         attrs = get_input_attributes(config, schema, state)
         assert attrs.keys() == {"a", "b", "c"}
 
-    def test_get_input_attributes_returns_correct_properties(self, config, state, schema):
+    def test_get_input_attributes_returns_correct_attributes(self, config, state, schema):
         attrs = get_input_attributes(config, schema, state)
-        assert isinstance(attrs["a"], UniformProperty)
+        assert isinstance(attrs["a"], UniformAttribute)
         assert attrs["a"].data_type == DataType(float)
 
     def test_get_input_attributes_registers_as_sub(self, config, state, schema):
@@ -131,7 +132,7 @@ def test_model_data_mask(config):
     }
 
 
-def test_detects_intermediate_properties_as_pub():
+def test_detects_intermediate_attributes_as_pub():
     config = {
         "entity_group": [["some_dataset", "some_entities"]],
         "inputs": {

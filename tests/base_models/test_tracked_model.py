@@ -1,6 +1,6 @@
 import json
 import typing as t
-from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -12,10 +12,8 @@ from movici_simulation_core.base_models.tracked_model import (
 )
 from movici_simulation_core.data_tracker.data_format import dump_update, load_update
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import (
+from movici_simulation_core.data_tracker.attribute import (
     field,
-    PropertySpec,
-    DataType,
     INIT,
     SUB,
     PUB,
@@ -35,14 +33,14 @@ from movici_simulation_core.utils.moment import Moment
 
 @pytest.fixture
 def entity_group():
-    init_spec = PropertySpec("init_prop", data_type=DataType(int, (), False))
-    sub_spec = PropertySpec("sub_prop", data_type=DataType(int, (), False))
-    pub_spec = PropertySpec("pub_prop", data_type=DataType(int, (), False))
+    init_spec = AttributeSpec("init_attr", data_type=DataType(int, (), False))
+    sub_spec = AttributeSpec("sub_attr", data_type=DataType(int, (), False))
+    pub_spec = AttributeSpec("pub_attr", data_type=DataType(int, (), False))
 
     class MyEntity(EntityGroup, name="my_entities"):
-        init_prop = field(init_spec, flags=INIT)
-        sub_prop = field(sub_spec, flags=SUB)
-        pub_prop = field(pub_spec, flags=PUB)
+        init_attr = field(init_spec, flags=INIT)
+        sub_attr = field(sub_spec, flags=SUB)
+        pub_attr = field(pub_spec, flags=PUB)
 
     return MyEntity
 
@@ -73,9 +71,10 @@ def get_adapter(settings, entity_group):
         adapter.set_schema(
             AttributeSchema(
                 [
-                    entity_group.init_prop.spec,
-                    entity_group.pub_prop.spec,
-                    entity_group.sub_prop.spec,
+                    AttributeSpec("id", DataType(int)),
+                    entity_group.init_attr.spec,
+                    entity_group.pub_attr.spec,
+                    entity_group.sub_attr.spec,
                 ]
             )
         )
@@ -104,7 +103,7 @@ def update(create_update):
     return create_update(
         {
             "id": [1, 2],
-            "sub_prop": [5, 6],
+            "sub_attr": [5, 6],
         }
     )
 
@@ -118,7 +117,7 @@ def init_data_handler(tmp_path):
                 "dataset": {
                     "my_entities": {
                         "id": [1, 2],
-                        "init_prop": [3, 4],
+                        "init_attr": [3, 4],
                     },
                 }
             }
@@ -152,8 +151,8 @@ def test_base_model(model, adapter, update, init_data_handler):
 def test_get_data_filter(adapter, init_data_handler):
     adapter.initialize(init_data_handler)
     assert adapter.get_data_filter() == {
-        "sub": {"dataset": {"my_entities": ["init_prop", "sub_prop"]}},
-        "pub": {"dataset": {"my_entities": ["pub_prop"]}},
+        "sub": {"dataset": {"my_entities": ["init_attr", "sub_attr"]}},
+        "pub": {"dataset": {"my_entities": ["pub_attr"]}},
     }
 
 
@@ -210,10 +209,10 @@ def test_full_run(model, get_adapter, update, init_data_handler, entity_group):
             self.entity_group = state.register_entity_group("dataset", entity_group)
 
         def initialize(self, state: TrackedState):
-            self.entity_group.pub_prop[:] = -1
+            self.entity_group.pub_attr[:] = -1
 
         def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-            self.entity_group.pub_prop[:] = moment.timestamp
+            self.entity_group.pub_attr[:] = moment.timestamp
             return Moment(moment.timestamp + 1)
 
         new_time = Mock()
@@ -232,14 +231,14 @@ def test_full_run(model, get_adapter, update, init_data_handler, entity_group):
         )
 
     compare_update_result(
-        0, None, {"dataset": {"my_entities": {"id": [1, 2], "pub_prop": [-1, -1]}}}
+        0, None, {"dataset": {"my_entities": {"id": [1, 2], "pub_attr": [-1, -1]}}}
     )
     compare_update_result(0, None, {})
     compare_update_result(
-        0, update, {"dataset": {"my_entities": {"id": [1, 2], "pub_prop": [0, 0]}}}
+        0, update, {"dataset": {"my_entities": {"id": [1, 2], "pub_attr": [0, 0]}}}
     )
     compare_update_result(
-        1, update, {"dataset": {"my_entities": {"id": [1, 2], "pub_prop": [1, 1]}}}
+        1, update, {"dataset": {"my_entities": {"id": [1, 2], "pub_attr": [1, 1]}}}
     )
 
 
@@ -279,8 +278,8 @@ class TestUpdateSeries:
     @pytest.fixture
     def data(self, create_update):
         return [
-            create_update({"id": [1], "sub_prop": [1]}),
-            create_update({"id": [2], "sub_prop": [2]}),
+            create_update({"id": [1], "sub_attr": [1]}),
+            create_update({"id": [2], "sub_attr": [2]}),
         ]
 
     @pytest.fixture
@@ -295,5 +294,5 @@ class TestUpdateSeries:
     def test_processes_all_data(self, adapter, model, message, data):
         adapter.update_series(message, data)
         np.testing.assert_array_equal(
-            adapter.state.properties["dataset"]["my_entities"][(None, "sub_prop")].array, [1, 2]
+            adapter.state.attributes["dataset"]["my_entities"][(None, "sub_attr")].array, [1, 2]
         )

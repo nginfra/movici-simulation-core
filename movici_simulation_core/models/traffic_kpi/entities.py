@@ -1,17 +1,17 @@
 from movici_simulation_core.core.attributes import LineProperties_Length
-from movici_simulation_core.core.schema import PropertySpec, DataType
+from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.property import field, INIT, PUB, OPT
+from movici_simulation_core.data_tracker.attribute import field, INIT, PUB, OPT
 from movici_simulation_core.models.common.attributes import (
     Transport_PassengerVehicleFlow,
     Transport_CargoVehicleFlow,
 )
 
-Transport_EnergyConsumption_Hours = PropertySpec(
+Transport_EnergyConsumption_Hours = AttributeSpec(
     "transport.energy_consumption.hours", DataType(float)
 )
-Transport_Co2Emission_Hours = PropertySpec("transport.co2_emission.hours", DataType(float))
-Transport_NoxEmission_Hours = PropertySpec("transport.nox_emission.hours", DataType(float))
+Transport_Co2Emission_Hours = AttributeSpec("transport.co2_emission.hours", DataType(float))
+Transport_NoxEmission_Hours = AttributeSpec("transport.nox_emission.hours", DataType(float))
 
 
 class TransportSegments(EntityGroup):

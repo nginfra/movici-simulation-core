@@ -5,7 +5,7 @@ import numpy as np
 from shapely.ops import nearest_points
 
 from movici_geo_query.geo_query import GeoQuery
-from movici_simulation_core.data_tracker.property import Property, UniformProperty
+from movici_simulation_core.data_tracker.attribute import Attribute, UniformAttribute
 from movici_simulation_core.models.common.entities import GeometryEntity, LineEntity
 from .dataset import OverlapEntity
 
@@ -27,17 +27,17 @@ class OverlapStatus:
     def __init__(
         self,
         from_entity: GeometryEntity,
-        from_check_property: Property,
+        from_check_attribute: Attribute,
         to_entities: t.List[GeometryEntity],
-        to_check_properties: t.List[Property],
+        to_check_attributes: t.List[Attribute],
         overlap_entity: OverlapEntity,
         distance_threshold: float,
         display_name_template: t.Optional[str],
     ) -> None:
         self._from_entity = from_entity
-        self._from_check_property = from_check_property
+        self._from_check_attribute = from_check_attribute
         self._to_entities = to_entities
-        self._to_check_property = to_check_properties
+        self._to_check_attribute = to_check_attributes
         self._overlap_entity = overlap_entity
         self._distance_threshold = distance_threshold
         if display_name_template:
@@ -190,14 +190,14 @@ class OverlapStatus:
         return (nearest_from.x + nearest_to.x) / 2, (nearest_from.y + nearest_to.y) / 2
 
     def _publish_active_overlaps(self):
-        for to_prop, to_entity, connections in zip(
-            self._to_check_property, self._to_entities, self._connections
+        for to_attr, to_entity, connections in zip(
+            self._to_check_attribute, self._to_entities, self._connections
         ):
             self._publish_active_overlaps_for_connection(
                 from_entity=self._from_entity,
-                from_check_property=self._from_check_property,
+                from_check_attribute=self._from_check_attribute,
                 to_entity=to_entity,
-                to_check_property=to_prop,
+                to_check_attribute=to_attr,
                 connections=connections,
                 overlap_entity=self._overlap_entity,
             )
@@ -205,9 +205,9 @@ class OverlapStatus:
     def _publish_active_overlaps_for_connection(
         self,
         from_entity: GeometryEntity,
-        from_check_property: t.Optional[Property],
+        from_check_attribute: t.Optional[Attribute],
         to_entity: GeometryEntity,
-        to_check_property: t.Optional[Property],
+        to_check_attribute: t.Optional[Attribute],
         connections: Connections,
         overlap_entity: OverlapEntity,
     ) -> None:
@@ -215,9 +215,9 @@ class OverlapStatus:
         overlap_undefined_value = overlap_entity.overlap_active.data_type.undefined
 
         overlap_active = self._calculate_active_overlaps(
-            from_active_status=from_check_property,
+            from_active_status=from_check_attribute,
             connection_from_indices=connections.from_indices,
-            to_active_status=to_check_property,
+            to_active_status=to_check_attribute,
             connection_to_indices=connections.to_indices,
             undefined_value=overlap_undefined_value,
         )
@@ -242,9 +242,9 @@ class OverlapStatus:
 
     @staticmethod
     def _calculate_active_overlaps(
-        from_active_status: t.Optional[UniformProperty],
+        from_active_status: t.Optional[UniformAttribute],
         connection_from_indices: np.ndarray,
-        to_active_status: t.Optional[UniformProperty],
+        to_active_status: t.Optional[UniformAttribute],
         connection_to_indices: np.ndarray,
         undefined_value: int,
     ) -> np.ndarray:
