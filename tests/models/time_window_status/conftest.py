@@ -32,10 +32,8 @@ def maintenance_agenda(maintenance_agenda_dataset_name):
                 "job_begin": ["2020-03-01", "2020-04-01"],
                 "job_end": ["2020-04-01", "2020-04-02"],
                 "id": [0, 1],
-                "connection_properties": {
-                    "to_dataset": ["a_road_network", "an_mv_network"],
-                    "to_references": [["100"], ["500", "501"]],
-                },
+                "connection.to_dataset": ["a_road_network", "an_mv_network"],
+                "connection.to_references": [["100"], ["500", "501"]],
                 "reference": ["1", "2"],
             }
         },
@@ -53,18 +51,14 @@ def mv_network(mv_network_name):
                 "id": [0, 2, 4, 6, 8],
                 "reference": ["499", "500", "501", "502", "503"],
                 "labels": [[1], [0], [0], [0], [0]],
-                "point_properties": {
-                    "position_x": [1.5, 0.5, 0.5, 1.5, 1.5],
-                    "position_y": [0.4, 0.5, 1.5, 1.5, 0.5],
-                    "position_z": [0.0, 0.0, None, None, 0.0],
-                },
+                "geometry.x": [1.5, 0.5, 0.5, 1.5, 1.5],
+                "geometry.y": [0.4, 0.5, 1.5, 1.5, 0.5],
+                "geometry.z": [0.0, 0.0, None, None, 0.0],
             },
             "electrical_load_entities": {
                 "id": [20, 10, 30, 40, 15],
-                "oneside_element_properties": {"node_id": [4, 2, 6, 8, 0]},
-                "operation_status_properties": {
-                    "is_working_properly": [True, True, True, True, True]
-                },
+                "topology.node_id": [4, 2, 6, 8, 0],
+                "operational.is_working_properly": [True, True, True, True, True],
             },
         },
     )
@@ -79,13 +73,11 @@ def road_network(road_network_name):
             "road_segment_entities": {
                 "id": [1, 2, 3],
                 "reference": ["100", "101", "102"],
-                "shape_properties": {
-                    "linestring_3d": [
-                        [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
-                        [[1.6, 0.5, 1.0], [1.5, 0.5, -1.0]],
-                        [[-0.5, 0.5, 0.0], [0.5, 0.5, -1.0], [1.5, 0.5, 1.0], [2.5, 0.5, 1.0]],
-                    ]
-                },
+                "geometry.linestring_3d": [
+                    [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
+                    [[1.6, 0.5, 1.0], [1.5, 0.5, -1.0]],
+                    [[-0.5, 0.5, 0.0], [0.5, 0.5, -1.0], [1.5, 0.5, 1.0], [2.5, 0.5, 1.0]],
+                ],
             }
         },
     )

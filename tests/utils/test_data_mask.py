@@ -119,8 +119,8 @@ valid_masks = [
 invalid_masks = [
     ([], "An empty list, must be a dictionary"),
     ({"dataset1": {}}, "Missing entities"),
-    ({"dataset1": ["prop", "prop1"]}, "Properties not under entities"),
-    ({"dataset1": {"entities": []}}, "Missing properties"),
+    ({"dataset1": ["prop", "prop1"]}, "Attributes not under entities"),
+    ({"dataset1": {"entities": []}}, "Missing attributes"),
 ]
 
 

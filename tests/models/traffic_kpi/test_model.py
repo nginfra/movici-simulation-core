@@ -11,7 +11,7 @@ from movici_simulation_core.utils.moment import Moment
 
 @pytest.fixture
 def road_network(road_network):
-    road_network["data"]["road_segment_entities"]["line_properties"]["length"] = [2.0, 1.5, 1.0]
+    road_network["data"]["road_segment_entities"]["shape.length"] = [2.0, 1.5, 1.0]
     return road_network
 
 

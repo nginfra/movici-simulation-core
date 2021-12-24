@@ -6,9 +6,7 @@ from movici_simulation_core.core.schema import (
     attribute_plugin_from_dict,
 )
 
-TrafficProperties_AverageTime = AttributeSpec(
-    "average_time", component="traffic_properties", data_type=DataType(float)
-)
+TrafficProperties_AverageTime = AttributeSpec("transport.average_time", data_type=DataType(float))
 Transport_MaxSpeed = AttributeSpec("transport.max_speed", data_type=DataType(float, (), False))
 Transport_Capacity_Hours = AttributeSpec(
     "transport.capacity.hours", data_type=DataType(float, (), False)

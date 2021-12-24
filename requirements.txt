@@ -6,3 +6,4 @@ pydantic>=1.8.2
 ujson>=4.0.0
 pyzmq
 msgpack
+click

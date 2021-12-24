@@ -39,6 +39,9 @@ setup(
     author_email="pelle.koster@nginfra.nl",
     url="http://www.movici.nl",
     license=LICENSE,
+    scripts=[
+        "bin/rename_attributes.py",
+    ],
     entry_points={
         "movici.plugins": [
             f"orchestrator = {SVC_PATH}.orchestrator.service:Orchestrator",

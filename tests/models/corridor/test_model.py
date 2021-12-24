@@ -53,7 +53,7 @@ class TestCorridor:
                                 "id": [101, 102, 103, 104],
                                 "transport.passenger_vehicle_flow": [5, 15, 30, 40],
                                 "transport.cargo_vehicle_flow": [4, 4, 3, 1],
-                                "traffic_properties": {"average_time": [10, 11, 12, 13]},
+                                "transport.average_time": [10, 11, 12, 13],
                                 "transport.passenger_car_unit": [
                                     13,
                                     23,
@@ -85,7 +85,7 @@ class TestCorridor:
                                 "id": [102, 103],
                                 "transport.passenger_vehicle_flow": [2, 2],
                                 "transport.cargo_vehicle_flow": [1, 0],
-                                "traffic_properties": {"average_time": [10, 40]},
+                                "transport.average_time": [10, 40],
                                 "transport.passenger_car_unit": [
                                     4,
                                     2,
@@ -112,29 +112,27 @@ class TestCorridor:
                                 "id": [1, 2],
                                 "transport.passenger_vehicle_flow": [5, 15],
                                 "transport.cargo_vehicle_flow": [2, 3],
-                                "traffic_properties": {"average_time": [23.0, 16.1429]},
+                                "transport.average_time": [23.0, 16.1429],
                                 "transport.passenger_car_unit": [9, 21],
                                 "transport.co2_emission.hours": [64.1304, 116.3044],
                                 "transport.nox_emission.hours": [153.2609, 257.6087],
                                 "transport.energy_consumption.hours": [2.9565, 5.5652],
                                 "transport.volume_to_capacity_ratio": [0.72, 0.72],
                                 "transport.delay_factor": [49.1420, 49.1420],
-                                "shape_properties": {
-                                    "linestring_2d": [
-                                        [
-                                            [97700, 434000],
-                                            [97702, 434000],
-                                            [97704, 434000],
-                                            [97701, 434000],
-                                        ],
-                                        [
-                                            [97700, 434000],
-                                            [97702, 434000],
-                                            [97704, 434000],
-                                            [97701, 434000],
-                                        ],
-                                    ]
-                                },
+                                "geometry.linestring_2d": [
+                                    [
+                                        [97700, 434000],
+                                        [97702, 434000],
+                                        [97704, 434000],
+                                        [97701, 434000],
+                                    ],
+                                    [
+                                        [97700, 434000],
+                                        [97702, 434000],
+                                        [97704, 434000],
+                                        [97701, 434000],
+                                    ],
+                                ],
                             },
                         }
                     },
@@ -148,7 +146,7 @@ class TestCorridor:
                                 "id": [1, 2],
                                 "transport.passenger_vehicle_flow": [2, 2],
                                 "transport.cargo_vehicle_flow": [0, 1],
-                                "traffic_properties": {"average_time": [50, 30]},
+                                "transport.average_time": [50, 30],
                                 "transport.passenger_car_unit": [2, 4],
                                 "transport.co2_emission.hours": [150, 200],
                                 "transport.nox_emission.hours": [500, 600],

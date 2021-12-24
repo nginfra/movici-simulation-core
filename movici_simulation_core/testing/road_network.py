@@ -103,10 +103,8 @@ class RoadNetworkGenerator:
         return {
             "id": nodes.id,
             "reference": [ref_prefix + str(n) for n in range(len(nodes))],
-            "point_properties": {
-                "position_x": nodes.x,
-                "position_y": nodes.y,
-            },
+            "geometry.x": nodes.x,
+            "geometry.y": nodes.y,
         }
 
     @staticmethod
@@ -115,19 +113,15 @@ class RoadNetworkGenerator:
         return {
             "id": links.id,
             "reference": [ref_prefix + str(n) for n in range(count)],
-            "line_properties": {
-                "from_node_id": [nodes.id[links.from_idx[i]] for i in range(count)],
-                "to_node_id": [nodes.id[links.to_idx[i]] for i in range(count)],
-            },
-            "shape_properties": {
-                "linestring_2d": [
-                    [
-                        [nodes.x[links.from_idx[i]], nodes.y[links.from_idx[i]]],
-                        [nodes.x[links.to_idx[i]], nodes.y[links.to_idx[i]]],
-                    ]
-                    for i in range(count)
+            "topology.from_node_id": [nodes.id[links.from_idx[i]] for i in range(count)],
+            "topology.to_node_id": [nodes.id[links.to_idx[i]] for i in range(count)],
+            "geometry.linestring_2d": [
+                [
+                    [nodes.x[links.from_idx[i]], nodes.y[links.from_idx[i]]],
+                    [nodes.x[links.to_idx[i]], nodes.y[links.to_idx[i]]],
                 ]
-            },
+                for i in range(count)
+            ],
         }
 
 

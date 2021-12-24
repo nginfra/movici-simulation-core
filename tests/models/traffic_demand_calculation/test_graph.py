@@ -67,20 +67,16 @@ def network_1():
         TransportSegmentEntity("tl"),
         {
             "id": [9, 10, 11, 12, 13, 14],
-            "line_properties": {
-                "from_node_id": [1, 2, 3, 2, 4, 4],
-                "to_node_id": [2, 4, 4, 3, 5, 2],
-            },
+            "topology.from_node_id": [1, 2, 3, 2, 4, 4],
+            "topology.to_node_id": [2, 4, 4, 3, 5, 2],
         },
     )
     virtual_links = create_entity_group_with_data(
         LinkEntity("vl"),
         {
             "id": [15, 16, 17, 18, 19],
-            "line_properties": {
-                "from_node_id": [1, 6, 3, 4, 8],
-                "to_node_id": [6, 2, 7, 7, 5],
-            },
+            "topology.from_node_id": [1, 6, 3, 4, 8],
+            "topology.to_node_id": [6, 2, 7, 7, 5],
         },
     )
     cost_factor = np.ones((6,), dtype=float)
@@ -101,20 +97,16 @@ def network_2():
         TransportSegmentEntity("tl"),
         {
             "id": [9, 10, 11, 12, 13, 14, 15, 16],
-            "line_properties": {
-                "from_node_id": [0, 1, 1, 2, 2, 3, 3, 4],
-                "to_node_id": [1, 0, 2, 1, 3, 2, 4, 3],
-            },
+            "topology.from_node_id": [0, 1, 1, 2, 2, 3, 3, 4],
+            "topology.to_node_id": [1, 0, 2, 1, 3, 2, 4, 3],
         },
     )
     virtual_links = create_entity_group_with_data(
         LinkEntity("vl"),
         {
             "id": [17, 18, 19, 20, 21],
-            "line_properties": {
-                "from_node_id": [5, 1, 6, 7, 4],
-                "to_node_id": [0, 6, 2, 3, 8],
-            },
+            "topology.from_node_id": [5, 1, 6, 7, 4],
+            "topology.to_node_id": [0, 6, 2, 3, 8],
         },
     )
     cost_factor = np.array([1, 1, 2, 2, 3, 3, 4, 4], dtype=float)
@@ -285,13 +277,14 @@ def test_network_with_layout(layout, mapping, indices, indptr):
         TransportSegmentEntity("tl"),
         {
             "id": [4],
-            "line_properties": {"from_node_id": [0], "to_node_id": [1]},
+            "topology.from_node_id": [0],
+            "topology.to_node_id": [1],
             "transport.layout": [layout],
         },
     )
     virtual_links = create_entity_group_with_data(
         LinkEntity("vl"),
-        {"id": [10, 11], "line_properties": {"from_node_id": [2, 3], "to_node_id": [0, 1]}},
+        {"id": [10, 11], "topology.from_node_id": [2, 3], "topology.to_node_id": [0, 1]},
     )
     network = Network(transport_nodes, transport_links, virtual_nodes, virtual_links)
     np.testing.assert_array_equal(network.tl_mapping, mapping)

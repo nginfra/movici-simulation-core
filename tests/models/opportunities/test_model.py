@@ -63,16 +63,14 @@ class TestOpportunity:
                             "overlap_entities": {
                                 "id": [1],
                                 "overlap.active": [True],
-                                "connection_properties": {
-                                    "from_id": [1],
-                                    "to_id": [3],
-                                    "from_dataset": [
-                                        water_network_name,
-                                    ],
-                                    "to_dataset": [
-                                        road_network_name,
-                                    ],
-                                },
+                                "connection.from_id": [1],
+                                "connection.to_id": [3],
+                                "connection.from_dataset": [
+                                    water_network_name,
+                                ],
+                                "connection.to_dataset": [
+                                    road_network_name,
+                                ],
                             }
                         },
                         road_network_name: {
@@ -146,16 +144,14 @@ class TestOpportunity:
                             "overlap_entities": {
                                 "id": [1],
                                 "overlap.active": [True],
-                                "connection_properties": {
-                                    "from_id": [1],
-                                    "to_id": [3],
-                                    "from_dataset": [
-                                        water_network_name,
-                                    ],
-                                    "to_dataset": [
-                                        road_network_name,
-                                    ],
-                                },
+                                "connection.from_id": [1],
+                                "connection.to_id": [3],
+                                "connection.from_dataset": [
+                                    water_network_name,
+                                ],
+                                "connection.to_dataset": [
+                                    road_network_name,
+                                ],
                             }
                         },
                         road_network_name: {
@@ -263,16 +259,14 @@ class TestOpportunity:
                             "overlap_entities": {
                                 "id": [1],
                                 "overlap.active": [False],
-                                "connection_properties": {
-                                    "from_id": [1],
-                                    "to_id": [3],
-                                    "from_dataset": [
-                                        water_network_name,
-                                    ],
-                                    "to_dataset": [
-                                        road_network_name,
-                                    ],
-                                },
+                                "connection.from_id": [1],
+                                "connection.to_id": [3],
+                                "connection.from_dataset": [
+                                    water_network_name,
+                                ],
+                                "connection.to_dataset": [
+                                    road_network_name,
+                                ],
                             }
                         },
                         road_network_name: {

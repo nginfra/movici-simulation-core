@@ -136,29 +136,25 @@ def knotweed_dataset(knotweed_dataset_name):
         ds_type="knotweed",
         data={
             "knotweed_entities": {
-                "point_properties": {
-                    "position_x": [0, 1],
-                    "position_y": [0, 1],
-                    "position_z": [1.2, 1.2],
-                },
-                "shape_properties": {
-                    "polygon": [
-                        [
-                            [0, 0],
-                            [0, 1],
-                            [1, 1],
-                            [1, 0],
-                            [0, 0],
-                        ],
-                        [
-                            [1, 1],
-                            [1, 2],
-                            [2, 2],
-                            [2, 1],
-                            [1, 1],
-                        ],
-                    ]
-                },
+                "geometry.x": [0, 1],
+                "geometry.y": [0, 1],
+                "geometry.z": [1.2, 1.2],
+                "geometry.polygon": [
+                    [
+                        [0, 0],
+                        [0, 1],
+                        [1, 1],
+                        [1, 0],
+                        [0, 0],
+                    ],
+                    [
+                        [1, 1],
+                        [1, 2],
+                        [2, 2],
+                        [2, 1],
+                        [1, 1],
+                    ],
+                ],
                 "id": [0, 1],
                 "knotweed.stem_density": [80.0, 100.0],
                 "reference": ["Knotweed1", "Knotweed2"],
@@ -176,14 +172,12 @@ def road_network(road_network_name):
             "road_segment_entities": {
                 "id": [1, 2, 3],
                 "reference": ["Road1", "Road2", "Road3"],
-                "shape_properties": {
-                    "linestring_3d": [
-                        [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
-                        [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
-                        [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
-                    ]
-                },
-                "line_properties": {"length": [1.4142, 2.0006, 5.3154]},
+                "geometry.linestring_3d": [
+                    [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
+                    [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
+                    [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
+                ],
+                "shape.length": [1.4142, 2.0006, 5.3154],
             }
         },
     )
@@ -197,12 +191,10 @@ def area_dataset(area_dataset_name):
         data={
             "area_entities": {
                 "id": [0, 2],
-                "shape_properties": {
-                    "polygon": [
-                        [[0, 0], [2000, 0], [2000, 2000], [0, 2000], [0, 0]],
-                        [[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5], [0, 0]],
-                    ]
-                },
+                "geometry.polygon": [
+                    [[0, 0], [2000, 0], [2000, 2000], [0, 2000], [0, 0]],
+                    [[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5], [0, 0]],
+                ],
             }
         },
     )
@@ -223,23 +215,17 @@ def get_entity_update():
         ids: t.Iterable,
         attributes: t.Iterable,
         key_name: str,
-        component_name: t.Optional[str] = None,
     ) -> dict:
         if not isinstance(ids, t.Iterable):
             ids = [ids]
         entities = {"id": list(ids)}
-        for key, attr, component in [
-            (key_name, attributes, component_name),
+        for key, attr, in [
+            (key_name, attributes),
         ]:
             if attr is not None:
                 if not isinstance(attr, t.Iterable):
                     attr = [attr for _ in ids]
-                if component is None:
-                    entities[key] = attr
-                else:
-                    if component not in entities:
-                        entities[component] = {}
-                    entities[component][key] = attr
+                entities[key] = attr
 
         return entities
 
@@ -258,15 +244,14 @@ def road_network_for_traffic(road_network_name):
             "road_segment_entities": {
                 "id": [101, 102, 103, 104],
                 "reference": ["RS1", "RS102", "RS103", "RS104"],
-                "line_properties": {"from_node_id": [1, 0, 1, 0], "to_node_id": [0, 2, 2, 1]},
-                "shape_properties": {
-                    "linestring_2d": [
-                        [[97701, 434000], [97700, 434000]],
-                        [[97700, 434000], [97702, 434000]],
-                        [[97701, 434000], [97704, 434000], [97702, 434000]],
-                        [[97700, 434000], [97701, 434000]],
-                    ]
-                },
+                "topology.from_node_id": [1, 0, 1, 0],
+                "topology.to_node_id": [0, 2, 2, 1],
+                "geometry.linestring_2d": [
+                    [[97701, 434000], [97700, 434000]],
+                    [[97700, 434000], [97702, 434000]],
+                    [[97701, 434000], [97704, 434000], [97702, 434000]],
+                    [[97700, 434000], [97701, 434000]],
+                ],
                 "transport.layout": [[1, 0, 0, 0], [1, 0, 0, 0], [0, 2, 0, 0], [0, 1, 0, 0]],
                 "transport.max_speed": [2.7778, 6.9444, 27.7778, 2.7778],
                 "transport.capacity.hours": [50, 100, 25, 10],
@@ -274,33 +259,25 @@ def road_network_for_traffic(road_network_name):
             "transport_node_entities": {
                 "id": [0, 1, 2],
                 "reference": ["RN0", "RN1", "RN2"],
-                "point_properties": {
-                    "position_x": [97700, 97701, 97702],
-                    "position_y": [434000, 434000, 434000],
-                },
+                "geometry.x": [97700, 97701, 97702],
+                "geometry.y": [434000, 434000, 434000],
             },
             "virtual_node_entities": {
                 "id": [10, 11, 12],
                 "reference": ["VN1", "VN2", "VN3"],
-                "point_properties": {
-                    "position_x": [97700.1, 97701.1, 97702.1],
-                    "position_y": [434000, 434000, 434000],
-                },
+                "geometry.x": [97700.1, 97701.1, 97702.1],
+                "geometry.y": [434000, 434000, 434000],
             },
             "virtual_link_entities": {
                 "id": [1000, 1001, 1002],
                 "reference": ["VL1", "VL2", "VL3"],
-                "line_properties": {
-                    "from_node_id": [10, 11, 12],
-                    "to_node_id": [0, 1, 2],
-                },
-                "shape_properties": {
-                    "linestring_2d": [
-                        [[97700.1, 434000], [97700, 434000]],
-                        [[97701.1, 434000], [97701, 434000]],
-                        [[97702.1, 434000], [97702, 434000]],
-                    ]
-                },
+                "topology.from_node_id": [10, 11, 12],
+                "topology.to_node_id": [0, 1, 2],
+                "geometry.linestring_2d": [
+                    [[97700.1, 434000], [97700, 434000]],
+                    [[97701.1, 434000], [97701, 434000]],
+                    [[97702.1, 434000], [97702, 434000]],
+                ],
             },
         },
     }
@@ -308,17 +285,15 @@ def road_network_for_traffic(road_network_name):
 
 @pytest.fixture
 def road_network_for_traffic_with_line3d(road_network_for_traffic):
-    shape_properties = road_network_for_traffic["data"]["road_segment_entities"][
-        "shape_properties"
-    ]
-    linestrings = shape_properties["linestring_2d"]
-    del shape_properties["linestring_2d"]
+    entity_data = road_network_for_traffic["data"]["road_segment_entities"]
+    linestrings = entity_data["geometry.linestring_2d"]
+    del entity_data["geometry.linestring_2d"]
 
     for linestring in linestrings:
         for point in linestring:
             point.append(0.0)
 
-    shape_properties["linestring_3d"] = linestrings
+    entity_data["geometry.linestring_3d"] = linestrings
 
     return road_network_for_traffic
 

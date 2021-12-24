@@ -10,6 +10,7 @@ from movici_simulation_core.data_tracker.data_format import (
     infer_data_type_from_list,
     load_update,
     dump_update,
+    data_keys,
 )
 from movici_simulation_core.core.schema import (
     AttributeSpec,
@@ -210,3 +211,43 @@ def test_can_dump_entity_group(list_init_data, array_init_data):
 )
 def test_serialization_round_trip(data):
     assert_dataset_dicts_equal(data, load_update(dump_update(data)))
+
+
+@pytest.mark.parametrize(
+    "data,ignored, expected",
+    [
+        (
+            {"data": {}},
+            None,
+            {"data"},
+        ),
+        (
+            {"non_dict": "some_val", "my_data": {}},
+            None,
+            {"my_data"},
+        ),
+        (
+            {"my_data": {}, "other_data": {}},
+            None,
+            {"my_data", "other_data"},
+        ),
+        (
+            {"general": {}, "my_data": {}},
+            None,
+            {"my_data"},
+        ),
+        (
+            {"ignored": {}, "my_data": {}},
+            {"ignored"},
+            {"my_data"},
+        ),
+        (
+            {"data": {"invalid": "format"}},
+            None,
+            set(),
+        ),
+    ],
+)
+def test_data_keys(data, ignored, expected):
+    result = data_keys(data, ignored) if ignored is not None else data_keys(data)
+    assert result == expected

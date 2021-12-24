@@ -169,7 +169,7 @@ def test_tws_resolve_single_connection(
     expected,
 ):
     create_source_data(
-        {"connection_properties": {"to_dataset": to_dataset, "to_references": to_references}},
+        {"connection.to_dataset": to_dataset, "connection.to_references": to_references},
     )
     create_target_data({"reference": reference})
     tws.initialize()
@@ -214,13 +214,11 @@ def test_resolve_multiple_foreign_connections(
 
     create_source_data(
         {
-            "connection_properties": {
-                "to_dataset": [
-                    "dataset_a",
-                    "dataset_b",
-                ],
-                "to_references": [["1"], ["2"]],
-            },
+            "connection.to_dataset": [
+                "dataset_a",
+                "dataset_b",
+            ],
+            "connection.to_references": [["1"], ["2"]],
         },
     )
     create_target_data({"reference": ["1"]})
@@ -247,7 +245,8 @@ def test_resolve_self_and_foreign_connection(
     self_target = get_target_entity("dataset_a", "source")
     create_source_data(
         {
-            "connection_properties": {"to_dataset": ["dataset_a"], "to_references": [["2"]]},
+            "connection.to_dataset": ["dataset_a"],
+            "connection.to_references": [["2"]],
         },
     )
     create_target_data({"reference": ["2"]})

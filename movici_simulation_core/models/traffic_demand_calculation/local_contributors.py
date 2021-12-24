@@ -280,15 +280,13 @@ class InducedDemand(LocalEffectsContributor):
             raise RuntimeError(f"Local attribute routing has to have line type, not {geom}")
 
         attr_spec = schema.get_spec(
-            ("traffic_properties", "average_time"), default_data_type=DataType(float)
+            (None, "transport.average_time"), default_data_type=DataType(float)
         )
         self._cost_attribute = state.register_attribute(
             dataset_name=ds_name, entity_name=entity_name, spec=attr_spec, flags=INIT
         )
 
-        attr_spec = schema.get_spec(
-            ("line_properties", "length"), default_data_type=DataType(float)
-        )
+        attr_spec = schema.get_spec((None, "shape.length"), default_data_type=DataType(float))
         self._length_attribute = state.register_attribute(
             dataset_name=ds_name, entity_name=entity_name, spec=attr_spec, flags=INIT
         )

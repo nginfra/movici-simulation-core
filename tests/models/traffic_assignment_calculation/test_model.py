@@ -93,14 +93,12 @@ class TestTrafficAssignmentRoads:
                                     1.0333,
                                 ],
                                 "transport.passenger_car_unit": [51.6667, 77, 177, 10.3333],
-                                "traffic_properties": {
-                                    "average_time": [
-                                        0.4216,
-                                        0.3032,
-                                        4.4203,
-                                        0.4216,
-                                    ],
-                                },
+                                "transport.average_time": [
+                                    0.4216,
+                                    0.3032,
+                                    4.4203,
+                                    0.4216,
+                                ],
                             },
                         },
                     },
@@ -122,9 +120,7 @@ class TestTrafficAssignmentRoads:
                                     0.5167,
                                 ],
                                 "transport.passenger_car_unit": [25.8334, 38.5, 88.5, 5.1667],
-                                "traffic_properties": {
-                                    "average_time": [0.3639, 0.289, 0.445, 0.3639],
-                                },
+                                "transport.average_time": [0.3639, 0.289, 0.445, 0.3639],
                             },
                         },
                     },
@@ -220,14 +216,12 @@ class TestTrafficAssignmentWaterways:
                                     0,
                                 ],
                                 "transport.passenger_car_unit": [62, 77, 177, 0],
-                                "traffic_properties": {
-                                    "average_time": [
-                                        0.3600,
-                                        7115.0348,
-                                        1.1800,
-                                        1e6,
-                                    ],
-                                },
+                                "transport.average_time": [
+                                    0.3600,
+                                    7115.0348,
+                                    1.1800,
+                                    1e6,
+                                ],
                             },
                         },
                     },
@@ -252,13 +246,11 @@ class TestTrafficAssignmentWaterways:
                                     None,
                                 ],
                                 "transport.passenger_car_unit": [31, 38.5, 88.5],
-                                "traffic_properties": {
-                                    "average_time": [
-                                        None,
-                                        1572.3614,
-                                        None,
-                                    ],
-                                },
+                                "transport.average_time": [
+                                    None,
+                                    1572.3614,
+                                    None,
+                                ],
                             },
                         },
                     },
@@ -365,14 +357,12 @@ class TestRoadsCapacityChanges:
                                     0,
                                 ],
                                 "transport.passenger_car_unit": [62, 77, 177, 0],
-                                "traffic_properties": {
-                                    "average_time": [
-                                        0.4877,
-                                        0.3032,
-                                        4.4203,
-                                        1e9,
-                                    ],
-                                },
+                                "transport.average_time": [
+                                    0.4877,
+                                    0.3032,
+                                    4.4203,
+                                    1e9,
+                                ],
                             },
                         },
                     },
@@ -391,12 +381,10 @@ class TestRoadsCapacityChanges:
                                     1.0333,
                                 ],
                                 "transport.passenger_car_unit": [51.6667, 10.3333],
-                                "traffic_properties": {
-                                    "average_time": [
-                                        0.4216,
-                                        0.4216,
-                                    ],
-                                },
+                                "transport.average_time": [
+                                    0.4216,
+                                    0.4216,
+                                ],
                             },
                         },
                     },
@@ -415,9 +403,7 @@ class TestRoadsCapacityChanges:
                                     1.1273,
                                 ],
                                 "transport.passenger_car_unit": [56.3636, 5.6364],
-                                "traffic_properties": {
-                                    "average_time": [0.4472, 0.4472],
-                                },
+                                "transport.average_time": [0.4472, 0.4472],
                             },
                         },
                     },

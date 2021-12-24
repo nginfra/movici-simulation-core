@@ -122,7 +122,7 @@ class TestNearestValueContributor:
 
     def test_setup(self, calculator, state):
         assert isinstance(
-            state.attributes["dataset"]["entities"][("shape_properties", "linestring_2d")],
+            state.attributes["dataset"]["entities"][(None, "geometry.linestring_2d")],
             CSRAttribute,
         )
         assert isinstance(calculator._target_entity, GeometryEntity)

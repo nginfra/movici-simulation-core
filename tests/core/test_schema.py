@@ -30,13 +30,13 @@ def test_infer_data_type_from_array(array, expected):
 def test_read_schema_from_plugin():
     schema = AttributeSchema()
     schema.use(attributes.GlobalAttributes)
-    assert schema.get(("point_properties", "position_x")) is not None
+    assert schema.get((None, "geometry.x")) is not None
 
 
 def test_read_schema_from_namespace():
     schema = AttributeSchema()
     schema.add_from_namespace(attributes)
-    assert schema.get(("point_properties", "position_x")) is not None
+    assert schema.get((None, "geometry.x")) is not None
 
 
 @pytest.mark.parametrize(

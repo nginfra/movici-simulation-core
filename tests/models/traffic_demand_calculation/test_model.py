@@ -38,12 +38,10 @@ def waterways(water_network_name):
         data={
             "road_segment_entities": {
                 "id": [1, 2],
-                "shape_properties": {
-                    "linestring_3d": [
-                        [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
-                        [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
-                    ]
-                },
+                "geometry.linestring_3d": [
+                    [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
+                    [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
+                ],
             },
         },
     )
@@ -330,7 +328,7 @@ class TestCargoWithLocalParameters:
             "global_elasticities": [2, -1],
             "local_entity_groups": [[water_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_geometries": ["line"],
             "local_elasticities": [2],
@@ -362,7 +360,7 @@ class TestCargoWithLocalParameters:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [1, 1]},
+                                "transport.average_time": [1, 1],
                             }
                         }
                     },
@@ -373,7 +371,7 @@ class TestCargoWithLocalParameters:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [2, 2]},
+                                "transport.average_time": [2, 2],
                             }
                         }
                     },
@@ -448,7 +446,7 @@ class TestCargoWithLoadFactor:
             "global_elasticities": [2, -1, 0],
             "local_entity_groups": [[water_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_geometries": ["line"],
             "local_elasticities": [2],
@@ -480,7 +478,7 @@ class TestCargoWithLoadFactor:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [1, 1]},
+                                "transport.average_time": [1, 1],
                             }
                         }
                     },
@@ -491,7 +489,7 @@ class TestCargoWithLoadFactor:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [2, 2]},
+                                "transport.average_time": [2, 2],
                             }
                         }
                     },
@@ -565,7 +563,7 @@ class TestCargoWithNonIterativeLocalParameters:
             "global_elasticities": [2, -1],
             "local_entity_groups": [[water_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_geometries": ["line"],
             "local_elasticities": [2],
@@ -598,7 +596,7 @@ class TestCargoWithNonIterativeLocalParameters:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [1, 1]},
+                                "transport.average_time": [1, 1],
                             }
                         }
                     },
@@ -613,7 +611,7 @@ class TestCargoWithNonIterativeLocalParameters:
                         water_network_name: {
                             "road_segment_entities": {
                                 "id": [1, 2],
-                                "traffic_properties": {"average_time": [2, 2]},
+                                "transport.average_time": [2, 2],
                             }
                         }
                     },
@@ -801,7 +799,7 @@ class TestCargoWithLocalRouting:
             "demand_property": [None, "transport.cargo_demand"],
             "local_entity_groups": [[road_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_mapping_type": ["route"],
             "local_geometries": ["line"],
@@ -821,10 +819,8 @@ class TestCargoWithLocalRouting:
                             "virtual_node_entities": {
                                 "id": [10, 11, 12, 13],
                                 # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
-                                "point_properties": {
-                                    "position_x": [97702, 97702, 97700, 97700],
-                                    "position_y": [434000, 434000, 434000, 434000],
-                                },
+                                "geometry.x": [97702, 97702, 97700, 97700],
+                                "geometry.y": [434000, 434000, 434000, 434000],
                                 "transport.cargo_demand": [
                                     [0, 0, 14, 5],
                                     [10, 0, 0, 0],
@@ -841,7 +837,7 @@ class TestCargoWithLocalRouting:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "traffic_properties": {"average_time": [1, 1, 1, 1]},
+                                "transport.average_time": [1, 1, 1, 1],
                             }
                         }
                     },
@@ -852,7 +848,7 @@ class TestCargoWithLocalRouting:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102],
-                                "traffic_properties": {"average_time": [2, 2]},
+                                "transport.average_time": [2, 2],
                             }
                         }
                     },
@@ -863,7 +859,7 @@ class TestCargoWithLocalRouting:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [103, 104],
-                                "traffic_properties": {"average_time": [3, 3]},
+                                "transport.average_time": [3, 3],
                             }
                         }
                     },
@@ -947,7 +943,7 @@ class TestCargoWithLocalRoutingIterative:
             "demand_property": [None, "transport.cargo_demand"],
             "local_entity_groups": [[road_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_mapping_type": ["route"],
             "local_geometries": ["line"],
@@ -967,10 +963,8 @@ class TestCargoWithLocalRoutingIterative:
                             "virtual_node_entities": {
                                 "id": [10, 11, 12, 13],
                                 # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
-                                "point_properties": {
-                                    "position_x": [97702, 97702, 97700, 97700],
-                                    "position_y": [434000, 434000, 434000, 434000],
-                                },
+                                "geometry.x": [97702, 97702, 97700, 97700],
+                                "geometry.y": [434000, 434000, 434000, 434000],
                                 "transport.cargo_demand": [
                                     [0, 0, 14, 5],
                                     [10, 0, 0, 0],
@@ -987,7 +981,7 @@ class TestCargoWithLocalRoutingIterative:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
-                                "traffic_properties": {"average_time": [1, 1, 1, 1]},
+                                "transport.average_time": [1, 1, 1, 1],
                             }
                         }
                     },
@@ -998,7 +992,7 @@ class TestCargoWithLocalRoutingIterative:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [101, 102],
-                                "traffic_properties": {"average_time": [2, 2]},
+                                "transport.average_time": [2, 2],
                             }
                         }
                     },
@@ -1010,7 +1004,7 @@ class TestCargoWithLocalRoutingIterative:
                         road_network_name: {
                             "road_segment_entities": {
                                 "id": [103, 104],
-                                "traffic_properties": {"average_time": [3, 3]},
+                                "transport.average_time": [3, 3],
                             }
                         }
                     },
@@ -1115,8 +1109,8 @@ class TestCargoWithInducedDemand:
                             "road_segment_entities": {
                                 "id": [101, 102, 103, 104],
                                 # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
-                                "line_properties": {"length": [1, 2, 3, 42]},
-                                "traffic_properties": {"average_time": [5, 6, 7, 8]},
+                                "shape.length": [1, 2, 3, 42],
+                                "transport.average_time": [5, 6, 7, 8],
                             },
                         }
                     },
@@ -1203,7 +1197,7 @@ class TestMaxIterations:
             "demand_property": [None, "transport.cargo_demand"],
             "local_entity_groups": [[road_network_name, "road_segment_entities"]],
             "local_properties": [
-                ["traffic_properties", "average_time"],
+                [None, "transport.average_time"],
             ],
             "local_mapping_type": ["route"],
             "local_geometries": ["line"],
@@ -1242,7 +1236,7 @@ class TestMaxIterations:
                 road_network_name: {
                     "road_segment_entities": {
                         "id": [101, 102, 103, 104],
-                        "traffic_properties": {"average_time": [value] * 4},
+                        "transport.average_time": [value] * 4,
                     }
                 }
             }

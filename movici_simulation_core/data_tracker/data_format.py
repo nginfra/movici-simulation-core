@@ -296,10 +296,27 @@ def dump_update(data: dict):
     return UpdateDataFormat().dumps(data)
 
 
-def extract_dataset_data(update_or_init_data):
-    if "data" in update_or_init_data and isinstance(name := update_or_init_data.get("name"), str):
+def data_keys(update_or_init_data, ignore_keys=("general",)):
+    return {
+        key
+        for key in data_key_candidates(update_or_init_data, ignore_keys)
+        if all(isinstance(update_or_init_data[key][k], dict) for k in update_or_init_data[key])
+    }
+
+
+def data_key_candidates(update_or_init_data, ignore_keys=("general",)):
+    if "data" in update_or_init_data:
+        return {"data"}
+    else:
+        return {key for key, val in update_or_init_data.items() if isinstance(val, dict)} - set(
+            ignore_keys
+        )
+
+
+def extract_dataset_data(update_or_init_data, ignore_keys=("general",)):
+    keys = data_keys(update_or_init_data, ignore_keys)
+
+    if "data" in keys and isinstance(name := update_or_init_data.get("name"), str):
         yield (name, update_or_init_data["data"])
     else:
-        yield from (
-            (key, val) for key, val in update_or_init_data.items() if isinstance(val, dict)
-        )
+        yield from ((key, update_or_init_data[key]) for key in keys)

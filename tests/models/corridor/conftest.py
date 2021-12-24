@@ -17,10 +17,8 @@ def corridor_dataset(corridor_dataset_name):
         "data": {
             "corridor_entities": {
                 "id": [1, 2],
-                "connection_properties": {
-                    "from_ids": [[10], [10]],
-                    "to_ids": [[11], [11, 12]],
-                },
+                "connection.from_ids": [[10], [10]],
+                "connection.to_ids": [[11], [11, 12]],
             }
         },
     }

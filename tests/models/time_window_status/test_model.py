@@ -47,12 +47,9 @@ def additional_attributes():
     from movici_simulation_core.core.schema import DataType
 
     return [
+        AttributeSpec("topology.node_id", data_type=DataType(int, (), False)),
         AttributeSpec(
-            "node_id", component="oneside_element_properties", data_type=DataType(int, (), False)
-        ),
-        AttributeSpec(
-            "is_working_properly",
-            component="operation_status_properties",
+            "operational.is_working_properly",
             data_type=DataType(bool, (), False),
         ),
     ]
@@ -172,10 +169,8 @@ class TestTimeWindowStatusSameEntity:
                     "job_begin": ["2019-01-01", "2020-01-02"],
                     "job_end": ["2020-01-10", "2020-02-10"],
                     "id": [0, 1],
-                    "connection_properties": {
-                        "to_dataset": ["a_road_network", "a_road_network"],
-                        "to_references": [["100"], ["100"]],
-                    },
+                    "connection.to_dataset": ["a_road_network", "a_road_network"],
+                    "connection.to_references": [["100"], ["100"]],
                 }
             },
         }
@@ -254,10 +249,8 @@ class TestTimeWindowUndefinedWindow:
                     "job_begin": [None, "2019-01-01"],
                     "job_end": [None, "2020-02-10"],
                     "id": [0, 1],
-                    "connection_properties": {
-                        "to_dataset": ["a_road_network", "a_road_network"],
-                        "to_references": [["100"], ["101"]],
-                    },
+                    "connection.to_dataset": ["a_road_network", "a_road_network"],
+                    "connection.to_references": [["100"], ["101"]],
                 }
             },
         }
@@ -342,13 +335,11 @@ class TestTimeWindowInEntitiesDataset:
                     "reference": ["100", "101", "102"],
                     "begin": ["2020-01-11", None, "2020-01-11"],
                     "end": ["2020-01-21", None, "2020-02-01"],
-                    "shape_properties": {
-                        "linestring_3d": [
-                            [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
-                            [[1.6, 0.5, 1.0], [1.5, 0.5, -1.0]],
-                            [[-0.5, 0.5, 0.0], [0.5, 0.5, -1.0], [1.5, 0.5, 1.0], [2.5, 0.5, 1.0]],
-                        ]
-                    },
+                    "geometry.linestring_3d": [
+                        [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
+                        [[1.6, 0.5, 1.0], [1.5, 0.5, -1.0]],
+                        [[-0.5, 0.5, 0.0], [0.5, 0.5, -1.0], [1.5, 0.5, 1.0], [2.5, 0.5, 1.0]],
+                    ],
                 }
             },
         }

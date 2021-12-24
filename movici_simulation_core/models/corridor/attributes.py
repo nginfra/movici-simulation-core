@@ -1,7 +1,7 @@
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 
 TrafficProperties_AverageTime = AttributeSpec(
-    name="average_time", component="traffic_properties", data_type=DataType(float, (), False)
+    name="transport.average_time", data_type=DataType(float, (), False)
 )
 Transport_VolumeToCapacityRatio = AttributeSpec(
     name="transport.volume_to_capacity_ratio", data_type=DataType(float, (), False)
