@@ -292,13 +292,33 @@ class TrackedState:
 
 
 def parse_special_values(
-    general_section: dict,
+    general_section: dict, special_keys: t.Iterable = ("special", "no_data")
 ) -> t.Dict[str, t.Dict[AttributeIdentifier, ValueType]]:
+    def detect_component_hack(split_attribute: t.Tuple[str]):
+        """hacky way to detect a component in a special values identifier by looking
+        whether the part ends with "_properties" as by convention all components ended
+        in that string
+
+        returns (component, attribute_name) where component may be None
+        """
+        # TODO: delete this once components are gone for good
+        component = None
+        if len(split_attribute) > 1 and split_attribute[0].endswith("_properties"):
+            component, *split_attribute = split_attribute
+        if split_attribute[0] == "":
+            _, *split_attribute = split_attribute
+        return component, ".".join(split_attribute)
+
+    special_section = {}
+    for key in special_keys:
+        if special_section := general_section.get(key, special_section):
+            break
+
     rv = defaultdict(dict)
-    for k, v in general_section.get("special", general_section.get("no_data", {})).items():
-        entity_type, component, *rest = k.split(".")
-        attribute_name = ".".join(rest)
-        rv[entity_type][(component if component else None, attribute_name)] = v
+    for k, v in special_section.items():
+        entity_type, *split_attribute = k.split(".")
+
+        rv[entity_type][detect_component_hack(split_attribute)] = v
     return dict(rv)
 
 

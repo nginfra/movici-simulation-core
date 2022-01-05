@@ -23,6 +23,7 @@ from movici_simulation_core.data_tracker.state import (
     StateProxy,
     EntityDataHandler,
     filter_attrs,
+    parse_special_values,
 )
 from movici_simulation_core.testing.helpers import (
     dataset_data_to_numpy,
@@ -715,3 +716,21 @@ def test_can_duplicate_attr():
         (None, "attr"),
         (None, "attr"),
     ]
+
+
+@pytest.mark.parametrize(
+    "general_section, key, expected",
+    [
+        ({"special": {"my_entities.attribute": -1}}, (None, "attribute"), -1),
+        ({"no_data": {"my_entities.attribute": -1}}, (None, "attribute"), -1),
+        ({"special": {"my_entities..attribute": -1}}, (None, "attribute"), -1),
+        ({"special": {"my_entities.my.attribute": -1}}, (None, "my.attribute"), -1),
+        (
+            {"special": {"my_entities.my_properties.attribute": -1}},
+            ("my_properties", "attribute"),
+            -1,
+        ),
+    ],
+)
+def test_parse_special_value(general_section: dict, key, expected: int, state: TrackedState):
+    assert parse_special_values(general_section)["my_entities"][key] == expected

@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 import typing as t
 from movici_simulation_core.data_tracker.data_format import data_keys
+from movici_simulation_core.data_tracker.state import parse_special_values
 
 try:
     import orjson as _orjson
@@ -23,6 +24,8 @@ except ImportError:
         return _json.dumps(*args, **kwargs).encode()
 
     loads = _json.loads
+
+DEFAULT_ATTRIBUTE_MAPPING_FILE = Path(__file__).parent.joinpath("attribute_mapping.csv")
 
 
 def iter_attributes(data_section, component=None):
@@ -46,11 +49,14 @@ def parse_attribute_csv(filename, skip_headers=True):
 
 
 class Converter:
-    def __init__(self, attribute_mapping, pretty, save_original, glob_pattern="*.json"):
+    def __init__(
+        self, attribute_mapping, pretty, save_original, special_key, glob_pattern="*.json"
+    ):
         self.mapping = parse_attribute_csv(attribute_mapping)
         self.pretty = pretty
         self.save_original = save_original
         self.glob_pattern = glob_pattern
+        self.special_key = special_key
 
     def convert(self, path: Path):
         path = Path(path).expanduser()
@@ -78,17 +84,25 @@ class Converter:
 
     def convert_file(self, file: Path):
         dataset_file = Path(file)
-        dataset_dict = loads(dataset_file.read_bytes())
+        dataset_dict: dict = loads(dataset_file.read_bytes())
         changed = False
         for key in data_keys(dataset_dict):
             result, changed_ = self.convert_data_section(dataset_dict[key])
             dataset_dict[key] = result
             changed |= changed_
+
         if is_tabular(dataset_dict):
             key = "data"
             result, changed_ = self.convert_tabular(dataset_dict[key])
             dataset_dict[key] = result
             changed |= changed_
+
+        general_key = "general"
+        if general_section := dataset_dict.get(general_key):
+            result, changed_ = self.convert_general_section(general_section)
+            dataset_dict[general_key] = result
+            changed |= changed_
+
         if changed:
             if self.save_original:
                 shutil.copyfile(dataset_file, str(dataset_file) + ".orig")
@@ -110,21 +124,52 @@ class Converter:
         data_section["data_series"] = new_data_series
         return data_section, changed
 
-    def convert_data_section(self, data_section):
+    def convert_data_section(self, data_section: dict):
         rv = {}
         changed = False
         for entity_group, attribute_data in data_section.items():
             entity_data = {}
-            for (comp, attr), data in iter_attributes(attribute_data):
-                if (new_name := self.mapping.get((comp, attr))) is not None:
-                    entity_data[new_name] = data
-                    changed = True
-                elif comp is None:
-                    entity_data[attr] = data
-                else:
-                    raise ValueError(f"Non-mapped attribute found: {comp}/{attr}")
+            for key, data in iter_attributes(attribute_data):
+                new_name, changed_ = self.get_new_attribute_name(key, scope=f"data/{entity_group}")
+                changed |= changed_
+
+                entity_data[new_name] = data
+
             rv[entity_group] = entity_data
         return rv, changed
+
+    def get_new_attribute_name(self, comp_attr, scope=""):
+        component, attribute = comp_attr
+        if (new_name := self.mapping.get(comp_attr)) is not None:
+            return new_name, True
+        elif component is None:
+            return attribute, False
+
+        error_prefix = "Non-mapped attribute found" + (f" in {scope}" if scope else "")
+        raise ValueError(f"{error_prefix}: {component}/{attribute}")
+
+    def convert_general_section(self, general_section: dict):
+        all_special_keys = {"no_data", "special"}
+        changed = False
+        special_values = parse_special_values(general_section, special_keys=all_special_keys)
+        flattened = (
+            (entity_group, key, value)
+            for entity_group, e_section in special_values.items()
+            for key, value in e_section.items()
+        )
+        new_special_values = {}
+        for entity_group, key, value in flattened:
+            new_name, changed_ = self.get_new_attribute_name(key, scope="general section")
+            changed |= changed_
+            new_special_values[f"{entity_group}.{new_name}"] = value
+
+        for key in all_special_keys - {self.special_key}:
+            if key in general_section:
+                del general_section[key]
+                changed = True
+        general_section[self.special_key] = new_special_values
+
+        return general_section, changed
 
 
 def is_tabular(dataset_dict):
@@ -138,13 +183,18 @@ def is_tabular(dataset_dict):
     "--attribute-mapping",
     help="path the attribute mapping csv",
     type=click.Path(),
-    required=True,
+    default=DEFAULT_ATTRIBUTE_MAPPING_FILE,
 )
 @click.option("--pretty/--no-pretty", "-p/", default=False)
 @click.option("--save-original/--no-save-original", "-o/", default=False)
-def main(path, attribute_mapping, pretty, save_original):
+@click.option(
+    "--special-key",
+    type=click.Choice(["special", "no_data"], case_sensitive=False),
+    default="no_data",
+)
+def main(path, attribute_mapping, pretty, save_original, special_key):
     path = Path(path)
-    converter = Converter(attribute_mapping, pretty, save_original)
+    converter = Converter(attribute_mapping, pretty, save_original, special_key)
     converter.convert(path)
 
 
