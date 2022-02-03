@@ -6,8 +6,20 @@ from movici_simulation_core.core.schema import (
     attribute_plugin_from_dict,
 )
 
-TrafficProperties_AverageTime = AttributeSpec("transport.average_time", data_type=DataType(float))
+Transport_AverageTime = AttributeSpec("transport.average_time", data_type=DataType(float))
+Transport_CargoAverageTime = AttributeSpec(
+    "transport.cargo_average_time", data_type=DataType(float)
+)
+Transport_PassengerAverageTime = AttributeSpec(
+    "transport.passenger_average_time", data_type=DataType(float)
+)
 Transport_MaxSpeed = AttributeSpec("transport.max_speed", data_type=DataType(float, (), False))
+Transport_PassengerVehicleMaxSpeed = AttributeSpec(
+    "transport.passenger_vehicle_max_speed", data_type=DataType(float, (), False)
+)
+Transport_CargoVehicleMaxSpeed = AttributeSpec(
+    "transport.cargo_vehicle_max_speed", data_type=DataType(float, (), False)
+)
 Transport_Capacity_Hours = AttributeSpec(
     "transport.capacity.hours", data_type=DataType(float, (), False)
 )
@@ -32,6 +44,12 @@ Transport_PassengerDemand = AttributeSpec(
 Transport_CargoDemand = AttributeSpec(
     "transport.cargo_demand", data_type=DataType(float, csr=True)
 )
+Transport_CargoAllowed = AttributeSpec("transport.cargo_allowed", data_type=bool)
 Transport_AdditionalTime = AttributeSpec("transport.additional_time", data_type=DataType(float))
-
+Transport_PassengerVehicleFrequency = AttributeSpec(
+    "transport.passenger_vehicle_frequency", data_type=DataType(float, csr=True)
+)
+Transport_PassengerVehicleCapacity = AttributeSpec(
+    "transport.passenger_vehicle_capacity", data_type=float
+)
 CommonAttributes = attribute_plugin_from_dict(globals())

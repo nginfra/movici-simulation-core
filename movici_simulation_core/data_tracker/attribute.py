@@ -618,7 +618,9 @@ def convert_nested_list_to_csr(
     return ensure_array(data, data_type), np.array(indptr, dtype="<i4")
 
 
-def get_attribute_aggregate(attr: AttributeObject, func: callable) -> t.Optional[bool, int, float]:
+def get_attribute_aggregate(
+    attr: AttributeObject, func: callable
+) -> t.Union[None, bool, int, float]:
     data = attr.array if isinstance(attr, UniformAttribute) else attr.csr.data
 
     if data is None or (undefined := get_undefined(data.dtype)) is None:
@@ -627,7 +629,9 @@ def get_attribute_aggregate(attr: AttributeObject, func: callable) -> t.Optional
 
 
 @lifecycle.deprecated(alternative="get_attribute_aggregate")
-def get_property_aggregate(prop: AttributeObject, func: callable) -> t.Optional[bool, int, float]:
+def get_property_aggregate(
+    prop: AttributeObject, func: callable
+) -> t.Union[None, bool, int, float]:
     return get_attribute_aggregate(prop, func)
 
 
@@ -648,10 +652,10 @@ attribute_max = functools.partial(get_attribute_aggregate, func=np.nanmax)
 
 
 @lifecycle.deprecated(alternative="attribute_min")
-def property_min(attr: AttributeObject) -> t.Optional[bool, int, float]:
+def property_min(attr: AttributeObject) -> t.Union[None, bool, int, float]:
     return attribute_min(attr)
 
 
 @lifecycle.deprecated(alternative="attribute_max")
-def property_max(attr: AttributeObject) -> t.Optional[bool, int, float]:
+def property_max(attr: AttributeObject) -> t.Union[None, bool, int, float]:
     return attribute_max(attr)

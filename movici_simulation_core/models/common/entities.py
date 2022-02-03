@@ -12,13 +12,13 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.base import BaseGeometry
 
 from movici_simulation_core.core.attributes import (
-    PointProperties_PositionX,
-    PointProperties_PositionY,
-    ShapeProperties_Linestring2d,
-    ShapeProperties_Linestring3d,
-    ShapeProperties_Polygon,
-    LineProperties_FromNodeId,
-    LineProperties_ToNodeId,
+    Geometry_X,
+    Geometry_Y,
+    Geometry_Linestring2d,
+    Geometry_Linestring3d,
+    Geometry_Polygon,
+    Topology_FromNodeId,
+    Topology_ToNodeId,
     Reference,
 )
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
@@ -44,8 +44,8 @@ class GeometryEntity(EntityGroup):
 
 
 class PointEntity(GeometryEntity):
-    x = field(PointProperties_PositionX, flags=INIT)
-    y = field(PointProperties_PositionY, flags=INIT)
+    x = field(Geometry_X, flags=INIT)
+    y = field(Geometry_Y, flags=INIT)
 
     def get_geometry(self) -> PointGeometry:
         return PointGeometry(points=np.stack((self.x.array, self.y.array), axis=-1))
@@ -55,8 +55,8 @@ class PointEntity(GeometryEntity):
 
 
 class LineEntity(GeometryEntity):
-    _linestring2d = field(ShapeProperties_Linestring2d, flags=OPT)
-    _linestring3d = field(ShapeProperties_Linestring3d, flags=OPT)
+    _linestring2d = field(Geometry_Linestring2d, flags=OPT)
+    _linestring3d = field(Geometry_Linestring3d, flags=OPT)
     _linestring: t.Optional[CSRAttribute] = None
 
     @property
@@ -91,7 +91,7 @@ class LineEntity(GeometryEntity):
 
 
 class PolygonEntity(GeometryEntity):
-    polygon = field(ShapeProperties_Polygon, flags=INIT)
+    polygon = field(Geometry_Polygon, flags=INIT)
 
     def get_geometry(self) -> ClosedPolygonGeometry:
         return ClosedPolygonGeometry(
@@ -103,16 +103,21 @@ class PolygonEntity(GeometryEntity):
 
 
 class LinkEntity(LineEntity):
-    from_node_id = field(LineProperties_FromNodeId, flags=INIT)
-    to_node_id = field(LineProperties_ToNodeId, flags=INIT)
+    from_node_id = field(Topology_FromNodeId, flags=INIT)
+    to_node_id = field(Topology_ToNodeId, flags=INIT)
 
 
 class VirtualLinkEntity(LinkEntity):
+    __entity_name__ = "virtual_link_entities"
     max_speed = field(Transport_MaxSpeed, flags=OPT)
     capacity = field(Transport_Capacity_Hours, flags=OPT)
 
 
 class TransportSegmentEntity(LinkEntity):
     layout = field(Transport_Layout, flags=INIT)
-    max_speed = field(Transport_MaxSpeed, flags=INIT)
+    _max_speed = field(Transport_MaxSpeed, flags=INIT)
     capacity = field(Transport_Capacity_Hours, flags=INIT)
+
+    @property
+    def max_speed(self):
+        return self._max_speed

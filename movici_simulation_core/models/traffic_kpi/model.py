@@ -240,7 +240,7 @@ class Model(TrackedModel, name="traffic_kpi"):
     def build_state(self, state: TrackedState, transport_type: str, schema: AttributeSchema):
         config = self.config
         dataset_name = config[transport_type][0]
-        entity_name = model_util.dataset_to_segments[transport_type]
+        entity_name = model_util.modality_link_entities[transport_type]
         self.segments = state.register_entity_group(
             dataset_name=dataset_name,
             entity=TransportSegments(name=entity_name),

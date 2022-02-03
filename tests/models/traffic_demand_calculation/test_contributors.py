@@ -157,6 +157,53 @@ class TestNearestValueContributor:
         )
 
 
+class TestNearestValueContributorCSR:
+    @pytest.fixture
+    def attribute(self):
+        return CSRAttribute([[1, 2, 3], [4, 5, 6], [7, 8, 9]], data_type=DataType(float, csr=True))
+
+    @pytest.fixture
+    def mapping_indices(self):
+        return [0, 1]
+
+    @pytest.fixture
+    def mapper(self, mapping_indices):
+        mock = Mock(LocalMapper)
+        mock.get_nearest.return_value = np.asarray(mapping_indices)
+        return mock
+
+    @pytest.fixture
+    def parameter_info(self, attribute):
+        return LocalParameterInfo(
+            target_dataset="dataset",
+            target_entity_group="entities",
+            target_geometry="line",
+            target_attribute=attribute,
+            elasticity=2,
+        )
+
+    @pytest.fixture
+    def state(self):
+        return TrackedState()
+
+    @pytest.fixture
+    def calculator(self, state, parameter_info, mapper):
+        rv = NearestValue(parameter_info)
+        rv.setup(state)
+        rv.initialize(mapper)
+        return rv
+
+    def test_calculate_values(self, calculator: NearestValue):
+        np.testing.assert_array_equal(calculator.calculate_values(), [[1, 2], [4, 5]])
+
+    def test_calculate_contribution(self, calculator: NearestValue):
+        old_values = np.array([[1, 2], [3, 4]], dtype=float)
+        new_values = np.array([[2, 4], [3, 4]], dtype=float)
+
+        result = calculator.calculate_contribution(new_values=new_values, old_values=old_values)
+        np.testing.assert_array_equal(result, [[4, 4], [1, 1]])
+
+
 def test_calculate_localized_multiplication_factor():
     values = np.array([1, 2, 3])
     old_values = np.array([2, 3, 4])
@@ -218,7 +265,7 @@ class TestRouteCostFactor:
         self, road_network_name, update_data, parameter_info, state, mapper
     ) -> RouteCostFactor:
         calc = RouteCostFactor(parameter_info)
-        calc.setup(state, Settings(), logging.getLogger())
+        calc.setup(state=state, settings=Settings(), logger=logging.getLogger())
 
         state.receive_update(update_data)
         calc.initialize(mapper)

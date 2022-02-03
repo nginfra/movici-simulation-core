@@ -51,7 +51,40 @@ class TrackedModelAdapter(ModelAdapterBase):
         )
         self.download_init_data(init_data_handler)
         self.try_initialize()
-        return self.get_data_filter()
+        return self.state.get_data_mask()
+
+    def new_time(self, message: NewTimeMessage):
+        moment = Moment(message.timestamp)
+        self.model.new_time(self.state, moment)
+        if not (self.model_initialized and self.model_ready_for_update) and moment.timestamp > 0:
+            raise RuntimeError(
+                "Model called with timestamp >0 while\n"
+                + f"initialized      : {self.model_initialized}\n"
+                + f"ready_for_updates: {self.model_ready_for_update}\n"
+                + self.format_uninitialized_attributes()
+            )
+
+    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
+        should_calculate = self.process_input(data)
+        result = self.try_calculate(message.timestamp, should_calculate)
+        return self.process_result(result)
+
+    def update_series(
+        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+    ) -> RawResult:
+        should_calculate = any([self.process_input(item) for item in data])
+        result = self.try_calculate(message.timestamp, should_calculate)
+        return self.process_result(result)
+
+    def close(self, message: QuitMessage):
+        self.model.shutdown(state=self.state)
+        if not (self.model_initialized and self.model_ready_for_update):
+            raise RuntimeError(
+                "Model called with shutdown while\n"
+                + f"initialized: {self.model_initialized}\n"
+                + f"ready_for_updates:{self.model_ready_for_update}\n"
+                + self.format_uninitialized_attributes()
+            )
 
     def download_init_data(self, init_data_handler: InitDataHandler):
         init_data_handler.as_numpy_array = True
@@ -67,20 +100,13 @@ class TrackedModelAdapter(ModelAdapterBase):
             data_dict = path.read_dict()
             self.state.receive_update(data_dict, is_initial=True)
 
-    def get_data_filter(self) -> dict:
-        return self.state.get_data_mask()
-
-    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
-        should_calculate = self.process_input(data)
-        result = self.try_calculate(message.timestamp, should_calculate)
-        return self.process_result(result)
-
-    def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
-    ) -> RawResult:
-        should_calculate = any([self.process_input(item) for item in data])
-        result = self.try_calculate(message.timestamp, should_calculate)
-        return self.process_result(result)
+    def try_initialize(self):
+        if not self.model_initialized and self.state.is_ready_for(INITIALIZE):
+            try:
+                self.model.initialize(state=self.state)
+            except NotReady:
+                return
+            self.model_initialized = True
 
     def process_input(self, data: RawUpdateData) -> bool:
         # Always calculate on a major update
@@ -92,15 +118,6 @@ class TrackedModelAdapter(ModelAdapterBase):
             self.state.receive_update(update_dict)
             return True
         return False
-
-    @staticmethod
-    def process_result(result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]) -> RawResult:
-        data, next_time = result
-        if data:
-            data = dump_update(data)
-        if isinstance(next_time, Moment):
-            next_time = next_time.timestamp
-        return data, next_time
 
     def try_calculate(
         self, timestamp: Timestamp, should_calculate=True
@@ -131,34 +148,14 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.next_time = next_time
         return update, next_time
 
-    def try_initialize(self):
-        if not self.model_initialized and self.state.is_ready_for(INITIALIZE):
-            try:
-                self.model.initialize(self.state)
-            except NotReady:
-                return
-            self.model_initialized = True
-
-    def new_time(self, message: NewTimeMessage):
-        moment = Moment(message.timestamp)
-        self.model.new_time(self.state, moment)
-        if not (self.model_initialized and self.model_ready_for_update) and moment.timestamp > 0:
-            raise RuntimeError(
-                "Model called with timestamp >0 while\n"
-                + f"initialized      : {self.model_initialized}\n"
-                + f"ready_for_updates: {self.model_ready_for_update}\n"
-                + self.format_uninitialized_attributes()
-            )
-
-    def close(self, message: QuitMessage):
-        self.model.shutdown(self.state)
-        if not (self.model_initialized and self.model_ready_for_update):
-            raise RuntimeError(
-                "Model called with shutdown while\n"
-                + f"initialized: {self.model_initialized}\n"
-                + f"ready_for_updates:{self.model_ready_for_update}\n"
-                + self.format_uninitialized_attributes()
-            )
+    @staticmethod
+    def process_result(result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]) -> RawResult:
+        data, next_time = result
+        if data:
+            data = dump_update(data)
+        if isinstance(next_time, Moment):
+            next_time = next_time.timestamp
+        return data, next_time
 
     def format_uninitialized_attributes(self) -> str:
         def uninitialized_attributes():

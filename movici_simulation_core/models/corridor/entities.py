@@ -1,8 +1,8 @@
 from movici_simulation_core.core.attributes import (
-    LineProperties_Length,
-    ShapeProperties_Linestring2d,
-    ConnectionProperties_FromIds,
-    ConnectionProperties_ToIds,
+    Shape_Length,
+    Geometry_Linestring2d,
+    Connection_FromIds,
+    Connection_ToIds,
 )
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.attribute import field, PUB, OPT, SUB
@@ -23,8 +23,8 @@ from movici_simulation_core.models.corridor.attributes import (
 
 
 class CorridorEntity(EntityGroup, name="corridor_entities"):
-    from_nodes = field(ConnectionProperties_FromIds, flags=SUB)
-    to_nodes = field(ConnectionProperties_ToIds, flags=SUB)
+    from_nodes = field(Connection_FromIds, flags=SUB)
+    to_nodes = field(Connection_ToIds, flags=SUB)
 
     max_volume_to_capacity = field(Transport_VolumeToCapacityRatio, flags=PUB)
     travel_time = field(TrafficProperties_AverageTime, flags=PUB)
@@ -35,11 +35,11 @@ class CorridorEntity(EntityGroup, name="corridor_entities"):
     co2_emission = field(Transport_Co2Emission_Hours, flags=PUB)
     nox_emission = field(Transport_NoxEmission_Hours, flags=PUB)
     energy_consumption = field(Transport_EnergyConsumption_Hours, flags=PUB)
-    line2d = field(ShapeProperties_Linestring2d, flags=PUB)
+    line2d = field(Geometry_Linestring2d, flags=PUB)
 
 
 class CorridorTransportSegmentEntity(TransportSegmentEntity):
-    lengths = field(LineProperties_Length, flags=OPT)
+    lengths = field(Shape_Length, flags=OPT)
 
     travel_time = field(TrafficProperties_AverageTime, flags=SUB)
     passenger_car_unit = field(Transport_PassengerCarUnit, flags=SUB)

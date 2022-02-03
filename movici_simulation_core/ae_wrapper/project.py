@@ -42,9 +42,9 @@ class AssignmentParameters:
     vdf_alpha: float = 0.64
     vdf_beta: float = 4.0
     cargo_pcu: float = 1.9
-    algorithm: str = (
-        "bfw"  # Recommended: bfw. One of ["all-or-nothing", "msa", "fw", "cfw", "bfw"]
-    )
+
+    # Recommended: bfw. One of ["all-or-nothing", "msa", "fw", "cfw", "bfw"]
+    algorithm: str = "bfw"
     max_iter: int = 1000
     rgap_target: float = 0.001
 

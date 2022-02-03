@@ -5,8 +5,8 @@ import numpy as np
 
 from movici_simulation_core.core.attributes import (
     Reference,
-    ConnectionProperties_ToDataset,
-    ConnectionProperties_ToReferences,
+    Connection_ToDataset,
+    Connection_ToReferences,
 )
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.attribute import field, INIT, UniformAttribute, OPT
@@ -41,8 +41,8 @@ class TimeWindowStatusEntity(EntityGroup):
 
 
 class TimeWindowEntity(EntityGroup):
-    connection_to_dataset = field(ConnectionProperties_ToDataset, flags=OPT)
-    connection_to_references = field(ConnectionProperties_ToReferences, flags=OPT)
+    connection_to_dataset = field(Connection_ToDataset, flags=OPT)
+    connection_to_references = field(Connection_ToReferences, flags=OPT)
     time_window_begin: UniformAttribute = None
     time_window_end: UniformAttribute = None
 

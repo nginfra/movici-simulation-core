@@ -63,7 +63,7 @@ class Model(TrackedModel, name="corridor"):
 
         self._transport_segments = state.register_entity_group(
             transport_dataset_name,
-            CorridorTransportSegmentEntity(name=model_util.dataset_to_segments[transport_type]),
+            CorridorTransportSegmentEntity(name=model_util.modality_link_entities[transport_type]),
         )
 
         self._transport_nodes = state.register_entity_group(

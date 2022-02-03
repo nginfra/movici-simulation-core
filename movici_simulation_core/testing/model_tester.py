@@ -11,6 +11,7 @@ from movici_simulation_core.base_models.tracked_model import (
 )
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.attributes import GlobalAttributes
+from movici_simulation_core.core.plugins import Extensible
 from movici_simulation_core.data_tracker.data_format import (
     load_update,
     dump_dataset_data,
@@ -101,7 +102,15 @@ DEFAULT_PREPROCESSORS: t.Dict[t.Type[ModelAdapterBase], t.Type[PreProcessor]] = 
 }
 
 
-def read_schema(schema: t.Any) -> AttributeSchema:
+class Plugin(t.Protocol):
+    def install(cls, obj: Extensible):
+        pass
+
+
+SchemaT = t.Union[AttributeSchema, t.Sequence[AttributeSpec], Plugin]
+
+
+def read_schema(schema: t.Optional[SchemaT]) -> AttributeSchema:
     if isinstance(schema, AttributeSchema):
         return schema
     rv = AttributeSchema()
@@ -125,7 +134,8 @@ class ModelTester:
         settings: Settings = None,
         init_data_handler=None,
         tmp_dir=None,
-        global_schema: t.Any = None,
+        global_schema: t.Optional[SchemaT] = None,
+        raise_on_premature_shutdown=False,
     ):
         """
 
@@ -143,6 +153,7 @@ class ModelTester:
         self.settings = settings or Settings()
         self.schema = read_schema(global_schema)
         self.model = self._try_wrap_model(model)
+        self.raise_on_premature_shutdown = raise_on_premature_shutdown
 
     def _try_wrap_model(self, model: Model):
         adapter = model.get_adapter()
@@ -178,7 +189,11 @@ class ModelTester:
         self.model.new_time(message)
 
     def close(self):
-        self.model.close(QuitMessage())
+        try:
+            self.model.close(QuitMessage())
+        except RuntimeError:
+            if self.raise_on_premature_shutdown:
+                raise
 
     @classmethod
     def run_scenario(
@@ -210,7 +225,9 @@ class ModelTester:
 
         inst = model(model_config)
         with set_timeline_info(settings.timeline_info):
-            tester = ModelTester(inst, settings, global_schema=global_schema)
+            tester = ModelTester(
+                inst, settings, global_schema=global_schema, raise_on_premature_shutdown=True
+            )
             for init_data in scenario.get("init_data", []):
                 tester.add_init_data(**init_data)
 

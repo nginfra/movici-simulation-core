@@ -210,5 +210,58 @@ class TrackedCSRArray:
             equal_nan=self.equal_nan,
         )
 
+    def as_matrix(self):
+        if self.size == 0:
+            return np.ndarray((0, 0))
+        if self.size == 1:
+            return self.data.copy()[np.newaxis, :]
+
+        row_length = self.row_ptr[1] - self.row_ptr[0]
+        if not np.all(np.diff(self.row_ptr) == row_length):
+            raise ValueError(
+                "Can only convert CSR array to matrix when all rows have an equal length"
+            )
+
+        return self.data.copy().reshape((self.size, row_length))
+
+    def update_from_matrix(self, matrix: np.ndarray):
+        """Update the csr-array from a 2D matrix. The matrix number of rows must match the
+        csr-array's number of rows
+        """
+        shape = matrix.shape
+
+        if len(shape) != 2 or shape[0] != self.size:
+            raise ValueError("Can only update a CSR array with a matrix of equal number of rows")
+
+        if len(self.data) == matrix.size and np.all(np.diff(self.row_ptr) == shape[1]):
+            # self.data is in the correct shape
+            self._update_from_matrix_inplace(matrix)
+        else:
+            as_csr = matrix_to_csr(matrix)
+            self.update(as_csr, indices=np.arange(self.size))
+
+    def _update_from_matrix_inplace(self, matrix):
+        shape = matrix.shape
+        new_data = matrix.flatten()
+
+        # Since we update the data directly, changes are not calculated automatically
+        # and we have to calculate them ourselves
+        changed = ~np.isclose(
+            self.data,
+            new_data,
+            rtol=self.rtol,
+            atol=self.atol,
+            equal_nan=self.equal_nan,
+        ).reshape(shape)
+        self.data = new_data
+        self.changed += np.amax(changed, axis=1)
+
 
 TrackedArrayType = t.Union[TrackedArray, TrackedCSRArray]
+
+
+def matrix_to_csr(matrix: np.ndarray):
+    """convert a 2d array to a TrackedCSRArray"""
+    row_ptr = np.arange(0, matrix.size + 1, matrix.shape[1])
+    data = matrix.flatten()
+    return TrackedCSRArray(data, row_ptr)

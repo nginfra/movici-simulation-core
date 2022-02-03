@@ -7,7 +7,6 @@ import pandas as pd
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.attribute import (
     PUB,
     UniformAttribute,
@@ -71,7 +70,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     _new_timesteps_first_update: bool = True
 
-    _local_mapping_type_to_calculators_dict = {
+    _local_mapping_type_to_calculators_dict: t.Dict[str, t.Type[LocalContributor]] = {
         "nearest": NearestValue,
         "route": RouteCostFactor,
         "extended_route": InducedDemand,
@@ -103,6 +102,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self.demand_estimation = DemandEstimation(
             global_contributors + scenario_multipliers, local_contributors + investments
         )
+        self.demand_estimation.setup(state=state, settings=settings, schema=schema, logger=logger)
 
     def configure_demand_nodes(self, state: TrackedState, schema: AttributeSchema):
         config = self.config
@@ -208,7 +208,6 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
                 elasticity=elasticity,
             )
             calculator = self._local_mapping_type_to_calculators_dict[mapping_type](info)
-            calculator.setup(state=state, settings=settings, schema=schema, logger=logger)
             rv.append(calculator)
         return rv
 
@@ -222,7 +221,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         mapper = LocalMapper(demand_geometry)
         self.demand_estimation.initialize(mapper)
 
-        demand_matrix = self._get_demand_matrix(self._demand_attribute.csr)
+        demand_matrix = self._demand_attribute.csr.as_matrix()
         self._update_demand_sum(demand_matrix)
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
@@ -231,7 +230,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
         self.proceed_tape(moment)
 
-        demand_matrix = self._get_demand_matrix(self._demand_attribute.csr)
+        demand_matrix = self._demand_attribute.csr.as_matrix()
         updated = self.demand_estimation.update(
             demand_matrix, self.update_count == 0, moment=moment
         )
@@ -240,7 +239,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         # our model's calculation
         state.reset_tracked_changes(SUBSCRIBE)
 
-        self._set_demand_matrix(updated, self._demand_attribute.csr)
+        self._demand_attribute.csr.update_from_matrix(updated)
         self._update_demand_sum(updated)
 
         self.update_count += 1
@@ -258,24 +257,6 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def new_time(self, state: TrackedState, moment: Moment):
         self.update_count = 0
-
-    @staticmethod
-    def _get_demand_matrix(csr_array: TrackedCSRArray):
-        return csr_array.data.copy().reshape((csr_array.size, csr_array.size))
-
-    @staticmethod
-    def _set_demand_matrix(demand_matrix: np.ndarray, demand_csr: TrackedCSRArray) -> None:
-        new_data = demand_matrix.flatten()
-        size = demand_csr.size
-        changed = ~np.isclose(
-            demand_csr.data,
-            new_data,
-            rtol=demand_csr.rtol,
-            atol=demand_csr.atol,
-            equal_nan=demand_csr.equal_nan,
-        ).reshape((size, size))
-        demand_csr.data = new_data
-        demand_csr.changed += np.amax(changed, axis=1)
 
     def _update_demand_sum(self, demand_matrix: np.ndarray):
         if self._total_outward_demand_attribute is not None:

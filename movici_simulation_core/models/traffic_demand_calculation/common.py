@@ -25,9 +25,16 @@ class DemandEstimation:
         self.global_params = global_params
         self.local_params = local_params
 
-    def setup(self, *, state: TrackedState, settings: Settings, schema: AttributeSchema):
+    def setup(
+        self,
+        *,
+        state: TrackedState,
+        settings: Settings,
+        schema: AttributeSchema,
+        logger: logging.Logger
+    ):
         for param in self.local_params:
-            param.setup(state=state, settings=settings, schema=schema)
+            param.setup(state=state, settings=settings, schema=schema, logger=logger)
 
     def initialize(self, mapper: LocalMapper):
         for param in self.local_params:

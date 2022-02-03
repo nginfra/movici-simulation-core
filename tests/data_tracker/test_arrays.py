@@ -280,3 +280,93 @@ def test_csr_bin_ops(a, b, op, expected):
     result = op(a, b)
     np.testing.assert_allclose(expected.data, result.data)
     np.testing.assert_allclose(expected.row_ptr, result.row_ptr)
+
+
+@pytest.mark.parametrize(
+    "array, matrix",
+    [
+        (
+            TrackedCSRArray([0, 0, 1, 1], np.array([0, 2, 4])),
+            np.array([[0, 0], [1, 1]]),
+        ),
+        (
+            TrackedCSRArray([], np.array([0])),
+            np.ndarray((0, 0)),
+        ),
+        (
+            TrackedCSRArray([1], np.array([0, 1])),
+            np.array(
+                [
+                    [
+                        1,
+                    ]
+                ]
+            ),
+        ),
+        (
+            TrackedCSRArray([0, 0, 0, 1, 1, 1], np.array([0, 3, 6])),
+            np.array([[0, 0, 0], [1, 1, 1]]),
+        ),
+    ],
+)
+def test_as_matrix(array, matrix):
+    np.testing.assert_array_equal(array.as_matrix(), matrix)
+
+
+def test_invalid_shape_for_matrix():
+    with pytest.raises(ValueError):
+        TrackedCSRArray([0, 1, 1], np.array([0, 1, 3])).as_matrix()
+
+
+@pytest.mark.parametrize(
+    "array, matrix, exp_change, exp_data, exp_rowptr",
+    [
+        (
+            TrackedCSRArray([0, 0, 1, 1], np.array([0, 2, 4])),
+            np.array([[1, 1], [2, 2]]),
+            [True, True],
+            [1, 1, 2, 2],
+            [0, 2, 4],
+        ),  # square matrix -> square matrix
+        (
+            TrackedCSRArray([np.nan, np.nan], np.array([0, 1, 2])),
+            np.array([[1, 1], [2, 2]]),
+            [True, True],
+            [1, 1, 2, 2],
+            [0, 2, 4],
+        ),  # uninitialized -> square matrix
+        (
+            TrackedCSRArray([np.nan, np.nan], np.array([0, 1, 2])),
+            np.array([[1, 1, 1], [2, 2, 2]]),
+            [True, True],
+            [1, 1, 1, 2, 2, 2],
+            [0, 3, 6],
+        ),  # unintialized -> non-square matrix
+        (
+            TrackedCSRArray([0, 0, 0, 1, 1, 1], np.array([0, 3, 6])),
+            np.array([[1, 1, 1], [2, 2, 2]]),
+            [True, True],
+            [1, 1, 1, 2, 2, 2],
+            [0, 3, 6],
+        ),  # non-square matrix -> non-square matrix
+        (
+            TrackedCSRArray([0, 0, 1, 1], np.array([0, 2, 4])),
+            np.array([[1, 0], [1, 1]]),
+            [True, False],
+            [1, 0, 1, 1],
+            [0, 2, 4],
+        ),  # Square matrix not all values have changed
+        (
+            TrackedCSRArray([0, 0, 1, 1, 2, 2], np.array([0, 2, 4, 6])),
+            np.array([[0, 0], [1, 2], [3, 3]]),
+            [False, True, True],
+            [0, 0, 1, 2, 3, 3],
+            [0, 2, 4, 6],
+        ),  # non-square matrix not all values have changed
+    ],
+)
+def test_update_csr_from_matrix(array, matrix, exp_change, exp_data, exp_rowptr):
+    array.update_from_matrix(matrix)
+    np.testing.assert_array_equal(array.changed, exp_change)
+    np.testing.assert_array_equal(array.data, exp_data)
+    np.testing.assert_array_equal(array.row_ptr, exp_rowptr)

@@ -1,4 +1,4 @@
-from movici_simulation_core.core.attributes import LineProperties_Length
+from movici_simulation_core.core.attributes import Shape_Length
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.attribute import field, INIT, PUB, OPT
@@ -15,7 +15,7 @@ Transport_NoxEmission_Hours = AttributeSpec("transport.nox_emission.hours", Data
 
 
 class TransportSegments(EntityGroup):
-    length = field(LineProperties_Length, flags=INIT)
+    length = field(Shape_Length, flags=INIT)
 
     passenger_flow = field(Transport_PassengerVehicleFlow, flags=OPT)
     cargo_flow = field(Transport_CargoVehicleFlow, flags=OPT)

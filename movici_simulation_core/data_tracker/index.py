@@ -78,8 +78,8 @@ class Index:
 
 
 # If the number of blocks is large, we may benefit from using numba. However, if the number of
-# blocks is large, this is not the right approach for Index and we'd probably want to use a
-# different Index data structure, such as pandas.Index
+# blocks is large, the current data structure not the right approach for Index and we'd
+# probably want to use a different Index data structure, such as pandas.Index
 
 
 def query_indices(block_from, block_to, block_offset, ids):

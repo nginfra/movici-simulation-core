@@ -46,6 +46,12 @@ def get_max_speeds_from_attribute(max_speed_attribute: UniformAttribute) -> np.n
     return max_speeds
 
 
+def get_cargo_allowed_from_attribute(cargo_allowed_attribute: UniformAttribute) -> np.ndarray:
+    rv = cargo_allowed_attribute.array.astype(bool)
+    rv[cargo_allowed_attribute.is_undefined()] = True
+    return rv
+
+
 def get_transport_directions(segments: TransportSegmentEntity) -> np.ndarray:
     contributions = np.array([1, -1, 0, 0])
     return (np.minimum(segments.layout, 1) * contributions).sum(axis=1)

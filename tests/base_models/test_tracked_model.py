@@ -136,7 +136,7 @@ def test_base_model(model, adapter, update, init_data_handler):
     assert model.initialize.call_count == 0
     adapter.initialize(init_data_handler)
     assert adapter.model_initialized
-    assert model.initialize.call_args == call(adapter.state)
+    assert model.initialize.call_args == call(state=adapter.state)
 
     assert not adapter.model_ready_for_update
     adapter.update(UpdateMessage(0), None)
@@ -148,9 +148,8 @@ def test_base_model(model, adapter, update, init_data_handler):
     assert model.update.call_count == 1
 
 
-def test_get_data_filter(adapter, init_data_handler):
-    adapter.initialize(init_data_handler)
-    assert adapter.get_data_filter() == {
+def test_data_mask(adapter, init_data_handler):
+    assert adapter.initialize(init_data_handler) == {
         "sub": {"dataset": {"my_entities": ["init_attr", "sub_attr"]}},
         "pub": {"dataset": {"my_entities": ["pub_attr"]}},
     }

@@ -70,3 +70,15 @@ def test_get_full_name():
 
     assert MyEntity.attr.full_name == "some_attribute"
     assert MyEntity.attr2.full_name == "component/other_attribute"
+
+
+def test_overwrite_attribute():
+    class BaseEntity(EntityGroup):
+        attr = get_attribute(name="some_attribute", flags=INIT)
+
+    class Derived(BaseEntity):
+        attr = get_attribute(name="some_attribute", flags=0)
+
+    attrs = Derived.all_attributes()
+    assert set(attrs) == {"attr"}
+    assert attrs["attr"].flags == 0

@@ -1,3 +1,4 @@
+from unittest import mock
 import numpy as np
 import pytest
 
@@ -7,10 +8,11 @@ from movici_simulation_core.models.common.entities import (
     LinkEntity,
     TransportSegmentEntity,
 )
-from movici_simulation_core.models.traffic_demand_calculation.network import (
+from movici_simulation_core.models.common.network import (
     build_graph,
     Graph,
     Network,
+    csr_argslice,
 )
 from movici_simulation_core.testing.helpers import create_entity_group_with_data
 
@@ -87,9 +89,9 @@ def network_1():
 @pytest.fixture
 def network_2():
     r"""
-             (6)    (7)
-             / \   /
-    (5)--0--1--2--3--4--(8)
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
     """
     transport_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [0, 1, 2, 3, 4]})
     virtual_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [5, 6, 7, 8]})
@@ -133,6 +135,35 @@ def network_3(road_network_for_traffic):
     return Network(transport_nodes, transport_links, virtual_nodes, virtual_links)
 
 
+@pytest.fixture
+def network_4():
+    r"""
+    (10)->0==>1<-(11)
+    a simple network with a duplicate edge between its two nodes
+
+    """
+    transport_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [0, 1]})
+    virtual_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [10, 11]})
+    transport_links = create_entity_group_with_data(
+        TransportSegmentEntity("tl"),
+        {
+            "id": [100, 101],
+            "topology.from_node_id": [0, 0],
+            "topology.to_node_id": [1, 1],
+        },
+    )
+    virtual_links = create_entity_group_with_data(
+        LinkEntity("vl"),
+        {
+            "id": [110, 111],
+            "topology.from_node_id": [10, 11],
+            "topology.to_node_id": [0, 1],
+        },
+    )
+    cost_factor = np.array([1, 2], dtype=float)
+    return Network(transport_nodes, transport_links, virtual_nodes, virtual_links, cost_factor)
+
+
 class TestNetwork1:
     @pytest.fixture
     def network(self, network_1):
@@ -152,14 +183,16 @@ class TestNetwork1:
         )
 
     def test_transport_links_have_a_normal_cost_factor(self, network):
-        assert np.sum(network.cost_factor == 1) == network.tl_count
+        assert np.sum(network.graph.cost_factor == 1) == network.tl_count
 
     def test_outgoing_virtual_links_have_high_cost_factor(self, network):
         indices = network.node_index[network.virtual_node_ids]
         graph = network.graph
         for idx in indices:
             begin, end = graph.indptr[idx : idx + 2]
-            np.testing.assert_array_equal(network.cost_factor[begin:end], network.MAX_COST_FACTOR)
+            np.testing.assert_array_equal(
+                network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR
+            )
 
     def test_incoming_virtual_links_have_low_cost_factor(self, network):
         graph = network.graph
@@ -173,14 +206,18 @@ class TestNetwork1:
         network.set_source_node(6)
         idx = network.node_index[source_node]
         begin, end = network.graph.indptr[idx : idx + 2]
-        np.testing.assert_array_equal(network.cost_factor[begin:end], network.MIN_COST_FACTOR)
+        np.testing.assert_array_equal(
+            network.graph.cost_factor[begin:end], network.MIN_COST_FACTOR
+        )
 
     def test_set_other_source_node_resets_previous_cost_factor(self, network):
         network.set_source_node(6)
         network.set_source_node(8)
         idx = network.node_index[6]
         begin, end = network.graph.indptr[idx : idx + 2]
-        np.testing.assert_array_equal(network.cost_factor[begin:end], network.MAX_COST_FACTOR)
+        np.testing.assert_array_equal(
+            network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR
+        )
 
     def test_shortest_path(self, network):
         dist, prev = network.get_shortest_path(6)
@@ -200,6 +237,20 @@ class TestNetwork1:
     def test_can_get_full_matrix_of_shortest_paths(self, network):
         result = network.all_shortest_paths(network.virtual_node_ids)
         np.testing.assert_array_almost_equal(result, [[0, 1, 2], [1, 0, 1], [np.inf, np.inf, 0]])
+
+    def test_caches_results(self, network: Network):
+        with mock.patch(Network.__module__ + ".shortest_path") as shortest_path:
+            network.get_shortest_path(6)
+            network.get_shortest_path(6)
+            network.get_shortest_path(7)
+        assert shortest_path.call_count == 2
+
+    def test_clears_cache_on_new_cost_factor(self, network: Network):
+        with mock.patch(Network.__module__ + ".shortest_path") as shortest_path:
+            network.get_shortest_path(6)
+            network.update_cost_factor(network.cost_factor)
+            network.get_shortest_path(6)
+        assert shortest_path.call_count == 2
 
 
 class TestNetwork2:
@@ -256,6 +307,19 @@ class TestNetwork2:
 
 
 @pytest.mark.parametrize(
+    "cost_factor, expected",
+    [
+        (np.array([1, 2]), 1),
+        (np.array([3, 2]), 2),
+    ],
+)
+def test_shortest_path_multiple_links(network_4: Network, cost_factor, expected):
+    network_4.update_cost_factor(cost_factor)
+    result = network_4.all_shortest_paths()
+    np.testing.assert_allclose(result, [[0, expected], [np.inf, 0]])
+
+
+@pytest.mark.parametrize(
     "layout,mapping,indices, indptr",
     [
         ([1, 0, 0, 0], [0], [1, 2, 3, 0, 1], [0, 2, 3, 4, 5]),
@@ -296,3 +360,95 @@ def test_get_network_with_links_based_on_layout(network_3):
     vn10, vn11, vn12 = network_3.node_index[[10, 11, 12]]
     np.testing.assert_array_equal(network_3.graph.indices, [2, vn10, 0, 0, vn11, 1, vn12, 0, 1, 2])
     np.testing.assert_array_equal(network_3.graph.indptr, [0, 2, 5, 7, 8, 9, 10])
+
+
+def test_shortest_path_weighted_average(network_2: Network):
+    r"""
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
+    """
+    network = network_2
+    source_id = 5
+    # using the cost factor as values, means that every link through the network that is traveled
+    # contributes cost_factor ** 2 to the weighted average (before dividing by the total
+    #  cost_factor)
+
+    values = network.cost_factor
+    expected = [
+        -1,  # no path between 5 and itself
+        (1 ** 1) / 1,  # 5 -> 6 travels between (0-1) (cf: 1)
+        (1 ** 1 + 2 ** 2 + 3 ** 2) / 6,  # 5 -> 7 (0-1-2-3) (cf: 1, 2, 3)
+        (1 ** 1 + 2 ** 2 + 3 ** 2 + 4 ** 2) / 10,  # 5 -> 7 (0-1-2-3-4) (cf: 1, 2, 3, 4)
+    ]
+
+    avg = network.shortest_path_weighted_average(source_id, values)
+
+    np.testing.assert_allclose(avg, expected)
+
+
+def test_all_shortest_paths_weighted_average(network_2: Network):
+    r"""
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
+    """
+    network = network_2
+
+    # using the cost factor as values, means that every link through the network that is traveled
+    # contributes cost_factor ** 2 to the weighted average (before dividing by the total
+    # cost_factor)
+    values = network.cost_factor
+
+    expected = [
+        [-1, 1, 14 / 6, 30 / 10],
+        [1, -1, 9 / 3, 25 / 7],
+        [14 / 6, 9 / 3, -1, 16 / 4],
+        [30 / 10, 25 / 7, 16 / 4, -1],
+    ]
+
+    avg = network.all_shortest_paths_weighted_average(values, no_path_found=-1)
+
+    np.testing.assert_allclose(avg, expected)
+
+
+def test_some_shortest_paths_weighted_average(network_2: Network):
+    r"""
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
+    """
+    network = network_2
+
+    # using the cost factor as values, means that every link through the network that is traveled
+    # contributes cost_factor ** 2 to the weighted average (before dividing by the total
+    # cost_factor)
+    values = network.cost_factor
+
+    expected = [
+        [-2, 9 / 3],
+        [9 / 3, -2],
+    ]
+
+    avg = network.all_shortest_paths_weighted_average(
+        values, virtual_node_ids=[6, 7], no_path_found=-2
+    )
+
+    np.testing.assert_allclose(avg, expected)
+
+
+@pytest.mark.parametrize(
+    "rowidx, colidx, expected",
+    [
+        (0, 0, 0),
+        (0, 1, 1),
+        (1, 3, 3),
+        (1, 7, 7),
+        (1, 8, -1),
+        (0, 3, -1),
+    ],
+)
+def test_csr_argslice(rowidx, colidx, expected):
+    indptr = np.array([0, 2, 8, 9])
+    indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
+    assert csr_argslice(indptr, indices, rowidx, colidx) == expected

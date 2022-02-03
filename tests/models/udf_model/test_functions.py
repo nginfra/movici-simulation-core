@@ -25,15 +25,20 @@ def test_sum(input_arr, exp):
 
 
 @pytest.mark.parametrize(
-    "input_arr, exp",
+    "inputs, exp",
     [
-        (np.array([1, 2, 3]), [1, 2, 3]),
-        (np.array([[1], [2], [3]]), [1, 2, 3]),
-        (ensure_csr_data([[1, 2], [3, 4], [5], []]), [2, 4, 5, UNDEFINED[int]]),
+        ([np.array([1, 2, 3])], [1, 2, 3]),
+        ([np.array([[1], [2], [3]])], [1, 2, 3]),
+        ([ensure_csr_data([[1, 2], [3, 4], [5], []])], [2, 4, 5, UNDEFINED[int]]),
+        ([np.array([1, 2, 3]), np.array([3, 2, 1]), np.array([2, 3, 1])], [3, 3, 3]),
+        ([np.array([1, 2, 3]), ensure_csr_data([[1, 2], [3, 4], [2]])], [2, 4, 3]),
+        ([3, ensure_csr_data([[1, 2], [3, 4], [2]])], [3, 4, 3]),
+        ([2, np.array([1, 2, 3])], [2, 2, 3]),
+        ([np.array([1, 2, 3]), 2], [2, 2, 3]),
     ],
 )
-def test_max(input_arr, exp):
-    np.testing.assert_array_equal(max_func(input_arr), exp)
+def test_max(inputs, exp):
+    np.testing.assert_array_equal(max_func(*inputs), exp)
 
 
 @pytest.mark.parametrize(

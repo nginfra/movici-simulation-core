@@ -340,6 +340,31 @@ def test_default_csr_to_csr(create_model_tester):
     }
 
 
+def test_multi_arg_min(create_model_tester):
+    tester: ModelTester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"a": [None, "in_a"], "b": [None, "in_b"]},
+            "functions": [
+                {
+                    "expression": "min(a, b, 2)",
+                    "output": [None, "out"],
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out": [1, 2, 2],
+            }
+        }
+    }
+
+
 @pytest.mark.parametrize(
     "config_",
     [

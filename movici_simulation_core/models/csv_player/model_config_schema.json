@@ -1,0 +1,46 @@
+{
+  "name": "csv_player",
+  "schema": {
+    "properties": {
+      "additionalItems": false,
+      "target_attributes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/attributeDef"
+        }
+      },
+      "csv_parameters": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "definitions": {
+      "attributeDef": {
+        "type": "array",
+        "items": [
+          {
+            "type": ["string", "null"]
+          }
+        ]
+      }
+    }
+  },
+  "entity_categories": [
+    {
+      "name": "entity_group",
+      "required": true,
+      "require_one": true
+    }
+  ],
+  "dataset_categories": [
+    {
+      "name": "csv_tape",
+      "required": true,
+      "require_one": true,
+      "type": "parameters"
+    }
+  ],
+  "strict_validation": true
+}

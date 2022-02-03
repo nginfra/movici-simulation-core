@@ -14,9 +14,14 @@ def model_config_validator(model_schema: dict):
 def assemble_json_schema(model_schema: dict):
     json_schema = {"type": "object", "properties": {}}
     json_schema.update(model_schema["schema"])
-    model_schema["type"] = "object"
-    model_schema.setdefault("properties", {})
-
+    json_schema["properties"].update(
+        {
+            "type": {"type": "string"},
+            "name": {"type": "string"},
+        }
+    )
+    if name := model_schema.get("name"):
+        json_schema["properties"]["type"]["pattern"] = rf"^{name}$"
     for entity_category in model_schema.get("entity_categories", []):
         add_entity_category(json_schema, entity_category)
     for dataset_category in model_schema.get("dataset_categories", []):
