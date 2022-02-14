@@ -21,12 +21,19 @@ def read_file_or_empty_str(file, comment_tag=None):
         return ""
 
 
-REQUIREMENTS = parse_requirements("requirements.txt")
 README = read_file_or_empty_str("README.md")
 LICENSE = read_file_or_empty_str("LICENSE")
 VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
-EXTRA_REQUIREMENTS = {"models": parse_requirements("requirements-models.txt")}
+REQUIREMENTS = parse_requirements("requirements.txt")
+EXTRA_REQUIREMENTS = {
+    "models": parse_requirements("requirements-models.txt"),
+    "dev": parse_requirements("requirements-dev.txt"),
+    "docs": parse_requirements("requirements-docs.txt"),
+}
+EXTRA_REQUIREMENTS["all"] = (
+    EXTRA_REQUIREMENTS["models"] + EXTRA_REQUIREMENTS["dev"] + EXTRA_REQUIREMENTS["docs"]
+)
 
 MODEL_PATH = "movici_simulation_core.models"
 SVC_PATH = "movici_simulation_core.services"

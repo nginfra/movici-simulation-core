@@ -2,14 +2,7 @@ import typing as t
 from abc import abstractmethod
 
 import numpy as np
-from movici_geo_query.geometry import (
-    Geometry,
-    LinestringGeometry,
-    PointGeometry,
-    ClosedPolygonGeometry,
-)
-from shapely.geometry import LineString, Point, Polygon
-from shapely.geometry.base import BaseGeometry
+
 
 from movici_simulation_core.core.attributes import (
     Geometry_X,
@@ -29,6 +22,38 @@ from movici_simulation_core.models.common.attributes import (
     Transport_Capacity_Hours,
     Transport_Layout,
 )
+
+
+def delayed_raise(err: Exception):
+    def _inner(*_, **__):
+        raise err from None
+
+    return _inner
+
+
+try:
+    from movici_geo_query.geometry import (
+        Geometry,
+        LinestringGeometry,
+        PointGeometry,
+        ClosedPolygonGeometry,
+    )
+except ImportError as e:
+
+    Geometry = delayed_raise(e)
+    LinestringGeometry = delayed_raise(e)
+    PointGeometry = delayed_raise(e)
+    ClosedPolygonGeometry = delayed_raise(e)
+
+try:
+    from shapely.geometry import LineString, Point, Polygon
+    from shapely.geometry.base import BaseGeometry
+except ImportError as e:
+
+    BaseGeometry = delayed_raise(e)
+    LineString = delayed_raise(e)
+    Point = delayed_raise(e)
+    Polygon = delayed_raise(e)
 
 
 class GeometryEntity(EntityGroup):

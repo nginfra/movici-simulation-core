@@ -8,6 +8,8 @@ import functools
 import numpy as np
 import typing as t
 
+from movici_simulation_core.core.data_type import get_undefined
+
 from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
 from .csr_helpers import generate_update, remove_undefined_csr, isclose
 from .data_format import is_undefined_uniform, is_undefined_csr
@@ -20,7 +22,6 @@ from ..core.schema import (
     has_rowptr_key,
     get_rowptr,
     infer_data_type_from_array,
-    get_undefined,
 )
 from ..types import UniformAttributeData, CSRAttributeData, NumpyAttributeData
 from ..utils import lifecycle
@@ -55,7 +56,7 @@ def flag_info(flag: int):
     )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class FlagInfo:
     initialize: bool
     subscribe: bool
@@ -106,7 +107,19 @@ T = t.TypeVar("T", bool, int, float, str)
 class AttributeOptions(t.Generic[T]):
     special: t.Optional[T] = None
     enum_name: t.Optional[str] = None
-    enum: t.Optional[t.List[str]] = None
+    enum_values: t.Optional[t.List[str]] = None
+
+    _enum: t.Any = dc.field(init=False, default=None)
+
+    def get_enumeration(self):
+        if self._enum is not None:
+            return self._enum
+
+        if None not in (self.enum_values, self.enum_name):
+            self._enum = type(
+                self.enum_name, (), {val: idx for idx, val in enumerate(self.enum_values)}
+            )
+        return self._enum
 
 
 class Attribute(abc.ABC):
@@ -168,6 +181,9 @@ class Attribute(abc.ABC):
         if not self.has_data():
             self.initialize(new_size)
         self._do_resize(new_size)
+
+    def get_enumeration(self):
+        return self.options.get_enumeration()
 
     @abc.abstractmethod
     def __len__(self):
@@ -306,7 +322,8 @@ class UniformAttribute(Attribute):
     def generate_update(self, mask=None):
         """
         :param mask: a boolean array signifying which indices should be returned. If there are no
-        changes for a specific index, its value should be `self.data_type.undefined`
+            changes for a specific index, its value should be `self.data_type.undefined`
+
         :return:
         """
         if mask is None:
@@ -457,7 +474,8 @@ class CSRAttribute(Attribute):
     def generate_update(self, mask=None):
         """
         :param mask: a boolean array signifying which indices should be returned. If there are no
-        changes for a specific index, its value will be `self.data_type.undefined`
+            changes for a specific index, its value will be `self.data_type.undefined`
+
         :return:
         """
         if dtype := determine_new_unicode_dtype(

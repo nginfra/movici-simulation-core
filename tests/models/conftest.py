@@ -5,7 +5,7 @@ import pytest
 import shutil
 import typing as t
 from pathlib import Path
-from movici_simulation_core.core.plugins import Model
+from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
 
 from movici_simulation_core.model_connector.init_data import (

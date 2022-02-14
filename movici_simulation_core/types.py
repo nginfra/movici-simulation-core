@@ -1,3 +1,4 @@
+import enum
 import typing as t
 
 import numpy as np
@@ -34,3 +35,18 @@ ValueType = t.Union[int, float, bool, str]
 class DataMask(t.TypedDict):
     pub: t.Optional[dict]
     sub: t.Optional[dict]
+
+
+class FileType(enum.Enum):
+    JSON = (".json",)
+    MSGPACK = (".msgpack",)
+    CSV = (".csv",)
+    NETCDF = (".nc",)
+    OTHER = ()
+
+    @classmethod
+    def from_extension(cls, ext):
+        for member in cls.__members__.values():
+            if ext.lower() in member.value:
+                return member
+        return cls.OTHER

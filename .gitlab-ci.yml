@@ -5,6 +5,12 @@ stages:
   - test
   - report
   - deploy
+  - docs
+
+.with_gcloud:
+  variables:
+  before_script:
+    - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
 
 check_version_upgrade:
   stage: verify
@@ -55,7 +61,7 @@ report:
   stage: report
   image:
     name: sonarsource/sonar-scanner-cli:latest
-    entrypoint: [ "" ]
+    entrypoint: [""]
   only:
     refs:
       - merge_requests
@@ -93,3 +99,29 @@ deploy:package:
     - master
   script:
     - bin/commit-version-to-modelengine-repo.sh
+
+docs:
+  stage: docs
+  image: eu.gcr.io/movici-develop/cicd-pipeline-tools:latest
+  only:
+    refs:
+      - /^.*docsci.*$/
+      - master
+  variables:
+    GCS_BUCKET: movici-docs
+    CLOUDSDK_CORE_PROJECT: movici-production
+    KUBERNETES_MEMORY_REQUEST: 1536Mi
+    KUBERNETES_MEMORY_LIMIT: 1536Mi
+    KUBERNETES_CPU_REQUEST: 1000m
+    KUBERNETES_CPU_LIMIT: 2000m
+  before_script:
+    - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+    - pip install -r requirements-dev.txt
+    - pip install -r requirements.txt
+    - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install --no-deps -e .[models]
+
+  script:
+    - cd docs
+    - make html
+    - gsutil -m cp -R build/html/* gs://$GCS_BUCKET/

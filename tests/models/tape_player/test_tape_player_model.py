@@ -63,7 +63,7 @@ def model(tape_dataset_name):
 
 @pytest.fixture
 def additional_attributes():
-    from movici_simulation_core.core.schema import DataType
+    from movici_simulation_core.core import DataType
 
     return [
         AttributeSpec("attribute", DataType(int, (), False)),

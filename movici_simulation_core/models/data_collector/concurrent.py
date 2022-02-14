@@ -45,6 +45,7 @@ class LimitedThreadPoolExecutor(futures.ThreadPoolExecutor):
         self._lock = Semaphore(self._max_workers)
 
     def submit(self, function, *args, **kwargs):
+        """"""
         self._lock.acquire()
         fut = super().submit(function, *args, **kwargs)
         fut.add_done_callback(lambda f: self._lock.release())

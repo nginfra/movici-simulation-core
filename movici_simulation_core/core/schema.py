@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-import dataclasses
 import typing as t
+from movici_simulation_core.core.utils import configure_global_plugins
+
+from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
+from movici_simulation_core.types import AttributeIdentifier
 
 import numpy as np
 
-from movici_simulation_core.core.plugins import Extensible, Plugin, Model
-from movici_simulation_core.types import AttributeIdentifier
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.utils import lifecycle
-from movici_simulation_core.utils.plugin import configure_global_plugins
+from . import types
+from .attribute_spec import AttributeSpec
+from .data_type import DataType
 
 
-class AttributeSchema(Extensible):
+class AttributeSchema(types.Extensible):
     def __init__(self, attributes: t.Optional[t.Iterable[AttributeSpec]] = None):
         self.attributes: t.Dict[AttributeIdentifier, AttributeSpec] = {}
         attributes = attributes or ()
@@ -78,7 +79,7 @@ class AttributeSchema(Extensible):
     def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         self.add_attributes(attributes)
 
-    def register_model_type(self, identifier: str, model_type: t.Type[Model]):
+    def register_model_type(self, identifier: str, model_type: t.Type[types.Model]):
         self.add_attributes(model_type.get_schema_attributes())
 
     def add_from_namespace(self, ns):
@@ -93,16 +94,14 @@ class AttributeSchema(Extensible):
 
 def get_global_schema():
     schema = AttributeSchema()
-    configure_global_plugins(
-        schema,
-    )
+    configure_global_plugins(schema, ignore_missing_imports=False)
     return schema
 
 
 def attribute_plugin_from_dict(d: dict):
-    class AttributePlugin(Plugin):
+    class AttributePlugin(types.Plugin):
         @classmethod
-        def install(cls, obj: Extensible):
+        def install(cls, obj: types.Extensible):
             obj.register_attributes(attributes_from_dict(d))
 
     return AttributePlugin
@@ -110,87 +109,6 @@ def attribute_plugin_from_dict(d: dict):
 
 def attributes_from_dict(d: dict):
     return filter(lambda i: isinstance(i, AttributeSpec), d.values())
-
-
-@dataclasses.dataclass(frozen=True)
-class AttributeSpec:
-    name: str
-    data_type: DataType = dataclasses.field(compare=False)
-    component: t.Optional[str] = None
-    enum_name: t.Optional[str] = dataclasses.field(default=None, compare=False)
-
-    def __post_init__(self):
-        if not isinstance(self.data_type, DataType) and self.data_type in (bool, str, float, int):
-            # bypass frozen dataclass (we're still in object instantiation, so it's fine)
-            object.__setattr__(self, "data_type", DataType(self.data_type))
-
-    @property
-    def full_name(self):
-        return attrstring(self.name, self.component)
-
-    @property
-    def key(self) -> AttributeIdentifier:
-        return (self.component, self.name)
-
-
-@lifecycle.deprecated(alternative="AttributeSpec")
-class PropertySpec(AttributeSpec):
-    pass
-
-
-T = t.TypeVar("T", bool, int, float, str)
-
-UNDEFINED = {
-    bool: np.iinfo(np.dtype("<i1")).min,
-    int: np.iinfo(np.dtype("<i4")).min,
-    float: np.nan,
-    str: "_udf_",
-}
-
-NP_TYPES = {
-    bool: np.dtype("<i1"),
-    int: np.dtype("<i4"),
-    float: np.dtype("f8"),
-    str: np.dtype("<U8"),
-}
-
-
-def get_undefined(dtype):
-    return {
-        **UNDEFINED,
-        **{np_type: UNDEFINED[py_type] for py_type, np_type in NP_TYPES.items()},
-    }.get(dtype)
-
-
-@dataclasses.dataclass(frozen=True)
-class DataType(t.Generic[T]):
-    py_type: t.Type[T]
-    unit_shape: t.Tuple[int, ...] = ()
-    csr: bool = False
-
-    @property
-    def undefined(self):
-        return UNDEFINED[self.py_type]
-
-    @property
-    def np_type(self):
-        return NP_TYPES[self.py_type]
-
-    def is_undefined(self, val):
-        undefined = self.undefined
-        result = val == undefined
-        if not isinstance(undefined, str) and np.isnan(undefined):
-            return result | np.isnan(val)
-        return result
-
-
-def attrstring(attribute_name: str, component: t.Optional[str] = None):
-    return f"{component}/{attribute_name}" if component else attribute_name
-
-
-@lifecycle.deprecated(alternative="attrstring")
-def propstring(property_name: str, component: t.Optional[str] = None):
-    return attrstring(property_name, component)
 
 
 ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr"}

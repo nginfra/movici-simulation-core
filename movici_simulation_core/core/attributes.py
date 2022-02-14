@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from movici_simulation_core.core.schema import (
     AttributeSpec,
-    DataType,
     attribute_plugin_from_dict,
 )
+from movici_simulation_core.core import DataType
 
 Id = AttributeSpec("id", data_type=DataType(int))
 Reference = AttributeSpec("reference", data_type=DataType(str))
@@ -21,9 +21,11 @@ Geometry_Linestring3d = AttributeSpec(
     "geometry.linestring_3d", data_type=DataType(float, (3,), True)
 )
 Geometry_Polygon = AttributeSpec("geometry.polygon", data_type=DataType(float, (2,), True))
-Shape_Area = AttributeSpec("shape.area", data_type=DataType(float))
+
 Topology_FromNodeId = AttributeSpec("topology.from_node_id", data_type=DataType(int))
 Topology_ToNodeId = AttributeSpec("topology.to_node_id", data_type=DataType(int))
+
+Shape_Area = AttributeSpec("shape.area", data_type=DataType(float))
 Shape_Length = AttributeSpec("shape.length", data_type=DataType(float))
 
 Connection_FromId = AttributeSpec("connection.from_id", data_type=DataType(int))

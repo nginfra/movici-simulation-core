@@ -251,9 +251,8 @@ class ProjectWrapper:
 
     def calculate_free_flow_times(self) -> np.ndarray:
         """
-        Aequilibrae calculates distances automatically,
-         but does not compute free flow time.
-        So we have to calculate them manually
+        Aequilibrae calculates distances automatically but does not compute free flow time, so we
+        have to calculate them manually
         """
         with closing(self._db.cursor()) as cursor:
             cursor.execute("SELECT link_id, distance, speed_ab FROM links")

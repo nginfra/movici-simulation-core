@@ -44,3 +44,4 @@ bump-version:
 	bumpversion  --config-file .bumpversion.app $(level)
 	@NEW_VERSION=$$(tail -1 VERSION);\
 	echo New version: $$NEW_VERSION
+

@@ -1,29 +1,28 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 import logging
 import typing as t
-from abc import abstractmethod
 
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.data_tracker.data_format import load_update, dump_update
-from movici_simulation_core.data_tracker.attribute import INITIALIZE, SUBSCRIBE, PUBLISH, REQUIRED
+from movici_simulation_core.core.types import ModelAdapterBase
+from movici_simulation_core.data_tracker.attribute import INITIALIZE, PUBLISH, REQUIRED, SUBSCRIBE
+from movici_simulation_core.data_tracker.data_format import dump_update, load_update
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
-from movici_simulation_core.model_connector.connector import (
-    ModelAdapterBase,
-)
-from ..model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.networking.messages import (
+    NewTimeMessage,
+    QuitMessage,
     UpdateMessage,
     UpdateSeriesMessage,
-    QuitMessage,
-    NewTimeMessage,
 )
-from movici_simulation_core.types import RawResult, Timestamp, RawUpdateData, UpdateData
+from movici_simulation_core.types import RawResult, RawUpdateData, Timestamp, UpdateData
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
+
 from .common import SchemaAwareInitDataHandler
+from ..model_connector.init_data import FileType, InitDataHandler
 
 
 class TrackedModelAdapter(ModelAdapterBase):
@@ -200,6 +199,7 @@ class TrackedModel(Model):
         needs to track (by subscribing (INIT/SUB/OPT) or publishing (PUB) attributes) from which
         datasets. These attributes may be grouped together in `EntityGroup` classes or created
         directly. The main entry points for registering are:
+
          * `state.add_dataset()` for registering a bunch of `EntityGroup` classes for a certain
            dataset name at once
          * `state.add_entity_group()` for registering a single `EntityGroup` class (or instance)

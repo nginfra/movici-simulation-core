@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
@@ -14,15 +16,14 @@ from .attribute import (
     PUBLISH,
     OPT,
 )
-from .entity_group import EntityGroup
+from . import entity_group as eg
 from .index import Index
-from ..core.schema import attrstring, AttributeSpec
+from ..core.attribute_spec import attrstring, AttributeSpec
 from ..data_tracker.data_format import extract_dataset_data
 from ..types import NumpyAttributeData, ComponentData, EntityData, AttributeIdentifier, ValueType
 from ..utils import lifecycle
 
 AttributeDict = t.Dict[AttributeIdentifier, AttributeObject]
-EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)
 
 
 @lifecycle.has_deprecations
@@ -57,20 +58,22 @@ class TrackedState:
             self.logger.log(level, message)
 
     def register_dataset(
-        self, dataset_name: str, entities: t.Sequence[t.Union[t.Type[EntityGroup], EntityGroup]]
-    ) -> t.List[EntityGroup]:
+        self,
+        dataset_name: str,
+        entities: t.Sequence[t.Union[t.Type[eg.EntityGroup], eg.EntityGroup]],
+    ) -> t.List[eg.EntityGroup]:
         if dataset_name in self.attributes:
             raise ValueError(f"dataset '{dataset_name}' already exists")
         return [self.register_entity_group(dataset_name, entity) for entity in entities]
 
     def register_entity_group(
-        self, dataset_name, entity: t.Union[t.Type[EntityGroupT], EntityGroupT]
-    ) -> EntityGroupT:
+        self, dataset_name, entity: t.Union[t.Type[eg.EntityGroupT], eg.EntityGroupT]
+    ) -> eg.EntityGroupT:
         """
 
         :rtype: object
         """
-        if isinstance(entity, type) and issubclass(entity, EntityGroup):
+        if isinstance(entity, type) and issubclass(entity, eg.EntityGroup):
             entity = entity()
         if entity.__entity_name__ is None:
             raise ValueError("EntityGroup must have __entity_name__ defined")
@@ -224,7 +227,7 @@ class TrackedState:
         for dataset_name, dataset_data in extract_dataset_data(update):
             for entity_name, entity_data in dataset_data.items():
                 if self.track_unknown != 0:
-                    self.register_entity_group(dataset_name, EntityGroup(entity_name))
+                    self.register_entity_group(dataset_name, eg.EntityGroup(entity_name))
                 if (entity_group := self._get_entity_group(dataset_name, entity_name)) is None:
                     continue
                 index = self.get_index(dataset_name, entity_name)
@@ -234,7 +237,7 @@ class TrackedState:
                 handler.receive_update(entity_data, is_initial)
             self.process_general_section(dataset_name, general_section)
 
-    def process_general_section(self, dataset_name, general_section):
+    def process_general_section(self, dataset_name: str, general_section: dict):
         enums = general_section.get("enum", {})
         specials = parse_special_values(general_section)
         for current_dataset, entity_name, identifier, attr in self.iter_attributes():
@@ -251,13 +254,13 @@ class TrackedState:
                     attr.options.special = special_value
 
             if (enum := enums.get(attr.options.enum_name)) is not None:
-                if attr.options.enum not in (None, enum):
+                if attr.options.enum_values not in (None, enum):
                     self.log(
                         WARN,
                         f"Enum already set for "
                         f"{dataset_name}/{entity_name}/{attrstring(identifier[1], identifier[0])}",
                     )
-                attr.options.enum = enum
+                attr.options.enum_values = enum
 
     def get_attribute(self, dataset_name: str, entity_type: str, identifier: AttributeIdentifier):
         try:

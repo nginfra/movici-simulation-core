@@ -1,35 +1,35 @@
 from logging import WARN
 from unittest.mock import Mock, call
 
-import numpy as np
-import pytest
-
-from movici_simulation_core.core.schema import UNDEFINED, AttributeSpec, DataType
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
+from movici_simulation_core.core.attribute_spec import AttributeSpec
+from movici_simulation_core.core.data_type import UNDEFINED, DataType
 from movici_simulation_core.data_tracker.attribute import (
-    AttributeField,
-    PUB,
-    SUB,
     INIT,
-    OPT,
     INITIALIZE,
-    SUBSCRIBE,
+    OPT,
+    PUB,
     PUBLISH,
     REQUIRED,
+    SUB,
+    SUBSCRIBE,
+    AttributeField,
 )
+from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.state import (
+    EntityDataHandler,
+    StateProxy,
     TrackedState,
     ensure_path,
-    StateProxy,
-    EntityDataHandler,
     filter_attrs,
     parse_special_values,
 )
 from movici_simulation_core.testing.helpers import (
     dataset_data_to_numpy,
-    get_attribute,
     dataset_dicts_equal,
+    get_attribute,
 )
+import numpy as np
+import pytest
 
 
 class MyEntity(EntityGroup, name="my_entities"):
@@ -455,7 +455,7 @@ def test_set_enum_on_init_data(state, entity, dataset_name):
     entity.attr.options.enum_name = "bla"
     init_data = {"general": {"enum": {"bla": ["a", "b"]}}, dataset_name: {}}
     state.receive_update(init_data)
-    assert entity.attr.options.enum == ["a", "b"]
+    assert entity.attr.options.enum_values == ["a", "b"]
 
 
 def test_logs_on_double_general_section_assignment_conflict(state, entity, dataset_name):

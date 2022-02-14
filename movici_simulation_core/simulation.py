@@ -9,14 +9,14 @@ from multiprocessing import Process
 import zmq
 from zmq import Socket
 
-from movici_simulation_core.core.plugins import Service, Plugin, Model, Extensible
+from movici_simulation_core.core.types import ModelAdapterBase, Service, Plugin, Model, Extensible
 from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
+from movici_simulation_core.core.utils import configure_global_plugins
 from movici_simulation_core.exceptions import StartupFailure
 from movici_simulation_core.model_connector.connector import (
     ModelConnector,
     UpdateDataClient,
     ConnectorStreamHandler,
-    ModelAdapterBase,
 )
 from movici_simulation_core.model_connector.init_data import (
     ServicedInitDataHandler,
@@ -29,7 +29,6 @@ from movici_simulation_core.networking.stream import (
 )
 from movici_simulation_core.utils.logging import get_logger
 from movici_simulation_core.utils.moment import TimelineInfo, set_timeline_info
-from movici_simulation_core.utils.plugin import configure_global_plugins
 from movici_simulation_core.utils.settings import Settings
 
 DEFAULT_SERVICE_ADDRESS = "tcp://127.0.0.1"
@@ -153,7 +152,8 @@ class Simulation(Extensible):
         :param name: the model name, a model name must be unique within a simulation
         :param model: the model class (or instance)
         :param config: the model config dictionary to instantiate the model, when the model is
-        given as a class
+            given as a class
+
         """
         if isinstance(model, type) and issubclass(model, Model):
             self.active_modules[name] = ModelFromTypeInfo(name, model, config)
@@ -169,6 +169,7 @@ class Simulation(Extensible):
         the simulation.
 
         :param timeline_info: the `TimelineInfo` object for this simulation
+
         """
         self.settings.timeline_info = timeline_info
 
@@ -257,11 +258,13 @@ class Simulation(Extensible):
         :param identifier: A unique name to identify the Simulation by
         :param service: The service class that will be used when this service is activated
         :param auto_use: When a service is registered as `auto_use`, an instance of this Service is
-        always available in the `Simulation`
+            always available in the `Simulation`
         :param daemon: Services can be either daemonic or not. Daemonic services are run as
-        fire-and-forget and will be terminated/killed once the simulation has ended. Non-daemonic
-        services are joined before exiting the simulation (and must have some way to exit).
-        Non-daemonic services have the benefit that they can spawn their own subprocesses
+            fire-and-forget and will be terminated/killed once the simulation has ended.
+            Non-daemonic services are joined before exiting the simulation (and must have some way
+            to exit). Non-daemonic services have the benefit that they can spawn their own
+            subprocesses
+
         """
         self.service_types[identifier] = ServiceTypeInfo(
             identifier, cls=service, auto_use=auto_use, daemon=daemon
@@ -273,8 +276,10 @@ class Simulation(Extensible):
         `Model.get_schema_attributes` method.
 
         :param identifier: A unique identifier for a model type. When configuring the `Simulation`
-        using `Simulation.configure`, this identifier must match the `type` key of the model config
+            using `Simulation.configure`, this identifier must match the `type` key of the model
+            config
         :param model_type: The `Model` subclass to register
+
         """
         self.model_types[identifier] = ModelTypeInfo(identifier, cls=model_type)
         self.schema.add_attributes(model_type.get_schema_attributes())
@@ -283,6 +288,7 @@ class Simulation(Extensible):
         """Register attributes for this Simulation.
 
         :param attributes: an iterable of `AttributeSpec` objects
+
         """
         self.schema.add_attributes(attributes)
 
@@ -290,16 +296,20 @@ class Simulation(Extensible):
 class ServiceRunner:
     """
     Provides logic for:
-        - Creating a Pipe that the Service can use to announce its port
-        - Creating a Process (daemon=True) that runs Service. Using a wrapping function this
-          subprocess will
-          - create the service
-          - create a (router) socket
-          - announce the port
-          - run the Service
-          - raise exception on failure
-        - Fills the ServiceInfo object
-        - Raising an exception if it fails to announce the port in time
+
+    * Creating a Pipe that the Service can use to announce its port
+    * Creating a Process (daemon=True) that runs Service. Using a wrapping function this
+        subprocess will
+
+        * create the service
+        * create a (router) socket
+        * announce the port
+        * run the Service
+        * raise exception on failure
+
+    * Fills the ServiceInfo object
+    * Raising an exception if it fails to announce the port in time
+
     By creating the process as deamon=True, services cannot spawn their own subprocesses but they
     can be easily terminated
     """
@@ -350,16 +360,19 @@ class ServiceRunner:
 
 class ModelRunner:
     """
-    accepts a dictionary of services with addresses/ports
     Provides logic for:
-        - Creating a Process (daemon=False) that runs a Model. Using a wrapping function, this
-        subprocess will
-          - create the model with its model adapter
-          - create a (dealer) socket
-          - run the model
-          - catch exceptions from model, send ERROR message
-          - raise exceptions when not directly from model
-        - Fills the ModelInfo object
+
+    * Creating a Process (daemon=False) that runs a Model. Using a wrapping function, this
+        subprocess will:
+
+        * create the model with its model adapter
+        * create a (dealer) socket
+        * run the model
+        * catch exceptions from model, send ERROR message
+        * raise exceptions when not directly from model
+
+    * Fills the ModelInfo object
+
     By creating the process as deamon=False, models can spawn their own subprocesses
     """
 

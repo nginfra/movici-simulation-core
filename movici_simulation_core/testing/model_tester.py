@@ -11,7 +11,7 @@ from movici_simulation_core.base_models.tracked_model import (
 )
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.attributes import GlobalAttributes
-from movici_simulation_core.core.plugins import Extensible
+from movici_simulation_core.core.types import Extensible
 from movici_simulation_core.data_tracker.data_format import (
     load_update,
     dump_dataset_data,
@@ -19,7 +19,7 @@ from movici_simulation_core.data_tracker.data_format import (
     dump_update,
 )
 from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
-from movici_simulation_core.model_connector.connector import ModelAdapterBase
+from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import (
     InitDataHandler,
     DirectoryInitDataHandler,

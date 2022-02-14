@@ -3,7 +3,7 @@ import typing as t
 from functools import singledispatchmethod
 
 from movici_simulation_core.data_tracker.data_format import dump_update
-from movici_simulation_core.core.plugins import Service
+from movici_simulation_core.core.types import Service
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.networking.messages import (
     ModelMessage,

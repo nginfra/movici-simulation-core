@@ -23,9 +23,7 @@ from .entities import (
 
 
 class Model(TrackedModel, name="corridor"):
-    """
-    Implementation of the corridor model
-    """
+    """Implementation of the corridor model"""
 
     epsilon = 1e-12
 

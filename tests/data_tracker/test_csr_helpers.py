@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import UNDEFINED
+from movici_simulation_core.core.data_type import UNDEFINED
 from movici_simulation_core.data_tracker.csr_helpers import (
     isclose,
     rows_equal,

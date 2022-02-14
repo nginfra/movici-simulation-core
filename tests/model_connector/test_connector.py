@@ -2,12 +2,12 @@ from pathlib import Path
 from unittest.mock import Mock, call
 
 import pytest
+from movici_simulation_core.core.types import ModelAdapterBase
 
 from movici_simulation_core.exceptions import InvalidMessage, StreamDone
 from movici_simulation_core.model_connector.connector import (
     ConnectorStreamHandler,
     ModelConnector,
-    ModelAdapterBase,
     UpdateDataClient,
 )
 from movici_simulation_core.model_connector.init_data import (

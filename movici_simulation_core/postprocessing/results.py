@@ -1,35 +1,33 @@
 from __future__ import annotations
 
+from pathlib import Path
 import abc
 import dataclasses
 import datetime
 import re
 import typing as t
-from pathlib import Path
 
-import numpy as np
-
+from movici_simulation_core.core.attribute_spec import AttributeSpec, attrstring
 from movici_simulation_core.core.schema import (
     DEFAULT_ROWPTR_KEY,
-    infer_data_type_from_array,
-    AttributeSpec,
-    attrstring,
     AttributeSchema,
+    infer_data_type_from_array,
 )
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.data_format import (
-    extract_dataset_data,
-    EntityInitDataFormat,
-)
 from movici_simulation_core.data_tracker.attribute import (
     OPT,
-    create_empty_attribute,
     CSRAttribute,
     UniformAttribute,
+    create_empty_attribute,
+)
+from movici_simulation_core.data_tracker.data_format import (
+    EntityInitDataFormat,
+    extract_dataset_data,
 )
 from movici_simulation_core.data_tracker.state import TrackedState, iter_entity_data
 from movici_simulation_core.types import EntityData
 from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
+import numpy as np
 
 
 @dataclasses.dataclass

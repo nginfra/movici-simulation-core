@@ -5,18 +5,16 @@ import typing as t
 
 import numpy as np
 
+from . import state as state_
+from .attribute import AttributeField, PropertyField
 from .index import Index
-from .attribute import PropertyField, AttributeField
 from ..types import AttributeIdentifier
 from ..utils import lifecycle
-
-if t.TYPE_CHECKING:
-    from .state import StateProxy
 
 
 @lifecycle.has_deprecations
 class EntityGroup:
-    state: StateProxy = None
+    state: state_.StateProxy = None
     attributes: t.Dict[str, AttributeField] = {}
     __entity_name__: t.Optional[str] = None
 
@@ -58,7 +56,7 @@ class EntityGroup:
             raise RuntimeError(f"EntityGroup {self.__entity_name__} doesn't have any ids")
         return self.index[ids]
 
-    def register(self, state: StateProxy):
+    def register(self, state: state_.StateProxy):
         self.state = state
 
     def get_attribute(self, identifier: AttributeIdentifier):
@@ -85,3 +83,6 @@ class EntityGroup:
     @property
     def dataset_name(self):
         return self.state.dataset_name
+
+
+EntityGroupT = t.TypeVar("EntityGroupT", bound=EntityGroup)

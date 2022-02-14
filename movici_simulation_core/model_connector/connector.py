@@ -1,33 +1,30 @@
 from __future__ import annotations
 
-import abc
+from functools import singledispatchmethod
 import dataclasses
 import itertools
-import logging
 import typing as t
-from functools import singledispatchmethod
+from movici_simulation_core.core.types import ModelAdapterBase
 
-from movici_simulation_core.core import Model
 from movici_simulation_core.exceptions import StreamDone
 from movici_simulation_core.model_connector.init_data import InitDataHandler
-from movici_simulation_core.networking.client import Sockets, RequestClient
+from movici_simulation_core.networking.client import RequestClient, Sockets
 from movici_simulation_core.networking.messages import (
-    NewTimeMessage,
-    UpdateSeriesMessage,
-    RegistrationMessage,
-    ResultMessage,
-    Message,
-    QuitMessage,
-    GetDataMessage,
-    UpdateMessage,
-    PutDataMessage,
     AcknowledgeMessage,
     ClearDataMessage,
     DataMessage,
+    GetDataMessage,
+    Message,
+    NewTimeMessage,
+    PutDataMessage,
+    QuitMessage,
+    RegistrationMessage,
+    ResultMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
 )
 from movici_simulation_core.networking.stream import Stream
-from movici_simulation_core.types import RawUpdateData, RawResult, DataMask
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.types import DataMask
 
 
 @dataclasses.dataclass
@@ -145,39 +142,3 @@ class UpdateDataClient(RequestClient):
 
     def reset_counter(self):
         self.counter = map(lambda num: f"{self.name}_{num}", itertools.count())
-
-
-class ModelAdapterBase(abc.ABC):
-    model: Model
-    settings: Settings
-    logger: logging.Logger
-
-    def __init__(self, model: Model, settings: Settings, logger: logging.Logger):
-        self.model = model
-        self.settings = settings
-        self.logger = logger
-
-    @abc.abstractmethod
-    def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def new_time(self, message: NewTimeMessage):
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
-    ) -> RawResult:
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def close(self, message: QuitMessage):
-        raise NotImplementedError
-
-    def set_schema(self, schema):
-        pass

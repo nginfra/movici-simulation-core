@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-from movici_simulation_core.core.schema import AttributeSchema, DataType, AttributeSpec
+from movici_simulation_core.core import AttributeSchema, DataType, AttributeSpec
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.attribute import AttributeField

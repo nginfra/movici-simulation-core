@@ -1,3 +1,4 @@
+import functools
 from jsonschema import Draft7Validator
 
 
@@ -32,6 +33,7 @@ def assemble_json_schema(model_schema: dict):
 
 
 def _add_category(entry_factory):
+    @functools.wraps(entry_factory)
     def _inner(schema: dict, category: dict):
         working_copy = category.copy()
         entry = entry_factory()

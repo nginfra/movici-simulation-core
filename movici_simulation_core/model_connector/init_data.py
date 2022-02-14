@@ -1,19 +1,18 @@
 from __future__ import annotations
+
 import dataclasses
-import enum
 import os
 import pathlib
 import typing as t
 
-import msgpack
-
-from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
+from movici_simulation_core.core.types import InitDataHandlerBase
+from movici_simulation_core.core.dataset_path import DatasetPath
 from movici_simulation_core.networking.client import RequestClient, Sockets
 from movici_simulation_core.networking.messages import GetDataMessage, PathMessage
+from movici_simulation_core.types import FileType
 
 
-class InitDataHandler:
+class InitDataHandler(InitDataHandlerBase):
     def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
         pass
 
@@ -69,79 +68,6 @@ class ServicedInitDataHandler(InitDataHandler):
 
     def close(self):
         self.client.close()
-
-
-class DatasetPath(pathlib.Path):
-    # subclassing pathlib.Path requires manually setting the flavour
-    _flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
-
-    def read_dict(self):
-        raise NotImplementedError
-
-
-class _JsonPath(DatasetPath):
-    schema: t.Optional[AttributeSchema] = None
-
-    def read_dict(self):
-        return EntityInitDataFormat(self.schema).load_bytes(self.read_bytes())
-
-
-class _MsgpackPath(DatasetPath):
-    schema: t.Optional[AttributeSchema] = None
-
-    def read_dict(self):
-        return EntityInitDataFormat(self.schema).load_json(msgpack.unpackb(self.read_bytes()))
-
-
-def _serialized_dict_path(cls, docstr=None):
-    # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
-    # initialization method. So instead we use a custom factory function posing as a class
-    # constructor, to set additional attributes
-    def constructor(path, schema: t.Optional[AttributeSchema] = None):
-        obj = cls(path)
-        obj.schema = schema
-        return obj
-
-    if docstr is not None:
-        constructor.__doc__ = docstr
-    return constructor
-
-
-JsonPath = _serialized_dict_path(
-    _JsonPath,
-    docstr="""JsonPath is a subclass of `pathlib.Path` that points to JSON dataset file. It has one
-    additional method `read_dict` that returns a dictionary of the dataset, assuming entity based
-    data
-
-    :param path: The location of the the dataset file
-    :param schema: An attribute schema for interpreting the entity based data.
-    """,
-)
-MsgpackPath = _serialized_dict_path(
-    _MsgpackPath,
-    docstr="""MsgpackPath is a subclass of `pathlib.Path` that points to msgpack dataset file.
-    It has one additional method `read_dict` that returns a dictionary of the dataset, assuming
-    :param path: The location of the the dataset file
-    entity based data
-
-    :param schema: An attribute schema for interpreting the entity based data.
-    """,
-)
-
-
-class FileType(enum.Enum):
-    JSON = (".json",)
-    MSGPACK = (".msgpack",)
-    CSV = (".csv",)
-    NETCDF = (".nc",)
-    OTHER = ()
-
-    @classmethod
-    def from_extension(cls, ext):
-        for member in cls.__members__.values():
-            if ext.lower() in member.value:
-                return member
-        return cls.OTHER
 
 
 class InitDataClient(RequestClient):

@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import DataType
+from movici_simulation_core.core import DataType
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.attribute import UniformAttribute, CSRAttribute

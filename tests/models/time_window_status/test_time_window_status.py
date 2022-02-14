@@ -3,7 +3,7 @@ import typing as t
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import AttributeSpec, DataType, AttributeSchema
+from movici_simulation_core.core import AttributeSpec, DataType, AttributeSchema
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.state import TrackedState

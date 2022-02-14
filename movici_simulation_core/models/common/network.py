@@ -221,9 +221,10 @@ class Network:
         is weighted by the cost factor of every link on the shortest path
 
         :param values: an array (or array-like) with the quantity values on transport links that
-        are to be averaged
+            are to be averaged
         :param no_path_found: A fill value for when no valid shortest path can be found between
-        source and target. This is also used for when the source and target node are the same
+            source and target. This is also used for when the source and target node are the same
+
         """
         values = self._get_mapped_quantity(values)
         if virtual_node_ids is None:
@@ -253,8 +254,8 @@ class Network:
         :param values: See `Network.all_shortest_paths_weighted_average`
         :param no_path_found: See `Network.all_shortest_paths_weighted_average`
         :param values_are_mapped: A boolean indicating whether the value array is in their original
-        order or already mapped to the corresponding link index in the graph (default: False). This
-        is usually False
+            order or already mapped to the corresponding link index in the graph (default: False).
+            This is usually `False`
 
         """
         if not values_are_mapped:

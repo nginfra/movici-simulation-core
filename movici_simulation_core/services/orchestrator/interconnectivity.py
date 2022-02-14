@@ -11,11 +11,13 @@ class IPubSubFilter(t.Protocol):
 
 def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):
     """
-    title     |0|1|2|3|
-    0|model_0 | |X|X|X|
-    1|model_1 | | | |X|
-    2|model_2 | | | |X|
-    3|model_10| | | | |
+    ::
+
+        title     |0|1|2|3|
+        0|model_0 | |X|X|X|
+        1|model_1 | | | |X|
+        2|model_2 | | | |X|
+        3|model_10| | | | |
     """
     box_size = 1 if len(models) < 11 else 2  # Too lazy for logarithms
     prefix_size = box_size + 1

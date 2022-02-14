@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import pytest
+from movici_simulation_core.core.data_type import UNDEFINED
 
 from movici_simulation_core.data_tracker.data_format import (
     create_array,
@@ -14,11 +15,10 @@ from movici_simulation_core.data_tracker.data_format import (
 )
 from movici_simulation_core.core.schema import (
     AttributeSpec,
-    DataType,
-    UNDEFINED,
     DEFAULT_ROWPTR_KEY,
     AttributeSchema,
 )
+from movici_simulation_core.core import DataType
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 
 

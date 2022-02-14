@@ -119,20 +119,21 @@ class GJTModel(TrackedModel, name="generalized_journey_time"):
 
 
 class GJTCalculator:
-    """Calculates the generalized journey time (GJT) for railway traffic demand. GJT is the
+    r"""Calculates the generalized journey time (GJT) for railway traffic demand. GJT is the
     perceived travel time for passengers that is composed of the in-train-time, the average
     waiting time and penalties for traveling in crowded trains and the fact that waiting time
     "counts more" than in-vehicle time. The formula for calculating GJT is as following
 
-        GJT = w*TT + f / (2*freq)
+    .. math:: GJT = w \cdot TT + \frac{f}{2 \cdot freq}
 
     where `w` is a crowdedness factor, `TT` is the in-vehicle travel time, f is a penalty factor
     for average waiting time and `freq` is the train frequency.
 
     This class reads the passenger flow of every track segment, and for every OD-pair
     calculates:
+
         * The travel-time weighted average passenger flow based on the shortest path between O
-          and D
+            and D
         * The capacity of the OD route based on a general train frequency on the OD-route
         * The corresponding w of the OD-route
         * The travel time based on the shortest path calculation

@@ -129,19 +129,26 @@ class InterpolatingTapefile:
         """
         :param year: eg: 2024
         :param reference: 2019
+
         :return: seconds since reference
         """
         return (datetime.datetime(year, 1, 1) - datetime.datetime(reference, 1, 1)).total_seconds()
 
     def create_update(self, values: t.Dict[str, list]):
-        """example:
-        {
-          "entity_group_name": {
-            "id": [4, 5, 6],
-            "some_attribute": [102, 40, 201]
-            "some_other_attribute": [7, 6, 21]
-          }
-        }
+        """
+        example:
+
+        .. highlight:: json
+        .. code-block:: json
+
+            {
+            "entity_group_name": {
+                "id": [4, 5, 6],
+                "some_attribute": [102, 40, 201]
+                "some_other_attribute": [7, 6, 21]
+            }
+            }
+
         """
         return {self.entity_group_name: {**{"id": self.init_data["id"].values.tolist()}, **values}}
 

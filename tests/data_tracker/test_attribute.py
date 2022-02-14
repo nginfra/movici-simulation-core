@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from movici_simulation_core.core.schema import DataType
+from movici_simulation_core.core import DataType
 
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray, TrackedArray
 from movici_simulation_core.data_tracker.attribute import (
@@ -494,3 +494,27 @@ def test_grow_csr_attribute():
 
     assert np.array_equal(attr.csr.data, [1, 2, data_type.undefined, data_type.undefined])
     assert np.array_equal(attr.csr.row_ptr, [0, 1, 1, 2, 3, 4])
+
+
+class TestEnum:
+    @pytest.fixture
+    def enum_name(self):
+        return "my_enum"
+
+    @pytest.fixture
+    def enum_values(self):
+        return None
+
+    @pytest.fixture
+    def attribute(self, enum_name, enum_values):
+        options = AttributeOptions(enum_name=enum_name, enum_values=enum_values)
+        return UniformAttribute(None, DataType(float), options=options)
+
+    def test_no_enum_when_no_values_given(self, attribute: UniformAttribute):
+        assert attribute.get_enumeration() is None
+
+    @pytest.mark.parametrize("enum_values", (["a", "b"],))
+    def test_can_query_enum_class(self, attribute: UniformAttribute):
+        enum = attribute.get_enumeration()
+        assert enum.a == 0
+        assert enum.b == 1

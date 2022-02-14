@@ -6,13 +6,13 @@ import numpy as np
 import ujson as json
 
 from movici_simulation_core.core.schema import (
-    DataType,
     DEFAULT_ROWPTR_KEY,
     has_rowptr_key,
     infer_data_type_from_array,
     AttributeSchema,
     get_rowptr,
 )
+from movici_simulation_core.core import DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.unicode_helpers import get_unicode_dtype
 from movici_simulation_core.types import NumpyAttributeData

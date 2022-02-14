@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.core.schema import UNDEFINED, DataType
+from movici_simulation_core.core.data_type import UNDEFINED, DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState

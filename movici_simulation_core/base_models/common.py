@@ -1,13 +1,9 @@
 import typing as t
 
+from movici_simulation_core.core.dataset_path import JsonPath, MsgpackPath
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.model_connector.init_data import (
-    InitDataHandler,
-    DatasetPath,
-    JsonPath,
-    FileType,
-    MsgpackPath,
-)
+from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
+from movici_simulation_core.utils.path import DatasetPath
 
 
 class SchemaAwareInitDataHandler(InitDataHandler):

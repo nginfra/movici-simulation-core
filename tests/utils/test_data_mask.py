@@ -110,8 +110,8 @@ valid_masks = [
         },
         "A mask with multiple entries",
     ),
-    ({}, "A empty dictionary, interested in nothing"),
-    (None, "No mask, interested in everything"),
+    ({}, "A empty dictionary, matches in nothing"),
+    (None, "No mask, matches everything"),
     ({"dataset": None}, "Everything from a specific data"),
     ({"dataset": {"entity_group": None}}, "A everything from an entity group"),
 ]

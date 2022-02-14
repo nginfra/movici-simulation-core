@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     storage_dir: t.Optional[Path] = None
     temp_dir: DirectoryPath = str(tempfile.gettempdir())
 
-    timeline_info: t.Optional[TimelineInfo] = Field(default=None, env="")
+    timeline_info: t.Optional[TimelineInfo] = Field(default=TimelineInfo(0), env="")
     datasets: t.List[dict] = Field(default_factory=list, env="")
     model_names: t.List[str] = Field(default_factory=list, env="")
     models: t.List[dict] = Field(default_factory=list, env="")

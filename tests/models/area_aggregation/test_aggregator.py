@@ -2,7 +2,7 @@ import typing as t
 
 import numpy as np
 import pytest
-from movici_simulation_core.core.schema import DataType
+from movici_simulation_core.core import DataType
 
 from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB
 from movici_simulation_core.models.area_aggregation.aggregators import (

@@ -7,7 +7,7 @@ from movici_simulation_core.base_models.common import SchemaAwareInitDataHandler
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.data_tracker.data_format import load_update, dump_update
-from movici_simulation_core.model_connector.connector import ModelAdapterBase
+from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import InitDataHandler
 from movici_simulation_core.networking.messages import (
     NewTimeMessage,

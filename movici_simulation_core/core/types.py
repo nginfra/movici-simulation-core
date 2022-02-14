@@ -1,14 +1,22 @@
 from __future__ import annotations
 
+from argparse import FileType
+import abc
 import logging
 import typing as t
 
+from movici_simulation_core.networking.messages import (
+    NewTimeMessage,
+    QuitMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
+)
 from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
+from movici_simulation_core.types import DataMask, RawResult, RawUpdateData
+from movici_simulation_core.utils.path import DatasetPath
 from movici_simulation_core.utils.settings import Settings
 
-if t.TYPE_CHECKING:
-    from movici_simulation_core.model_connector.connector import ModelAdapterBase
-    from movici_simulation_core.core.schema import AttributeSpec
+from .attribute_spec import AttributeSpec
 
 
 class Plugin:
@@ -78,3 +86,47 @@ class Extensible:
         self, identifier: str, service: t.Type[Service], auto_use=False, daemon=True
     ):
         pass
+
+
+class ModelAdapterBase(abc.ABC):
+    model: Model
+    settings: Settings
+    logger: logging.Logger
+
+    def __init__(self, model: Model, settings: Settings, logger: logging.Logger):
+        self.model = model
+        self.settings = settings
+        self.logger = logger
+
+    @abc.abstractmethod
+    def initialize(self, init_data_handler: InitDataHandlerBase) -> DataMask:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def new_time(self, message: NewTimeMessage):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def update_series(
+        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+    ) -> RawResult:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def close(self, message: QuitMessage):
+        raise NotImplementedError
+
+    def set_schema(self, schema):
+        pass
+
+
+class InitDataHandlerBase:
+    def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
+        raise NotImplementedError
+
+    def ensure_ftype(self, name: str, ftype: FileType):
+        raise NotImplementedError

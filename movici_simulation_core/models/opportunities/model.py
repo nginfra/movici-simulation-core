@@ -1,19 +1,19 @@
 import typing as t
 
-import numpy as np
-
 from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core import DataType
 from movici_simulation_core.core.schema import (
     AttributeSchema,
-    DataType,
-    attributes_from_dict,
     AttributeSpec,
+    attributes_from_dict,
 )
-from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB, OPT
+from movici_simulation_core.data_tracker.attribute import OPT, PUB, UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.utils.moment import Moment
+import numpy as np
+
 from . import dataset
-from .dataset import OverlapEntity, LineEntity
+from .dataset import LineEntity, OverlapEntity
 
 
 class Model(TrackedModel, name="opportunity"):

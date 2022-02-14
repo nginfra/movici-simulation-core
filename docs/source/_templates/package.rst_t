@@ -1,0 +1,61 @@
+{%- macro automodule(modname, options) -%}
+.. automodule:: {{ modname }}
+{%- for option in options %}
+   :{{ option }}:
+{%- endfor %}
+{%- endmacro %}
+
+{%- macro toctree(docnames) -%}
+.. toctree::
+   :maxdepth: {{ maxdepth }}
+{% for docname in docnames %}
+   {{ docname }}
+{%- endfor %}
+{%- endmacro %}
+
+{% set basename = pkgname.split('.')[-1] %}
+
+{%- if is_namespace %}
+{{- [basename, ""] | join(" ") | e | heading }}
+{% else %}
+{{- [basename, ""] | join(" ") | e | heading }}
+{% endif %}
+
+{%- if is_namespace %}
+.. py:module:: {{ pkgname }}
+{% endif %}
+
+{%- if modulefirst and not is_namespace %}
+{{ automodule(pkgname, automodule_options) }}
+{% endif %}
+
+{%- if subpackages %}
+Subpackages
+-----------
+
+{{ toctree(subpackages) }}
+{% endif %}
+
+{%- if submodules %}
+{% if separatemodules %}
+Submodules
+----------
+{{ toctree(submodules) }}
+{% else %}
+{%- for submodule in submodules %}
+{% set basesubmodule = submodule.split('.')[-1] %}
+
+{% if show_headings %}
+{{- [basesubmodule, ""] | join(" ") | e | heading(2) }}
+{% endif %}
+{{ automodule(submodule, automodule_options) }}
+{% endfor %}
+{%- endif %}
+{%- endif %}
+
+{%- if not modulefirst and not is_namespace %}
+Module contents
+---------------
+
+{{ automodule(pkgname, automodule_options) }}
+{% endif %}

@@ -44,7 +44,7 @@ def model_config(model_name, road_network_name, mv_network_name):
 
 @pytest.fixture
 def additional_attributes():
-    from movici_simulation_core.core.schema import DataType
+    from movici_simulation_core.core import DataType
 
     return [
         AttributeSpec("topology.node_id", data_type=DataType(int, (), False)),

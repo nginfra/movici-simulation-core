@@ -16,9 +16,7 @@ from .aggregators import functions, AttributeAggregator
 
 
 class Model(TrackedModel, name="area_aggregation"):
-    """
-    Implementation of the area aggregation model
-    """
+    """Implementation of the area aggregation model"""
 
     output_interval: t.Optional[int]
     aggregators: t.List[AttributeAggregator]

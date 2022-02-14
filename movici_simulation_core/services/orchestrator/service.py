@@ -1,6 +1,6 @@
 import logging
 
-from movici_simulation_core.core.plugins import Service
+from movici_simulation_core.core.types import Service
 from movici_simulation_core.utils.settings import Settings
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.networking.messages import ModelMessage, Message
