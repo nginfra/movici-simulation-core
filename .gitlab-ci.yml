@@ -117,6 +117,7 @@ docs:
   before_script:
     - gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
     - pip install -r requirements-dev.txt
+    - pip install -r requirements-docs.txt
     - pip install -r requirements.txt
     - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - pip install --no-deps -e .[models]
