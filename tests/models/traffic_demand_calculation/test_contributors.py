@@ -291,7 +291,7 @@ class TestRouteCostFactor:
         result = calculator.update_demand(input_matrix)
 
         expected = np.ones_like(input_matrix)
-        expected[np.nonzero(base_costs)] = 2 ** 2  # (2*bc/bc) ** elasticity
+        expected[np.nonzero(base_costs)] = 2**2  # (2*bc/bc) ** elasticity
         np.testing.assert_allclose(result, expected, rtol=1e-10, atol=1e-11)
 
 

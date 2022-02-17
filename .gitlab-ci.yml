@@ -28,7 +28,19 @@ check_version_upgrade:
         exit 1
       fi
 
-test:
+test:static:
+  stage: test
+  only:
+    refs:
+      - merge_requests
+      - master
+  artifacts:
+    untracked: true
+  script:
+    - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - make lint
+
+test:unit:
   stage: test
   only:
     refs:
@@ -39,10 +51,10 @@ test:
   script:
     - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - pip install -e .[models] --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
-    - make test-all
+    - make coverage
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
 
-test-numba:
+test:numba:
   stage: test
   only:
     refs:
@@ -74,7 +86,8 @@ report:
     KUBERNETES_CPU_REQUEST: 400m
     KUBERNETES_CPU_LIMIT: 800m
   dependencies:
-    - test
+    - test:unit
+    - test:static
   script:
     - sonar-scanner -Dsonar.branch.name="${CI_COMMIT_REF_NAME}" -Dsonar.projectVersion=$(tail -1 VERSION)
 

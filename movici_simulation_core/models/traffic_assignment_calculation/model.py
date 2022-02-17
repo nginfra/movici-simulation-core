@@ -346,6 +346,6 @@ modalities: t.Dict[str, t.Type[ModalityStrategy]] = {
 
 
 def get_matrix(csr_array: TrackedCSRArray):
-    if len(csr_array.data) != csr_array.size ** 2:
+    if len(csr_array.data) != csr_array.size**2:
         raise ValueError("Array is not a valid demand matrix")
     return csr_array.data.copy().reshape((csr_array.size, csr_array.size))

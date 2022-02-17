@@ -16,7 +16,6 @@ try:
         option = 0 if indent is None else _orjson.OPT_INDENT_2
         return _orjson.dumps(data, option=option)
 
-
 except ImportError:
     import json as _json
 

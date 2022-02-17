@@ -377,9 +377,9 @@ def test_shortest_path_weighted_average(network_2: Network):
     values = network.cost_factor
     expected = [
         -1,  # no path between 5 and itself
-        (1 ** 1) / 1,  # 5 -> 6 travels between (0-1) (cf: 1)
-        (1 ** 1 + 2 ** 2 + 3 ** 2) / 6,  # 5 -> 7 (0-1-2-3) (cf: 1, 2, 3)
-        (1 ** 1 + 2 ** 2 + 3 ** 2 + 4 ** 2) / 10,  # 5 -> 7 (0-1-2-3-4) (cf: 1, 2, 3, 4)
+        (1**1) / 1,  # 5 -> 6 travels between (0-1) (cf: 1)
+        (1**1 + 2**2 + 3**2) / 6,  # 5 -> 7 (0-1-2-3) (cf: 1, 2, 3)
+        (1**1 + 2**2 + 3**2 + 4**2) / 10,  # 5 -> 7 (0-1-2-3-4) (cf: 1, 2, 3, 4)
     ]
 
     avg = network.shortest_path_weighted_average(source_id, values)

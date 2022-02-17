@@ -35,7 +35,12 @@ benchmark:
 test-numba:
 	pytest -v tests/
 
-test-all: unittest flake8 coverage bandit safety pylint mypy
+black-check:
+	black --check .
+
+lint: flake8 black-check bandit safety pylint mypy
+	
+test-all: coverage lint
 
 level=patch
 export level

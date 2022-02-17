@@ -4,7 +4,7 @@ import numpy as np
 
 
 def determine_new_unicode_dtype(
-    a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2 ** 8
+    a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2**8
 ) -> t.Optional[np.dtype]:
     """Determine the new unicode dtype for array `a` if it needs to be updated with data coming
     from `b`.
@@ -18,7 +18,7 @@ def determine_new_unicode_dtype(
     return None
 
 
-def largest_unicode_dtype(a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2 ** 8):
+def largest_unicode_dtype(a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2**8):
     """Determines whether the dtype of unicode array a and/or b must be upcasted to the largest
     size dtype of the two arrays to be able to use them both in numba jit compiled functions, since
     numba requires unicode arrays to be of the same itemsize in order to do certain operations,
@@ -43,12 +43,12 @@ def largest_unicode_dtype(a: np.ndarray, b: t.Union[np.ndarray, str], max_size=2
     return get_unicode_dtype(max(lengths))
 
 
-def get_unicode_dtype(size, max_size=2 ** 8):
+def get_unicode_dtype(size, max_size=2**8):
     size = next_power_of_two(size, max_val=max_size)
     return np.dtype(f"<U{size}")
 
 
-def next_power_of_two(val, max_val=2 ** 8):
+def next_power_of_two(val, max_val=2**8):
     return min(2 ** (math.ceil(math.log2(val))), max_val)
 
 

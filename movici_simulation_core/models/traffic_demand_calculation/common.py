@@ -31,7 +31,7 @@ class DemandEstimation:
         state: TrackedState,
         settings: Settings,
         schema: AttributeSchema,
-        logger: logging.Logger
+        logger: logging.Logger,
     ):
         for param in self.local_params:
             param.setup(state=state, settings=settings, schema=schema, logger=logger)
@@ -84,7 +84,7 @@ class LocalContributor(Contributor):
         state: TrackedState,
         settings: Settings,
         schema: AttributeSchema,
-        logger: logging.Logger
+        logger: logging.Logger,
     ):
         pass
 
