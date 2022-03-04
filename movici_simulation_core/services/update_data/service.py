@@ -2,7 +2,6 @@ import logging
 import typing as t
 from functools import singledispatchmethod
 
-from movici_simulation_core.data_tracker.data_format import dump_update
 from movici_simulation_core.core.types import Service
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.networking.messages import (
@@ -14,8 +13,9 @@ from movici_simulation_core.networking.messages import (
     AcknowledgeMessage,
     ClearDataMessage,
 )
-from movici_simulation_core.data_tracker.data_format import load_update
 from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
+from movici_simulation_core.types import InternalSerializationStrategy
+from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.data_mask import validate_mask, filter_data
 
 
@@ -26,6 +26,7 @@ class UpdateDataService(Service):
 
     def __init__(self):
         self.store: t.Dict[str, dict] = {}
+        self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     @classmethod
     def install(cls, sim: Simulation):
@@ -61,13 +62,13 @@ class UpdateDataService(Service):
         if msg.key not in self.store:
             return ErrorMessage("Key not found")
         filtered = filter_data(self.store[msg.key], msg.mask)
-        raw_data = dump_update(filtered)
+        raw_data = self.serialization.dumps(filtered)
         return DataMessage(raw_data)
 
     @handle_message.register
     def put(self, msg: PutDataMessage):
         try:
-            data = load_update(msg.data)
+            data = self.serialization.loads(msg.data)
             if not isinstance(data, dict):
                 raise ValueError()
         except ValueError:

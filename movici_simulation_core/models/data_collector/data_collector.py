@@ -9,7 +9,6 @@ import typing as t
 from pathlib import Path
 
 from movici_simulation_core.base_models.simple_model import SimpleModel
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.attribute import SUB, SUBSCRIBE
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.models.data_collector.concurrent import (
@@ -17,7 +16,8 @@ from movici_simulation_core.models.data_collector.concurrent import (
     MultipleFutures,
 )
 from movici_simulation_core.networking.messages import UpdateMessage
-from movici_simulation_core.types import DataMask, UpdateData
+from movici_simulation_core.types import DataMask, ExternalSerializationStrategy, UpdateData
+from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
 
@@ -134,6 +134,7 @@ class LocalStorageStrategy(StorageStrategy):
     def __init__(self, directory: Path, filename_template="t{timestamp}_{iteration}_{name}"):
         self.directory = Path(directory)
         self.filename_template = filename_template
+        self.serialization = strategies.get_instance(ExternalSerializationStrategy)
 
     @classmethod
     def choose(cls, model_config: dict, settings: Settings, **_) -> StorageStrategy:
@@ -148,7 +149,7 @@ class LocalStorageStrategy(StorageStrategy):
     def store(self, info: UpdateInfo):
         filename = self.filename_template.format(**dataclasses.asdict(info))
         path = (self.directory / filename).with_suffix(".json")
-        path.write_text(EntityInitDataFormat().dumps(info.full_data()))
+        path.write_bytes(self.serialization.dumps(info.full_data()))
 
     def reset_iterations(self, model: DataCollector):
         model.iteration = itertools.count()

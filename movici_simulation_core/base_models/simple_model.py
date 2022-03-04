@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from movici_simulation_core.base_models.common import SchemaAwareInitDataHandler
+from movici_simulation_core.base_models.common import EntityAwareInitDataHandler
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.data_tracker.data_format import load_update, dump_update
 from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import InitDataHandler
 from movici_simulation_core.networking.messages import (
@@ -16,7 +15,15 @@ from movici_simulation_core.networking.messages import (
     QuitMessage,
 )
 from movici_simulation_core.postprocessing.results import merge_updates
-from movici_simulation_core.types import DataMask, Timestamp, RawUpdateData, RawResult, UpdateData
+from movici_simulation_core.types import (
+    DataMask,
+    InternalSerializationStrategy,
+    Timestamp,
+    RawUpdateData,
+    RawResult,
+    UpdateData,
+)
+from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
 
@@ -24,9 +31,14 @@ from movici_simulation_core.utils.settings import Settings
 class SimpleModelAdapter(ModelAdapterBase):
     model: SimpleModel
     schema: AttributeSchema = None
+    serialization: InternalSerializationStrategy
+
+    def __init__(self, model: Model, settings: Settings, logger: logging.Logger):
+        super().__init__(model, settings, logger)
+        self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
-        init_data_handler = SchemaAwareInitDataHandler(init_data_handler, schema=self.schema)
+        init_data_handler = EntityAwareInitDataHandler(init_data_handler)
 
         return self.model.initialize(
             settings=self.settings,
@@ -52,17 +64,17 @@ class SimpleModelAdapter(ModelAdapterBase):
         )
         return self.process_result(result)
 
-    @staticmethod
-    def process_input(data: RawUpdateData) -> UpdateData:
+    def process_input(self, data: RawUpdateData) -> UpdateData:
         if data is None:
             return None
-        return load_update(data)
+        return self.serialization.loads(data)
 
-    @staticmethod
-    def process_result(result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]) -> RawResult:
+    def process_result(
+        self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
+    ) -> RawResult:
         data, next_time = result
         if data:
-            data = dump_update(data)
+            data = self.serialization.dumps(data)
         if isinstance(next_time, Moment):
             next_time = next_time.timestamp
         return data, next_time

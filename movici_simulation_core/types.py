@@ -50,3 +50,36 @@ class FileType(enum.Enum):
             if ext.lower() in member.value:
                 return member
         return cls.OTHER
+
+
+class ExternalSerializationStrategy:
+    def __init__(
+        self,
+        schema,
+        non_data_dict_keys: t.Container[str] = ("general",),
+        cache_inferred_attributes: bool = False,
+    ) -> None:
+        self.schema = schema
+        self.non_data_dict_keys = non_data_dict_keys
+        self.cache_inferred_attributes = cache_inferred_attributes
+
+    def dumps(self, data, type: FileType):
+        raise NotImplementedError
+
+    def loads(self, raw_data, type: FileType):
+        raise NotImplementedError
+
+    def supported_file_types(self) -> t.Sequence[FileType]:
+        raise NotImplementedError
+
+    def supported_file_type_or_raise(self, filetype: FileType):
+        if filetype not in self.supported_file_types():
+            raise TypeError(f"Unsupported file type '{type}'")
+
+
+class InternalSerializationStrategy:
+    def dumps(self, data):
+        raise NotImplementedError
+
+    def loads(self, raw_data):
+        raise NotImplementedError

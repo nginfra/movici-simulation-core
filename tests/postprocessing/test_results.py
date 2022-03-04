@@ -242,7 +242,7 @@ class TestSimulationResults:
     def init_data_dir(self, empty_init_data_dir, init_data, dataset_a):
         file = empty_init_data_dir / f"{dataset_a}.json"
         dataset_name, dataset_data = next(extract_dataset_data(init_data))
-        file.write_text(EntityInitDataFormat().dumps({"name": dataset_a, "data": dataset_data}))
+        file.write_bytes(EntityInitDataFormat().dumps({"name": dataset_a, "data": dataset_data}))
         return empty_init_data_dir
 
     @pytest.fixture
@@ -258,7 +258,7 @@ class TestSimulationResults:
             dataset_name, update_data = next(extract_dataset_data(data))
             dataset = dataset if dataset is not None else dataset_name
             file = empty_updates_dir / f"t{timestamp}_{iteration}_{dataset}.json"
-            file.write_text(EntityInitDataFormat().dumps({"data": update_data}))
+            file.write_bytes(EntityInitDataFormat().dumps({"data": update_data}))
 
         return _add_update
 

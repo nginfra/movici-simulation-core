@@ -2,6 +2,9 @@ import pytest
 from movici_simulation_core.core.attributes import GlobalAttributes
 
 from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
+from movici_simulation_core.data_tracker.serialization import UpdateDataFormat
+from movici_simulation_core.utils import strategies
 
 from movici_simulation_core.utils.moment import set_timeline_info
 
@@ -34,3 +37,11 @@ def global_schema(additional_attributes):
     schema = AttributeSchema(attributes=additional_attributes)
     schema.use(GlobalAttributes)
     return schema
+
+
+@pytest.fixture(autouse=True)
+def clean_strategies(global_schema):
+    strategies.set(EntityInitDataFormat(schema=global_schema))
+    strategies.set(UpdateDataFormat)
+    yield
+    strategies.reset()

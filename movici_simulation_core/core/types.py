@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from argparse import FileType
 import abc
 import logging
 import typing as t
@@ -12,7 +11,7 @@ from movici_simulation_core.networking.messages import (
     UpdateSeriesMessage,
 )
 from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
-from movici_simulation_core.types import DataMask, RawResult, RawUpdateData
+from movici_simulation_core.types import DataMask, RawResult, RawUpdateData, FileType
 from movici_simulation_core.utils.path import DatasetPath
 from movici_simulation_core.utils.settings import Settings
 
@@ -85,6 +84,9 @@ class Extensible:
     def register_service(
         self, identifier: str, service: t.Type[Service], auto_use=False, daemon=True
     ):
+        pass
+
+    def set_strategy(self, tp, inst):
         pass
 
 

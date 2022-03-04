@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
+import logging
 
 import numpy as np
 import typing as t
+
+from movici_simulation_core.core.schema import AttributeSchema
 
 from .attribute import (
     AttributeObject,
@@ -25,6 +28,8 @@ from ..utils import lifecycle
 
 AttributeDict = t.Dict[AttributeIdentifier, AttributeObject]
 
+NO_TRACK_UNKNOWN = 0
+
 
 @lifecycle.has_deprecations
 class TrackedState:
@@ -37,17 +42,23 @@ class TrackedState:
     def properties(self):
         return self.attributes
 
-    def __init__(self, logger=None, track_unknown=0):
+    def __init__(
+        self,
+        schema: t.Optional[AttributeSchema] = None,
+        logger: t.Optional[logging.Logger] = None,
+        track_unknown=NO_TRACK_UNKNOWN,
+    ):
         """
 
         :param logger: a logging.Logger instance
         :param track_unknown: a union of flags (eg PUB|SUB) that will be used to track
-        attributes present in updates, but not yet registered to the state. If 0 (ie. no flags are
-        given) these attributes will not be tracked
+        attributes present in updates, but not yet registered to the state. by default (ie. no
+        flags are given) these attributes will not be tracked
         """
         self.attributes = {}
         self.index = {}
         self.logger = logger
+        self.schema = schema
 
         if isinstance(track_unknown, bool):
             track_unknown = track_unknown * OPT

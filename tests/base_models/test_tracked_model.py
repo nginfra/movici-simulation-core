@@ -10,7 +10,7 @@ from movici_simulation_core.base_models.tracked_model import (
     TrackedModelAdapter,
     TrackedModel,
 )
-from movici_simulation_core.data_tracker.data_format import dump_update, load_update
+from movici_simulation_core.data_tracker.serialization import dump_update, load_update
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 from movici_simulation_core.data_tracker.attribute import (
     field,
@@ -29,6 +29,11 @@ from movici_simulation_core.networking.messages import (
 )
 from movici_simulation_core.testing.helpers import dataset_data_to_numpy, dataset_dicts_equal
 from movici_simulation_core.utils.moment import Moment
+
+
+@pytest.fixture
+def additional_attributes():
+    return [AttributeSpec("init_attr", data_type=DataType(int, (), False))]
 
 
 @pytest.fixture

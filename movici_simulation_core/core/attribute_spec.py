@@ -18,14 +18,13 @@ class AttributeSpec:
             # bypass frozen dataclass (we're still in object instantiation, so it's fine)
             object.__setattr__(self, "data_type", DataType(self.data_type))
 
-    @property
-    def full_name(self):
-        return attrstring(self.name, self.component)
+    def full_name(self, sep="/"):
+        return attrstring(self.name, self.component, sep=sep)
 
     @property
     def key(self) -> AttributeIdentifier:
         return (self.component, self.name)
 
 
-def attrstring(attribute_name: str, component: t.Optional[str] = None):
-    return f"{component}/{attribute_name}" if component else attribute_name
+def attrstring(attribute_name: str, component: t.Optional[str] = None, sep="/"):
+    return f"{component}{sep}{attribute_name}" if component else attribute_name

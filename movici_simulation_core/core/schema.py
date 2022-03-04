@@ -51,13 +51,13 @@ class AttributeSchema(types.Extensible):
         if current := self.get(attr.key):
             if current.data_type != attr.data_type:
                 raise TypeError(
-                    f"Duplicate registration of attribute '{attr.full_name}':\n"
+                    f"Duplicate registration of attribute '{attr.full_name()}':\n"
                     f"Data type {attr.data_type} is incompatible with "
                     f"data type {current.data_type}"
                 )
             if attr.enum_name and (current.enum_name != attr.enum_name):
                 raise TypeError(
-                    f"Duplicate registration of attribute '{attr.full_name}':\n"
+                    f"Duplicate registration of attribute '{attr.full_name()}':\n"
                     f"Enum name {attr.enum_name} does not match with "
                     f"enum name {current.enum_name}"
                 )

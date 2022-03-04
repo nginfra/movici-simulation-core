@@ -10,14 +10,12 @@ from movici_simulation_core.base_models.tracked_model import (
     TrackedModel,
 )
 from movici_simulation_core.core import Model
-from movici_simulation_core.core.attributes import GlobalAttributes
 from movici_simulation_core.core.types import Extensible
 from movici_simulation_core.data_tracker.data_format import (
-    load_update,
     dump_dataset_data,
     EntityInitDataFormat,
-    dump_update,
 )
+from movici_simulation_core.data_tracker.serialization import dump_update, load_update
 from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
 from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import (
@@ -214,9 +212,6 @@ class ModelTester:
             raise ValueError(f"model {model_name} not found in scenario") from e
         settings = Settings()
         settings.apply_scenario_config(scenario["config"])
-        schema = AttributeSchema()
-        schema.use(GlobalAttributes)
-        schema.add_attributes(model.get_schema_attributes())
 
         expected = [
             (exp["time"], exp["data"], exp.get("next_time", NEXT_TIME_MISSING))

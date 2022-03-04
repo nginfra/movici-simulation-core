@@ -2,7 +2,7 @@ import dataclasses
 import typing as t
 
 import msgpack
-import ujson as json
+import orjson as json
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import (
@@ -37,7 +37,7 @@ class Model(TrackedModel, name="tape_player"):
             if tapefile_path is None:
                 raise ValueError(f"Tapefile dataset {tape_name} not found!")
             if ftype == FileType.JSON:
-                tapefile = json.loads(tapefile_path.read_text())
+                tapefile = json.loads(tapefile_path.read_bytes())
             elif ftype == FileType.MSGPACK:
                 tapefile = msgpack.unpackb(tapefile_path.read_bytes())
             else:

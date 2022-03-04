@@ -8,7 +8,6 @@ from movici_simulation_core.core import Model
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.data_tracker.attribute import INITIALIZE, PUBLISH, REQUIRED, SUBSCRIBE
-from movici_simulation_core.data_tracker.data_format import dump_update, load_update
 from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.networking.messages import (
@@ -17,16 +16,24 @@ from movici_simulation_core.networking.messages import (
     UpdateMessage,
     UpdateSeriesMessage,
 )
-from movici_simulation_core.types import RawResult, RawUpdateData, Timestamp, UpdateData
+from movici_simulation_core.types import (
+    InternalSerializationStrategy,
+    RawResult,
+    RawUpdateData,
+    Timestamp,
+    UpdateData,
+)
+from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
 
-from .common import SchemaAwareInitDataHandler
+from .common import EntityAwareInitDataHandler
 from ..model_connector.init_data import FileType, InitDataHandler
 
 
 class TrackedModelAdapter(ModelAdapterBase):
     model: TrackedModel
+    serialization: InternalSerializationStrategy
 
     def __init__(self, model: TrackedModel, settings: Settings, logger: logging.Logger):
         super().__init__(model, settings, logger)
@@ -35,12 +42,14 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.model_ready_for_update: bool = False
         self.schema: t.Optional[AttributeSchema] = None
         self.next_time: t.Optional[int] = None
+        self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     def set_schema(self, schema: AttributeSchema):
         self.schema = schema
+        self.state.schema = schema
 
     def initialize(self, init_data_handler: InitDataHandler):
-        init_data_handler = SchemaAwareInitDataHandler(init_data_handler, schema=self.schema)
+        init_data_handler = EntityAwareInitDataHandler(init_data_handler)
         self.model.setup(
             state=self.state,
             settings=self.settings,
@@ -113,7 +122,7 @@ class TrackedModelAdapter(ModelAdapterBase):
             return True
 
         # Only calculate on a cascading update if there is actually data for the model
-        if update_dict := load_update(data):
+        if update_dict := self.serialization.loads(data):
             self.state.receive_update(update_dict)
             return True
         return False
@@ -147,11 +156,12 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.next_time = next_time
         return update, next_time
 
-    @staticmethod
-    def process_result(result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]) -> RawResult:
+    def process_result(
+        self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
+    ) -> RawResult:
         data, next_time = result
         if data:
-            data = dump_update(data)
+            data = self.serialization.dumps(data)
         if isinstance(next_time, Moment):
             next_time = next_time.timestamp
         return data, next_time

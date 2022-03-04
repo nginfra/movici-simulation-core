@@ -5,13 +5,14 @@ import sys
 import traceback
 import typing as t
 from multiprocessing import Process
-
 import zmq
 from zmq import Socket
 
 from movici_simulation_core.core.types import ModelAdapterBase, Service, Plugin, Model, Extensible
 from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
 from movici_simulation_core.core.utils import configure_global_plugins
+from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
+from movici_simulation_core.data_tracker.serialization import UpdateDataFormat
 from movici_simulation_core.exceptions import StartupFailure
 from movici_simulation_core.model_connector.connector import (
     ModelConnector,
@@ -27,9 +28,14 @@ from movici_simulation_core.networking.stream import (
     Stream,
     MessageDealerSocket,
 )
+from movici_simulation_core.types import (
+    ExternalSerializationStrategy,
+    InternalSerializationStrategy,
+)
 from movici_simulation_core.utils.logging import get_logger
 from movici_simulation_core.utils.moment import TimelineInfo, set_timeline_info
 from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.utils import strategies
 
 DEFAULT_SERVICE_ADDRESS = "tcp://127.0.0.1"
 
@@ -126,6 +132,8 @@ class Simulation(Extensible):
         if debug:
             self.settings.log_level = "DEBUG"
 
+        self.set_default_strategies()
+
         if use_global_plugins:
             configure_global_plugins(self)
 
@@ -136,6 +144,10 @@ class Simulation(Extensible):
     @property
     def active_services(self):
         return [mod for mod in self.active_modules.values() if isinstance(mod, ServiceInfo)]
+
+    def set_default_strategies(self):
+        strategies.set(UpdateDataFormat)
+        strategies.set(EntityInitDataFormat)
 
     def configure(self, config: dict):
         """Configure a simulation by scenario config. All model types and additional services that
@@ -201,6 +213,11 @@ class Simulation(Extensible):
     def _prepare(self):
         self._activate_services()
         self._activate_models()
+        self._configure_strategies()
+
+    def _configure_strategies(self):
+        strategies.get_instance(ExternalSerializationStrategy, schema=self.schema)
+        strategies.get_instance(InternalSerializationStrategy)
 
     def _activate_services(self):
         active_svc_names = set(name for name, svc in self.service_types.items() if svc.auto_use)
@@ -291,6 +308,9 @@ class Simulation(Extensible):
 
         """
         self.schema.add_attributes(attributes)
+
+    def set_strategy(self, strat):
+        strategies.set(strat)
 
 
 class ServiceRunner:

@@ -100,12 +100,12 @@ class Model(TrackedModel, name="area_aggregation"):
     def ensure_uniform_attribute(ds, entity, spec: AttributeSpec):
         if spec.data_type.py_type == str:
             raise ValueError(
-                f"Can't aggregate attribute {ds}/{entity}/{spec.full_name} "
+                f"Can't aggregate attribute {ds}/{entity}/{spec.full_name()} "
                 f"as it has string type"
             )
         if spec.data_type.csr is True:
             raise ValueError(
-                f"attribute {ds}/{entity}/{spec.full_name} in the aggregator "
+                f"attribute {ds}/{entity}/{spec.full_name()} in the aggregator "
                 f"should be of uniform data type"
             )
         if len(spec.data_type.unit_shape):

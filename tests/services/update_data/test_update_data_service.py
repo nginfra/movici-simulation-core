@@ -3,7 +3,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.data_tracker.data_format import dump_update, load_update
+from movici_simulation_core.data_tracker.serialization import dump_update, load_update
 from movici_simulation_core.networking.messages import (
     PutDataMessage,
     GetDataMessage,

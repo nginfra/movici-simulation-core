@@ -21,20 +21,23 @@ from movici_simulation_core.testing.model_tester import ModelTester
 
 
 @pytest.fixture
-def schema():
-    return AttributeSchema(
-        [
-            AttributeSpec("id", DataType(int)),
-            AttributeSpec("in_a", DataType(float)),
-            AttributeSpec("in_b", DataType(float)),
-            AttributeSpec("in_csr", DataType(float, csr=True)),
-            AttributeSpec("in_csr2", DataType(float, csr=True)),
-            AttributeSpec("undef", DataType(float)),
-            AttributeSpec("undef_csr", DataType(float, csr=True)),
-            AttributeSpec("out_csr", DataType(float, csr=True)),
-            AttributeSpec("in_2d", DataType(float, (2,))),
-        ]
-    )
+def additional_attributes():
+    return [
+        AttributeSpec("id", DataType(int)),
+        AttributeSpec("in_a", DataType(float)),
+        AttributeSpec("in_b", DataType(float)),
+        AttributeSpec("in_csr", DataType(float, csr=True)),
+        AttributeSpec("in_csr2", DataType(float, csr=True)),
+        AttributeSpec("undef", DataType(float)),
+        AttributeSpec("undef_csr", DataType(float, csr=True)),
+        AttributeSpec("out_csr", DataType(float, csr=True)),
+        AttributeSpec("in_2d", DataType(float, (2,))),
+    ]
+
+
+@pytest.fixture
+def schema(additional_attributes):
+    return AttributeSchema(additional_attributes)
 
 
 @pytest.fixture
@@ -159,16 +162,16 @@ def test_detects_intermediate_attributes_as_pub():
 
 
 @pytest.fixture
-def create_model_tester(tmp_path_factory, init_data, schema):
+def create_model_tester(tmp_path_factory, init_data, global_schema):
     testers: t.List[ModelTester] = []
     counter = itertools.count()
 
     def _create(config, **kwargs):
         model = UDFModel(config)
         tmp_dir = kwargs.pop("tmp_dir", tmp_path_factory.mktemp(f"init_data_{next(counter)}"))
-        global_schema = kwargs.pop("global_schema", schema)
+        global_schema_ = kwargs.pop("global_schema", global_schema)
 
-        tester = ModelTester(model, tmp_dir=tmp_dir, global_schema=global_schema, **kwargs)
+        tester = ModelTester(model, tmp_dir=tmp_dir, global_schema=global_schema_, **kwargs)
         tester.add_init_data("some_dataset", init_data)
         testers.append(tester)
         return tester

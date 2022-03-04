@@ -3,7 +3,7 @@ import warnings
 
 import msgpack
 import numpy as np
-import ujson as json
+import orjson as json
 
 from movici_simulation_core.core.schema import (
     DEFAULT_ROWPTR_KEY,
@@ -15,24 +15,42 @@ from movici_simulation_core.core.schema import (
 from movici_simulation_core.core import DataType
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.unicode_helpers import get_unicode_dtype
-from movici_simulation_core.types import NumpyAttributeData
+from movici_simulation_core.types import (
+    ExternalSerializationStrategy,
+    FileType,
+    NumpyAttributeData,
+)
+from movici_simulation_core.utils import lifecycle
 
 
-class EntityInitDataFormat:
+@lifecycle.has_deprecations
+class EntityInitDataFormat(ExternalSerializationStrategy):
     schema: AttributeSchema
 
     def __init__(
         self,
         schema: t.Optional[AttributeSchema] = None,
-        non_data_dict_keys=("general",),
-        cache_inferred_attributes=False,
-    ):
-        self.schema = schema or AttributeSchema()
-        self.non_data_dict_keys = set(non_data_dict_keys)
-        self.cache_inferred_attributes = cache_inferred_attributes
+        non_data_dict_keys: t.Container[str] = ("general",),
+        cache_inferred_attributes: bool = False,
+    ) -> None:
+        if schema is None:
+            schema = AttributeSchema()
+        super().__init__(schema, non_data_dict_keys, cache_inferred_attributes)
 
+    def supported_file_types(self) -> t.Sequence[FileType]:
+        return (FileType.JSON, FileType.MSGPACK)
+
+    @lifecycle.deprecated(alternative="EntityInitDataFormat.loads")
     def load_bytes(self, raw: t.Union[str, bytes], **kwargs):
-        list_data = json.loads(raw, **kwargs)
+        return self.loads(raw, FileType.JSON)
+
+    def loads(self, raw_data, type: FileType):
+        self.supported_file_type_or_raise(type)
+        if type is FileType.JSON:
+            list_data = json.loads(raw_data)
+        elif type is FileType.MSGPACK:
+            list_data = msgpack.unpackb(raw_data)
+
         return self.load_json(list_data)
 
     def load_json(self, obj: dict):
@@ -46,22 +64,6 @@ class EntityInitDataFormat:
             )
             for key, val in obj.items()
         }
-
-    def dump_dict(self, dataset: dict):
-        return {
-            key: (
-                dump_dataset_data(val)
-                if isinstance(val, dict) and key not in self.non_data_dict_keys
-                else val
-            )
-            for key, val in dataset.items()
-        }
-
-    def dumps(self, dataset: dict, **kwargs) -> str:
-        return json.dumps(
-            self.dump_dict(dataset),
-            **kwargs,
-        )
 
     def load_data_section(self, data: dict) -> dict:
         rv = {}
@@ -104,6 +106,26 @@ class EntityInitDataFormat:
 
         else:
             raise TypeError("attribute data must be dict (component) or list (attribute)")
+
+    def dumps(
+        self, dataset: dict, filetype: t.Optional[FileType] = FileType.JSON, **kwargs
+    ) -> str:
+        self.supported_file_type_or_raise(filetype)
+        list_data = self.dump_dict(dataset)
+        if filetype is FileType.JSON:
+            return json.dumps(self.dump_dict(dataset), **kwargs)
+        if filetype is FileType.MSGPACK:
+            return msgpack.packb(list_data, **kwargs)
+
+    def dump_dict(self, dataset: dict):
+        return {
+            key: (
+                dump_dataset_data(val)
+                if isinstance(val, dict) and key not in self.non_data_dict_keys
+                else val
+            )
+            for key, val in dataset.items()
+        }
 
 
 def load_from_json(
@@ -256,44 +278,6 @@ def is_undefined_uniform(data, data_type):
 
 def is_undefined_csr(csr_array, data_type):
     return csr_array.rows_contain(np.array([data_type.undefined]))
-
-
-class UpdateDataFormat:
-    CURRENT_VERSION = 1
-
-    def loads(self, raw_bytes: bytes):
-        return msgpack.unpackb(raw_bytes, object_hook=self.decode_numpy_array)
-
-    def dumps(self, data: dict):
-        return msgpack.packb(data, default=self.encode_numpy_array)
-
-    @classmethod
-    def decode_numpy_array(cls, obj):
-        ver = obj.get("__np_encode_version__", None)
-        if ver is None:
-            return obj
-        if ver == 1:
-            return np.ndarray(shape=obj["shape"], dtype=obj["dtype"], buffer=obj["data"]).copy()
-        raise TypeError("Unsupported Numpy encoding version")
-
-    @classmethod
-    def encode_numpy_array(cls, obj):
-        if isinstance(obj, np.ndarray):
-            return {
-                "__np_encode_version__": cls.CURRENT_VERSION,
-                "dtype": obj.dtype.str,
-                "shape": obj.shape,
-                "data": obj.data,
-            }
-        return obj
-
-
-def load_update(raw_bytes: bytes):
-    return UpdateDataFormat().loads(raw_bytes)
-
-
-def dump_update(data: dict):
-    return UpdateDataFormat().dumps(data)
 
 
 def data_keys(update_or_init_data, ignore_keys=("general",)):

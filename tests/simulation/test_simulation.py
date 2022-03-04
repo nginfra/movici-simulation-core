@@ -45,7 +45,8 @@ class SimpleModel(TrackedModel):
         self.output_file = config.get("output")
         self.attr = None
 
-    def setup(self, state: TrackedState, **_):
+    def setup(self, state: TrackedState, schema, **_):
+        self.schema = schema
         mode = PUB if self.mode == "pub" else SUB
         self.attr = state.register_attribute(
             "dataset", "entity", AttributeSpec("attr", DataType(float, (), False)), flags=mode
@@ -68,7 +69,9 @@ class SimpleModel(TrackedModel):
         if self.attr.flags & PUB:
             self.attr[0] = 1.0
         else:
-            Path(self.output_file).write_text(EntityInitDataFormat().dumps(state.to_dict()))
+            Path(self.output_file).write_bytes(
+                EntityInitDataFormat(self.schema).dumps(state.to_dict())
+            )
 
         return None
 
@@ -370,7 +373,7 @@ class TestSimulation:
 
 
 def test_full_simulation_run(temp_output_file, tmp_path):
-    sim = Simulation(data_dir=tmp_path)
+    sim = Simulation(data_dir=tmp_path, debug=True)
 
     sim.add_model("pub", SimpleModel({"mode": "pub"}))
     sim.add_model(

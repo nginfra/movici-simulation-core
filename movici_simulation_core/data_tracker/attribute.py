@@ -86,7 +86,7 @@ class AttributeField:
 
     @property
     def full_name(self):
-        return self.spec.full_name
+        return self.spec.full_name()
 
     @property
     def key(self):

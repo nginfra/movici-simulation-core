@@ -25,7 +25,7 @@ from movici_simulation_core.data_tracker.data_format import (
     extract_dataset_data,
 )
 from movici_simulation_core.data_tracker.state import TrackedState, iter_entity_data
-from movici_simulation_core.types import EntityData
+from movici_simulation_core.types import EntityData, FileType
 from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
 import numpy as np
 
@@ -61,14 +61,14 @@ class SimulationResults:
     def get_dataset(self, name):
         if not (file := self.datasets.get(name)):
             raise ValueError(f"Dataset {name} not found")
-        init_data = self.data_reader.load_bytes(file.read_bytes())
+        init_data = self.data_reader.loads(file.read_bytes(), FileType.JSON)
         update_files = self.updates.get(name, [])
         updates = [
             {
                 "timestamp": int(upd.timestamp),
                 "iteration": int(upd.iteration),
                 "name": upd.dataset,
-                **self.data_reader.load_bytes(upd.path.read_bytes()),
+                **self.data_reader.loads(upd.path.read_bytes(), FileType.JSON),
             }
             for upd in update_files
         ]

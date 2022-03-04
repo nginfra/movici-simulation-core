@@ -9,10 +9,9 @@ from movici_simulation_core.data_tracker.data_format import (
     EntityInitDataFormat,
     parse_list,
     infer_data_type_from_list,
-    load_update,
-    dump_update,
     data_keys,
 )
+from movici_simulation_core.data_tracker.serialization import load_update, dump_update
 from movici_simulation_core.core.schema import (
     AttributeSpec,
     DEFAULT_ROWPTR_KEY,
@@ -20,6 +19,7 @@ from movici_simulation_core.core.schema import (
 )
 from movici_simulation_core.core import DataType
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
+from movici_simulation_core.types import FileType
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def schema():
 
 def test_init_data_format(list_init_data, array_init_data, schema):
     fmt = EntityInitDataFormat(schema)
-    result = fmt.load_bytes(list_init_data)
+    result = fmt.loads(list_init_data, FileType.JSON)
     assert_dataset_dicts_equal(result, array_init_data)
 
 
