@@ -16,7 +16,12 @@ from movici_simulation_core.models.data_collector.concurrent import (
     MultipleFutures,
 )
 from movici_simulation_core.networking.messages import UpdateMessage
-from movici_simulation_core.types import DataMask, ExternalSerializationStrategy, UpdateData
+from movici_simulation_core.types import (
+    DataMask,
+    ExternalSerializationStrategy,
+    UpdateData,
+    FileType,
+)
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
@@ -149,7 +154,7 @@ class LocalStorageStrategy(StorageStrategy):
     def store(self, info: UpdateInfo):
         filename = self.filename_template.format(**dataclasses.asdict(info))
         path = (self.directory / filename).with_suffix(".json")
-        path.write_bytes(self.serialization.dumps(info.full_data()))
+        path.write_bytes(self.serialization.dumps(info.full_data(), FileType.JSON))
 
     def reset_iterations(self, model: DataCollector):
         model.iteration = itertools.count()
