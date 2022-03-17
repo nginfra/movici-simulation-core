@@ -466,6 +466,11 @@ class StateProxy:
     def get_index(self):
         return self.state.get_index(self.dataset_name, self.entity_type)
 
+    def register_attribute(self, spec: AttributeSpec, flags: int = 0, rtol=1e-5, atol=1e-8):
+        return self.state.register_attribute(
+            self.dataset_name, self.entity_type, spec=spec, flags=flags, rtol=rtol, atol=atol
+        )
+
 
 def ensure_path(d: dict, path: t.Sequence[str]):
     if not path:

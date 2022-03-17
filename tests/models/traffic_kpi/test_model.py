@@ -101,7 +101,7 @@ def test_model_reads_coefficients(model):
     model.coefficients_tape.proceed_to(Moment(0))
     assert np.array_equal(model.coefficients_tape[("passenger", "co2")][0], [16, 19, 20])
     assert len(model.coefficients_tape[("cargo", "co2")]) == 3
-    assert np.array_equal(model.coefficients_tape[("cargo", "co2")][0], [1, 13, 10])
+    assert np.array_equal(model.coefficients_tape[("cargo", "co2")][0], [1, 13, 10, 1])
     assert model.coefficients_tape.timeline[0] == 0
     assert model.coefficients_tape.timeline[1] == 2
 
@@ -110,10 +110,10 @@ def test_model_returns_coefficients_by_time(model):
     model.coefficients_tape.proceed_to(Moment(2))
     assert np.array_equal(model.coefficients_tape[("passenger", "co2")][0], [15, 18, 19])
     assert len(model.coefficients_tape[("cargo", "co2")]) == 3
-    assert np.array_equal(model.coefficients_tape[("cargo", "co2")][0], [0, 12, 9])
+    assert np.array_equal(model.coefficients_tape[("cargo", "co2")][0], [0, 12, 9, 1])
 
 
-def test_coefficients_without_category_return_empty_list(model):
+def test_coefficients_without_category_returns_nones(model):
     model.coefficients_tape.proceed_to(Moment(2))
     assert np.array_equal(model.coefficients_tape[("other_category", "co2")], [])
     assert np.array_equal(model.coefficients_tape[("cargo", "other_kpi")], [])

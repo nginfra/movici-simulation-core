@@ -12,7 +12,7 @@ from movici_simulation_core.models.common.network import (
     build_graph,
     Graph,
     Network,
-    csr_argslice,
+    link_indices,
 )
 from movici_simulation_core.testing.helpers import create_entity_group_with_data
 
@@ -387,6 +387,31 @@ def test_shortest_path_weighted_average(network_2: Network):
     np.testing.assert_allclose(avg, expected)
 
 
+def test_shortest_path_weighted_average_with_custom_weights(network_2: Network):
+    r"""
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
+    """
+    network = network_2
+    source_id = 5
+    values = network.cost_factor
+
+    # using a constant weight, means that the calculated average is just the normal average
+    weights = np.ones_like(values) * 2
+
+    expected = [
+        -1,  # no path between 5 and itself
+        1,  # 5 -> 6 travels between (0-1) (cf: 1)
+        (1 + 2 + 3) / 3,  # 5 -> 7 (0-1-2-3) (cf: 1, 2, 3)
+        (1 + 2 + 3 + 4) / 4,  # 5 -> 7 (0-1-2-3-4) (cf: 1, 2, 3, 4)
+    ]
+
+    avg = network.shortest_path_weighted_average(source_id, values, weights=weights)
+
+    np.testing.assert_allclose(avg, expected)
+
+
 def test_all_shortest_paths_weighted_average(network_2: Network):
     r"""
              (6)     (7)
@@ -437,18 +462,35 @@ def test_some_shortest_paths_weighted_average(network_2: Network):
     np.testing.assert_allclose(avg, expected)
 
 
+def test_shortest_path_sum(network_2: Network):
+    r"""
+             (6)     (7)
+             / \    /
+    (5)--0--1---2--3--4--(8)
+    """
+    network = network_2
+
+    # using the cost factor as values, means that we're effectively recalculating the total
+    # distance matrix
+    values = network.cost_factor
+
+    expected = network_2.all_shortest_paths()
+
+    np.testing.assert_allclose(network.all_shortest_paths_sum(values), expected)
+
+
 @pytest.mark.parametrize(
     "rowidx, colidx, expected",
     [
-        (0, 0, 0),
-        (0, 1, 1),
-        (1, 3, 3),
-        (1, 7, 7),
-        (1, 8, -1),
-        (0, 3, -1),
+        (0, 0, [0]),
+        (0, 1, [1]),
+        (1, 3, [3, 4]),
+        (1, 7, [7]),
+        (1, 8, []),
+        (0, 3, []),
     ],
 )
 def test_csr_argslice(rowidx, colidx, expected):
     indptr = np.array([0, 2, 8, 9])
-    indices = np.array([0, 1, 2, 3, 4, 5, 6, 7, 8])
-    assert csr_argslice(indptr, indices, rowidx, colidx) == expected
+    indices = np.array([0, 1, 2, 3, 3, 5, 6, 7, 8])
+    np.testing.assert_equal(link_indices(indptr, indices, rowidx, colidx), expected)

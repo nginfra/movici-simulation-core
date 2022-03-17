@@ -6,6 +6,7 @@ import numpy.typing as npt
 from numba import njit
 from scipy.sparse.csgraph import shortest_path
 from scipy.sparse.csr import csr_matrix
+
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
 
 from movici_simulation_core.data_tracker.index import Index
@@ -13,6 +14,7 @@ from movici_simulation_core.data_tracker.state import TrackedState
 from .entities import (
     PointEntity,
     LinkEntity,
+    TransportLinkEntity,
     TransportSegmentEntity,
 )
 
@@ -215,16 +217,15 @@ class Network:
         begin, end = self.graph.indptr[vn_index : vn_index + 2]
         self.graph.cost_factor[begin:end] = value
 
-    def all_shortest_paths_weighted_average(self, values, virtual_node_ids=None, no_path_found=-1):
-        """Calculate the weighted average of a quantity that is defined for every link on the
-        shortest path from all source (virtual) nodes to all target (virtual) nodes. The average
-        is weighted by the cost factor of every link on the shortest path
+    def all_shortest_paths_sum(self, values, virtual_node_ids=None, no_path_found=-1):
+        """Calculate the sum of a quantity that is defined for every link on the shortest path from
+        all source (virtual) nodes to all target (virtual) nodes. When the source node and the
+        target node are the same, the summed value equals 0
 
         :param values: an array (or array-like) with the quantity values on transport links that
-            are to be averaged
+            are to be summed
         :param no_path_found: A fill value for when no valid shortest path can be found between
-            source and target. This is also used for when the source and target node are the same
-
+            source and target.
         """
         values = self._get_mapped_quantity(values)
         if virtual_node_ids is None:
@@ -233,7 +234,7 @@ class Network:
 
         return np.vstack(
             [
-                self.shortest_path_weighted_average(
+                self.shortest_path_sum(
                     ident,
                     values=values,
                     no_path_found=no_path_found,
@@ -243,12 +244,10 @@ class Network:
             ]
         )
 
-    def shortest_path_weighted_average(
-        self, source_node_id, values, no_path_found=-1, values_are_mapped=False
-    ):
-        """Calculate the weighted average of a quantity that is defined for every link on the
-        shortest path from a source node to all target (virtual) nodes. The average is weighted by
-        the cost factor of every link on the shortest path
+    def shortest_path_sum(self, source_node_id, values, no_path_found=-1, values_are_mapped=False):
+        """Calculate the sum of a quantity that is defined for every link on the shortest path from
+        a source node to all target (virtual) nodes. When the source node and the target node are
+        the same, the summed value equals 0
 
         :param source_node_id: The entity id of the source (virtual) node
         :param values: See `Network.all_shortest_paths_weighted_average`
@@ -261,16 +260,91 @@ class Network:
         if not values_are_mapped:
             values = self._get_mapped_quantity(values)
 
-        dist, prev = self.get_shortest_path(source_node_id)
+        _, prev = self.get_shortest_path(source_node_id)
         source_idx = self.node_index[source_node_id]
-        return _shortest_path_weighted_average(
-            dist=dist,
+        return _shortest_path_sum(
             predecessors=prev,
             source_idx=source_idx,
             target_indices=self.node_index[self.virtual_node_ids],
             indptr=self.graph.indptr,
             indices=self.graph.indices,
             cost_factor=self.graph.cost_factor,
+            values=values,
+            no_path_found=no_path_found,
+        )
+
+    def all_shortest_paths_weighted_average(
+        self, values, virtual_node_ids=None, weights=None, no_path_found=-1
+    ):
+        """Calculate the weighted average of a quantity that is defined for every link on the
+        shortest path from all source (virtual) nodes to all target (virtual) nodes. The average
+        is weighted by the cost factor of every link on the shortest path
+
+        :param values: an array (or array-like) with the quantity values on transport links that
+            are to be averaged
+        :param virtual_node_ids: an array (or array-like) for which virtual nodes to calculate the
+            weighted averages
+        :param weights: (optional) an array with alternative weights to calculate the weighted
+            average. By default the network cost factor is used for both calculating the shortest
+            path and as weights for the weighted average. Supplying this attributes makes it
+            possible to calculate the shortest path by cost factor (eg. travel time) and the
+            weighted average by a different attribute (eg. length). This array should have the same
+            length as the cost_factor array
+        :param no_path_found: A fill value for when no valid shortest path can be found between
+            source and target. This is also used for when the source and target node are the same
+
+        """
+        values = self._get_mapped_quantity(values)
+        if weights is not None:
+            weights = self._get_mapped_quantity(weights)
+
+        if virtual_node_ids is None:
+            virtual_node_ids = self.virtual_node_ids
+        node_indices = self.virtual_node_index[virtual_node_ids]
+
+        return np.vstack(
+            [
+                self.shortest_path_weighted_average(
+                    ident,
+                    values=values,
+                    weights=weights,
+                    no_path_found=no_path_found,
+                    values_are_mapped=True,
+                )[node_indices]
+                for ident in virtual_node_ids
+            ]
+        )
+
+    def shortest_path_weighted_average(
+        self, source_node_id, values, weights=None, no_path_found=-1, values_are_mapped=False
+    ):
+        """Calculate the weighted average of a quantity that is defined for every link on the
+        shortest path from a source node to all target (virtual) nodes. The average is weighted by
+        the cost factor of every link on the shortest path
+
+        :param source_node_id: The entity id of the source (virtual) node
+        :param values: See ``Network.all_shortest_paths_weighted_average``
+        :param weights: See ``Network.all_shortest_paths_weighted_average``
+        :param no_path_found: See ``Network.all_shortest_paths_weighted_average``
+        :param values_are_mapped: A boolean indicating whether the value array is in their original
+            order or already mapped to the corresponding link index in the graph (default: False).
+            This is usually ``False``
+
+        """
+        if not values_are_mapped:
+            values = self._get_mapped_quantity(values)
+            if weights is not None:
+                weights = self._get_mapped_quantity(weights)
+        _, prev = self.get_shortest_path(source_node_id)
+        source_idx = self.node_index[source_node_id]
+        return _shortest_path_weighted_average(
+            predecessors=prev,
+            source_idx=source_idx,
+            target_indices=self.node_index[self.virtual_node_ids],
+            indptr=self.graph.indptr,
+            indices=self.graph.indices,
+            cost_factor=self.graph.cost_factor,
+            weights=weights if weights is not None else self.graph.cost_factor,
             values=values,
             no_path_found=no_path_found,
         )
@@ -293,7 +367,7 @@ class Network:
     ) -> NetworkEntities:
         defaults = {
             "transport_nodes": (PointEntity, "transport_node_entities"),
-            "transport_links": (TransportSegmentEntity, transport_segments_name),
+            "transport_links": (TransportLinkEntity, transport_segments_name),
             "virtual_nodes": (PointEntity, "virtual_node_entities"),
             "virtual_links": (LinkEntity, "virtual_link_entities"),
         }
@@ -309,7 +383,76 @@ class Network:
 
 @njit(cache=True)
 def _shortest_path_weighted_average(
-    dist,
+    predecessors,
+    source_idx,
+    target_indices,
+    indptr,
+    indices,
+    cost_factor,
+    weights,
+    values,
+    no_path_found=-1,
+):
+    """calculate the weighted average of a quantity along the shortest path"""
+    result = np.zeros_like(target_indices, dtype=np.float64)
+
+    for result_idx, target in enumerate(target_indices):
+        # the predecessors array contains for every target node, what is the next node that
+        # needs to be taken to travel to the source node over the shortest path. We'll travel along
+        # the path back from the target towards the source until we've reached the source.
+
+        # we start at the target idx
+        curr = target
+
+        total_weight = 0.0
+        error = False
+
+        while curr != source_idx:
+
+            # We need to examine the first link from the current node towards the source node
+            # ``prev`` is the next node on our path to the source node, so the link to examine
+            # is prev->curr
+            prev = predecessors[curr]
+
+            # A negative value in predecessors means that there is no connected route from the
+            # target towards the source
+            if prev < 0:
+                error = True
+                break
+
+            # get the index of the link in the csr matrix. The link for node a->b exists in the
+            # full-form matrix at position [a][b]. In csr form, we lookup the index in the csr-data
+            # array.
+            val_idx = shortest_link_index(indptr, indices, prev, curr, cost_factor)
+
+            if val_idx == -1:  # link not found
+                error = True
+                break
+
+            # keep a running total of the weighted quantity before later dividing by the total
+            # weight of the route
+            total_weight += weights[val_idx]
+            result[result_idx] += weights[val_idx] * values[val_idx]
+
+            # move to the next (previous) node
+            curr = prev
+
+        # If the total weight is 0, it means that the source node and target node are the same,
+        # or there is another reason why they have a zero-weighting. In either case
+        # we cannot calculate the weighted average
+        if total_weight == 0.0:
+            error = True
+
+        if error:
+            result[result_idx] = no_path_found
+        else:
+            result[result_idx] /= total_weight
+
+    return result
+
+
+@njit(cache=True)
+def _shortest_path_sum(
     predecessors,
     source_idx,
     target_indices,
@@ -322,38 +465,60 @@ def _shortest_path_weighted_average(
     result = np.zeros_like(target_indices, dtype=np.float64)
 
     for result_idx, target in enumerate(target_indices):
-        curr = target
-        total_dist = dist[target]
+        # the predecessors array contains for every target node, what is the next node that
+        # needs to be taken to travel to the source node over the shortest path. We'll travel along
+        # the path back from the target towards the source until we've reached the source.
 
-        if total_dist == 0:
-            result[result_idx] = no_path_found
-            continue
+        # we start at the target idx
+        curr = target
 
         while curr != source_idx:
-            prev = predecessors[curr]
-            if prev < 0:
-                result == no_path_found
 
-            val_idx = csr_argslice(indptr, indices, prev, curr)
+            # We need to examine the first link from the current node towards the source node
+            # ``prev`` is the next node on our path to the source node, so the link to examine
+            # is prev->curr
+            prev = predecessors[curr]
+
+            # A negative value in predecessors means that there is no connected route from the
+            # target towards the source
+            if prev < 0:
+                result[result_idx] = no_path_found
+
+            val_idx = shortest_link_index(indptr, indices, prev, curr, cost_factor)
             if val_idx == -1:  # link not found
                 result[result_idx] = no_path_found
-            result[result_idx] += cost_factor[val_idx] * values[val_idx]
+
+            # keep a running total
+            result[result_idx] += values[val_idx]
+
+            # move on to the next (previous) node
             curr = prev
 
-        result[result_idx] /= total_dist
+        result[result_idx]
 
     return result
 
 
 @njit(cache=True)
-def csr_argslice(indptr, indices, row_idx, col_idx):
-    min_i = indptr[row_idx]
-    max_i = indptr[row_idx + 1]
+def shortest_link_index(indptr, indices, from_idx, to_idx, cost_factor):
+    all_links = link_indices(indptr, indices, from_idx, to_idx)
+    if len(all_links) == 0:
+        return -1
+    costs = cost_factor[all_links]
+    return all_links[np.argmin(costs)]
 
-    idx = np.searchsorted(indices[min_i:max_i], col_idx) + min_i
-    if idx < max_i and indices[idx] == col_idx:
-        return idx
-    return -1
+
+@njit(cache=True)
+def link_indices(indptr, indices, from_idx, to_idx):
+    """return the indices of all links in a csr sparse network going from from_idx to to_idx"""
+
+    min_i = indptr[from_idx]
+    max_i = indptr[from_idx + 1]
+
+    begin_idx = candidate_idx = np.searchsorted(indices[min_i:max_i], to_idx) + min_i
+    while candidate_idx < max_i and indices[candidate_idx] == to_idx:
+        candidate_idx += 1
+    return np.arange(begin_idx, candidate_idx)
 
 
 def build_graph(node_idx: Index, from_node_id, to_node_id):

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import operator
 import typing as t
 import numpy as np
 
 from .csr_helpers import (
+    csr_binop,
     get_row,
     update_csr_array,
     slice_csr_array,
@@ -186,21 +186,27 @@ class TrackedCSRArray:
                 raise ValueError("row_ptr arrays must be equal")
             return TrackedCSRArray(data=op(self.data, other.data), row_ptr=self.row_ptr.copy())
         try:
+            other = np.asarray(other)
+            if other.ndim == 1 and len(other) == len(self.row_ptr) - 1:
+                return TrackedCSRArray(
+                    data=csr_binop(self.data, self.row_ptr, other, op),
+                    row_ptr=self.row_ptr.copy(),
+                )
             return TrackedCSRArray(data=op(self.data, other), row_ptr=self.row_ptr.copy())
         except TypeError:
             return NotImplemented
 
     def __add__(self, other):
-        return self.__bin_op__(other, operator.add)
+        return self.__bin_op__(other, np.add)
 
     def __sub__(self, other):
-        return self.__bin_op__(other, operator.sub)
+        return self.__bin_op__(other, np.subtract)
 
     def __mul__(self, other):
-        return self.__bin_op__(other, operator.mul)
+        return self.__bin_op__(other, np.multiply)
 
     def __truediv__(self, other):
-        return self.__bin_op__(other, operator.truediv)
+        return self.__bin_op__(other, np.divide)
 
     def copy(self):
         return TrackedCSRArray(

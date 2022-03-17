@@ -3,6 +3,7 @@ import pytest
 
 from movici_simulation_core.core.data_type import UNDEFINED
 from movici_simulation_core.data_tracker.csr_helpers import (
+    csr_binop,
     isclose,
     rows_equal,
     rows_contain,
@@ -255,3 +256,21 @@ def test_generate_update_unicode(data, row_ptr, mask, changed, exp_data, exp_row
     )
     assert np.array_equal(res_data, exp_data)
     assert np.array_equal(res_row_ptr, exp_row_ptr)
+
+
+@pytest.mark.parametrize(
+    "operator, expected",
+    [
+        (np.add, [2, 4, 6]),
+        (np.subtract, [0, 0, 2]),
+        (np.multiply, [1, 4, 8]),
+        (np.divide, [1, 1, 2]),
+        (np.minimum, [1, 2, 2]),
+    ],
+)
+def test_csr_binop(operator, expected):
+    # csr array in form [[1], [2,4], []]
+    data = np.array([1, 2, 4], dtype=int)
+    row_ptr = np.array([0, 1, 3, 3])
+    operand = np.array([1, 2, 3])
+    np.testing.assert_array_equal(csr_binop(data, row_ptr, operand, operator), expected)

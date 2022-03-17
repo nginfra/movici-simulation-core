@@ -105,6 +105,21 @@ def _substituted_min(data, empty_row):
     return np.min(data)
 
 
+def csr_binop(data, row_ptr, operand, operator):
+    """Perform binary operation ``operator`` rowwise on a csr array, the operand must be a 1d array
+    of length equal to the number of rows in the csr array
+    """
+    if len(operand) != len(row_ptr) - 1:
+        raise ValueError("Can only add to CSR arrays if array length equals number of rows")
+    rv = np.zeros_like(data)
+
+    for idx, val in enumerate(operand):
+        begin, end = row_ptr[idx], row_ptr[idx + 1]
+
+        rv[begin:end] = operator(data[begin:end], val)
+    return rv
+
+
 def assert_numeric_array(arr):
     if getattr(arr, "dtype", None) not in number_domain:
         raise TypeError("Only numeric arrays are supported")

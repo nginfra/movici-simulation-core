@@ -5,6 +5,8 @@ import typing as t
 
 import numpy as np
 
+from movici_simulation_core.core.attribute_spec import AttributeSpec
+
 from . import state as state_
 from .attribute import AttributeField, PropertyField
 from .index import Index
@@ -61,6 +63,9 @@ class EntityGroup:
 
     def get_attribute(self, identifier: AttributeIdentifier):
         return self.state.get_attribute(identifier)
+
+    def register_attribute(self, spec: AttributeSpec, flags: int = 0, rtol=0.00001, atol=1e-8):
+        return self.state.register_attribute(spec, flags, rtol, atol)
 
     @lifecycle.deprecated(alternative="EntityGroup.get_attribute")
     def get_property(self, identifier: AttributeIdentifier):

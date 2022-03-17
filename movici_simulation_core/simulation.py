@@ -431,7 +431,7 @@ class ModelRunner:
         except Exception as e:
             self.socket.send(ErrorMessage(str(e)))
             logger.critical(str(e))
-            logger.debug(traceback.format_exc())
+            logger.info(traceback.format_exc())
             if model:
                 # noinspection PyBroadException
                 try:

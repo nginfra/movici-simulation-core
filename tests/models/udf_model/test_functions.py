@@ -30,9 +30,6 @@ def test_sum(input_arr, exp):
         ([np.array([[1], [2], [3]])], [1, 2, 3]),
         ([ensure_csr_data([[1, 2], [3, 4], [5], []])], [2, 4, 5, UNDEFINED[int]]),
         ([np.array([1, 2, 3]), np.array([3, 2, 1]), np.array([2, 3, 1])], [3, 3, 3]),
-        ([np.array([1, 2, 3]), ensure_csr_data([[1, 2], [3, 4], [2]])], [2, 4, 3]),
-        ([3, ensure_csr_data([[1, 2], [3, 4], [2]])], [3, 4, 3]),
-        ([2, np.array([1, 2, 3])], [2, 2, 3]),
         ([np.array([1, 2, 3]), 2], [2, 2, 3]),
     ],
 )
@@ -78,6 +75,16 @@ def test_default_uniform(input_arr, default, exp):
             ensure_csr_data([[1, 2], None], data_type=DataType(int, csr=True)),
             0,
             ensure_csr_data([[1, 2], [0]]),
+        ),
+        (
+            ensure_csr_data([[1, 2], None], data_type=DataType(int, csr=True)),
+            np.array([2, 3]),
+            ensure_csr_data([[1, 2], [3]]),
+        ),
+        (
+            ensure_csr_data([[1, 2], None], data_type=DataType(int, csr=True)),
+            ensure_csr_data([None, [1, 2]], data_type=DataType(int, csr=True)),
+            ensure_csr_data([[1, 2], [1, 2]]),
         ),
     ],
 )

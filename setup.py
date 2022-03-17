@@ -66,6 +66,7 @@ setup(
             f"generalized_journey_time = {MODEL_PATH}.generalized_journey_time.gjt_model:GJTModel",
             f"opportunities = {MODEL_PATH}.opportunities.model:Model",
             f"overlap_status = {MODEL_PATH}.overlap_status.model:Model",
+            f"shortest_path = {MODEL_PATH}.shortest_path.model:ShortestPathModel",
             f"tape_player = {MODEL_PATH}.tape_player.model:Model",
             f"time_window_status = {MODEL_PATH}.time_window_status.model:Model",
             f"traffic_assignment_calculation = {MODEL_PATH}.traffic_assignment_calculation.model:Model",  # noqa: E501

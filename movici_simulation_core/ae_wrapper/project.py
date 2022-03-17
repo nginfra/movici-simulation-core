@@ -29,7 +29,10 @@ from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
 from movici_simulation_core.data_tracker.csr_helpers import get_row
 
 EPSILON = 1e-12
-GEOM_ACC = 7  # 7 decimals of lat/lon means a
+
+# 9 decimals of lat/lon accuracy means a precision < 1mm, which is necessary for nodes that have
+# been shifted by ``PointGenerator`` to prevent duplicate nodes
+GEOM_ACC = 9
 
 
 class TransportMode:
@@ -116,10 +119,10 @@ class ProjectWrapper:
 
         point_strs = []
         lats, lons = self.transformer.transform(nodes.geometries[:, 0], nodes.geometries[:, 1])
-        lats = np.round(lats, decimals=7)
-        lons = np.round(lons, decimals=7)
+        lats = np.round(lats, decimals=GEOM_ACC)
+        lons = np.round(lons, decimals=GEOM_ACC)
         for node_id, xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
-            point_strs.append(f"POINT({lon:.7f} {lat:.7f})")
+            point_strs.append(f"POINT({lon:.{GEOM_ACC}f} {lat:.{GEOM_ACC}f})")
             self._node_id_to_point[node_id] = (lat, lon)
 
         sql = (
@@ -164,7 +167,7 @@ class ProjectWrapper:
                     links.geometries.data[:, 0], links.geometries.data[:, 1]
                 )
             ),
-            decimals=7,
+            decimals=GEOM_ACC,
         )
 
         for row_idx, (from_node, to_node) in enumerate(zip(new_from_nodes, new_to_nodes)):
@@ -245,7 +248,7 @@ class ProjectWrapper:
         linestring[0] = from_node_point
         linestring[-1] = to_node_point
 
-        linestring2d = [f"{lon:.7f} {lat:.7f}" for lat, lon in linestring]
+        linestring2d = [f"{lon:.{GEOM_ACC}f} {lat:.{GEOM_ACC}f}" for lat, lon in linestring]
         linestring_str = ",".join(linestring2d)
         return f"LINESTRING({linestring_str})"
 

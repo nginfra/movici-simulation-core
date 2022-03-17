@@ -166,7 +166,11 @@ class GJTCalculator:
         travel_time = self.network.all_shortest_paths()
         f = 1.5
         freq = self.frequency.csr.as_matrix()
-        return crowdedness * travel_time + safe_divide(f, (2 * freq), fill_value=np.inf)
+
+        no_trains = freq < 1e-20
+        rv = crowdedness * travel_time + safe_divide(f, (2 * freq), fill_value=0)
+        rv[no_trains] = 0
+        return rv
 
     def crowdedness(self):
         avg_passenger_flow = self.average_passenger_flow()

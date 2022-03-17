@@ -123,17 +123,19 @@ class Model(TrackedModel, name="unit_conversions"):
         if from_attr.is_initialized():
             coef = 0.0
             if od_type == "roads":
-                coef += tape["load_capacity_truck_medium"] * tape["share_truck_medium"]
-                coef += tape["load_capacity_tractor_light"] * tape["share_tractor_light"]
-                coef += tape["load_capacity_tractor_heavy"] * tape["share_tractor_heavy"]
+                coef += tape["road_effective_load_factor"] * (
+                    tape["load_capacity_truck_medium"] * tape["share_truck_medium"]
+                    + tape["load_capacity_tractor_light"] * tape["share_tractor_light"]
+                    + tape["load_capacity_tractor_heavy"] * tape["share_tractor_heavy"]
+                )
+
             elif od_type == "waterways":
-                coef += tape["load_capacity_rhc_vessel"] * tape["share_rhc_vessel"]
-                coef += tape["load_capacity_large_vessel"] * tape["share_large_vessel"]
-            elif od_type == "tracks":
-                coef += tape["load_capacity_train_electric"] * tape["share_train_electric"]
-                coef += tape["load_capacity_train_diesel"] * tape["share_large_train_diesel"]
+                coef += tape["waterway_effective_load_factor"] * (
+                    tape["load_capacity_rhc"] * tape["share_rhc"]
+                    + tape["load_capacity_lr"] * tape["share_lr"]
+                )
             else:
-                raise RuntimeError(f"od_type {od_type} should be one of roads, waterways, tracks")
+                raise RuntimeError(f"od_type {od_type} should be one of roads, waterways")
             to_attr[:] = from_attr.array * coef
 
     @staticmethod

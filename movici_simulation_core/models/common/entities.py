@@ -138,10 +138,14 @@ class VirtualLinkEntity(LinkEntity):
     capacity = field(Transport_Capacity_Hours, flags=OPT)
 
 
+class TransportLinkEntity(LinkEntity):
+    layout = field(Transport_Layout, flags=OPT)
+
+
 class TransportSegmentEntity(LinkEntity):
-    layout = field(Transport_Layout, flags=INIT)
-    _max_speed = field(Transport_MaxSpeed, flags=INIT)
-    capacity = field(Transport_Capacity_Hours, flags=INIT)
+    layout = field(Transport_Layout, flags=OPT)
+    _max_speed = field(Transport_MaxSpeed, flags=OPT)
+    capacity = field(Transport_Capacity_Hours, flags=OPT)
 
     @property
     def max_speed(self):

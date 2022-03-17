@@ -125,3 +125,7 @@ def data_mask_compare(data_mask):
     elif isinstance(data_mask, list):
         return set(data_mask)
     return data_mask
+
+
+def assert_equivalent_data_mask(a, b):
+    assert data_mask_compare(a) == data_mask_compare(b)  # nosec

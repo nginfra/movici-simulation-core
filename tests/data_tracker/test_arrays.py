@@ -274,6 +274,12 @@ class TestTrackedArray:
             operator.mul,
             ensure_csr_data([[2, 4], [6, 8], [10], []]),
         ),
+        (
+            ensure_csr_data([[1, 2], [3, 4], [5], []]),
+            np.array([1, 2, 3, 4]),
+            operator.add,
+            ensure_csr_data([[2, 3], [5, 6], [8], []]),
+        ),
     ],
 )
 def test_csr_bin_ops(a, b, op, expected):

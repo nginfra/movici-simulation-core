@@ -87,6 +87,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "cef_f_truck_medium",
             "share_truck_medium",
             "load_capacity_truck_medium",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -94,6 +95,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "cef_f_tractor_light",
             "share_tractor_light",
             "load_capacity_tractor_light",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -101,6 +103,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "cef_f_tractor_heavy",
             "share_tractor_heavy",
             "load_capacity_tractor_heavy",
+            "road_effective_load_factor",
         )
 
         add(
@@ -109,6 +112,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "nef_f_truck_medium",
             "share_truck_medium",
             "load_capacity_truck_medium",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -116,6 +120,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "nef_f_tractor_light",
             "share_tractor_light",
             "load_capacity_tractor_light",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -123,6 +128,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "nef_f_tractor_heavy",
             "share_tractor_heavy",
             "load_capacity_tractor_heavy",
+            "road_effective_load_factor",
         )
 
         add(
@@ -131,6 +137,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "ecf_f_truck_medium",
             "share_truck_medium",
             "load_capacity_truck_medium",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -138,6 +145,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "ecf_f_tractor_light",
             "share_tractor_light",
             "load_capacity_tractor_light",
+            "road_effective_load_factor",
         )
         add(
             CARGO,
@@ -145,6 +153,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             "ecf_f_tractor_heavy",
             "share_tractor_heavy",
             "load_capacity_tractor_heavy",
+            "road_effective_load_factor",
         )
 
         add(
@@ -174,48 +183,114 @@ class Model(TrackedModel, name="traffic_kpi"):
         add(
             CARGO,
             CO2,
-            "cef_f_rhc_vessel",
-            "share_rhc_vessel",
-            "load_capacity_rhc_vessel",
+            "cef_f_rhc",
+            "share_rhc",
+            "load_capacity_rhc",
+            "waterway_effective_load_factor",
         )
         add(
             CARGO,
             CO2,
-            "cef_f_large_vessel",
-            "share_large_vessel",
-            "load_capacity_large_vessel",
+            "cef_f_lr",
+            "share_lr",
+            "load_capacity_lr",
+            "waterway_effective_load_factor",
         )
         add(
             CARGO,
             NOX,
-            "nef_f_rhc_vessel",
-            "share_rhc_vessel",
-            "load_capacity_rhc_vessel",
+            "nef_f_rhc",
+            "share_rhc",
+            "load_capacity_rhc",
+            "waterway_effective_load_factor",
         )
         add(
             CARGO,
             NOX,
-            "nef_f_large_vessel",
-            "share_large_vessel",
-            "load_capacity_large_vessel",
+            "nef_f_lr",
+            "share_lr",
+            "load_capacity_lr",
+            "waterway_effective_load_factor",
         )
         add(
             CARGO,
             ENERGY,
-            "ecf_f_rhc_vessel",
-            "share_rhc_vessel",
-            "load_capacity_rhc_vessel",
+            "ecf_f_rhc",
+            "share_rhc",
+            "load_capacity_rhc",
+            "waterway_effective_load_factor",
         )
         add(
             CARGO,
             ENERGY,
-            "ecf_f_large_vessel",
-            "share_large_vessel",
-            "load_capacity_large_vessel",
+            "ecf_f_lr",
+            "share_lr",
+            "load_capacity_lr",
+            "waterway_effective_load_factor",
         )
 
     def add_tracks_coefficients(self):
-        raise RuntimeError("tracks coefficients not defined in model")
+        add = self.coefficients_tape.add_coefficient
+        add(
+            CARGO,
+            CO2,
+            "cef_f_train_medium_length",
+            "share_train_medium_length",
+        )
+        add(
+            CARGO,
+            NOX,
+            "nef_f_train_medium_length",
+            "share_train_medium_length",
+        )
+        add(
+            CARGO,
+            ENERGY,
+            "ecf_f_train_medium_length",
+            "share_train_medium_length",
+        )
+        add(
+            PASSENGER,
+            CO2,
+            "cef_p_ic",
+            "share_ic",
+            "passenger_train_capacity",
+        )
+        add(
+            PASSENGER,
+            NOX,
+            "nef_p_ic",
+            "share_ic",
+            "passenger_train_capacity",
+        )
+        add(
+            PASSENGER,
+            ENERGY,
+            "ecf_p_ic",
+            "share_ic",
+            "passenger_train_capacity",
+        )
+        add(
+            PASSENGER,
+            CO2,
+            "cef_p_st",
+            "share_st",
+            "passenger_train_capacity",
+        )
+        add(
+            PASSENGER,
+            NOX,
+            "nef_p_st",
+            "share_st",
+            "passenger_train_capacity",
+        )
+        add(
+            PASSENGER,
+            ENERGY,
+            "ecf_p_st",
+            "share_st",
+            "passenger_train_capacity",
+        )
 
     def set_scenario_parameters(self, config, config_key: str):
         _scenario_parameters = config.get(config_key, [])
@@ -346,10 +421,25 @@ class Model(TrackedModel, name="traffic_kpi"):
         scenario_multiplier = self._compute_scenario_multiplier(
             category=category
         )  # some factor from our other tape
+        transport_type = model_util.get_transport_type(self.config)
         for factors in self.coefficients_tape[(category, kpi)]:
-            coefficient_times_share = (
-                factors[0] * factors[1] * factors[2] * multiplier * scenario_multiplier
-            )
+            if transport_type != "tracks" and category == CARGO:
+                f0, f1, f2, f3 = factors
+                base_coeff = f0 * f1 * f2 * f3
+            elif transport_type == "roads" and category == PASSENGER:
+                # passenger vehicles do not have effective load factor
+                f0, f1, f2 = factors
+                base_coeff = f0 * f1 * f2
+            elif transport_type == "tracks" and category == CARGO:
+                f0, f1 = factors
+                # flow is in tonne for cargo train, kpi factors are also based on tkm
+                base_coeff = f0 * f1
+            else:
+                f0, f1, f2 = factors
+                # flow is in the number of passengers, passenger trains do not have effective load
+                # factor, kpi factors are based on vkm
+                base_coeff = f0 * f1 / f2
+            coefficient_times_share = base_coeff * multiplier * scenario_multiplier
             output.array += flows.array * lengths.array * coefficient_times_share
 
     def _compute_scenario_multiplier(self, category: str) -> float:

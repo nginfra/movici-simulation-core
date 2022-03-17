@@ -1,5 +1,5 @@
 {
-  "name": "gjt",
+  "name": "generalized_journey_time",
   "schema": {
     "properties": {
       "additionalItems": false,

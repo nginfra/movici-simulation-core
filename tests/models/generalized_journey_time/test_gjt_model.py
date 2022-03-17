@@ -22,7 +22,7 @@ import pytest
 @pytest.fixture
 def model_config(railway_network_name):
     return {
-        "type": "gjt",
+        "type": "generalized_journey_time",
         "travel_time": [None, "transport.passenger_average_time"],
         "transport_segments": [[railway_network_name, "track_segment_entities"]],
     }
@@ -114,9 +114,9 @@ class TestGJTModel:
         np.testing.assert_allclose(
             gjt,
             [
-                [np.inf, gjt_1, gjt_2],
-                [gjt_1, np.inf, gjt_2],
-                [gjt_2, gjt_2, np.inf],
+                [0, gjt_1, gjt_2],
+                [gjt_1, 0, gjt_2],
+                [gjt_2, gjt_2, 0],
             ],
             atol=1e-3,
         )
@@ -193,9 +193,9 @@ class TestGJTCalculator:
         np.testing.assert_allclose(
             gjt,
             [
-                [np.inf, gjt_1, gjt_2],
-                [gjt_1, np.inf, gjt_2],
-                [gjt_2, gjt_2, np.inf],
+                [0, gjt_1, gjt_2],
+                [gjt_1, 0, gjt_2],
+                [gjt_2, gjt_2, 0],
             ],
             atol=1e-3,
         )
@@ -224,9 +224,9 @@ class TestGJTCalculator:
             gjt,
             np.array(
                 [
-                    [np.inf, gjt_1, gjt_2],
-                    [gjt_1, np.inf, gjt_2],
-                    [gjt_2, gjt_2, np.inf],
+                    [0, gjt_1, gjt_2],
+                    [gjt_1, 0, gjt_2],
+                    [gjt_2, gjt_2, 0],
                 ]
             ),
             atol=1e-3,

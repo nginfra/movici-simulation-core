@@ -586,7 +586,9 @@ def ensure_csr_data(
     if isinstance(value, TrackedCSRArray):
         return value
 
-    if isinstance(value, list) and (len(value) == 0 or isinstance(value[0], (list, np.ndarray))):
+    if isinstance(value, list) and (
+        len(value) == 0 or isinstance(value[0], (list, np.ndarray, type(None)))
+    ):
         data, row_ptr = convert_nested_list_to_csr(value, data_type)
 
     elif isinstance(value, dict):

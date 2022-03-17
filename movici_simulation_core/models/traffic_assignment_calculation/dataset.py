@@ -20,6 +20,7 @@ from movici_simulation_core.models.common.attributes import (
     Transport_PassengerDemand,
     Transport_CargoDemand,
     Transport_AdditionalTime,
+    Transport_Capacity_Hours,
 )
 from movici_simulation_core.models.common.entities import (
     TransportSegmentEntity,
@@ -47,7 +48,7 @@ class DemandNodeEntity(PointEntity):
 
 
 class TrackSegmentEntity(TrafficTransportSegmentEntity):
-    __entity_name__ = "track_segment_entitites"
+    __entity_name__ = "track_segment_entities"
     _max_speed = field(Transport_MaxSpeed, flags=OPT)
     average_time = field(Transport_AverageTime, flags=0)
     passenger_flow = field(Transport_PassengerFlow, flags=PUB)
@@ -55,6 +56,7 @@ class TrackSegmentEntity(TrafficTransportSegmentEntity):
 
 
 class PassengerTrackSegmentEntity(TrackSegmentEntity):
+    capacity = field(Transport_Capacity_Hours, flags=OPT)
     passenger_max_speed = field(Transport_PassengerVehicleMaxSpeed, flags=OPT)
     passenger_average_time = field(Transport_PassengerAverageTime, flags=PUB)
 
@@ -67,6 +69,7 @@ class PassengerTrackSegmentEntity(TrackSegmentEntity):
 
 
 class CargoTrackSegmentEntity(TrackSegmentEntity):
+    capacity = field(Transport_Capacity_Hours, flags=OPT)
     cargo_max_speed = field(Transport_CargoVehicleMaxSpeed, flags=OPT)
     cargo_average_time = field(Transport_CargoAverageTime, flags=PUB)
     cargo_allowed = field(Transport_CargoAllowed, flags=OPT)

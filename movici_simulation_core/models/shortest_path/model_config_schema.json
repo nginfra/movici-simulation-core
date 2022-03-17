@@ -1,0 +1,54 @@
+{
+  "name": "shortest_path",
+  "schema": {
+    "required": ["cost_factor", "calculations"],
+    "additionalProperties": false,
+    "properties": {
+      "cost_factor": {
+        "$ref": "#/definitions/attributeDef"
+      },
+      "no_update_shortest_path": {
+        "type": "boolean",
+        "default": false
+      },
+      "calculations": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalItems": false,
+          "minItems": 1,
+          "properties": {
+            "type": {
+              "enum": ["sum", "weighted_average"],
+              "type": "string"
+            },
+            "input": {
+              "$ref": "#/definitions/attributeDef"
+            },
+            "output": {
+              "$ref": "#/definitions/attributeDef"
+            }
+          }
+        }
+      }
+    },
+    "definitions": {
+      "attributeDef": {
+        "type": "array",
+        "items": [
+          {
+            "type": ["string", "null"]
+          }
+        ]
+      }
+    }
+  },
+  "entity_categories": [
+    {
+      "name": "transport_segments",
+      "required": true,
+      "require_one": true
+    }
+  ],
+  "strict_validation": true
+}

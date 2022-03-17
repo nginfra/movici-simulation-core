@@ -41,7 +41,9 @@ class CsvTape:
         return self.last_pos != self.current_pos
 
     def _create_timeline(self, timeline: pd.Series):
-        timeline = timeline.apply(self.timeline_info.seconds_to_timestamp, convert_dtype=int).array
+        timeline = timeline.apply(
+            self.timeline_info.seconds_to_timestamp, convert_dtype=True
+        ).array
 
         if not np.all(timeline[:-1] <= timeline[1:]):
             raise ValueError("Time data is not sorted.")

@@ -291,6 +291,32 @@ def test_with_csr_to_csr(create_model_tester):
     }
 
 
+def test_csr_with_uniform(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"csr": [None, "in_csr"], "a": [None, "in_a"]},
+            "functions": [
+                {
+                    "expression": "csr+a",
+                    "output": [None, "out_csr"],
+                },
+            ],
+        }
+    )
+
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out_csr": [[11, 12], [22, 24], []],
+            }
+        }
+    }
+
+
 def test_default(create_model_tester):
     tester = create_model_tester(
         {
@@ -344,6 +370,7 @@ def test_default_csr_to_csr(create_model_tester):
 
 
 def test_multi_arg_min(create_model_tester):
+
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -363,6 +390,60 @@ def test_multi_arg_min(create_model_tester):
             "some_entities": {
                 "id": [1, 2, 3],
                 "out": [1, 2, 2],
+            }
+        }
+    }
+
+
+def test_csr_uniform_min(create_model_tester):
+
+    tester: ModelTester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"csr": [None, "in_csr"], "a": [None, "in_a"]},
+            "functions": [
+                {
+                    "expression": "min(csr, a)",
+                    "output": [None, "out_csr"],
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out_csr": [[1, 1], [2, 2], []],
+            }
+        }
+    }
+
+
+def test_csr_scalar_min(create_model_tester):
+
+    tester: ModelTester = create_model_tester(
+        {
+            "entity_group": [["some_dataset", "some_entities"]],
+            "inputs": {"csr": [None, "in_csr"]},
+            "functions": [
+                {
+                    "expression": "min(csr, 11)",
+                    "output": [None, "out_csr"],
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out_csr": [[10, 11], [11, 11], []],
             }
         }
     }
