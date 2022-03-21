@@ -1,7 +1,11 @@
 {
   "name": "shortest_path",
   "schema": {
-    "required": ["cost_factor", "calculations"],
+    "required": [
+      "cost_factor",
+      "calculations",
+      "transport_segments"
+    ],
     "additionalProperties": false,
     "properties": {
       "cost_factor": {
@@ -11,16 +15,35 @@
         "type": "boolean",
         "default": false
       },
+      "transport_segments": {
+        "$ref": "#/definitions/entityCategoryDef"
+      },
       "calculations": {
         "type": "array",
         "items": {
           "type": "object",
-          "additionalItems": false,
+          "additionalProperties": false,
           "minItems": 1,
           "properties": {
             "type": {
-              "enum": ["sum", "weighted_average"],
+              "enum": [
+                "sum",
+                "weighted_average"
+              ],
               "type": "string"
+            },
+            "single_source_entity_id": {
+              "type": [
+                "null",
+                "integer"
+              ],
+              "minimum": 0
+            },
+            "single_source_entity_reference": {
+              "type": [
+                "null",
+                "string"
+              ]
             },
             "input": {
               "$ref": "#/definitions/attributeDef"
@@ -37,18 +60,36 @@
         "type": "array",
         "items": [
           {
-            "type": ["string", "null"]
+            "type": "null"
+          },
+          {
+            "type": "string",
+            "movici.type": "attribute"
           }
-        ]
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "entityCategoryDef": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": [
+            {
+              "type": "string",
+              "movici.type": "dataset"
+            },
+            {
+              "type": "string",
+              "movici.type": "entityGroup"
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "minItems": 1,
+        "maxItems": 1
       }
     }
-  },
-  "entity_categories": [
-    {
-      "name": "transport_segments",
-      "required": true,
-      "require_one": true
-    }
-  ],
-  "strict_validation": true
+  }
 }

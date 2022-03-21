@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import typing as t
+
+import numpy as np
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.data_tracker.attribute import (
     INIT,
     PUB,
+    REQUIRED,
     SUB,
     CSRAttribute,
     UniformAttribute,
@@ -49,18 +53,30 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
                 schema.get_spec(conf["input"], default_data_type=DataType(float)),
                 flags=SUB,
             )
+            if entity_resolver := self.single_source_entity_resolver(
+                conf.get("single_source_entity_id"), conf.get("single_source_entity_reference")
+            ):
+                output_dtype = DataType(float, csr=False)
+                if conf.get("singleSourceEntityReference") is not None:
+                    self.entity_groups["virtual_nodes"].reference.flags |= REQUIRED
+            else:
+                output_dtype = DataType(float, csr=True)
             output_attr = self.entity_groups["virtual_nodes"].register_attribute(
-                schema.get_spec(conf["output"], default_data_type=DataType(float, csr=True)),
+                schema.get_spec(conf["output"], default_data_type=output_dtype),
                 flags=PUB,
             )
             self.calculators.append(
-                calc_class(input_attribute=input_attr, output_attribute=output_attr)
+                calc_class(
+                    input_attribute=input_attr,
+                    output_attribute=output_attr,
+                    single_source_entity_resolver=entity_resolver,
+                )
             )
 
     def initialize(self, **_):
         self.network = Network(**self.entity_groups, cost_factor=self.cost_factor.array)
         for calculator in self.calculators:
-            calculator.network = self.network
+            calculator.initialize(self.network)
 
     def update(self, **_) -> t.Optional[Moment]:
 
@@ -73,12 +89,55 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
         for calculator in self.calculators:
             calculator.update(weights)
 
+    def single_source_entity_resolver(
+        self, entity_id: t.Optional[int], entity_ref: t.Optional[str]
+    ):
+        if entity_id is None and entity_ref is None:
+            return None
+
+        if entity_id is not None and entity_ref is not None:
+            raise ValueError(
+                "supply only one of 'single_source_entity_id' or 'single_source_entity_reference',"
+                " not both"
+            )
+        if entity_id is not None:
+            return functools.partial(self.resolve_entity_by_id, entity_id)
+        return functools.partial(self.resolve_entity_by_ref, entity_ref)
+
+    def resolve_entity_by_id(self, entity_id: int) -> int:
+        nodes = self.entity_groups["virtual_nodes"]
+        idx = nodes.index[entity_id]
+        if idx == -1:
+            raise ValueError(f"Entity id {entity_id} not found in {nodes.__entity_name__}")
+        return entity_id
+
+    def resolve_entity_by_ref(self, ref: str) -> int:
+        nodes = self.entity_groups["virtual_nodes"]
+        all_refs = nodes.reference.array
+        idx = np.flatnonzero(all_refs == ref)
+        if len(idx) == 0:
+            raise ValueError(f"reference {ref} not found in {nodes.__entity_name__}")
+        if len(idx) > 1:
+            raise ValueError(f"Duplicated refencence {ref} found in {nodes.__entity_name__}")
+        return nodes.index.ids[idx[0]]
+
 
 @dataclasses.dataclass
 class NetworkCalculator:
     input_attribute: UniformAttribute
-    output_attribute: CSRAttribute
+    output_attribute: t.Union[CSRAttribute, UniformAttribute]
+    single_source_entity_resolver: t.Optional[t.Callable[[], int]] = None
     network: t.Optional[Network] = None
+    source_entity: t.Optional[int] = dataclasses.field(init=False, default=None)
+    no_path_found: t.Optional[int] = dataclasses.field(init=False, default=None)
+
+    def initialize(self, network: Network):
+        self.network = network
+        if self.single_source_entity_resolver is not None:
+            self.source_entity = self.single_source_entity_resolver()
+        self.no_path_found = self.output_attribute.options.special
+        if self.no_path_found is None:
+            self.no_path_found = -1
 
     def update(self, weights=None):
         raise NotImplementedError
@@ -86,15 +145,41 @@ class NetworkCalculator:
 
 class SumCalculator(NetworkCalculator):
     def update(self, weights=None):
-        result = self.network.all_shortest_paths_sum(self.input_attribute.array)
+        if self.source_entity is None:
+            return self.update_for_all_sources()
+        return self.update_for_single_source()
+
+    def update_for_single_source(self):
+        result = self.network.shortest_path_sum(
+            self.source_entity, self.input_attribute.array, no_path_found=self.no_path_found
+        )
+        self.output_attribute.array[:] = result
+
+    def update_for_all_sources(self):
+        result = self.network.all_shortest_paths_sum(
+            self.input_attribute.array, no_path_found=self.no_path_found
+        )
         self.output_attribute.csr.update_from_matrix(result)
 
 
 class WeightedAverageCalculator(NetworkCalculator):
     def update(self, weights=None):
-        no_path_found = self.output_attribute.options.special
+        if self.source_entity is None:
+            return self.update_for_all_sources(weights)
+        return self.update_for_single_source(weights)
+
+    def update_for_single_source(self, weights):
+        result = self.network.shortest_path_weighted_average(
+            source_node_id=self.source_entity,
+            values=self.input_attribute.array,
+            weights=weights,
+            no_path_found=self.no_path_found,
+        )
+        self.output_attribute.array[:] = result
+
+    def update_for_all_sources(self, weights):
         result = self.network.all_shortest_paths_weighted_average(
-            self.input_attribute.array, weights=weights, no_path_found=no_path_found
+            self.input_attribute.array, weights=weights, no_path_found=self.no_path_found
         )
         self.output_attribute.csr.update_from_matrix(result)
 

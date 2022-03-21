@@ -1,10 +1,9 @@
 import json
 import typing as t
-
+import jsonschema
 from movici_simulation_core.models.shortest_path import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.shortest_path.model import ShortestPathModel
 from movici_simulation_core.testing.model_schema import model_config_validator
-from movici_simulation_core.testing.model_tester import ModelTester
 import numpy as np
 import pytest
 
@@ -36,24 +35,23 @@ def model_config(get_model_config):
     )
 
 
-class TestShortestPathModel:
-    @pytest.fixture
-    def special(self):
-        return -2
+@pytest.fixture
+def special():
+    return -2
 
-    @pytest.fixture
-    def init_data(self, road_network_name, road_network_for_traffic, special):
-        road_network_for_traffic["general"] = {
-            "special": {"virtual_node_entities.transport.shortest_path_length": special}
+
+@pytest.fixture
+def init_data(road_network_name, road_network_for_traffic, special):
+    road_network_for_traffic["general"] = {
+        "special": {
+            "virtual_node_entities.transport.shortest_path_length": special,
+            "virtual_node_entities.transport.total_length": special,
         }
-        return [(road_network_name, road_network_for_traffic)]
+    }
+    return [(road_network_name, road_network_for_traffic)]
 
-    @pytest.fixture
-    def tester(self, create_model_tester, model_config):
-        return create_model_tester(
-            ShortestPathModel, model_config, raise_on_premature_shutdown=False
-        )
 
+class TestShortestPathModel:
     @pytest.fixture
     def update_data(self, road_network_name):
         return {
@@ -66,7 +64,10 @@ class TestShortestPathModel:
             }
         }
 
-    def test_data_mask(self, tester: ModelTester, road_network_name):
+    def test_data_mask(self, model_config, create_model_tester, road_network_name):
+        tester = create_model_tester(
+            ShortestPathModel, model_config, raise_on_premature_shutdown=False
+        )
         datamask = tester.initialize()
 
         def setify(dm):
@@ -265,16 +266,138 @@ class TestShortestPathModel:
         )
 
 
+class TestShortestPathModelSingleSource:
+    @pytest.fixture
+    def update_data(self, road_network_name):
+        return {
+            road_network_name: {
+                "road_segment_entities": {
+                    "id": [101, 102, 103, 104],
+                    "transport.average_time": [1, 2, 3, 10],
+                    "shape.length": [1, 2, 3, 4],
+                }
+            }
+        }
+
+    @pytest.mark.parametrize(
+        "calculation_type,source, expected",
+        [
+            ("sum", "VN2", [1, 0, 3]),
+            ("sum", 11, [1, 0, 3]),
+            ("weighted_average", 11, [1, -2, (1 * 1 + 2 * 2) / 3]),
+        ],
+    )
+    def test_shortest_path_single_source(
+        self,
+        create_model_tester,
+        get_model_config,
+        update_data,
+        road_network_name,
+        calculation_type,
+        source,
+        expected,
+    ):
+        key = (
+            "single_source_entity_id"
+            if isinstance(source, int)
+            else "single_source_entity_reference"
+        )
+        model_config = get_model_config(
+            calculation={
+                "type": calculation_type,
+                "input": [None, "shape.length"],
+                "output": [None, "transport.total_length"],
+                key: source,
+            }
+        )
+        tester = create_model_tester(
+            ShortestPathModel, model_config, raise_on_premature_shutdown=False
+        )
+        tester.initialize()
+        result, _ = tester.update(0, update_data)
+        length = result[road_network_name]["virtual_node_entities"]["transport.total_length"]
+        np.testing.assert_allclose(length, expected)
+
+
 @pytest.fixture
 def json_schema():
     return json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
 
 
-def test_validate_model_config(model_config, json_schema):
+@pytest.mark.parametrize(
+    "extra_props, calculation",
+    [
+        (None, None),
+        ({"no_update_shortest_path": True}, None),
+        ({"no_update_shortest_path": False}, None),
+        (
+            None,
+            {
+                "type": "sum",
+                "input": [None, "foo_attr"],
+                "output": [None, "bar_attr"],
+                "single_source_entity_reference": "ref",
+            },
+        ),
+        (
+            None,
+            {
+                "type": "sum",
+                "input": [None, "foo_attr"],
+                "output": [None, "bar_attr"],
+                "single_source_entity_id": 42,
+            },
+        ),
+    ],
+)
+def test_validate_model_config(
+    extra_props, calculation, model_config, get_model_config, json_schema
+):
+    if calculation is not None:
+        model_config = get_model_config(calculation)
+    if extra_props:
+        model_config.update(extra_props)
     assert model_config_validator(json_schema)(model_config)
 
 
-@pytest.mark.parametrize("value", [True, False])
-def test_validate_config_with_no_update_shortest_path(value, model_config, json_schema):
-    model_config["no_update_shortest_path"] = value
-    assert model_config_validator(json_schema)(model_config)
+@pytest.mark.parametrize(
+    "extra_props, calculation",
+    [
+        ({"invalid": True}, None),
+        (
+            None,
+            {
+                "type": "invalid",
+                "input": [None, "foo_attr"],
+                "output": [None, "bar_attr"],
+            },
+        ),
+        (
+            None,
+            {
+                "type": "sum",
+                "input": [None, "foo_attr"],
+                "output": [None, "bar_attr"],
+                "single_source_entity_reference": 42,
+            },
+        ),
+        (
+            None,
+            {
+                "type": "sum",
+                "input": [None, "foo_attr"],
+                "output": [None, "bar_attr"],
+                "single_source_entity_id": "ref",
+            },
+        ),
+    ],
+)
+def test_invalid_model_config(
+    extra_props, calculation, model_config, get_model_config, json_schema
+):
+    if calculation is not None:
+        model_config = get_model_config(calculation)
+    if extra_props:
+        model_config.update(extra_props)
+    with pytest.raises(jsonschema.ValidationError):
+        model_config_validator(json_schema)(model_config)

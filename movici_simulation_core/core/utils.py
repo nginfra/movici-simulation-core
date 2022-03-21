@@ -11,7 +11,7 @@ def configure_global_plugins(
         try:
             plugin: types.Plugin = entry_point.load()
             plugin.install(app)
-        except ImportError:
+        except (ImportError, pkg_resources.DistributionNotFound):
             if ignore_missing_imports:
                 continue
             raise
