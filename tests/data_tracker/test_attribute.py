@@ -208,6 +208,29 @@ def test_generate_update_with_existing_data():
     assert np.array_equal(entity.attr.generate_update([1, 1])["data"], np.array([42, undefined]))
 
 
+def test_generate_update_multidim():
+    entity = get_entity_with_initialized_attributes(2)
+    entity.multidim[:] = [[1, 0], [2, 0]]
+    entity.multidim.reset()
+
+    entity.multidim[0] = [2, 0]
+
+    np.testing.assert_array_equal(entity.multidim.generate_update()["data"], np.array([[2, 0]]))
+
+
+def test_generate_update_multidim_with_slice():
+    entity = get_entity_with_initialized_attributes(2)
+    entity.multidim[:] = [[1, 0], [2, 0]]
+    entity.multidim.reset()
+
+    entity.multidim[0] = [2, 0]
+    undefined = entity.attr.data_type.undefined
+
+    np.testing.assert_array_equal(
+        entity.multidim.generate_update([1, 1])["data"], np.array([[2, 0], [undefined, undefined]])
+    )
+
+
 @pytest.mark.parametrize("item", ["bla", "something_long"])
 def test_generate_update_uniform_unicode(item):
     entity = get_entity_with_initialized_attributes(2)

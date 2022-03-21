@@ -327,11 +327,11 @@ class UniformAttribute(Attribute):
         :return:
         """
         if mask is None:
-            data = self.array[self.array.changed]
+            data = self.array[self.changed]
         else:
             mask = np.array(mask, dtype=bool)
-            data = self.array.copy()
-            data[~self.array.changed] = self.data_type.undefined
+            data = np.asarray(self.array.copy())
+            data[~self.changed] = self.data_type.undefined
             data = data[mask]
 
         return {"data": data}
