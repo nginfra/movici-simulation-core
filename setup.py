@@ -80,4 +80,8 @@ setup(
     packages=find_packages(),
     install_requires=REQUIREMENTS,
     extras_require=EXTRA_REQUIREMENTS,
+    include_package_data=True,
+    package_data={
+        "movici_simulation_core.json_schemas": ["*"],
+    },
 )

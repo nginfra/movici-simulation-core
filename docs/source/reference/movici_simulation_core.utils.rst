@@ -74,6 +74,16 @@ settings
    :undoc-members:
    :show-inheritance:
 
+
+
+strategies 
+-----------
+
+.. automodule:: movici_simulation_core.utils.strategies
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

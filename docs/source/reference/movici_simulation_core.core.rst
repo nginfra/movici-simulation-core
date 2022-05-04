@@ -36,16 +36,6 @@ data\_type
 
 
 
-dataset\_path 
---------------
-
-.. automodule:: movici_simulation_core.core.dataset_path
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
 model\_adapter 
 ---------------
 

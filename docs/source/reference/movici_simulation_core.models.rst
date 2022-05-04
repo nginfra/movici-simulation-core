@@ -17,6 +17,7 @@ Subpackages
    movici_simulation_core.models.generalized_journey_time
    movici_simulation_core.models.opportunities
    movici_simulation_core.models.overlap_status
+   movici_simulation_core.models.shortest_path
    movici_simulation_core.models.tape_player
    movici_simulation_core.models.time_window_status
    movici_simulation_core.models.traffic_assignment_calculation

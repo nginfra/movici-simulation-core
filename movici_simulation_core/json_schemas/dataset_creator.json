@@ -1,0 +1,238 @@
+{
+  "$id": "http://movici.nl/schemas/dataset_creator_schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Dataset creator schema",
+  "description": "schema that defines config files to instantiate dataset creators",
+  "type": "object",
+  "required": [
+    "data", "name"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "__meta__": {
+      "type": "object",
+      "properties": {
+        "crs": {
+          "type": [
+            "string",
+            "integer"
+          ],
+          "default": "EPSG:28992"
+        }
+      },
+      "additionalProperties": false
+    },
+    "__sources__": {
+      "$ref": "#/$defs/sources"
+    },
+    "name": {
+      "type": "string"
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "version": {
+      "const": 4
+    },
+    "general": {
+      "$ref": "#/$defs/general_section"
+    },
+    "data": {
+      "$ref": "#/$defs/data_section"
+    }
+  },
+  "$defs": {
+    "sources": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "source_type",
+              "path"
+            ],
+            "properties": {
+              "source_type": {
+                "type": "string",
+                "enum": [
+                  "file"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    },
+    "general_section": {
+      "type": "object",
+      "properties": {
+        "enum": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "special": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string"
+            ]
+          }
+        }
+      }
+    },
+    "data_section": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/entity_group"
+      }
+    },
+    "entity_group": {
+      "type": "object",
+      "required": [
+        "__meta__"
+      ],
+      "properties": {
+        "__meta__": {
+          "$ref": "#/$defs/entity_group_meta"
+        }
+      },
+      "not": {
+        "required": [
+          "id"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/attribute"
+      }
+    },
+    "entity_group_meta": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": [
+            "source"
+          ],
+          "properties": {
+            "source": {
+              "$ref": "#/$defs/source_ref"
+            },
+            "geometry": {
+              "type": "string",
+              "enum": [
+                "points",
+                "lines",
+                "polygons"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": [
+            "count"
+          ],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "attribute": {
+      "type": "object",
+      "required": [
+        "property"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source_ref"
+        },
+        "property": {
+          "type": "string"
+        },
+        "const": {
+          "type": [
+            "boolean",
+            "number",
+            "string"
+          ]
+        },
+        "id_link": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/id_link_item"
+              },
+              "minItems": 1
+            },
+            {
+              "$ref": "#/$defs/id_link_item"
+            }
+          ]
+        },
+        "special": {
+          "type": [
+            "number",
+            "string"
+          ]
+        },
+        "enum": {
+          "type": "string"
+        },
+        "loaders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "json",
+              "csv",
+              "bool",
+              "int",
+              "float",
+              "str"
+            ]
+          }
+        }
+      }
+    },
+    "id_link_item": {
+      "type": "object",
+      "required": [
+        "entity_group",
+        "property"
+      ],
+      "properties": {
+        "entity_group": {
+          "type": "string"
+        },
+        "property": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "source_ref": {
+      "type": "string"
+    }
+  }
+}

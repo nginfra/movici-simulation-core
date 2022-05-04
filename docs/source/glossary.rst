@@ -1,21 +1,4 @@
-.. |Attribute| replace:: :term:`Attribute`
-.. |Attributes| replace:: :term:`Attributes<Attribute>`
-.. |Dataset| replace:: :term:`Dataset`
-.. |Datasets| replace:: :term:`Datasets<Dataset>`
-.. |Entity| replace:: :term:`Entity`
-.. |Entities| replace:: :term:`Entities<Entity>`
-.. |Entity group| replace:: :term:`Entity group`
-.. |Entity groups| replace:: :term:`Entity groups<Entity group>`
-.. |Model| replace:: :term:`Model`
-.. |Models| replace:: :term:`Models<Model>`
-.. |Orchestrator| replace:: :term:`Orchestrator`
-.. |Pub/Sub| replace:: :term:`Pub/Sub<Datamask>`
-.. |Scenario| replace:: :term:`Scenario`
-.. |Services| replace:: :term:`Services<Service>`
-.. |Simulation| replace:: :term:`Simulation`
-.. |Update| replace:: :term:`Update`
-.. |Updates| replace:: :term:`Updates<Update>`
-.. |World state| replace:: :term:`World state`
+.. include:: ./include/glossary.rst
 
 
 Glossary
@@ -96,6 +79,15 @@ Glossary
     The process of letting |Models| and |Services| work together in calculating the results of a
     |Scenario|. A simulation is created by instantiating the ``Simulation`` class.
   
+  Special
+  Special Value
+    A specific attribute value indicating a defined value that is outside the valid range of values
+    for that attribute. For example a flooding cell water height might indicate "dry" using `Special`
+    value, or a travel time attribute might use `Special` to indicate there is no route to a 
+    destination and therefore there is no defined travel time to that destination. Typical values
+    for `Special` are ``-9999`` or ``-1`` depending on context. See :ref:`movici-data-format-data-special-values`
+    for more information.
+
   Moment
   Timestamp
     ...

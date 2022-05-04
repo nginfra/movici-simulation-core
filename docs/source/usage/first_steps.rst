@@ -34,7 +34,7 @@ values
 
   The ``shape.`` prefix acts as a namespace to our ``edge_length`` attribute. Perhaps in the future we
   also want to do simulations containing medieval weaponry, and we want to distinguish the meaning 
-  the meaning of ``swords.edge_length`` from that of ``shape.edge_length``. By convention, amespaces 
+  the meaning of ``swords.edge_length`` from that of ``shape.edge_length``. By convention, namespaces 
   are the way to do that.
 
 We now have defined two entities of type ``square_entities`` in our ``figures`` dataset. The first 

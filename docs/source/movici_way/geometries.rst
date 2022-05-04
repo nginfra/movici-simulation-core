@@ -1,2 +1,5 @@
+
+.. _movici-geometries:
+
 Geometries
 ============

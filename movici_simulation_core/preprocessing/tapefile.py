@@ -10,7 +10,7 @@ that outputs a value for every year (linearly interpolating between years that d
 csv files). The entities are matched based on a `reference_attribute` and the `<key>` column in the
 csv files.
 
-If multiple tapefiles are given, every update will contain the interpolated values for all time
+If multiple csv files are given, every update will contain the interpolated values for all time
 dependent attributes, even if the corresponding timestamp is not defined for that tapefile. For
 example if csv file "a" defines 2020 as a year, but csv file "b" starts at 2025, then a tapefile
 will be generated starting from the timestamp at 2020. The values from csv file "b" will be taken

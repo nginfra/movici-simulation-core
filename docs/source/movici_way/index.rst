@@ -7,3 +7,4 @@ The Movici Way
    design_overview
    data_format
    geometries
+   common_attributes

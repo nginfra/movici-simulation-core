@@ -13,6 +13,7 @@ Subpackages
    movici_simulation_core.base_models
    movici_simulation_core.core
    movici_simulation_core.data_tracker
+   movici_simulation_core.json_schemas
    movici_simulation_core.model_connector
    movici_simulation_core.models
    movici_simulation_core.networking

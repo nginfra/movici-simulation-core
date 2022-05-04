@@ -86,6 +86,16 @@ property
 
 
 
+serialization 
+--------------
+
+.. automodule:: movici_simulation_core.data_tracker.serialization
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+
 state 
 ------
 
