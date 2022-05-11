@@ -13,7 +13,7 @@ To get started, please read the Introduction below
    :maxdepth: 2
    :caption: Contents:
    
-   usage/index
+   getting_started/index
    movici_way/index
    tutorials/index
    models/index

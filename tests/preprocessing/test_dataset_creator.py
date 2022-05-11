@@ -787,6 +787,11 @@ class TestEnumConversion:
 class TestSpecialValueCollection:
     params = [
         {
+            "name": "Empty data",
+            "config": {"data": {}},
+            "expected": {},
+        },
+        {
             "name": "Can collect special values",
             "config": {
                 "data": {

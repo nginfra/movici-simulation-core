@@ -15,7 +15,11 @@ from movici_simulation_core.data_tracker.data_format import (
     dump_dataset_data,
     EntityInitDataFormat,
 )
-from movici_simulation_core.data_tracker.serialization import dump_update, load_update
+from movici_simulation_core.data_tracker.serialization import (
+    UpdateDataFormat,
+    dump_update,
+    load_update,
+)
 from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
 from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.model_connector.init_data import (
@@ -38,6 +42,7 @@ from movici_simulation_core.types import (
     DataMask,
 )
 import typing as t
+from movici_simulation_core.utils import strategies
 
 from movici_simulation_core.utils.moment import set_timeline_info
 from movici_simulation_core.utils.settings import Settings
@@ -132,7 +137,7 @@ class ModelTester:
         settings: Settings = None,
         init_data_handler=None,
         tmp_dir=None,
-        global_schema: t.Optional[SchemaT] = None,
+        schema: t.Optional[SchemaT] = None,
         raise_on_premature_shutdown=False,
     ):
         """
@@ -141,7 +146,8 @@ class ModelTester:
         :param settings:
         :param init_data_handler:
         :param tmp_dir:
-        :param global_schema: Can be one of
+        :param schema: Can be one of
+          - An AttributeSchema object
           - An sequence (eg, list or tuple) of AttributeSpec objects
           - A Namespace (ie module, containing AttributeSpec objects
           - A `Plugin` that registers attributes
@@ -149,9 +155,14 @@ class ModelTester:
         self.tmp_dir = Path(tmp_dir or tempfile.mkdtemp())
         self.init_data_handler = init_data_handler or DirectoryInitDataHandler(self.tmp_dir)
         self.settings = settings or Settings()
-        self.schema = read_schema(global_schema)
+        self.schema = read_schema(schema)
+        self._set_default_strategies()
         self.model = self._try_wrap_model(model)
         self.raise_on_premature_shutdown = raise_on_premature_shutdown
+
+    def _set_default_strategies(self):
+        strategies.set(UpdateDataFormat)
+        strategies.set(EntityInitDataFormat(schema=self.schema))
 
     def _try_wrap_model(self, model: Model):
         adapter = model.get_adapter()
@@ -221,7 +232,7 @@ class ModelTester:
         inst = model(model_config)
         with set_timeline_info(settings.timeline_info):
             tester = ModelTester(
-                inst, settings, global_schema=global_schema, raise_on_premature_shutdown=True
+                inst, settings, schema=global_schema, raise_on_premature_shutdown=True
             )
             for init_data in scenario.get("init_data", []):
                 tester.add_init_data(**init_data)

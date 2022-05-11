@@ -16,6 +16,9 @@ This function can create a Dataset from a ``dataset creator config``, a json obj
 specific :ref:`schema<tutorial-dataset-creator-config-schema>`. A simple example of a dataset
 creator config is as following:
 
+Dataset Creator Config
+---------------------------------------------------------------------------------------------------
+
 .. code-block:: json
 
   {
@@ -50,7 +53,7 @@ creator config is as following:
 Let's look at the config piece by piece to show what everything means. 
 
 Global meta data
----------------------------------------------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We start with the global metadata:
 
@@ -69,7 +72,7 @@ on that later. The currently only supported version is `4`, and is an optional f
 
 
 __meta__ section
----------------------------------------------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block::
 
@@ -86,7 +89,7 @@ crs), but the geospatial coordinates of the source entities will be transformed 
 of ``crs``. If omitted, the default value is ``EPSG:28992``, which corresponds with `Amersfoort / RD New`
 
 Data Sources
----------------------------------------------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. code-block::
 
   {
@@ -116,7 +119,7 @@ Data source files are read by ``geopandas`` (which uses ``Fiona`` under the hood
 any format that ``geopandas`` supports, typically GeoJSON and Shapefile.
 
 Data section
----------------------------------------------------------------------------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block::
 
@@ -162,7 +165,7 @@ for more information about loaders and an overview of the supported loaders. In 
 
 
 ID generation
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+###################################################################################################
 
 You may have noticed that the above example does not specify an ``id`` for the ``my_entities``
 entity group. In fact, specifying an ``id`` attribute is not allowed. ``id``\s are always generated
@@ -174,7 +177,7 @@ asset.
 .. _dataset-creator-attribute-loaders:
 
 Loaders
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+###################################################################################################
 
 An attribute config may specify one or more ``loaders``. Loaders are processing operations done on
 source property values before they are written to the dataset. A loader acts on each value for
@@ -209,7 +212,19 @@ Now that we have established the contents of the dataset creator config, let's h
 to use this to actually create datasets. As mentioned earlier, the most straight-forward method is
 to use the |create_dataset| function:
 
-.. code-block:: python
+.. testsetup:: create-dataset
+
+  import json
+  from pathlib import Path
+  config = {"name": "foo", "data": {}}
+  Path("source_a.csv").write_text("a,b\n0,0")
+
+.. testcleanup:: create-dataset
+
+  Path('dataset.json').unlink(missing_ok=True)
+  Path('source_a.csv').unlink(missing_ok=True)
+  
+.. testcode:: create-dataset
 
   from movici_simulation_core.preprocessing.dataset_creator import create_dataset
 
@@ -222,7 +237,7 @@ This will use the config to create a dataset. It is also possible to supply addi
 ``DataSources`` as using the ``sources`` arguments. These are then merged with any sources defined
 in the config's ``__sources__`` key:
 
-.. code-block:: python
+.. testcode:: create-dataset
   
   import pandas as pd
   from movici_simulation_core.preprocessing.dataset_creator import create_dataset, PandasDataSource 
@@ -319,7 +334,7 @@ dataset will look like this:
     "transport.layout": [[0,1,1,0]]
   }
   
-Similarly, if the geojson property would be json encoded (eg. `"[0,1,1,0]"``), you would use the
+Similarly, if the source property would be json-encoded (eg. ``"[0,1,1,0]"``), you would use the
 ``json`` loader. As a bonus, when loading json data, all values are converted to their respective
 data type automatically.
 
@@ -376,14 +391,14 @@ at an example dataset creator config:
         "__meta__": {
           "source": "edges"
         }
-        "connection.from_node_id": {
+        "topology.from_node_id": {
           "property": "from_node_ref"
           "id_link": {
             "entity_group": "node_entities",
             "property": "ref"
           }
         },
-        "connection.to_node_id": {
+        "topology.to_node_id": {
           "property": "to_node_ref"
           "id_link": {
             "entity_group": "node_entities",
@@ -401,12 +416,12 @@ This config will interpret the source data in the following way:
 * the ``edges`` source is expected to have features with a ``from_node_ref`` and a ``to_node_ref``
   property. Values for these properties are expected to match a ``ref`` field of a feature in
   the ``nodes`` source. This information links a single edge to two nodes; in the attribute config
-  for ``connection.from_node_id`` and ``connection.to_node_id`` this link is specified using the 
+  for ``topology.from_node_id`` and ``topology.to_node_id`` this link is specified using the 
   ``id_link`` field
 * After generating the ``id``\s for every entity, the dataset creator revisits attributes with an
   ``id_link``. It looks up the ``source`` for a linked entity group (in this case "node_entities")
   and maps it to a unique ``id``, which it places in the linking attribute (in this case 
-  ``connection.from_node_id`` and ``connection.to_node_id``). Note that it is not required to have
+  ``topology.from_node_id`` and ``topology.to_node_id``). Note that it is not required to have
   the linking source property (ie: ``ref``) be available as an attribute in the linked entity
   group. (ie. ``node_entities``), it will read the data directly from the source.
 
@@ -473,8 +488,8 @@ below output data:
       },
       "edge_entities": {
         "id": [2],
-        "connection.from_node_id": [0],
-        "connection.to_node_id": [1]
+        "topology.from_node_id": [0],
+        "topology.to_node_id": [1]
       }
     }
   }
@@ -486,7 +501,7 @@ array of entries:
 .. code-block::
 
   {
-    "connection.from_node_id": {
+    "topology.from_node_id": {
       "property": "from_node_ref",
       "id_link": [
           {
@@ -561,6 +576,9 @@ config to ensure the correct data type.
 
 Dataset Creator Config Schema Reference
 ---------------------------------------------------------------------------------------------------
+
+DatasetCreatorConfig
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | ``type``: ``object``
 
 ``properties``:

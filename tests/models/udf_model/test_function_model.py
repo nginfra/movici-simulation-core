@@ -171,7 +171,7 @@ def create_model_tester(tmp_path_factory, init_data, global_schema):
         tmp_dir = kwargs.pop("tmp_dir", tmp_path_factory.mktemp(f"init_data_{next(counter)}"))
         global_schema_ = kwargs.pop("global_schema", global_schema)
 
-        tester = ModelTester(model, tmp_dir=tmp_dir, global_schema=global_schema_, **kwargs)
+        tester = ModelTester(model, tmp_dir=tmp_dir, schema=global_schema_, **kwargs)
         tester.add_init_data("some_dataset", init_data)
         testers.append(tester)
         return tester

@@ -86,7 +86,7 @@ def run_updates(global_schema):
         model,
         updates: t.Sequence[t.Tuple[int, UpdateData]],
     ):
-        tester = ModelTester(model, global_schema=global_schema)
+        tester = ModelTester(model, schema=global_schema)
         tester.initialize()
         for timestamp, data in updates:
             tester.update(timestamp, data)
@@ -146,7 +146,7 @@ def test_only_submits_on_changed_data(model, run_updates):
 
 def test_can_aggregate_updates_on_newtime(model, settings, storage_dir, global_schema):
     model.config["aggregate_updates"] = True
-    tester = ModelTester(model, settings, global_schema=global_schema)
+    tester = ModelTester(model, settings, schema=global_schema)
     tester.initialize()
     tester.new_time(0)
     tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})

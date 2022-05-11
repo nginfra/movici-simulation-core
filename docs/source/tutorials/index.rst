@@ -4,7 +4,7 @@ Tutorials
 .. toctree::
    :maxdepth: 2
 
-   attributes
    data_preparation
+   custom_model
    plugins
    

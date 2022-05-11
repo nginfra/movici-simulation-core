@@ -79,7 +79,7 @@ class DatasetCreator:
         return pipe((op(config) for op in self.operations), dataset, sources=self.sources)
 
     @staticmethod
-    def default_operations(cls):
+    def default_operations():
         return (
             SourcesSetup,
             CRSTransformation,
@@ -179,7 +179,7 @@ class MetadataSetup(DatasetOperation):
         for (key, default) in self.keys:
             result = self.config.get(key, default)
             if result is self._missing:
-                pass
+                continue
             if callable(result):
                 result = result()
             dataset[key] = result
@@ -193,14 +193,18 @@ class SpecialValueCollection(DatasetOperation):
     """
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
-        general = dataset.setdefault("general", {})
-        general["special"] = {
+        result = {
             **self.extract_special_values(self.config["data"]),
             **deep_get(self.config, "general", "special", default={}),
         }
+        if result:
+            general = dataset.setdefault("general", {})
+            general["special"] = result
         return dataset
 
     def extract_special_values(self, config: dict, key=None, level=0):
+        if not config:
+            return {}
         if level == 2:
             if isinstance(config, dict) and "special" in config:
                 return {key: config["special"]}
@@ -237,7 +241,7 @@ class AttributeDataLoading(DatasetOperation):
     r"""Extracts the actual data from the ``DataSource``\s into the attribute arrays. It also
     supports transforming the raw data using so called ``loaders`` in the attribute config.
     Currently supported loaders are: ``json``, ``csv``, ``bool``, ``int``, ``float`` and ``str``
-    See :func:`~movici_simulation_core.preprocessing.dataset_creator.create_dataset`for more
+    See :func:`~movici_simulation_core.preprocessing.dataset_creator.create_dataset` for more
     information on the available loaders.
     """
 

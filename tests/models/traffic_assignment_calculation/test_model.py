@@ -302,7 +302,7 @@ class TestRoadLinksChanges:
     @pytest.fixture
     def tester_with_base_result(self, init_data, model_config, global_schema, road_network_name):
         inst = Model(model_config)
-        tester = ModelTester(inst, global_schema=global_schema)
+        tester = ModelTester(inst, schema=global_schema)
         for dataset in init_data:
             tester.add_init_data(dataset["name"], dataset["data"])
         tester.initialize()
@@ -467,7 +467,7 @@ class BaseTestTrafficAssignmentRailways:
     @pytest.fixture
     def tester(self, init_data, model_config, global_schema):
         inst = Model(model_config)
-        rv = ModelTester(inst, global_schema=global_schema)
+        rv = ModelTester(inst, schema=global_schema)
         for dataset in init_data:
             rv.add_init_data(dataset["name"], dataset["data"])
         return rv

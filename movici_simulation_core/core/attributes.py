@@ -1,3 +1,7 @@
+"""This module contains :class:`~movici_simulation_core.core.attribute_spec.AttributeSpec` objects
+for common, generic, attribute types that can be used in datasets
+"""
+
 from __future__ import annotations
 
 from movici_simulation_core.core.schema import (
@@ -35,6 +39,9 @@ Connection_ToIds = AttributeSpec(name="connection.to_ids", data_type=DataType(in
 Connection_FromDataset = AttributeSpec("connection.from_dataset", data_type=DataType(str))
 Connection_ToDataset = AttributeSpec("connection.to_dataset", data_type=DataType(str))
 Connection_FromReference = AttributeSpec("connection.from_reference", data_type=DataType(str))
+Connection_FromReferences = AttributeSpec(
+    "connection.from_references", data_type=DataType(str, (), True)
+)
 Connection_ToReference = AttributeSpec("connection.to_reference", data_type=DataType(str))
 Connection_ToReferences = AttributeSpec(
     "connection.to_references", data_type=DataType(str, (), True)

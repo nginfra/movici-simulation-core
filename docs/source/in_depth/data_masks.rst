@@ -90,3 +90,8 @@ The exception is that the ``pub`` and ``sub`` key may contain an empty dictionar
 This means that nothing is matched, so this datamask means that the model would publish nothing,
 and would subscribe to nothing. (Which makes it a pretty useless model; normally a maximum of one
 of ``pub`` and ``sub`` would be an empty dictionary.)
+
+Usage by the Orchestrator
+---------------------------
+
+The ``Orchestrator`` uses the Data Mask of every model to construct a dependency graph

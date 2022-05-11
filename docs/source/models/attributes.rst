@@ -1,4 +1,4 @@
-.. _tutorial-attributes:
+.. _manual-attributes:
 
 Working with Attributes
 =======================

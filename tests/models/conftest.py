@@ -461,7 +461,7 @@ def create_model_tester(tmp_path_factory, init_data, global_schema):
         if schema is None:
             schema = global_schema
 
-        tester = ModelTester(model, tmp_dir=tmp_dir, global_schema=schema, **kwargs)
+        tester = ModelTester(model, tmp_dir=tmp_dir, schema=schema, **kwargs)
         for name, dataset in init_data:
             tester.add_init_data(name, dataset)
         testers.append(tester)

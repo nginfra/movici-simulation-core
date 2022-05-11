@@ -208,7 +208,7 @@ arguments:
   entity. The meaning of ``unit_shape`` is equivalent to the meaning of ``numpy.ndarray.shape``
 * ``is_csr`` This toggles support for variable width arrays per entity. ``csr`` is an abbreviation
   of Compressed Sparse Row, which is the technique used to store these types of attribute arrays.
-  See also :ref:`Working with Attributes<tutorial-attributes>` on how to interact with csr arrays
+  See also :ref:`manual-attributes` on how to interact with csr arrays
 
 Fixed width arrays are created by supplying the ``unit_shape`` argument to a ``DataType``. For 
 example an array of pairs are supported by ``DataType(int, unit_shape=(2,))``:
@@ -339,7 +339,7 @@ then placed under the ``enum`` key in the ``general`` section. For an attribute 
 
 The attribute values ``[2, 1, 2, 0]`` now map to the ``bar`` enumeration as 
 ``["categories", "enumerated", "categories", "some"]`` but which a much reduced data footprint. See
-also :ref:`Custom Models<custom-models>` on how to work with enumerations
+also :ref:`manual-attributes` on how to work with enumerations
 
 
 .. _movici-data-format-storing-data:

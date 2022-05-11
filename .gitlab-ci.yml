@@ -48,9 +48,12 @@ test:unit:
       - master
   artifacts:
     untracked: true
+  before_script:
+    - pip install -r requirements-dev.txt
+    - pip install -r requirements.txt
+    - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install --no-deps -e .[models]
   script:
-    - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
-    - pip install -e .[models] --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - make coverage
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
 
@@ -64,10 +67,30 @@ test:numba:
     KUBERNETES_MEMORY_LIMIT: 1536Mi
     KUBERNETES_CPU_REQUEST: 1000m
     KUBERNETES_CPU_LIMIT: 2000m
+  before_script:
+    - pip install -r requirements-dev.txt
+    - pip install -r requirements.txt
+    - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install --no-deps -e .[models]
   script:
-    - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
-    - pip install -e .[models] --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - make test-numba
+
+test:docs:
+  stage: test
+  only:
+    refs:
+      - merge_requests
+      - master
+  before_script:
+    - pip install -r requirements-dev.txt
+    - pip install -r requirements-docs.txt
+    - pip install -r requirements.txt
+    - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
+    - pip install --no-deps -e .[models]
+  
+  script:
+    - make docs
+    - make doctest
 
 report:
   stage: report
@@ -136,6 +159,5 @@ docs:
     - pip install --no-deps -e .[models]
 
   script:
-    - cd docs
-    - make html
-    - gsutil -m cp -R build/html/* gs://$GCS_BUCKET/
+    - make docs
+    - gsutil -m cp -R /docs/build/html/* gs://$GCS_BUCKET/

@@ -8,7 +8,7 @@ running simulations.
 In order to run a simulation, we create a file `squares.py` and start editing it. We first need to 
 instantiate a ``Simulation`` object:
 
-.. code-block:: python
+.. testcode:: fs1
 
   from movici_simulation_core import Simulation
   
@@ -19,7 +19,7 @@ or more specifically, entity based data (see also: :ref:`movici-data-format`), h
 format. Let's create a dataset with two entities of a certain type, and give them some attribute
 values
 
-.. code-block:: python
+.. testcode:: fs1
 
   dataset = {
       "figures": {
@@ -46,7 +46,9 @@ and position 1 for entity ``id=2``.
 
 In order to make use of this dataset in a simulation, we must store it to disk:
 
-.. code-block:: python
+
+
+.. testcode:: fs1
 
   import json
   from pathlib import Path
@@ -56,6 +58,10 @@ In order to make use of this dataset in a simulation, we must store it to disk:
   output_dir = mkdtemp(prefix='movici-output-')
 
   Path(input_dir).joinpath('figures.json').write_text(json.dumps(dataset))
+
+.. testcleanup:: fs1
+  
+  Path(input_dir).joinpath('figures.json').unlink(missing_ok=True) 
 
 We've created two temporary directories, one for input data and one for simulation results. We
 then stored our dataset in a json file with the name of the dataset.
@@ -80,7 +86,7 @@ that it has values of type ``float``. This is done by registring an ``AttributeS
 
 Our ``squares.py`` now looks as following:
 
-.. code-block:: python
+.. testcode:: python
 
   import json
   from pathlib import Path
@@ -111,7 +117,7 @@ a model calculate these. For this, we'll make use of the included ``UDFModel``. 
 *User Defined Function* and thi model can do basic arithmetic operations on attributes. We add the 
 ``UDFModel`` as following
 
-.. code-block:: python
+.. testcode:: python
 
   from movici_simulation_core.models.udf_model import UDFModel
 
@@ -148,7 +154,7 @@ is completed. In order to save the results, we need to add a second, special mod
 ``DataCollector``. This model takes all updates that other models produce, and stores them in the
 output directory ``storage_dir``. 
 
-.. code-block:: python
+.. testcode:: python
 
   from movici_simulation_core.models.data_collector import DataCollector
 
@@ -156,7 +162,7 @@ output directory ``storage_dir``.
 
 There, we are now ready to run our first simulation. The final ``squares.py`` looks like this:
 
-.. code-block:: python
+.. testcode:: python
 
   import json
   from pathlib import Path
@@ -202,7 +208,10 @@ There, we are now ready to run our first simulation. The final ``squares.py`` lo
   sim.add_model("data_collector", DataCollector({}))
 
   sim.run()
-  print(f"results stored in {output_dir}")
+
+  output_file = Path(output_dir).joinpath("t0_0_figures.json")
+  print(output_file.read_text())
+
 
 After we've succesfully run our simulation, the output directory contains one file:
 ``t0_0_figures.json``. Its filename is made up of the following components:
@@ -213,9 +222,14 @@ After we've succesfully run our simulation, the output directory contains one fi
   iteration number
 * ``figures`` This is to indicate to which dataset the update file belongs to.
 
+.. testoutput:: python
+  :hide:
+
+  {"figures":{"square_entities":{"id":[1,2],"shape.area":[100.0,400.0]}}}
+
 When we open this file, we see that it contains the following data:
 
-.. code-block:: python
+.. code-block:: json
 
   {
     "figures":{

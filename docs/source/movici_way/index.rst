@@ -8,3 +8,4 @@ The Movici Way
    data_format
    geometries
    common_attributes
+   simulation_life_cycle

@@ -1,4 +1,5 @@
 .. include:: ./include/glossary.rst
+.. include:: ./include/code.rst
 
 
 Glossary
@@ -90,7 +91,10 @@ Glossary
 
   Moment
   Timestamp
-    ...
+    `Timestamp` and |code_Moment| represent the 'current' world time inside a simulation. `Timestamp`
+    is a discrete integer value representing some amount of elapsed time from the start time of the
+    simulation, while a ``Moment`` can be used to convert a timestamp into a ``datetime.datetime``
+    to reconstruct the simulation world time.
 
   Update
     Whenever a model calculates new output, ie. changes to the current |World state|, only these 
