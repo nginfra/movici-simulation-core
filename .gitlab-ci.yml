@@ -160,4 +160,4 @@ docs:
 
   script:
     - make docs
-    - gsutil -m cp -R /docs/build/html/* gs://$GCS_BUCKET/
+    - gsutil -m cp -R docs/build/html/* gs://$GCS_BUCKET/
