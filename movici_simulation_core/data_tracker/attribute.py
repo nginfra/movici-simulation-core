@@ -79,18 +79,18 @@ class AttributeField:
     ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
         if instance is None:
             return self
-        return instance.get_attribute(self.spec.key)
+        return instance.get_attribute(self.spec.name)
 
     def __set__(self, instance: EntityGroup, value):
         raise TypeError("AttributeField is read only")
 
     @property
-    def full_name(self):
-        return self.spec.full_name()
+    def name(self):
+        return self.spec.name
 
     @property
     def key(self):
-        return self.spec.key
+        return self.spec.name
 
 
 @lifecycle.deprecated(alternative="AttributeField")

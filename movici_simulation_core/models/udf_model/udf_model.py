@@ -42,15 +42,12 @@ class UDFInfo:
     entity_group: str
     expression: str
     output_attribute: str
-    output_component: t.Optional[str] = None
 
     def get_output_attribute(self, state: TrackedState, schema: AttributeSchema, replace_sub=True):
         attr = state.register_attribute(
             self.dataset,
             self.entity_group,
-            schema.get_spec(
-                (self.output_component, self.output_attribute), default_data_type=DataType(float)
-            ),
+            schema.get_spec(self.output_attribute, default_data_type=DataType(float)),
             flags=PUB,
         )
         if replace_sub:
@@ -104,6 +101,5 @@ def get_udf_infos(config):
             dataset=dataset,
             entity_group=entity_group,
             expression=func["expression"],
-            output_component=func["output"][0],
             output_attribute=func["output"][1],
         )

@@ -20,9 +20,7 @@ if __name__ == "__main__":
     )
     print(
         "Slicing a dataset over a specific attribute",
-        dataset.slice(
-            "antenna_entities", component="antenna_properties", attribute="connected_people"
-        ),
+        dataset.slice("antenna_entities", attribute="antennas.connected_people"),
         sep="\n",
     )
     print(

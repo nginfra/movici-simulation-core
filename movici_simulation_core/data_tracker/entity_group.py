@@ -10,7 +10,6 @@ from movici_simulation_core.core.attribute_spec import AttributeSpec
 from . import state as state_
 from .attribute import AttributeField, PropertyField
 from .index import Index
-from ..types import AttributeIdentifier
 from ..utils import lifecycle
 
 
@@ -61,14 +60,14 @@ class EntityGroup:
     def register(self, state: state_.StateProxy):
         self.state = state
 
-    def get_attribute(self, identifier: AttributeIdentifier):
+    def get_attribute(self, identifier: str):
         return self.state.get_attribute(identifier)
 
     def register_attribute(self, spec: AttributeSpec, flags: int = 0, rtol=0.00001, atol=1e-8):
         return self.state.register_attribute(spec, flags, rtol, atol)
 
     @lifecycle.deprecated(alternative="EntityGroup.get_attribute")
-    def get_property(self, identifier: AttributeIdentifier):
+    def get_property(self, identifier: str):
         return self.get_attribute(identifier)
 
     @classmethod

@@ -4,8 +4,8 @@ from movici_simulation_core.utils.data_mask import validate_mask, masks_overlap,
 
 pub_sub_masks = [
     (
-        {"dataset1": {"entity1": ["component/property"]}},
-        {"dataset1": {"entity1": ["component/property"]}},
+        {"dataset1": {"entity1": ["property"]}},
+        {"dataset1": {"entity1": ["property"]}},
         True,
         "Two equal masks",
     ),
@@ -25,8 +25,8 @@ pub_sub_masks = [
         "One mask has an extra dataset",
     ),
     (
-        {"dataset1": {"entity1": ["component/property"]}},
-        {"dataset1": {"entity1": ["component/property2"]}},
+        {"dataset1": {"entity1": ["property"]}},
+        {"dataset1": {"entity1": ["property2"]}},
         False,
         "No matching properties",
     ),
@@ -99,14 +99,14 @@ def test_matching_of_datafilters(pub, sub, has_match, _):
 
 
 valid_masks = [
-    ({"dataset1": {"entity1": ["component/property"]}}, "A simple mask"),
+    ({"dataset1": {"entity1": ["property"]}}, "A simple mask"),
     (
         {
             "dataset1": {
-                "entity1": ["component/property", "prop1"],
-                "entity2": ["component/property"],
+                "entity1": ["property", "prop1"],
+                "entity2": ["property"],
             },
-            "dataset2": {"entity1": ["component/property"]},
+            "dataset2": {"entity1": ["property"]},
         },
         "A mask with multiple entries",
     ),
@@ -156,10 +156,8 @@ dataset = {
     "dataset": {
         "entity_group": {
             "id": {"data": [1, 2, 3]},
-            "component": {
-                "a": {"data": [1, 2, 3]},
-                "b": {"data": [4, 5, 6]},
-            },
+            "a": {"data": [1, 2, 3]},
+            "b": {"data": [4, 5, 6]},
         },
     }
 }
@@ -168,7 +166,7 @@ test_cases = {
     "allow_all": {
         "mask": None,
         "paths_match": [
-            ("dataset/entity_group/component/a/data", True),
+            ("dataset/entity_group/a/data", True),
         ],
     },
     "allow_none": {
@@ -180,7 +178,7 @@ test_cases = {
     "all_of_dataset": {
         "mask": {"dataset": None},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", True),
+            ("dataset/entity_group/a/data", True),
         ],
     },
     "all_of_other_dataset": {
@@ -193,7 +191,7 @@ test_cases = {
     "all_of_entity_group": {
         "mask": {"dataset": {"entity_group": None}},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", True),
+            ("dataset/entity_group/a/data", True),
             ("dataset/entity_group/id/data", True),
         ],
     },
@@ -204,50 +202,43 @@ test_cases = {
             ("dataset/other_group", False),
         ],
     },
-    "component/a": {
-        "mask": {"dataset": {"entity_group": ["component/a"]}},
-        "paths_match": [
-            ("dataset/entity_group/component/a/data", True),
-            ("dataset/entity_group/component/b/data", False),
-            ("dataset/entity_group/id/data", True),
-        ],
-    },
     "a": {
         "mask": {"dataset": {"entity_group": ["a"]}},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", False),
+            ("dataset/entity_group/a/data", True),
+            ("dataset/entity_group/b/data", False),
             ("dataset/entity_group/id/data", True),
         ],
     },
     "id": {
         "mask": {"dataset": {"entity_group": ["id"]}},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", False),
+            ("dataset/entity_group/a/data", False),
             ("dataset/entity_group/id/data", True),
         ],
     },
-    "component/b": {
-        "mask": {"dataset": {"entity_group": ["component/b"]}},
+    "b": {
+        "mask": {"dataset": {"entity_group": ["b"]}},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", False),
-            ("dataset/entity_group/component/b/data", True),
+            ("dataset/entity_group/a/data", False),
+            ("dataset/entity_group/b/data", True),
         ],
     },
-    "component/a_and_component/b": {
+    "a_and_b": {
         "mask": {
-            "dataset": {"entity_group": ["component/a", "component/b"]},
+            "dataset": {"entity_group": ["a", "b"]},
         },
         "paths_match": [
-            ("dataset/entity_group/component/a/data", True),
-            ("dataset/entity_group/component/b/data", True),
+            ("dataset/entity_group/a/data", True),
+            ("dataset/entity_group/b/data", True),
             ("dataset/entity_group/id/data", True),
         ],
     },
-    "component/c": {
-        "mask": {"dataset": {"entity_group": ["component/c"]}},
+    "c": {
+        "mask": {"dataset": {"entity_group": ["c"]}},
         "paths_match": [
-            ("dataset/entity_group/component/a/data", False),
-            ("dataset/entity_group/component/b/data", False),
+            ("dataset/entity_group/a/data", False),
+            ("dataset/entity_group/b/data", False),
             ("dataset/entity_group/id/data", True),
         ],
     },

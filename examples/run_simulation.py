@@ -1,4 +1,3 @@
-import logging
 import sys
 import tempfile
 import typing as t
@@ -12,9 +11,7 @@ from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.data_tracker.attribute import PUB, SUB
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.model_connector.init_data import InitDataHandler
 from movici_simulation_core.utils.moment import TimelineInfo, Moment
-from movici_simulation_core.utils.settings import Settings
 
 
 class DummyModel(TrackedModel):
@@ -22,14 +19,7 @@ class DummyModel(TrackedModel):
         super().__init__(config)
         self.mode = config["mode"]
 
-    def setup(
-        self,
-        state: TrackedState,
-        settings: Settings,
-        init_data_handler: InitDataHandler,
-        logger: logging.Logger,
-        **_
-    ):
+    def setup(self, state: TrackedState, **_):
         mode = PUB if self.mode == "pub" else SUB
         self.attr = state.register_attribute(
             "dataset", "entity", AttributeSpec("attr", DataType(float, (), False)), flags=mode

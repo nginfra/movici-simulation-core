@@ -4,43 +4,35 @@ from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
 import logging
-
-import numpy as np
 import typing as t
 
-from movici_simulation_core.core.schema import AttributeSchema
+import numpy as np
 
+from . import entity_group as eg
 from .attribute import (
+    OPT,
+    PUBLISH,
+    SUBSCRIBE,
     AttributeObject,
     AttributeOptions,
     create_empty_attribute,
     create_empty_attribute_for_data,
-    SUBSCRIBE,
-    PUBLISH,
-    OPT,
 )
-from . import entity_group as eg
 from .index import Index
-from ..core.attribute_spec import attrstring, AttributeSpec
+from ..core.attribute_spec import AttributeSpec
+from ..core.schema import AttributeSchema
 from ..data_tracker.data_format import extract_dataset_data
-from ..types import NumpyAttributeData, ComponentData, EntityData, AttributeIdentifier, ValueType
-from ..utils import lifecycle
+from ..types import EntityData, NumpyAttributeData, ValueType
 
-AttributeDict = t.Dict[AttributeIdentifier, AttributeObject]
+AttributeDict = t.Dict[str, AttributeObject]
 
 NO_TRACK_UNKNOWN = 0
 
 
-@lifecycle.has_deprecations
 class TrackedState:
     attributes: t.Dict[str, t.Dict[str, AttributeDict]]
     index: t.Dict[str, t.Dict[str, Index]]
     track_unknown: int
-
-    @lifecycle.deprecated(alternative="TrackedState.attributes")
-    @property
-    def properties(self):
-        return self.attributes
 
     def __init__(
         self,
@@ -112,8 +104,8 @@ class TrackedState:
     ) -> AttributeObject:
         target = ensure_path(self.attributes, (dataset_name, entity_name))
 
-        if spec.key in target:
-            attr = target[spec.key]
+        if spec.name in target:
+            attr = target[spec.name]
         else:
             attr = create_empty_attribute(
                 spec.data_type,
@@ -122,22 +114,10 @@ class TrackedState:
                 options=AttributeOptions(enum_name=spec.enum_name),
             )
             attr.index = self.get_index(dataset_name, entity_name)
-            target[spec.key] = attr
+            target[spec.name] = attr
         attr.flags |= flags
 
         return attr
-
-    @lifecycle.deprecated(alternative="TrackedState.register_attribute")
-    def register_property(
-        self,
-        dataset_name: str,
-        entity_name: str,
-        spec: AttributeSpec,
-        flags: int = 0,
-        rtol=1e-5,
-        atol=1e-8,
-    ) -> AttributeObject:
-        return self.register_attribute(dataset_name, entity_name, spec, flags, rtol, atol)
 
     def _get_entity_group(self, dataset_name, entity_type: str) -> t.Optional[AttributeDict]:
         try:
@@ -155,25 +135,14 @@ class TrackedState:
 
     def iter_attributes(
         self,
-    ) -> t.Iterable[t.Tuple[str, str, AttributeIdentifier, AttributeObject]]:
+    ) -> t.Iterable[t.Tuple[str, str, str, AttributeObject]]:
         for (datasetname, entity_type, attributes) in self.iter_entities():
             yield from (
-                (datasetname, entity_type, identifier, attr)
-                for identifier, attr in attributes.items()
+                (datasetname, entity_type, name, attr) for name, attr in attributes.items()
             )
 
-    @lifecycle.deprecated(alternative="TrackedState.iter_attributes")
-    def iter_properties(
-        self,
-    ) -> t.Iterable[t.Tuple[str, str, AttributeIdentifier, AttributeObject]]:
-        return self.iter_attributes()
-
     def all_attributes(self):
-        return [attr for _, _, identifier, attr in self.iter_attributes()]
-
-    @lifecycle.deprecated(alternative="TrackedState.all_attributes")
-    def all_properties(self):
-        return self.all_attributes()
+        return [attr for _, _, _, attr in self.iter_attributes()]
 
     def iter_entities(self) -> t.Iterable[t.Tuple[str, str, AttributeDict]]:
         yield from (
@@ -206,22 +175,7 @@ class TrackedState:
 
     @staticmethod
     def _get_entity_mask(attributes: AttributeDict, flags: int):
-        return [
-            attrstring(name, component)
-            for (component, name), _ in filter_attrs(attributes, flags).items()
-        ]
-
-    @staticmethod
-    def _get_entity_filter(attributes: AttributeDict, flags: int):
-        rv = {}
-        for (component, name), attr in filter_attrs(attributes, flags).items():
-            if component:
-                if component not in rv:
-                    rv[component] = {}
-                rv[component][name] = "*"
-            else:
-                rv[name] = "*"
-        return rv
+        return list(filter_attrs(attributes, flags).keys())
 
     def generate_update(self, flags=PUBLISH):
         rv = defaultdict(dict)
@@ -251,15 +205,14 @@ class TrackedState:
     def process_general_section(self, dataset_name: str, general_section: dict):
         enums = general_section.get("enum", {})
         specials = parse_special_values(general_section)
-        for current_dataset, entity_name, identifier, attr in self.iter_attributes():
+        for current_dataset, entity_name, name, attr in self.iter_attributes():
             if current_dataset != dataset_name:
                 continue
-            if (special_value := specials.get(entity_name, {}).get(identifier)) is not None:
+            if (special_value := specials.get(entity_name, {}).get(name)) is not None:
                 if attr.options.special not in (None, special_value):
                     self.log(
                         WARN,
-                        f"Special value already set for "
-                        f"{dataset_name}/{entity_name}/{attrstring(identifier[1], identifier[0])}",
+                        f"Special value already set for " f"{dataset_name}/{entity_name}/{name}",
                     )
                 else:
                     attr.options.special = special_value
@@ -268,20 +221,15 @@ class TrackedState:
                 if attr.options.enum_values not in (None, enum):
                     self.log(
                         WARN,
-                        f"Enum already set for "
-                        f"{dataset_name}/{entity_name}/{attrstring(identifier[1], identifier[0])}",
+                        f"Enum already set for " f"{dataset_name}/{entity_name}/{name}",
                     )
                 attr.options.enum_values = enum
 
-    def get_attribute(self, dataset_name: str, entity_type: str, identifier: AttributeIdentifier):
+    def get_attribute(self, dataset_name: str, entity_type: str, name: str):
         try:
-            return self.attributes[dataset_name][entity_type][identifier]
+            return self.attributes[dataset_name][entity_type][name]
         except KeyError as e:
-            raise ValueError(f"Attribute '{identifier}' not available") from e
-
-    @lifecycle.deprecated(alternative="TrackedState.get_attribute")
-    def get_property(self, dataset_name: str, entity_type: str, identifier: AttributeIdentifier):
-        return self.get_attribute(dataset_name, entity_type, identifier)
+            raise ValueError(f"Attribute '{name}' not available") from e
 
     def get_index(self, dataset_name: str, entity_type: str):
         target = ensure_path(self.index, (dataset_name,))
@@ -307,32 +255,18 @@ class TrackedState:
 
 def parse_special_values(
     general_section: dict, special_keys: t.Iterable = ("special", "no_data")
-) -> t.Dict[str, t.Dict[AttributeIdentifier, ValueType]]:
-    def detect_component_hack(split_attribute: t.Tuple[str]):
-        """hacky way to detect a component in a special values identifier by looking
-        whether the part ends with "_properties" as by convention all components ended
-        in that string
+) -> t.Dict[str, t.Dict[str, ValueType]]:
 
-        returns (component, attribute_name) where component may be None
-        """
-        # TODO: delete this once components are gone for good
-        component = None
-        if len(split_attribute) > 1 and split_attribute[0].endswith("_properties"):
-            component, *split_attribute = split_attribute
-        if split_attribute[0] == "":
-            _, *split_attribute = split_attribute
-        return component, ".".join(split_attribute)
-
-    special_section = {}
+    special_section: t.Dict[str, t.Any] = {}
     for key in special_keys:
         if special_section := general_section.get(key, special_section):
             break
 
     rv = defaultdict(dict)
     for k, v in special_section.items():
-        entity_type, *split_attribute = k.split(".")
+        entity_type, attribute = k.split(".", maxsplit=1)
+        rv[entity_type][attribute] = v
 
-        rv[entity_type][detect_component_hack(split_attribute)] = v
     return dict(rv)
 
 
@@ -378,22 +312,22 @@ class EntityDataHandler:
 
     def _apply_update(self, entity_data: EntityData):
         ids = entity_data["id"]["data"]
-        for identifier, data in iter_entity_data(entity_data):
-            if identifier == (None, "id"):
+        for name, data in entity_data.items():
+            if name == "id":
                 continue
-            if (attr := self.attributes.get(identifier)) is None and self.track_unknown:
-                attr = self._register_new_attribute(identifier, data)
+            if (attr := self.attributes.get(name)) is None and self.track_unknown:
+                attr = self._register_new_attribute(name, data)
             if attr is None:
                 continue
             if not attr.has_data():
                 attr.initialize(len(self.index))
             attr.update(data, self.index[ids], process_undefined=self.process_undefined)
 
-    def _register_new_attribute(self, identifier: AttributeIdentifier, data: NumpyAttributeData):
+    def _register_new_attribute(self, name: str, data: NumpyAttributeData):
         attr = create_empty_attribute_for_data(data, len(self.index))
         attr.index = self.index
         attr.flags |= self.track_unknown
-        self.attributes[identifier] = attr
+        self.attributes[name] = attr
         return attr
 
     def generate_update(self, flags=PUBLISH):
@@ -404,28 +338,19 @@ class EntityDataHandler:
             return rv
 
         rv["id"] = {"data": self.index.ids[all_changes]}
-        for (component, name), attr in filter_attrs(self.attributes, flags).items():
+        for name, attr in filter_attrs(self.attributes, flags).items():
             if not np.any(attr.changed):
                 continue
             data = attr.generate_update(mask=all_changes)
 
-            if component:
-                rv[component][name] = data
-            else:
-                rv[name] = data
+            rv[name] = data
         return dict(rv)
 
     def to_dict(self):
-        rv: t.Dict[str, dict] = defaultdict(dict)
-        rv["id"] = {"data": self.index.ids}
-
-        for (component, name), attr in self.attributes.items():
-            data = attr.to_dict()
-            if component:
-                rv[component][name] = data
-            else:
-                rv[name] = data
-        return dict(rv)
+        return {
+            "id": {"data": self.index.ids},
+            **{name: attr.to_dict() for name, attr in self.attributes.items()},
+        }
 
     def _get_all_changed_mask(self, flags: int):
         all_changes = np.zeros(len(self.index), dtype=bool)
@@ -460,8 +385,8 @@ class StateProxy:
     dataset_name: str
     entity_type: str
 
-    def get_attribute(self, identifier: AttributeIdentifier):
-        return self.state.get_attribute(self.dataset_name, self.entity_type, identifier)
+    def get_attribute(self, name: str):
+        return self.state.get_attribute(self.dataset_name, self.entity_type, name)
 
     def get_index(self):
         return self.state.get_index(self.dataset_name, self.entity_type)
@@ -479,21 +404,3 @@ def ensure_path(d: dict, path: t.Sequence[str]):
     if key not in d:
         d[key] = {}
     return ensure_path(d[key], rest)
-
-
-def iter_entity_data(
-    data: t.Union[EntityData, ComponentData]
-) -> t.Iterable[t.Tuple[AttributeIdentifier, NumpyAttributeData]]:
-    yield from _iter_entity_data_helper(data, current_component=None)
-
-
-def _iter_entity_data_helper(
-    data: t.Union[EntityData, ComponentData], current_component=None
-) -> t.Iterable[t.Tuple[AttributeIdentifier, NumpyAttributeData]]:
-    for key, val in data.items():
-        if "data" in val:
-            # val is AttributeData
-            yield ((current_component, key), val)
-        else:
-            # val is ComponentData
-            yield from _iter_entity_data_helper(val, current_component=key)

@@ -75,26 +75,19 @@ class Model(TrackedModel, name="tape_player"):
 class AttributeInfo:
     dataset: str
     entity_group: str
-    component: t.Optional[str]
     name: str
     data_type: DataType
 
     @property
     def spec(self):
-        return AttributeSpec(self.name, self.data_type, self.component)
+        return AttributeSpec(self.name, self.data_type)
 
 
-def iter_attribute_info(data: dict, dataset=None, entity_group=None, component=None, exclude=()):
+def iter_attribute_info(data: dict, dataset=None, entity_group=None, exclude=()):
     for key, val in data.items():
         if dataset is None:
             yield from iter_attribute_info(val, dataset=key, exclude=exclude)
         elif entity_group is None:
             yield from iter_attribute_info(val, dataset, entity_group=key, exclude=exclude)
-        elif "data" not in val:
-            yield from iter_attribute_info(
-                val, dataset, entity_group, component=key, exclude=exclude
-            )
         elif key not in exclude:
-            yield AttributeInfo(
-                dataset, entity_group, component, key, infer_data_type_from_array(val)
-            )
+            yield AttributeInfo(dataset, entity_group, key, infer_data_type_from_array(val))

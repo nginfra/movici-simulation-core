@@ -115,7 +115,7 @@ def test_time_progressing_state(init_data, update_0, update_1, dataset_a, entity
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update_0, update_1])
-    data = state.get_attribute(dataset_a, entity_1, (None, "attr"))
+    data = state.get_attribute(dataset_a, entity_1, "attr")
     assert np.array_equal(data.array, [11, 22])
 
     state.move_to(0)
@@ -139,7 +139,7 @@ def test_time_progressing_state_with_new_id(init_data, dataset_a, entity_1):
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_attribute(dataset_a, entity_1, (None, "attr"))
+    data = state.get_attribute(dataset_a, entity_1, "attr")
     assert np.array_equal(data.array, [10, 20, 31])
 
     state.move_to(0)
@@ -162,7 +162,7 @@ def test_time_progressing_state_with_new_attribute(init_data, dataset_a, entity_
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_attribute(dataset_a, entity_1, (None, "attr_2"))
+    data = state.get_attribute(dataset_a, entity_1, "attr_2")
     assert np.array_equal(data.array, [31, UNDEFINED[int]])
 
     state.move_to(0)
@@ -185,7 +185,7 @@ def test_time_progressing_state_with_new_entity_group(init_data, dataset_a, enti
     state = TimeProgressingState()
     state.add_init_data(init_data)
     state.add_updates_to_timeline([update])
-    data = state.get_attribute(dataset_a, "entity_2", (None, "attr"))
+    data = state.get_attribute(dataset_a, "entity_2", "attr")
     assert np.array_equal(data.array, [12])
 
     state.move_to(0)

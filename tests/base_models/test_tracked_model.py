@@ -298,5 +298,5 @@ class TestUpdateSeries:
     def test_processes_all_data(self, adapter, model, message, data):
         adapter.update_series(message, data)
         np.testing.assert_array_equal(
-            adapter.state.attributes["dataset"]["my_entities"][(None, "sub_attr")].array, [1, 2]
+            adapter.state.attributes["dataset"]["my_entities"]["sub_attr"].array, [1, 2]
         )

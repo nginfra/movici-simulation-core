@@ -168,9 +168,9 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def format_uninitialized_attributes(self) -> str:
         def uninitialized_attributes():
-            for ds, entity, (comp, attr_name), attr in self.state.iter_attributes():
+            for ds, entity, attr_name, attr in self.state.iter_attributes():
                 if (attr.flags & REQUIRED) and not attr.is_initialized():
-                    yield "/".join((ds, entity, comp or "", attr_name))
+                    yield "/".join((ds, entity, attr_name))
 
         return "\n".join(f"Uninitialized attribute: {attr}" for attr in uninitialized_attributes())
 

@@ -23,12 +23,9 @@ class CSRAttributeData(t.TypedDict, total=False):
 
 
 NumpyAttributeData = t.Union[UniformAttributeData, CSRAttributeData]
-ComponentData = t.Dict[str, NumpyAttributeData]
-EntityData = t.Dict[str, t.Union[NumpyAttributeData, ComponentData]]
+EntityData = t.Dict[str, NumpyAttributeData]
 DatasetData = t.Dict[str, EntityData]
-# TODO: PropertyIdentifier is deprecated
-PropertyIdentifier = t.Tuple[t.Optional[str], str]
-AttributeIdentifier = PropertyIdentifier
+
 ValueType = t.Union[int, float, bool, str]
 
 

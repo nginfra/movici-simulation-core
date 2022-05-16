@@ -31,9 +31,7 @@ def list_init_data():
                 "some_entities": {
                     "bla": [4.0, 5.0, 6.0],
                     "csr_attr": [[1, 2], [3], []],
-                    "component": {
-                        "unknown_str": ["a", "b", "c"],
-                    },
+                    "unknown_str": ["a", "b", "c"],
                 },
             },
         }
@@ -53,7 +51,9 @@ def array_init_data():
                     "data": np.array([1, 2, 3], dtype=int),
                     DEFAULT_ROWPTR_KEY: np.array([0, 2, 3, 3], dtype=int),
                 },
-                "component": {"unknown_str": {"data": np.array(["a", "b", "c"])}},
+                "unknown_str": {
+                    "data": np.array(["a", "b", "c"]),
+                },
             },
         },
     }
@@ -65,9 +65,7 @@ def schema():
         [
             AttributeSpec("bla", DataType(float, (), False)),
             AttributeSpec("csr_attr", DataType(int, (), True)),
-            AttributeSpec(
-                component="component", name="unknown_str", data_type=DataType(str, (), False)
-            ),
+            AttributeSpec(name="unknown_str", data_type=DataType(str, (), False)),
         ]
     )
 

@@ -1,14 +1,13 @@
-import typing as t
 from pathlib import Path
+import typing as t
 
 import numpy as np
 
-from movici_simulation_core.core import AttributeSchema, DataType, AttributeSpec
+from movici_simulation_core.core import AttributeSchema, AttributeSpec, DataType
+from movici_simulation_core.data_tracker.attribute import AttributeField
 from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import AttributeField
 from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.utils import lifecycle
 
 
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
@@ -19,17 +18,10 @@ def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
     return {"data": np.asarray(data)}
 
 
-def get_attribute(name="attr", component=None, **kwargs):
-    spec = dict(
-        spec=AttributeSpec(name=name, component=component, data_type=DataType(int, (), False))
-    )
+def get_attribute(name="attr", **kwargs):
+    spec = dict(spec=AttributeSpec(name=name, data_type=DataType(int, (), False)))
     spec.update(kwargs)
     return AttributeField(**spec)
-
-
-@lifecycle.deprecated(alternative="get_attribute")
-def get_property(name="prop", component=None, **kwargs):
-    return get_attribute(name, component, **kwargs)
 
 
 T = t.TypeVar("T", bound=EntityGroup)

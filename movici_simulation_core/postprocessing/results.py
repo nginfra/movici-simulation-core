@@ -7,7 +7,7 @@ import datetime
 import re
 import typing as t
 
-from movici_simulation_core.core.attribute_spec import AttributeSpec, attrstring
+from movici_simulation_core.core.attribute_spec import AttributeSpec
 from movici_simulation_core.core.schema import (
     DEFAULT_ROWPTR_KEY,
     AttributeSchema,
@@ -24,7 +24,7 @@ from movici_simulation_core.data_tracker.data_format import (
     EntityInitDataFormat,
     extract_dataset_data,
 )
-from movici_simulation_core.data_tracker.state import TrackedState, iter_entity_data
+from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.types import EntityData, FileType
 from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
 import numpy as np
@@ -120,14 +120,12 @@ class ResultDataset:
         self,
         entity_group,
         timestamp: t.Union[int, str, datetime.datetime, None] = None,
-        component: t.Optional[str] = None,
         attribute: t.Optional[str] = None,
         entity_selector=None,
         key="id",  # attribute to check `entity_id` for, for example 'id' or 'reference'
     ):
         kwargs = dict(
             timestamp=timestamp,
-            component=component,
             attribute=attribute,
             entity_selector=entity_selector,
             key=key,
@@ -294,11 +292,11 @@ class ReversibleUpdate:
 
     def calculate_reverse_update(self, state: TrackedState):
         rev = {"id": self.update["id"]}
-        for (component, prop_name), data in iter_entity_data(self.update):
-            if (component, prop_name) == (None, "id"):
+        for attr_name, data in self.update.items():
+            if attr_name == "id":
                 continue
             try:
-                attr = state.get_attribute(self.dataset, self.entity_group, (component, prop_name))
+                attr = state.get_attribute(self.dataset, self.entity_group, attr_name)
             except ValueError:
                 num_entities = len(state.get_index(self.dataset, self.entity_group)) or len(
                     self.update["id"]["data"]
@@ -307,15 +305,14 @@ class ReversibleUpdate:
                     infer_data_type_from_array(data),
                     num_entities,
                 )
-            target = rev if component is None else rev.setdefault(component, {})
             current_data = attr.slice(self.indices)
             if isinstance(current_data, TrackedCSRArray):
-                target[prop_name] = {
+                rev[attr_name] = {
                     "data": current_data.data,
                     DEFAULT_ROWPTR_KEY: current_data.row_ptr,
                 }
             else:
-                target[prop_name] = {"data": current_data.copy()}
+                rev[attr_name] = {"data": current_data.copy()}
         self.reverse_update = rev
 
     def apply(self, state: TrackedState):
@@ -392,7 +389,6 @@ class SlicingStrategy:
     def slice(
         self,
         timestamp: t.Union[int, str, datetime.datetime, None] = None,
-        component: t.Optional[str] = None,
         attribute: t.Optional[str] = None,
         entity_selector=None,
         key="id",
@@ -422,7 +418,6 @@ class SingleTimestampSlicingStrategy(SlicingStrategy):
 class SingleAttributeSlicingStrategy(SlicingStrategy):
     def slice(
         self,
-        component: t.Optional[str] = None,
         attribute: t.Optional[str] = None,
         **_,
     ):
@@ -430,9 +425,7 @@ class SingleAttributeSlicingStrategy(SlicingStrategy):
         data = []
         ids = self.state.get_index(self.dataset, self.entity_group).ids
         try:
-            prop = self.state.get_attribute(
-                self.dataset, self.entity_group, (component, attribute)
-            )
+            prop = self.state.get_attribute(self.dataset, self.entity_group, attribute)
         except ValueError:
             pass
         else:
@@ -460,37 +453,36 @@ class SingleEntitySlicingStrategy(SlicingStrategy):
             raise ValueError(f"Entity not found where {key}=={entity_selector}")
 
         timestamps = self.state.get_timestamps(self.dataset, self.entity_group)
-        all_props = self.state.attributes.get(self.dataset, {}).get(self.entity_group, {})
-        data = {attrstring(key[1], key[0]): [] for key in all_props}
+        all_attrs = self.state.attributes.get(self.dataset, {}).get(self.entity_group, {})
+        data = {key: [] for key in all_attrs}
 
         for timestamp in timestamps:
             self.state.move_to(timestamp)
-            for key, prop in all_props.items():
-                result = prop.slice([index])
-                if isinstance(prop, UniformAttribute):
+            for key, attr in all_attrs.items():
+                result = attr.slice([index])
+                if isinstance(attr, UniformAttribute):
                     result = result[0]
                 else:
                     result = result.data
-                data[attrstring(key[1], key[0])].append(result)
+                data[key].append(result)
 
         return {
             "timestamps": timestamps,
             "data": data,
         }
 
-    def _get_entity_index(self, entity_selector, key):
+    def _get_entity_index(self, entity_selector, attribute: str):
         index = self.state.get_index(self.dataset, self.entity_group)
-        if key == "id":
+        if attribute == "id":
             return index[[entity_selector]][0]
         try:
-            # TODO: support components
-            key_prop = self.state.get_attribute(self.dataset, self.entity_group, (None, key))
+            key_attr = self.state.get_attribute(self.dataset, self.entity_group, attribute)
         except ValueError:
             return -1
-        if isinstance(key_prop, CSRAttribute):
+        if isinstance(key_attr, CSRAttribute):
             raise ValueError("Can only use UniformAttribute as key")
         self.state.move_to(0)
-        matches = np.flatnonzero(key_prop.array == entity_selector)
+        matches = np.flatnonzero(key_attr.array == entity_selector)
         if len(matches) == 0:
             return -1
         return matches[0]

@@ -40,7 +40,6 @@ class MyEntity(EntityGroup, name="my_entities"):
 
 class Pub(EntityGroup, name="pub_entities"):
     pub_attr = get_attribute(name="pub_attr", flags=PUB)
-    component_attr = get_attribute(name="comp_attr", component="component", flags=PUB)
 
 
 class Sub(EntityGroup, name="sub_entities"):
@@ -118,7 +117,7 @@ def test_can_create_attribute(state, dataset_name):
         spec=spec,
         flags=OPT,
     )
-    assert spec.key in state.attributes[dataset_name][MyEntity.__entity_name__]
+    assert spec.name in state.attributes[dataset_name][MyEntity.__entity_name__]
 
 
 def test_can_get_attribute(state, dataset_name):
@@ -130,7 +129,7 @@ def test_can_get_attribute(state, dataset_name):
         spec=spec,
         flags=OPT,
     )
-    assert state.get_attribute(dataset_name, MyEntity.__entity_name__, spec.key).flags == OPT
+    assert state.get_attribute(dataset_name, MyEntity.__entity_name__, spec.name).flags == OPT
 
 
 @pytest.mark.parametrize(
@@ -197,7 +196,7 @@ def test_get_data_mask():
     state.register_dataset("pub_dataset", [Pub])
     state.register_dataset("sub_dataset", [Sub])
     assert state.get_data_mask() == {
-        "pub": {"pub_dataset": {"pub_entities": ["pub_attr", "component/comp_attr"]}},
+        "pub": {"pub_dataset": {"pub_entities": ["pub_attr"]}},
         "sub": {"sub_dataset": {"sub_entities": ["sub_attr", "init_attr", "opt_attr"]}},
     }
 
@@ -216,7 +215,7 @@ def tracked_entity(state, dataset_name):
         {dataset_name: {entity.__entity_name__: dataset_data_to_numpy({"id": [1, 2, 3]})}}
     )
     for field in entity.attributes.values():
-        attr = entity.get_attribute(field.key)
+        attr = entity.get_attribute(field.name)
         attr[0] = 1
         assert np.any(attr.changed)
 
@@ -352,7 +351,7 @@ class TestEntityUpdateHandler:
     def entity_group(self, entity_type):
         class MyEntity(EntityGroup, name=entity_type):
             attr = get_attribute(name="attr", flags=PUB)
-            component_attr = get_attribute(name="component_attr", component="component", flags=PUB)
+            other_attr = get_attribute(name="other_attr", flags=PUB)
             non_changed_attr = get_attribute(name="non_changed", flags=PUB)
 
         entity_group = MyEntity()
@@ -373,10 +372,10 @@ class TestEntityUpdateHandler:
         return _get_attribute
 
     def test_initialization(self, get_attribute_from_state):
-        assert get_attribute_from_state((None, "attr")).is_initialized()
+        assert get_attribute_from_state("attr").is_initialized()
 
     def test_initializes_with_empty_attribute_when_not_supplied(self, get_attribute_from_state):
-        assert np.all(get_attribute_from_state((None, "non_changed")).is_undefined())
+        assert np.all(get_attribute_from_state("non_changed").is_undefined())
 
     def test_later_added_attribute_is_initialized(
         self, state, get_attribute_from_state, update_with_new_attr, dataset_name, entity_group
@@ -384,11 +383,11 @@ class TestEntityUpdateHandler:
         attr = get_attribute("new_attr")
         state.register_attribute(dataset_name, entity_group.__entity_name__, attr.spec, attr.flags)
         state.receive_update(update_with_new_attr)
-        assert np.all(get_attribute_from_state((None, "new_attr")).is_initialized())
+        assert np.all(get_attribute_from_state("new_attr").is_initialized())
 
     def test_generate_update(self, initial_data, dataset_name, entity_group, state):
         entity_group.attr[0] = 42
-        entity_group.component_attr[1] = 43
+        entity_group.other_attr[1] = 43
         update = state.generate_update()[dataset_name][entity_group.__entity_name__]
         undefined = entity_group.attr.data_type.undefined
         assert dataset_dicts_equal(
@@ -396,9 +395,7 @@ class TestEntityUpdateHandler:
             {
                 "id": {"data": [1, 2]},
                 "attr": {"data": [42, undefined]},
-                "component": {
-                    "component_attr": {"data": [undefined, 43]},
-                },
+                "other_attr": {"data": [undefined, 43]},
             },
         )
 
@@ -410,7 +407,7 @@ def state_proxy(state, dataset_name, entity):
 
 def test_state_proxy_can_get_attribute(state_proxy, update):
     state_proxy.state.receive_update(update)
-    attr = state_proxy.get_attribute(MyEntity.attr.key)
+    attr = state_proxy.get_attribute(MyEntity.attr.name)
     assert attr[0] == 47
 
 
@@ -442,11 +439,11 @@ def test_can_filter_attributes_by_flag(dataset_name, flag, attrs):
     state.register_dataset(dataset_name, [AllFlags])
     attributes = state.attributes[dataset_name][AllFlags.__entity_name__]
 
-    assert set(filter_attrs(attributes, flag).keys()) == set((None, attr) for attr in attrs)
+    assert set(filter_attrs(attributes, flag).keys()) == set(attrs)
 
 
 def test_set_special_value_on_init_data(state, entity, dataset_name):
-    init_data = {"general": {"special": {"my_entities..attr": -100}}, dataset_name: {}}
+    init_data = {"general": {"special": {"my_entities.attr": -100}}, dataset_name: {}}
     state.receive_update(init_data)
     assert entity.attr.options.special == -100
 
@@ -464,13 +461,13 @@ def test_logs_on_double_general_section_assignment_conflict(state, entity, datas
     state.logger = Mock()
     state.receive_update(
         {
-            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities.attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
     state.receive_update(
         {
-            "general": {"special": {"my_entities..attr": -99}, "enum": {"bla": ["c"]}},
+            "general": {"special": {"my_entities.attr": -99}, "enum": {"bla": ["c"]}},
             dataset_name: {},
         }
     )
@@ -495,13 +492,13 @@ def test_does_not_log_when_double_general_section_assignment_equal_values(
     state.logger = Mock()
     state.receive_update(
         {
-            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities.attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
     state.receive_update(
         {
-            "general": {"special": {"my_entities..attr": -100}, "enum": {"bla": ["a", "b"]}},
+            "general": {"special": {"my_entities.attr": -100}, "enum": {"bla": ["a", "b"]}},
             dataset_name: {},
         }
     )
@@ -584,7 +581,7 @@ def test_can_grow_entity_group_with_new_entities():
         }
     )
     assert np.array_equal(
-        state.get_attribute("dataset", "some_entities", (None, "some_attr")).array, [10, 20]
+        state.get_attribute("dataset", "some_entities", "some_attr").array, [10, 20]
     )
     assert np.array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
 
@@ -630,7 +627,7 @@ def test_can_add_new_entity_groups_and_attributes_in_update():
         }
     )
     assert np.array_equal(
-        state.get_attribute("dataset", "other_entities", (None, "other_attr")).array, [20]
+        state.get_attribute("dataset", "other_entities", "other_attr").array, [20]
     )
     assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
 
@@ -659,11 +656,11 @@ def test_can_grow_entity_group():
     )
     np.testing.assert_array_equal(state.index["dataset"]["some_entities"].ids, [2, 1])
     np.testing.assert_array_equal(
-        state.get_attribute("dataset", "some_entities", (None, "some_attr")).array,
+        state.get_attribute("dataset", "some_entities", "some_attr").array,
         [10, UNDEFINED[int]],
     )
     np.testing.assert_array_equal(
-        state.get_attribute("dataset", "some_entities", (None, "other_attr")).array,
+        state.get_attribute("dataset", "some_entities", "other_attr").array,
         [UNDEFINED[int], 20],
     )
 
@@ -674,9 +671,9 @@ def test_can_inherit_attributes():
             spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {attr.key for attr in Derived.all_attributes().values()} == {
-        (None, "attr"),
-        (None, "also_attr"),
+    assert {attr.name for attr in Derived.all_attributes().values()} == {
+        "attr",
+        "also_attr",
     }
 
 
@@ -686,7 +683,7 @@ def test_can_override_attributes():
             spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [attr.key for attr in Derived.all_attributes().values()] == [(None, "also_attr")]
+    assert [attr.name for attr in Derived.all_attributes().values()] == ["also_attr"]
 
 
 def test_cascading_inheritance():
@@ -700,9 +697,9 @@ def test_cascading_inheritance():
             spec=AttributeSpec("other_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {attr.key for attr in DoubleDerived.all_attributes().values()} == {
-        (None, "also_attr"),
-        (None, "other_attr"),
+    assert {attr.name for attr in DoubleDerived.all_attributes().values()} == {
+        "also_attr",
+        "other_attr",
     }
 
 
@@ -712,24 +709,18 @@ def test_can_duplicate_attr():
             spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [attr.key for attr in Derived.all_attributes().values()] == [
-        (None, "attr"),
-        (None, "attr"),
+    assert [attr.name for attr in Derived.all_attributes().values()] == [
+        "attr",
+        "attr",
     ]
 
 
 @pytest.mark.parametrize(
     "general_section, key, expected",
     [
-        ({"special": {"my_entities.attribute": -1}}, (None, "attribute"), -1),
-        ({"no_data": {"my_entities.attribute": -1}}, (None, "attribute"), -1),
-        ({"special": {"my_entities..attribute": -1}}, (None, "attribute"), -1),
-        ({"special": {"my_entities.my.attribute": -1}}, (None, "my.attribute"), -1),
-        (
-            {"special": {"my_entities.my_properties.attribute": -1}},
-            ("my_properties", "attribute"),
-            -1,
-        ),
+        ({"special": {"my_entities.attribute": -1}}, "attribute", -1),
+        ({"no_data": {"my_entities.attribute": -1}}, "attribute", -1),
+        ({"special": {"my_entities.my.attribute": -1}}, "my.attribute", -1),
     ],
 )
 def test_parse_special_value(general_section: dict, key, expected: int, state: TrackedState):

@@ -63,13 +63,11 @@ def test_can_ask_state_for_index(entity_group):
     assert entity_group.index is sentinel
 
 
-def test_get_full_name():
+def test_get_name():
     class MyEntity(EntityGroup, name="some_entities"):
         attr = get_attribute(name="some_attribute")
-        attr2 = get_attribute(name="other_attribute", component="component")
 
-    assert MyEntity.attr.full_name == "some_attribute"
-    assert MyEntity.attr2.full_name == "component/other_attribute"
+    assert MyEntity.attr.name == "some_attribute"
 
 
 def test_overwrite_attribute():

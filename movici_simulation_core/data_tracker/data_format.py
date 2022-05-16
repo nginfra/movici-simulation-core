@@ -78,34 +78,22 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
             raise TypeError("Entity group data must be dict")
         return {key: self.load_attribute(data, key) for key, data in entity_group.items()}
 
-    def load_attribute(
-        self, attr_data: t.Union[dict, list], name: str, component: t.Optional[str] = None
-    ) -> dict:
-        if isinstance(attr_data, dict):
-            return {
-                key: self.load_attribute(data, name=key, component=name)
-                for key, data in attr_data.items()
-            }
-        elif isinstance(attr_data, list):
+    def load_attribute(self, attr_data: list, name: str) -> dict:
+        if isinstance(attr_data, list):
 
             def infer_datatype():
-                warnings.warn(
-                    f"Inferring datatype of attribute"
-                    f" '{component + '/' + name if component else name}'"
-                )
+                warnings.warn(f"Inferring datatype of attribute '{name}'")
                 try:
                     return infer_data_type_from_list(attr_data)
                 except TypeError as e:
-                    raise TypeError(f"Error when parsing data for {component}/{name}") from e
+                    raise TypeError(f"Error when parsing data for '{name}'") from e
 
-            data_type = self.schema.get_spec(
-                (component, name), infer_datatype, cache=True
-            ).data_type
+            data_type = self.schema.get_spec(name, infer_datatype, cache=True).data_type
 
             return parse_list(attr_data, data_type)
 
         else:
-            raise TypeError("attribute data must be dict (component) or list (attribute)")
+            raise TypeError("attribute data must be list")
 
     def dumps(
         self, dataset: dict, filetype: t.Optional[FileType] = FileType.JSON, **kwargs

@@ -4,7 +4,7 @@ import typing as t
 def validate_mask(data_mask: t.Optional[dict]):
     """determines whether the dataset filter has the correct shape, it must be lists inside
     dictionaries inside a dictionary. eg.:
-    `{"some_dataset": {"some_entity_group": ["attribute1", "component_a/attribute2"]}}`
+    `{"some_dataset": {"some_entity_group": ["attribute1", "attribute2"]}}`
 
     Also, at every level, the filter must either be filled or be none. It cannot be an empty
     container, eg:
@@ -39,7 +39,7 @@ def filter_data(data: dict, mask: t.Optional[dict]):
 
         if isinstance(mask_, list):
             ensure_id(mask_)
-            mask_ = expand_list_mask(mask_)
+            mask_ = {attr: None for attr in mask_}
 
         if isinstance(mask_, dict):
             return {
@@ -52,24 +52,6 @@ def filter_data(data: dict, mask: t.Optional[dict]):
 def ensure_id(mask: t.List[str]):
     if "id" not in mask:
         mask.append("id")
-
-
-def expand_list_mask(mask: t.List[str]) -> dict:
-    rv = {}
-    for attr in mask:
-        component, name = split_attribute(attr)
-        if component is None:
-            rv[name] = None
-        else:
-            comp_dict = rv.setdefault(component, {})
-            comp_dict[name] = None
-    return rv
-
-
-def split_attribute(attribute: str):
-    if "/" in attribute:
-        return attribute.split("/", maxsplit=1)
-    return None, attribute
 
 
 def masks_overlap(pub: t.Optional[dict], sub: t.Optional[dict]):

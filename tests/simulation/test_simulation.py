@@ -279,7 +279,7 @@ class TestSimulation:
                 return [spec]
 
         simulation.add_model("model", ModelWithAttributes)
-        assert simulation.schema[spec.key] is spec
+        assert simulation.schema[spec.name] is spec
 
     def test_can_configure_simulation(self, simulation, settings):
         simulation.configure(
@@ -334,7 +334,7 @@ class TestSimulation:
                 return [spec]
 
         simulation.register_model_type("dummy", ModelWithAttributes)
-        assert simulation.schema[spec.key] is spec
+        assert simulation.schema[spec.name] is spec
 
     def test_register_attributes(self, simulation):
         assert len(simulation.schema) == 0

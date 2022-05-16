@@ -68,7 +68,7 @@ def config():
             },
             {
                 "expression": "a*c",
-                "output": ["comp_e", "out_e"],
+                "output": [None, "out_e"],
             },
         ],
     }
@@ -97,14 +97,12 @@ class TestConfigParsing:
             UDFInfo(
                 dataset="some_dataset",
                 entity_group="some_entities",
-                output_component=None,
                 output_attribute="out_d",
                 expression="a+b",
             ),
             UDFInfo(
                 dataset="some_dataset",
                 entity_group="some_entities",
-                output_component="comp_e",
                 output_attribute="out_e",
                 expression="a*c",
             ),
@@ -131,7 +129,7 @@ def test_model_data_mask(config):
     tester = ModelTester(model)
     assert data_mask_compare(tester.initialize()) == {
         "sub": {"some_dataset": {"some_entities": {"in_a", "in_b", "in_c"}}},
-        "pub": {"some_dataset": {"some_entities": {"out_d", "comp_e/out_e"}}},
+        "pub": {"some_dataset": {"some_entities": {"out_d", "out_e"}}},
     }
 
 

@@ -30,13 +30,13 @@ def test_infer_data_type_from_array(array, expected):
 def test_read_schema_from_plugin():
     schema = AttributeSchema()
     schema.use(attributes.GlobalAttributes)
-    assert schema.get((None, "geometry.x")) is not None
+    assert schema.get("geometry.x") is not None
 
 
 def test_read_schema_from_namespace():
     schema = AttributeSchema()
     schema.add_from_namespace(attributes)
-    assert schema.get((None, "geometry.x")) is not None
+    assert schema.get("geometry.x") is not None
 
 
 @pytest.mark.parametrize(
@@ -50,7 +50,7 @@ def test_read_schema_from_namespace():
 )
 def test_get_spec(name, default_data_type, expected):
     schema = AttributeSchema([AttributeSpec("existing", DataType(float))])
-    spec = schema.get_spec((None, name), default_data_type)
+    spec = schema.get_spec(name, default_data_type)
     data_type = spec.data_type if spec is not None else None
     assert data_type == expected
 
@@ -62,9 +62,9 @@ default = object()
 def test_get_spec_caches(caches, expected):
     schema = AttributeSchema()
     kwargs = {} if caches is default else dict(cache=caches)
-    schema.get_spec((None, "attr"), DataType(float), **kwargs)
+    schema.get_spec("attr", DataType(float), **kwargs)
     spec = schema.get_spec(
-        (None, "attr"),
+        "attr",
         DataType(int),
     )
     assert spec.data_type == DataType(expected)

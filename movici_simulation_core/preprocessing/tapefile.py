@@ -70,7 +70,7 @@ class InterpolatingTapefile:
     def ensure_csv_completeness(self):
         incomplete = {}
         for attr in self.attributes:
-            if missing := (set(self.init_data[self.reference]) - set(attr.dataframe[attr.key])):
+            if missing := (set(self.init_data[self.reference]) - set(attr.dataframe[attr.name])):
                 incomplete[str(attr.csv_file)] = missing
         if incomplete:
             entities = ((key, name) for key in incomplete for name in incomplete[key])

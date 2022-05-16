@@ -99,15 +99,11 @@ class Model(TrackedModel, name="overlap_status"):
     @staticmethod
     def ensure_uniform_attribute(ds, entity, spec: AttributeSpec):
         if spec.data_type.py_type == str:
-            raise ValueError(f"Attribute {ds}/{entity}/{spec.full_name()} can't have string type")
+            raise ValueError(f"Attribute {ds}/{entity}/{spec.name} can't have string type")
         if spec.data_type.csr is True:
-            raise ValueError(
-                f"attribute {ds}/{entity}/{spec.full_name()} should be of uniform data type"
-            )
+            raise ValueError(f"attribute {ds}/{entity}/{spec.name} should be of uniform data type")
         if len(spec.data_type.unit_shape):
-            raise ValueError(
-                f"attribute {ds}/{entity}/{spec.full_name()} should be one-dimensional"
-            )
+            raise ValueError(f"attribute {ds}/{entity}/{spec.name} should be one-dimensional")
 
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
