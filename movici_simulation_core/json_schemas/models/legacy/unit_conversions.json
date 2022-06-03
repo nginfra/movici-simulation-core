@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/unit_conversions/1.0.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "od_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/modality"
+      }
+    },
+    "flow_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/modality"
+      }
+    },
+    "parameters": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "parameters"
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "od_entities": {
+      "$ref": "#/$defs/entityGroupDef"
+    },
+    "flow_entities": {
+      "$ref": "#/$defs/entityGroupDef"
+    }
+  },
+  "$defs": {
+    "entityGroupDef": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ]
+      }
+    },
+    "modality": {
+      "type": "string",
+      "enum": [
+        "roads",
+        "waterways"
+      ]
+    }
+  }
+}

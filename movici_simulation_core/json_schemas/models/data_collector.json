@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/data_collector/1.0.0",
+  "additionalProperties": false,
+  "properties": {
+    "gather_filter": {
+      "oneOf": [
+        {
+          "type": "object"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "const": "*"
+        }
+      ]
+    },
+    "aggregate_updates": {
+      "type": "boolean"
+    },
+    "storage_dir": {
+      "type": "string"
+    }
+  }
+}

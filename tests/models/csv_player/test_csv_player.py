@@ -43,13 +43,24 @@ def some_dataset():
 
 
 @pytest.fixture
-def model_config(csv_tape_name, dataset_name):
+def legacy_model_config(csv_tape_name, dataset_name):
     return {
-        "type": "csv_player",
         "entity_group": [[dataset_name, "some_entities"]],
         "csv_tape": [csv_tape_name],
         "csv_parameters": ["param1", "param2"],
         "target_attributes": [[None, "target1"], [None, "target2"]],
+    }
+
+
+@pytest.fixture
+def model_config(csv_tape_name, dataset_name):
+    return {
+        "entity_group": [dataset_name, "some_entities"],
+        "csv_tape": csv_tape_name,
+        "csv_parameters": [
+            {"parameter": "param1", "target_attribute": "target1"},
+            {"parameter": "param2", "target_attribute": "target2"},
+        ],
     }
 
 
@@ -131,3 +142,7 @@ def test_csv_player_update_1(tester: ModelTester, dataset_name):
 def test_model_config_schema(model_config):
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
     assert model_config_validator(schema)(model_config)
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    assert CSVPlayer(legacy_model_config).config == model_config

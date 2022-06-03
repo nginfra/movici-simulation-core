@@ -17,6 +17,29 @@ def global_schema(global_schema: AttributeSchema):
     return global_schema
 
 
+@pytest.fixture
+def legacy_model_config(model_name, road_network_name):
+    return {
+        "name": model_name,
+        "type": "traffic_assignment_calculation",
+        "vdf_alpha": 0.15,
+        "roads": [road_network_name],
+        "waterways": [],
+        "tracks": [],
+    }
+
+
+@pytest.fixture
+def model_config(model_name, road_network_name):
+    return {
+        "name": model_name,
+        "type": "traffic_assignment_calculation",
+        "vdf_alpha": 0.15,
+        "dataset": road_network_name,
+        "modality": "roads",
+    }
+
+
 class TestTrafficAssignmentRoads:
     @pytest.fixture(params=["road_network_for_traffic", "road_network_for_traffic_with_line3d"])
     def init_data(
@@ -36,9 +59,8 @@ class TestTrafficAssignmentRoads:
             "name": model_name,
             "type": "traffic_assignment_calculation",
             "vdf_alpha": 0.15,
-            "roads": [road_network_name],
-            "waterways": [],
-            "tracks": [],
+            "dataset": road_network_name,
+            "modality": "roads",
         }
 
     def test_traffic_assignment_roads(
@@ -159,9 +181,8 @@ class TestTrafficAssignmentWaterways:
             "name": model_name,
             "type": "traffic_assignment_calculation",
             "vdf_alpha": 0.15,
-            "roads": [],
-            "waterways": [water_network_name],
-            "tracks": [],
+            "dataset": water_network_name,
+            "modality": "waterways",
         }
 
     def test_traffic_assignment_waterways(
@@ -294,9 +315,8 @@ class TestRoadLinksChanges:
             "name": model_name,
             "type": "traffic_assignment_calculation",
             "vdf_alpha": 0.15,
-            "roads": [road_network_name],
-            "waterways": [],
-            "tracks": [],
+            "dataset": road_network_name,
+            "modality": "roads",
         }
 
     @pytest.fixture
@@ -459,9 +479,9 @@ class BaseTestTrafficAssignmentRailways:
         return {
             "name": model_name,
             "type": "traffic_assignment_calculation",
-            "tracks": [railway_network_name],
-            "waterways": [],
-            "roads": [],
+            "vdf_alpha": 0.15,
+            "dataset": railway_network_name,
+            "modality": "tracks",
         }
 
     @pytest.fixture
@@ -514,7 +534,7 @@ class TestRailwayPassengerAssignment(BaseTestTrafficAssignmentRailways):
             "name": model_name,
             "type": "traffic_assignment_calculation",
             "modality": "passenger_tracks",
-            "dataset": [railway_network_name],
+            "dataset": railway_network_name,
         }
 
     def test_passenger_assignment_only(self, tester: ModelTester, railway_network_name):
@@ -558,7 +578,7 @@ class TestRailwayCargoAssignment(BaseTestTrafficAssignmentRailways):
             "name": model_name,
             "type": "traffic_assignment_calculation",
             "modality": "cargo_tracks",
-            "dataset": [railway_network_name],
+            "dataset": railway_network_name,
         }
 
     def test_cargo_assignment_only(self, tester: ModelTester, railway_network_name):
@@ -630,3 +650,9 @@ class TestRailwayCargoAssignment(BaseTestTrafficAssignmentRailways):
             },
             atol=1e-2,
         )
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

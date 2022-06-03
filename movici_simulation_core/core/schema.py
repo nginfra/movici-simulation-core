@@ -28,19 +28,11 @@ class AttributeSchema(types.Extensible):
     def get_spec(
         self,
         name: t.Union[str, t.Tuple[t.Optional[str], str]],
-        default_data_type: t.Union[DataType, t.Callable[[], DataType], None],
+        default_data_type: t.Union[DataType, t.Callable[[], DataType], None] = None,
         cache=False,
     ):
         if not isinstance(name, str):
-            # TODO: Remove fallback behaviour once all models convert old style to new style
-            # fallback behaviour for legacy dealing with (component, attribute)
-            if not isinstance(name, t.Sequence) or len(name) != 2:
-                raise TypeError(f"name must be a string, not {type(name)}")
-            if name[0] is not None:
-                raise ValueError(
-                    f"Components are no longer supported, received attribute identifier {name}"
-                )
-            name = name[1]
+            name = self._extract_name(name)
 
         if spec := self.get(name):
             return spec
@@ -52,6 +44,19 @@ class AttributeSchema(types.Extensible):
         if cache:
             self.add_attribute(spec)
         return spec
+
+    # TODO: Remove _extract_name once all models convert old style to new style
+    @staticmethod
+    def _extract_name(identifier):
+        # fallback behaviour for dealing with (component, attribute) style attribute identifier
+        if not isinstance(identifier, t.Sequence) or len(identifier) != 2:
+            raise TypeError(f"name must be a string, not {type(identifier)}")
+        component, name = identifier
+        if component is not None:
+            raise ValueError(
+                f"Components are no longer supported, received attribute identifier {identifier}"
+            )
+        return name
 
     def add_attributes(self, attributes: t.Iterable[AttributeSpec]):
         for attr in attributes:

@@ -13,6 +13,7 @@ from movici_simulation_core.core.schema import AttributeSpec, attributes_from_di
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import model_util, ae_util
 from movici_simulation_core.models.common.entities import (
     PointEntity,
@@ -20,6 +21,7 @@ from movici_simulation_core.models.common.entities import (
 )
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.utils.validate import ensure_valid_config
 from . import dataset as ds
 
 
@@ -37,6 +39,17 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
     demand_nodes: t.Optional[ds.DemandNodeEntity] = None
     demand_links: t.Optional[VirtualLinkEntity] = None
     modality: ModalityStrategy
+
+    def __init__(self, model_config):
+        model_config = ensure_valid_config(
+            model_config,
+            "2",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
+            },
+        )
+        super().__init__(model_config)
 
     def setup(self, state: TrackedState, settings: Settings, **_):
         transport_type, dataset_name = model_util.get_transport_info(self.config)
@@ -349,3 +362,19 @@ def get_matrix(csr_array: TrackedCSRArray):
     if len(csr_array.data) != csr_array.size**2:
         raise ValueError("Array is not a valid demand matrix")
     return csr_array.data.copy().reshape((csr_array.size, csr_array.size))
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_assignment_calculation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_assignment_calculation.json"
+
+
+def convert_v1_v2(config):
+    modality, dataset = model_util.get_transport_info(config)
+    rv = {
+        "modality": modality,
+        "dataset": dataset,
+    }
+    for key in ("vdf_beta", "cargo_pcu", "vdf_alpha"):
+        if key in config:
+            rv[key] = config[key]
+    return rv

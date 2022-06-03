@@ -3,10 +3,14 @@ from jsonschema import Draft7Validator
 
 
 def model_config_validator(model_schema: dict):
-    json_schema = Draft7Validator(assemble_json_schema(model_schema))
+
+    # TODD: rm legacy schema definition with entity_categories and such
+    if "schema" in model_schema:
+        model_schema = assemble_json_schema(model_schema)
+    validator = Draft7Validator(model_schema)
 
     def _validate(model_config):
-        json_schema.validate(model_config)
+        validator.validate(model_config)
         return True
 
     return _validate

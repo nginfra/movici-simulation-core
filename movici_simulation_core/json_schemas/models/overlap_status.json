@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/overlap_status/2.0.0",
+  "type": "object",
+  "required": [
+    "output_dataset",
+    "source",
+    "targets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "output_dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "overlap"
+    },
+    "source": {
+      "$ref": "#/$defs/overlapObject"
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/overlapObject"
+      }
+    },
+    "distance_threshold": {
+      "type": "number"
+    },
+    "display_name_template": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "attributeOrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/attributeDef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    },
+    "overlapObject": {
+      "type": "object",
+      "required": [
+        "entity_group",
+        "geometry"
+      ],
+      "additionalItems": false,
+      "properties": {
+        "entity_group": {
+          "$ref": "#/$defs/entityGroupDef"
+        },
+        "geometry": {
+          "type": "string",
+          "enum": [
+            "point",
+            "line",
+            "polygon"
+          ]
+        },
+        "status_attribute": {
+          "$ref": "#/$defs/attributeOrNull"
+        }
+      }
+    }
+  }
+}

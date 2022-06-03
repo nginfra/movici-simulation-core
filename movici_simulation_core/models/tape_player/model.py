@@ -14,9 +14,11 @@ from movici_simulation_core.core.schema import (
 from movici_simulation_core.data_tracker.data_format import load_from_json
 from movici_simulation_core.data_tracker.attribute import PUB
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.utils.moment import Moment, get_timeline_info
+from movici_simulation_core.utils.validate import ensure_valid_config
 
 
 class Model(TrackedModel, name="tape_player"):
@@ -24,6 +26,13 @@ class Model(TrackedModel, name="tape_player"):
     timeline: t.Optional[TimeSeries[dict]] = None
 
     def __init__(self, model_config: dict):
+        model_config = ensure_valid_config(
+            model_config,
+            "1",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_PATH},
+            },
+        )
         super().__init__(model_config)
         self.pub_attributes: t.Set[AttributeInfo] = set()
 
@@ -31,8 +40,10 @@ class Model(TrackedModel, name="tape_player"):
         self, state: TrackedState, schema: AttributeSchema, init_data_handler: InitDataHandler, **_
     ):
         self.timeline = TimeSeries()
-
-        for tape_name in self.config.get("tabular", []):
+        tapes = self.config.get("tabular", [])
+        if not isinstance(tapes, (list, tuple)):
+            tapes = [tapes]
+        for tape_name in tapes:
             ftype, tapefile_path = init_data_handler.get(tape_name)
             if tapefile_path is None:
                 raise ValueError(f"Tapefile dataset {tape_name} not found!")
@@ -91,3 +102,6 @@ def iter_attribute_info(data: dict, dataset=None, entity_group=None, exclude=())
             yield from iter_attribute_info(val, dataset, entity_group=key, exclude=exclude)
         elif key not in exclude:
             yield AttributeInfo(dataset, entity_group, key, infer_data_type_from_array(val))
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/tape_player.json"

@@ -1,4 +1,4 @@
-image: eu.gcr.io/movici-develop/cicd-build-env:latest
+image: eu.gcr.io/movici-develop/cicd-pipeline-tools:latest
 
 stages:
   - verify
@@ -49,6 +49,7 @@ test:unit:
   artifacts:
     untracked: true
   before_script:
+    - apt-get update && apt-get install -y libsqlite3-mod-spatialite
     - pip install -r requirements-dev.txt
     - pip install -r requirements.txt
     - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST

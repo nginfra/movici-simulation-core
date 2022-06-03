@@ -17,8 +17,10 @@ from movici_simulation_core.data_tracker.attribute import (
     UniformAttribute,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common.network import Network, NetworkEntities
 from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.validate import ensure_valid_config
 
 
 class ShortestPathModel(TrackedModel, name="shortest_path"):
@@ -28,8 +30,19 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
     calculators: t.List[NetworkCalculator]
     no_update_shortest_path: bool = False
 
+    def __init__(self, model_config):
+        model_config = ensure_valid_config(
+            model_config,
+            "2",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
+            },
+        )
+        super().__init__(model_config)
+
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
-        dataset, segments = self.config["transport_segments"][0]
+        dataset, segments = self.config["transport_segments"]
         self.entity_groups = Network.register_required_attributes(
             state=state, dataset_name=dataset, transport_segments_name=segments
         )
@@ -188,3 +201,22 @@ CALCULATORS: t.Dict[str, t.Type[NetworkCalculator]] = {
     "sum": SumCalculator,
     "weighted_average": WeightedAverageCalculator,
 }
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/shortest_path.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/shortest_path.json"
+
+
+def convert_v1_v2(config):
+    return {
+        **config,
+        "cost_factor": config["cost_factor"][1],
+        "transport_segments": config["transport_segments"][0],
+        "calculations": [
+            {
+                **calc,
+                "input": calc["input"][1],
+                "output": calc["output"][1],
+            }
+            for calc in config["calculations"]
+        ],
+    }

@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/corridor/1.0.0",
+  "required": [
+    "corridors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "roads": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      }
+    },
+    "cargo_pcu": {
+      "type": "number"
+    },
+    "corridors": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "corridor"
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "waterways": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      }
+    },
+    "publish_corridor_geometry": {
+      "type": "boolean"
+    }
+  }
+  
+}

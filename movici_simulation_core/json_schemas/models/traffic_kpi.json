@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/traffic_kpi/2.0.0",
+  "type": "object",
+  "required": [
+    "coefficients_dataset",
+    "scenario_parameters_dataset",
+    "energy_consumption_attribute",
+    "co2_emission_attribute",
+    "nox_emission_attribute"
+  ],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "transport_network"
+    },
+    "modality": {
+      "type": "string",
+      "enum": [
+        "roads",
+        "tracks",
+        "waterways"
+      ]
+    },
+    "coefficients_dataset": {
+      "$ref": "#/$defs/parameterDataset"
+    },
+    "scenario_parameters_dataset": {
+      "$ref": "#/$defs/parameterDataset"
+    },
+    "cargo_scenario_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "passenger_scenario_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "energy_consumption_attribute": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "co2_emission_attribute": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "nox_emission_attribute": {
+      "$ref": "#/$defs/attributeDef"
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "parameterDataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "parameters"
+    }
+  }
+}

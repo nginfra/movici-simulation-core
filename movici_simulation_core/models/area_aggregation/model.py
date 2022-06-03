@@ -12,7 +12,17 @@ from movici_simulation_core.models.common.entities import PolygonEntity, Geometr
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.json_schemas import PATH as SCHEMA_PATH
 from .aggregators import functions, AttributeAggregator
+
+
+class AggregatorConfig(t.TypedDict):
+    source_entity_group: t.Tuple[str, str]
+    source_attribute: str
+    target_attribute: str
+    function: str
+    source_geometry: str
 
 
 class Model(TrackedModel, name="area_aggregation"):
@@ -25,6 +35,14 @@ class Model(TrackedModel, name="area_aggregation"):
     previous_timestamp: t.Optional[Moment]
 
     def __init__(self, config):
+        config = ensure_valid_config(
+            config,
+            "2",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
+            },
+        )
         super().__init__(config)
         self.aggregators = []
         self.target_entity = None
@@ -34,50 +52,39 @@ class Model(TrackedModel, name="area_aggregation"):
 
     def setup(self, state: TrackedState, schema, **_):
         config = self.config
-        self.check_input_lengths(config=config)
         self.parse_config(state, config, schema)
 
     def parse_config(self, state: TrackedState, config: t.Dict, schema: AttributeSchema):
         self.output_interval = config.get("output_interval")
         self.add_aggregators(
             state=state,
-            source_geometries=config["source_geometry_types"],
-            source_entities=config["source_entity_groups"],
-            source_attrs=config["source_properties"],
-            funcs=config["aggregation_functions"],
             target_entity=config["target_entity_group"],
-            target_attrs=config["target_properties"],
+            aggregators=config["aggregations"],
             schema=schema,
         )
 
     def add_aggregators(
         self,
         state: TrackedState,
-        source_geometries,
-        source_entities,
-        source_attrs,
-        funcs,
         target_entity,
-        target_attrs,
+        aggregators: t.List[AggregatorConfig],
         schema: AttributeSchema,
     ):
-        target_ds_name, target_entity_name = target_entity[0]
+        target_ds_name, target_entity_name = target_entity
         self.target_entity = state.register_entity_group(
             dataset_name=target_ds_name, entity=PolygonEntity(name=target_entity_name)
         )
 
-        for geom, src_entity, src_attr, func, target_attr in zip(
-            source_geometries, source_entities, source_attrs, funcs, target_attrs
-        ):
-            src_ds_name, src_entity_name = src_entity
+        for agg in aggregators:
+            src_ds_name, src_entity_name = agg["source_entity_group"]
             self.src_entities.append(
                 state.register_entity_group(
                     dataset_name=src_ds_name,
-                    entity=try_get_geometry_type(geom)(name=src_entity_name),
+                    entity=try_get_geometry_type(agg["source_geometry"])(name=src_entity_name),
                 )
             )
 
-            target_spec = schema.get_spec(target_attr, DataType(float))
+            target_spec = schema.get_spec(agg["target_attribute"], DataType(float))
             self.ensure_uniform_attribute(target_ds_name, target_entity_name, target_spec)
             target_prop = state.register_attribute(
                 dataset_name=target_ds_name,
@@ -86,13 +93,13 @@ class Model(TrackedModel, name="area_aggregation"):
                 flags=PUB,
             )
 
-            src_spec = schema.get_spec(src_attr, DataType(float))
+            src_spec = schema.get_spec(agg["source_attribute"], DataType(float))
             self.ensure_uniform_attribute(target_ds_name, target_entity_name, src_spec)
             src_prop = state.register_attribute(
                 dataset_name=src_ds_name, entity_name=src_entity_name, spec=src_spec, flags=INIT
             )
 
-            ensure_function(func)
+            func = ensure_function(agg["function"])
             aggregator = AttributeAggregator(source=src_prop, target=target_prop, func=func)
             self.aggregators.append(aggregator)
 
@@ -111,27 +118,6 @@ class Model(TrackedModel, name="area_aggregation"):
             raise ValueError(
                 f"attribute {ds}/{entity}/{spec.name} in the aggregator "
                 f"should be one-dimensional"
-            )
-
-    @staticmethod
-    def check_input_lengths(config):
-        if len(config["target_entity_group"]) != 1 or len(config["target_entity_group"][0]) != 2:
-            raise ValueError(
-                "target_entity_group should have exactly 1 "
-                "dataset_name and entity_group pair in a list"
-            )
-        keys = [
-            "source_properties",
-            "source_entity_groups",
-            "target_properties",
-            "source_geometry_types",
-            "aggregation_functions",
-        ]
-        if any(len(config[key]) != len(config[keys[0]]) for key in keys[1:]):
-            raise ValueError(
-                "source_properties, source_entity_groups, target_properties, "
-                "source_geometry_types, and aggregation_functions must have the same "
-                "length in the model configuration"
             )
 
     def initialize(self, state: TrackedState):
@@ -197,3 +183,28 @@ class Model(TrackedModel, name="area_aggregation"):
 def ensure_function(func):
     if func not in functions:
         raise ValueError(f"models function must be one of {[k for k in functions.keys()]}")
+    return func
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/area_aggregation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/area_aggregation.json"
+
+
+def convert_v1_v2(config):
+    rv = {
+        "target_entity_group": config["target_entity_group"][0],
+        "aggregations": [
+            {
+                "source_entity_group": config["source_entity_groups"][i],
+                "source_attribute": config["source_properties"][i][1],
+                "target_attribute": config["target_properties"][i][1],
+                "function": config["aggregation_functions"][i],
+                "source_geometry": config["source_geometry_types"][i],
+            }
+            for i in range(len(config["source_entity_groups"]))
+        ],
+    }
+    if "output_interval" in config:
+        rv["output_interval"] = config["output_interval"]
+
+    return rv

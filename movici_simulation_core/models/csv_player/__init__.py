@@ -1,5 +1,4 @@
-from pathlib import Path
+from .csv_player import CSVPlayer, MODEL_CONFIG_SCHEMA_PATH
 
 
-MODEL_CONFIG_SCHEMA_PATH = Path(__file__).parent / "model_config_schema.json"
-__all__ = ["MODEL_CONFIG_SCHEMA_PATH"]
+__all__ = ["CSVPlayer", "MODEL_CONFIG_SCHEMA_PATH"]

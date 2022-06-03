@@ -20,11 +20,18 @@ import pytest
 
 
 @pytest.fixture
-def model_config(railway_network_name):
+def legacy_model_config(railway_network_name):
     return {
-        "type": "generalized_journey_time",
         "travel_time": [None, "transport.passenger_average_time"],
         "transport_segments": [[railway_network_name, "track_segment_entities"]],
+    }
+
+
+@pytest.fixture
+def model_config(railway_network_name):
+    return {
+        "travel_time": "transport.passenger_average_time",
+        "transport_segments": [railway_network_name, "track_segment_entities"],
     }
 
 
@@ -250,3 +257,7 @@ def test_crowdedness():
 def test_model_config_schema(model_config):
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
     assert model_config_validator(schema)(model_config)
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    assert GJTModel(legacy_model_config).config == model_config

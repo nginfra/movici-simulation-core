@@ -11,6 +11,7 @@ from pathlib import Path
 from movici_simulation_core.base_models.simple_model import SimpleModel
 from movici_simulation_core.data_tracker.attribute import SUB, SUBSCRIBE
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.data_collector.concurrent import (
     LimitedThreadPoolExecutor,
     MultipleFutures,
@@ -25,6 +26,7 @@ from movici_simulation_core.types import (
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.utils.validate import ensure_valid_config
 
 
 @dataclasses.dataclass
@@ -46,6 +48,13 @@ class DataCollector(SimpleModel, name="data_collector"):
     strategies: t.Dict[str, t.Type[StorageStrategy]] = {}
 
     def __init__(self, model_config: dict):
+        model_config = ensure_valid_config(
+            model_config,
+            "1",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_PATH},
+            },
+        )
         super().__init__(model_config)
         self.pool = LimitedThreadPoolExecutor(max_workers=5)
         self.futures = MultipleFutures()
@@ -168,3 +177,5 @@ class LocalStorageStrategy(StorageStrategy):
 
 
 DataCollector.add_storage_strategy("disk", LocalStorageStrategy)
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"

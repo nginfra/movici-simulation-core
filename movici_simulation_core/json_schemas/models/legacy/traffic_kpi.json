@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/traffic_kpi/1.0.0",
+  "type": "object",
+  "required": [
+    "coefficients_csv",
+    "scenario_parameters",
+    "energy_consumption_property",
+    "co2_emission_property",
+    "nox_emission_property"
+  ],
+  "properties": {
+    "roads": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "waterways": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "transport_network"
+      },
+      "minItems": 1,
+      "maxItems": 1
+    },
+    "coefficients_csv": {
+      "$ref": "#/$defs/parameterDataset"
+    },
+    "scenario_parameters": {
+      "$ref": "#/$defs/parameterDataset"
+    },
+    "cargo_scenario_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "passenger_scenario_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "energy_consumption_property": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "co2_emission_property": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "nox_emission_property": {
+      "$ref": "#/$defs/attributeDef"
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "array",
+      "items": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      ]
+    },
+    "parameterDataset": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "parameters"
+      },
+      "maxItems": 1,
+      "minItems": 1
+    }
+  }
+}

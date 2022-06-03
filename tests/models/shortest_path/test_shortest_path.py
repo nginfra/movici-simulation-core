@@ -13,10 +13,8 @@ def get_model_config(road_network_name):
     def _get_model_config(calculation: dict, cost_factor="transport.average_time", **kwargs):
 
         return {
-            "name": "my_shortest_path",
-            "type": "shortest_path",
-            "transport_segments": [[road_network_name, "road_segment_entities"]],
-            "cost_factor": [None, cost_factor],
+            "transport_segments": [road_network_name, "road_segment_entities"],
+            "cost_factor": cost_factor,
             "calculations": [calculation],
             **kwargs,
         }
@@ -29,10 +27,25 @@ def model_config(get_model_config):
     return get_model_config(
         {
             "type": "sum",
-            "input": [None, "shape.length"],
-            "output": [None, "transport.shortest_path_length"],
+            "input": "shape.length",
+            "output": "transport.shortest_path_length",
         }
     )
+
+
+@pytest.fixture
+def legacy_model_config(road_network_name):
+    return {
+        "transport_segments": [[road_network_name, "road_segment_entities"]],
+        "cost_factor": [None, "transport.average_time"],
+        "calculations": [
+            {
+                "type": "sum",
+                "input": [None, "shape.length"],
+                "output": [None, "transport.shortest_path_length"],
+            }
+        ],
+    }
 
 
 @pytest.fixture
@@ -145,8 +158,8 @@ class TestShortestPathModel:
         model_config = get_model_config(
             calculation={
                 "type": calculation_type,
-                "input": [None, "shape.length"],
-                "output": [None, "transport.shortest_path_length"],
+                "input": "shape.length",
+                "output": "transport.shortest_path_length",
             }
         )
         tester = create_model_tester(
@@ -175,8 +188,8 @@ class TestShortestPathModel:
             # no_update_shortest_path=True,
             calculation={
                 "type": "sum",
-                "input": [None, "shape.length"],
-                "output": [None, "transport.shortest_path_length"],
+                "input": "shape.length",
+                "output": "transport.shortest_path_length",
             },
         )
         tester = create_model_tester(
@@ -228,8 +241,8 @@ class TestShortestPathModel:
             no_update_shortest_path=True,
             calculation={
                 "type": "weighted_average",
-                "input": [None, "shape.length"],
-                "output": [None, "transport.shortest_path_length"],
+                "input": "shape.length",
+                "output": "transport.shortest_path_length",
             },
         )
         tester = create_model_tester(
@@ -305,8 +318,8 @@ class TestShortestPathModelSingleSource:
         model_config = get_model_config(
             calculation={
                 "type": calculation_type,
-                "input": [None, "shape.length"],
-                "output": [None, "transport.total_length"],
+                "input": "shape.length",
+                "output": "transport.total_length",
                 key: source,
             }
         )
@@ -334,8 +347,8 @@ def json_schema():
             None,
             {
                 "type": "sum",
-                "input": [None, "foo_attr"],
-                "output": [None, "bar_attr"],
+                "input": "foo_attr",
+                "output": "bar_attr",
                 "single_source_entity_reference": "ref",
             },
         ),
@@ -343,8 +356,8 @@ def json_schema():
             None,
             {
                 "type": "sum",
-                "input": [None, "foo_attr"],
-                "output": [None, "bar_attr"],
+                "input": "foo_attr",
+                "output": "bar_attr",
                 "single_source_entity_id": 42,
             },
         ),
@@ -368,16 +381,16 @@ def test_validate_model_config(
             None,
             {
                 "type": "invalid",
-                "input": [None, "foo_attr"],
-                "output": [None, "bar_attr"],
+                "input": "foo_attr",
+                "output": "bar_attr",
             },
         ),
         (
             None,
             {
                 "type": "sum",
-                "input": [None, "foo_attr"],
-                "output": [None, "bar_attr"],
+                "input": "foo_attr",
+                "output": "bar_attr",
                 "single_source_entity_reference": 42,
             },
         ),
@@ -385,8 +398,8 @@ def test_validate_model_config(
             None,
             {
                 "type": "sum",
-                "input": [None, "foo_attr"],
-                "output": [None, "bar_attr"],
+                "input": "foo_attr",
+                "output": "bar_attr",
                 "single_source_entity_id": "ref",
             },
         ),
@@ -401,3 +414,7 @@ def test_invalid_model_config(
         model_config.update(extra_props)
     with pytest.raises(jsonschema.ValidationError):
         model_config_validator(json_schema)(model_config)
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    assert ShortestPathModel(legacy_model_config).config == model_config

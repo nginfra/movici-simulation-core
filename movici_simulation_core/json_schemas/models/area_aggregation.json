@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/area_aggregration/2.0.0",
+  "required": [
+    "aggregations",
+    "target_entity_group"
+  ],
+  "properties": {
+    "additionalItems": false,
+    "output_interval": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "aggregations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source_entity_group",
+          "source_attribute",
+          "target_attribute",
+          "function",
+          "source_geometry"
+        ],
+        "properties": {
+          "source_entity_group": {
+            "$ref": "#/$defs/entityGroupDef"
+          },
+          "source_attribute": {
+            "$ref": "#/$defs/attributeDef"
+          },
+          "target_attribute": {
+            "$ref": "#/$defs/attributeDef"
+          },
+          "function": {
+            "type": "string",
+            "enum": [
+              "min",
+              "max",
+              "average",
+              "sum",
+              "integral",
+              "integral_seconds",
+              "integral_minutes",
+              "integral_hours",
+              "integral_days"
+            ]
+          },
+          "source_geometry": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "point",
+                "line",
+                "polygon"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "target_entity_group": {
+      "$ref": "#/$defs/entityGroupDef"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    }
+  }
+}

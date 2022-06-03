@@ -10,10 +10,12 @@ from movici_simulation_core.core.schema import AttributeSpec, attributes_from_di
 from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 from movici_simulation_core.data_tracker.index import Index
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import model_util, ae_util
 from movici_simulation_core.models.common.entities import PointEntity, VirtualLinkEntity
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.utils.validate import ensure_valid_config
 from . import attributes
 from .entities import (
     CorridorEntity,
@@ -27,7 +29,19 @@ class Model(TrackedModel, name="corridor"):
 
     epsilon = 1e-12
 
-    def __init__(self, model_config: dict) -> None:
+    def __init__(self, model_config: dict, validate_config=True):
+        if validate_config:
+            model_config = ensure_valid_config(
+                model_config,
+                "2",
+                {
+                    "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                    "2": {
+                        "schema": MODEL_CONFIG_SCHEMA_PATH,
+                        "convert_from": {"1": convert_v1_v2},
+                    },
+                },
+            )
         super().__init__(model_config)
         self._corridor_entity: t.Optional[CorridorEntity] = None
         self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
@@ -51,13 +65,12 @@ class Model(TrackedModel, name="corridor"):
         self._project = ProjectWrapper(settings.temp_dir)
 
         self._corridor_entity = state.register_entity_group(
-            dataset_name=self.config["corridors"][0], entity=CorridorEntity
+            dataset_name=self.config["corridors"], entity=CorridorEntity
         )
         self._register_transport_entities(state, self.config)
 
     def _register_transport_entities(self, state: TrackedState, config: dict) -> None:
-        transport_type = model_util.get_transport_type(config)
-        transport_dataset_name = config[transport_type][0]
+        transport_type, transport_dataset_name = model_util.get_transport_info(config)
 
         self._transport_segments = state.register_entity_group(
             transport_dataset_name,
@@ -286,3 +299,22 @@ class Model(TrackedModel, name="corridor"):
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/corridor.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/corridor.json"
+
+
+def convert_v1_v2(config):
+    rv = {"corridors": config["corridors"][0]}
+    for key in ("cargo_pcu", "publish_corridor_geometry"):
+        if key in config:
+            rv[key] = config[key]
+
+    for key in ("roads", "waterways", "tracks"):
+        if key in config:
+            rv["dataset"] = config[key][0]
+            rv["modality"] = key
+            break
+
+    return rv

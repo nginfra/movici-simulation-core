@@ -35,7 +35,7 @@ def init_data(
 
 
 @pytest.fixture
-def model_config(
+def legacy_model_config(
     model_name, overlap_dataset_name, water_network_name, road_network_name, mv_network_name
 ):
     return {
@@ -64,6 +64,35 @@ def model_config(
 
 
 @pytest.fixture
+def model_config(
+    model_name, overlap_dataset_name, water_network_name, road_network_name, mv_network_name
+):
+    return {
+        "name": model_name,
+        "type": "overlap_status",
+        "source": {
+            "entity_group": [water_network_name, "water_pipe_entities"],
+            "geometry": "line",
+            "status_attribute": "operational.is_working_properly",
+        },
+        "targets": [
+            {
+                "entity_group": [mv_network_name, "electrical_node_entities"],
+                "geometry": "point",
+                "status_attribute": "operational.is_working_properly",
+            },
+            {
+                "entity_group": [road_network_name, "road_segment_entities"],
+                "geometry": "line",
+                "status_attribute": "operational.is_working_properly",
+            },
+        ],
+        "output_dataset": overlap_dataset_name,
+        "distance_threshold": 0.1,
+    }
+
+
+@pytest.fixture
 def additional_attributes():
     from movici_simulation_core.core import DataType
 
@@ -75,6 +104,17 @@ def additional_attributes():
             data_type=DataType(bool, (), False),
         ),
     ]
+
+
+@pytest.fixture
+def get_overlap_update(get_entity_update):
+    def _factory(
+        ids: Iterable,
+        attributes: Iterable,
+    ) -> Dict:
+        return get_entity_update(ids, attributes, key_name="overlap.active")
+
+    return _factory
 
 
 class TestOverlapStatus:
@@ -496,9 +536,10 @@ class TestOverlapStatus:
         get_entity_update,
         global_schema,
     ):
-        del config["config"]["models"][0]["from_check_status_property"]
-        config["config"]["models"][0]["to_check_status_properties"][0] = None
-        config["config"]["models"][0]["to_check_status_properties"][1] = (None, None)
+        model_config = config["config"]["models"][0]
+        del model_config["source"]["status_attribute"]
+        model_config["targets"][0]["status_attribute"] = None
+        del model_config["targets"][1]["status_attribute"]
 
         scenario = {
             "updates": [
@@ -874,12 +915,12 @@ class TestOverlapStatus:
         get_overlap_update,
         global_schema,
     ):
-
-        config["config"]["models"][0]["to_entity_groups"] = [
-            (knotweed_dataset_name, "knotweed_entities")
+        config["config"]["models"][0]["targets"] = [
+            {
+                "entity_group": [knotweed_dataset_name, "knotweed_entities"],
+                "geometry": "polygon",
+            }
         ]
-        config["config"]["models"][0]["to_geometry_types"] = ["polygon"]
-        del config["config"]["models"][0]["to_check_status_properties"]
 
         scenario = {
             "updates": [
@@ -1006,11 +1047,12 @@ class TestOverlapWithoutActualOverlaps:
         get_overlap_update,
         global_schema,
     ):
-        config["config"]["models"][0]["to_entity_groups"] = [
-            (knotweed_dataset_name, "knotweed_entities")
+        config["config"]["models"][0]["targets"] = [
+            {
+                "entity_group": [knotweed_dataset_name, "knotweed_entities"],
+                "geometry": "polygon",
+            }
         ]
-        config["config"]["models"][0]["to_geometry_types"] = ["polygon"]
-        del config["config"]["models"][0]["to_check_status_properties"]
 
         scenario = {
             "updates": [
@@ -1068,12 +1110,7 @@ class TestOverlapWithoutActualOverlaps:
         )
 
 
-@pytest.fixture
-def get_overlap_update(get_entity_update):
-    def _factory(
-        ids: Iterable,
-        attributes: Iterable,
-    ) -> Dict:
-        return get_entity_update(ids, attributes, key_name="overlap.active")
-
-    return _factory
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/corridor/2.0.0",
+  "required": [
+    "corridors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "corridors": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "corridor"
+    },
+    "modality": {
+      "type": "string",
+      "enum": [
+        "roads",
+        "waterways",
+        "tracks"
+      ]
+    },
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "transport_network"
+    },
+    "cargo_pcu": {
+      "type": "number"
+    },
+    "publish_corridor_geometry": {
+      "type": "boolean"
+    }
+  }
+}

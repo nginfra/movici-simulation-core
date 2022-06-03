@@ -52,7 +52,7 @@ def init_data(
 
 
 @pytest.fixture
-def model_config(
+def legacy_model_config(
     model_name,
     road_network_name,
     coefficients_csv_name,
@@ -68,6 +68,27 @@ def model_config(
         "energy_consumption_property": [None, "transport.energy_consumption_h2.hours"],
         "co2_emission_property": [None, "transport.co2_emission_h2.hours"],
         "nox_emission_property": [None, "transport.nox_emission_h2.hours"],
+    }
+
+
+@pytest.fixture
+def model_config(
+    model_name,
+    road_network_name,
+    coefficients_csv_name,
+    scenario_parameters_csv_name,
+):
+    return {
+        "name": model_name,
+        "type": "traffic_kpi",
+        "modality": "roads",
+        "dataset": road_network_name,
+        "coefficients_dataset": coefficients_csv_name,
+        "scenario_parameters_dataset": scenario_parameters_csv_name,
+        "cargo_scenario_parameters": ["h2_share_freight_road"],
+        "energy_consumption_attribute": "transport.energy_consumption_h2.hours",
+        "co2_emission_attribute": "transport.co2_emission_h2.hours",
+        "nox_emission_attribute": "transport.nox_emission_h2.hours",
     }
 
 
@@ -322,3 +343,9 @@ def test_kpi_calculation(
         rtol=0.01,
         global_schema=global_schema,
     )
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

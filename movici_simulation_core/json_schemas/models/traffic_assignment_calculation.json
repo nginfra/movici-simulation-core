@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/traffic_assignment_calculation/2.0.0",
+  "type": "object",
+  "required": [
+    "dataset",
+    "modality"
+  ],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "transport_network"
+    },
+    "modality": {
+      "type": "string",
+      "enum": [
+        "roads",
+        "tracks",
+        "waterways",
+        "passenger_tracks",
+        "cargo_tracks"
+      ]
+    },
+    "vdf_beta": {
+      "type": "number"
+    },
+    "cargo_pcu": {
+      "type": "number"
+    },
+    "vdf_alpha": {
+      "type": "number"
+    }
+  },
+  "additionalProperties": false
+}

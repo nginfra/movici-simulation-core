@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/shortest_path/1.0.0",
+  "type": "object",
+  "required": [
+    "cost_factor",
+    "calculations",
+    "transport_segments"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "cost_factor": {
+      "$ref": "#/definitions/attributeDef"
+    },
+    "no_update_shortest_path": {
+      "type": "boolean",
+      "default": false
+    },
+    "transport_segments": {
+      "$ref": "#/definitions/entityGroupDef"
+    },
+    "calculations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "minItems": 1,
+        "properties": {
+          "type": {
+            "enum": [
+              "sum",
+              "weighted_average"
+            ],
+            "type": "string"
+          },
+          "single_source_entity_id": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "minimum": 0
+          },
+          "single_source_entity_reference": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "input": {
+            "$ref": "#/definitions/attributeDef"
+          },
+          "output": {
+            "$ref": "#/definitions/attributeDef"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "attributeDef": {
+      "type": "array",
+      "items": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "minItems": 1,
+      "maxItems": 1
+    }
+  }
+}

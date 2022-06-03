@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/time_window_status/1.0.0",
+  "type": "object",
+  "required": [
+    "time_window_dataset",
+    "status_datasets",
+    "time_window_begin",
+    "time_window_end",
+    "time_window_status"
+  ],
+  "properties": {
+    "status_datasets": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "minItems": 1
+    },
+    "time_window_end": {
+      "type": "array",
+      "items": [
+        {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": false
+    },
+    "time_window_begin": {
+      "type": "array",
+      "items": [
+        {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": false
+    },
+    "time_window_status": {
+      "type": "array",
+      "items": [
+        {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "additionalItems": false
+    },
+    "time_window_dataset": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "maxItems": 1,
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/area_aggregration/1.0.0",
+  "required": [
+    "target_entity_group",
+    "source_entity_groups",
+    "source_properties",
+    "target_properties",
+    "aggregation_functions",
+    "source_geometry_types"
+  ],
+  "properties": {
+    "additionalItems": false,
+    "output_interval": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "source_properties": {
+      "type": "array",
+      "items": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "target_properties": {
+      "type": "array",
+      "items": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "target_entity_group": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "source_entity_groups": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "minItems": 1
+    },
+    "aggregation_functions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_geometry_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "point",
+          "line",
+          "polygon"
+        ],
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

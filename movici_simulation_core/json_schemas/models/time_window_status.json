@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/time_window_status/2.0.0",
+  "type": "object",
+  "required": [
+    "source",
+    "time_window_begin",
+    "time_window_end",
+    "targets"
+  ],
+  "properties": {
+    "source": {
+      "$ref": "#/$defs/entityGroupDef"
+    },
+    "time_window_end": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "time_window_begin": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "targets": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/statusTarget"
+          },
+          "minItems": 1
+        },
+        {
+          "$ref": "#/$defs/statusTarget"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    },
+    "statusTarget": {
+      "type": "object",
+      "required": [
+        "entity_group",
+        "attribute"
+      ],
+      "properties": {
+        "entity_group": {
+          "$ref": "#/$defs/entityGroupDef"
+        },
+        "attribute": {
+          "$ref": "#/$defs/attributeDef"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

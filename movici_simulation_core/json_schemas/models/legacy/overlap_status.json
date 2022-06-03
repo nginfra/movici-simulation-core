@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/overlap_status/1.0.0",
+  "type": "object",
+  "required": [
+    "output_dataset",
+    "from_entity_group",
+    "to_entity_groups"
+  ],
+  "properties": {
+    "output_dataset": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "overlap"
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "additionalItems": false,
+    "to_entity_groups": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "minItems": 1
+    },
+    "from_entity_group": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "to_geometry_types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "point",
+          "line",
+          "polygon"
+        ],
+        "type": "string"
+      }
+    },
+    "distance_threshold": {
+      "type": "number"
+    },
+    "from_geometry_type": {
+      "enum": [
+        "point",
+        "line",
+        "polygon"
+      ],
+      "type": "string"
+    },
+    "display_name_template": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "from_check_status_property": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "additionalItems": false
+    },
+    "to_check_status_properties": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": [
+              {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "additionalItems": false
+    }
+  },
+  "additionalProperties": false
+}

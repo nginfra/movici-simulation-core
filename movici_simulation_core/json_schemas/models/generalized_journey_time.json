@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/generalized_journey_time/2.0.0",
+  "required": [
+    "transport_segments",
+    "travel_time"
+  ],
+  "properties": {
+    "additionalItems": false,
+    "travel_time": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "transport_segments": {}
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    }
+  }
+}

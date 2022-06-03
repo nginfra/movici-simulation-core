@@ -68,7 +68,6 @@ class TestCargoDemand:
             "local_entity_groups": [],
             "local_properties": [],
             "local_geometries": [],
-            "local_geometry_entities": [],
             "local_elasticities": [],
         }
 
@@ -146,7 +145,6 @@ class TestPassengerDemand:
             "local_entity_groups": [],
             "local_properties": [],
             "local_geometries": [],
-            "local_geometry_entities": [],
             "local_elasticities": [],
         }
 
@@ -227,7 +225,6 @@ class TestCargoDemandSum:
             "local_entity_groups": [],
             "local_properties": [],
             "local_geometries": [],
-            "local_geometry_entities": [],
             "local_elasticities": [],
         }
 
@@ -795,16 +792,19 @@ class TestCargoWithLocalRouting:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [[water_network_name, "virtual_node_entities"]],
-            "demand_property": [None, "transport.cargo_demand"],
-            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
-            "local_properties": [
-                [None, "transport.average_time"],
+            "demand_path": [water_network_name, "virtual_node_entities", "transport.cargo_demand"],
+            "local_parameters": [
+                {
+                    "attribute_path": [
+                        road_network_name,
+                        "road_segment_entities",
+                        "transport.average_time",
+                    ],
+                    "geometry": "line",
+                    "mapping_type": "route",
+                    "elasticity": 2,
+                }
             ],
-            "local_mapping_type": ["route"],
-            "local_geometries": ["line"],
-            "local_prop_is_iterative": [False],
-            "local_elasticities": [2],
         }
 
     def test_demand_calculation(
@@ -939,16 +939,19 @@ class TestCargoWithLocalRoutingIterative:
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [[water_network_name, "virtual_node_entities"]],
-            "demand_property": [None, "transport.cargo_demand"],
-            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
-            "local_properties": [
-                [None, "transport.average_time"],
+            "demand_path": [water_network_name, "virtual_node_entities", "transport.cargo_demand"],
+            "local_parameters": [
+                {
+                    "attribute_path": [
+                        road_network_name,
+                        "road_segment_entities",
+                        "transport.average_time",
+                    ],
+                    "geometry": "line",
+                    "mapping_type": "route",
+                    "elasticity": 2,
+                }
             ],
-            "local_mapping_type": ["route"],
-            "local_geometries": ["line"],
-            "local_prop_is_iterative": [True],
-            "local_elasticities": [2],
         }
 
     def test_demand_calculation(
@@ -1068,111 +1071,6 @@ class TestCargoWithLocalRoutingIterative:
         )
 
 
-class TestCargoWithInducedDemand:
-    @pytest.fixture
-    def init_data(
-        self,
-        road_network_name,
-        road_network_for_traffic,
-        scenario_parameters_csv_path,
-        waterways,
-    ):
-        return [
-            {"name": road_network_name, "data": road_network_for_traffic},
-        ]
-
-    @pytest.fixture
-    def model_config(self, model_name, road_network_name):
-        return {
-            "name": model_name,
-            "type": "traffic_demand_calculation",
-            "demand_entity": [[road_network_name, "virtual_node_entities"]],
-            "demand_property": [None, "transport.cargo_demand"],
-            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
-            "local_properties": [
-                [None, "transport.layout"],
-            ],
-            "local_mapping_type": ["extended_route"],
-            "local_geometries": ["line"],
-            "local_prop_is_iterative": [False],
-            "local_elasticities": [2],
-        }
-
-    def test_demand_calculation(self, config, model_name, road_network_name, global_schema):
-        scenario = {
-            "updates": [
-                {
-                    # Publish road lengths, required for induced demand
-                    "time": 0,
-                    "data": {
-                        road_network_name: {
-                            "road_segment_entities": {
-                                "id": [101, 102, 103, 104],
-                                # maps virt_node [12, 12, 10, 10] -> path_length 12->10=2, 10->12=1
-                                "shape.length": [1, 2, 3, 42],
-                                "transport.average_time": [5, 6, 7, 8],
-                            },
-                        }
-                    },
-                },
-                {
-                    # Publish demands lengths, required to calculate any demand at all
-                    "time": 0,
-                    "data": {
-                        road_network_name: {
-                            "virtual_node_entities": {
-                                "id": [10, 11, 12],
-                                "transport.cargo_demand": [
-                                    [0, 0, 14],
-                                    [10, 0, 0],
-                                    [11, 0, 0],
-                                ],
-                            },
-                        }
-                    },
-                },
-                {
-                    "time": 2,
-                    "data": {
-                        road_network_name: {
-                            "road_segment_entities": {
-                                "id": [101],
-                                "transport.layout": [[2, 0, 0, 0]],
-                            }
-                        }
-                    },
-                },
-            ],
-            "expected_results": [
-                {"time": 0, "data": None},
-                {"time": 0, "data": None},
-                {
-                    "time": 2,
-                    "data": {
-                        road_network_name: {
-                            "virtual_node_entities": {
-                                "id": [11, 12],
-                                "transport.cargo_demand": [
-                                    [10 * ((2 * 1) / (1 * 1)) ** 2, 0, 0],
-                                    [11 * ((2 * 1 + 2 * 3) / (1 * 1 + 2 * 3)) ** 2, 0, 0],
-                                ],
-                            },
-                        },
-                    },
-                },
-            ],
-        }
-
-        scenario.update(config)
-        ModelTester.run_scenario(
-            model=TrafficDemandCalculation,
-            model_name=model_name,
-            scenario=scenario,
-            rtol=0.01,
-            global_schema=global_schema,
-        )
-
-
 class TestMaxIterations:
     @pytest.fixture
     def init_data(
@@ -1189,20 +1087,23 @@ class TestMaxIterations:
         ]
 
     @pytest.fixture
-    def model_config(self, model_name, road_network_name, water_network_name):
+    def model_config(self, model_name, road_network_name):
         return {
             "name": model_name,
             "type": "traffic_demand_calculation",
-            "demand_entity": [[road_network_name, "virtual_node_entities"]],
-            "demand_property": [None, "transport.cargo_demand"],
-            "local_entity_groups": [[road_network_name, "road_segment_entities"]],
-            "local_properties": [
-                [None, "transport.average_time"],
+            "demand_path": [road_network_name, "virtual_node_entities", "transport.cargo_demand"],
+            "local_parameters": [
+                {
+                    "attribute_path": [
+                        road_network_name,
+                        "road_segment_entities",
+                        "transport.average_time",
+                    ],
+                    "geometry": "line",
+                    "mapping_type": "route",
+                    "elasticity": 2,
+                }
             ],
-            "local_mapping_type": ["route"],
-            "local_geometries": ["line"],
-            "local_prop_is_iterative": [True],
-            "local_elasticities": [2],
             "max_iterations": 2,
         }
 
@@ -1252,3 +1153,54 @@ class TestMaxIterations:
             tester.update(1, average_time_update(4)),
         ]
         assert [r[0] is None for r in results] == [False, False, True]
+
+
+@pytest.fixture
+def legacy_model_config():
+    return {
+        "demand_entity": [["road_network", "virtual_node_entities"]],
+        "demand_property": [None, "transport.cargo_demand"],
+        "total_inward_demand_property": [None, "inward"],
+        "total_outward_demand_property": [None, "outward"],
+        "scenario_parameters": ["csv"],
+        "global_parameters": ["gp1", "gp2"],
+        "global_elasticities": [2, -1],
+        "local_entity_groups": [["dataset", "eg"]],
+        "local_properties": [[None, "attr"]],
+        "local_geometries": ["point"],
+        "local_elasticities": [1],
+        "atol": 1e-3,
+        "rtol": 1e-4,
+        "max_iterations": 10,
+        "scenario_multipliers": ["load_factor_multiplier"],
+    }
+
+
+@pytest.fixture
+def model_config():
+    return {
+        "demand_path": ["road_network", "virtual_node_entities", "transport.cargo_demand"],
+        "total_inward_demand_attribute": "inward",
+        "total_outward_demand_attribute": "outward",
+        "parameter_dataset": "csv",
+        "global_parameters": [
+            {"name": "gp1", "elasticity": 2},
+            {"name": "gp2", "elasticity": -1},
+        ],
+        "local_parameters": [
+            {
+                "attribute_path": ["dataset", "eg", "attr"],
+                "geometry": "point",
+                "elasticity": 1,
+                "mapping_type": "nearest",
+            }
+        ],
+        "atol": 1e-3,
+        "rtol": 1e-4,
+        "max_iterations": 10,
+        "scenario_multipliers": ["load_factor_multiplier"],
+    }
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    assert TrafficDemandCalculation(legacy_model_config).config == model_config

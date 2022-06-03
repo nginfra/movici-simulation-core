@@ -219,7 +219,7 @@ class ModelTester:
             model_config = next(
                 filter(lambda m: m["name"] == model_name, scenario["config"]["models"])
             )
-        except StopIteration as e:
+        except (KeyError, StopIteration) as e:
             raise ValueError(f"model {model_name} not found in scenario") from e
         settings = Settings()
         settings.apply_scenario_config(scenario["config"])

@@ -58,7 +58,7 @@ def tape_dataset(tape_data, tape_dataset_name):
 
 @pytest.fixture
 def model(tape_dataset_name):
-    return Model({"tabular": [tape_dataset_name]})
+    return Model({"tabular": tape_dataset_name})
 
 
 @pytest.fixture

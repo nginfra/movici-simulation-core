@@ -68,3 +68,24 @@ def test_get_spec_caches(caches, expected):
         DataType(int),
     )
     assert spec.data_type == DataType(expected)
+
+
+def test_schema_legacy_get_spec():
+    spec = AttributeSpec("attr", float)
+    schema = AttributeSchema([spec])
+    assert schema.get_spec((None, "attr")) is spec
+
+
+@pytest.mark.parametrize(
+    "inp, exception, pattern",
+    [
+        (("component", "attr"), ValueError, "Components are no longer supported"),
+        ((), TypeError, "name must be a string"),
+        (("toolong", "component", "attr"), TypeError, "name must be a string"),
+    ],
+)
+def test_schema_legacy_invalid(inp, exception, pattern):
+    schema = AttributeSchema()
+
+    with pytest.raises(exception, match=pattern):
+        schema.get_spec(inp)

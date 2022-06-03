@@ -27,7 +27,7 @@ def init_data(
 
 
 @pytest.fixture
-def model_config(model_name, road_network_name, mv_network_name):
+def legacy_model_config(model_name, road_network_name, mv_network_name):
     return {
         "name": model_name,
         "type": "time_window_status",
@@ -39,6 +39,21 @@ def model_config(model_name, road_network_name, mv_network_name):
         "time_window_begin": (None, "begin"),
         "time_window_end": (None, "end"),
         "time_window_status": (None, "status"),
+    }
+
+
+@pytest.fixture
+def model_config(model_name, road_network_name, mv_network_name):
+    return {
+        "name": model_name,
+        "type": "time_window_status",
+        "source": ["a_maintenance_agenda", "maintenance_job_entities"],
+        "targets": [
+            {"entity_group": [road_network_name, "road_segment_entities"], "attribute": "status"},
+            {"entity_group": [mv_network_name, "electrical_node_entities"], "attribute": "status"},
+        ],
+        "time_window_begin": "begin",
+        "time_window_end": "end",
     }
 
 
@@ -56,6 +71,26 @@ def additional_attributes():
 
 
 class TestTimeWindowStatus:
+    @pytest.fixture
+    def model_config(self, model_name, road_network_name, mv_network_name):
+        return {
+            "name": model_name,
+            "type": "time_window_status",
+            "source": ["a_maintenance_agenda", "maintenance_job_entities"],
+            "targets": [
+                {
+                    "entity_group": [road_network_name, "road_segment_entities"],
+                    "attribute": "status",
+                },
+                {
+                    "entity_group": [mv_network_name, "electrical_node_entities"],
+                    "attribute": "other_status",
+                },
+            ],
+            "time_window_begin": "begin",
+            "time_window_end": "end",
+        }
+
     def test_maintenance_window(
         self,
         get_entity_update,
@@ -87,7 +122,7 @@ class TestTimeWindowStatus:
                             "electrical_node_entities": get_entity_update(
                                 [0, 2, 4, 6, 8],
                                 attributes=[False, False, False, False, False],
-                                key_name="status",
+                                key_name="other_status",
                             ),
                         },
                     },
@@ -113,7 +148,7 @@ class TestTimeWindowStatus:
                             "electrical_node_entities": get_entity_update(
                                 [2, 4],
                                 attributes=[True, True],
-                                key_name="status",
+                                key_name="other_status",
                             ),
                         }
                     },
@@ -126,7 +161,7 @@ class TestTimeWindowStatus:
                             "electrical_node_entities": get_entity_update(
                                 [2, 4],
                                 attributes=[False, False],
-                                key_name="status",
+                                key_name="other_status",
                             ),
                         }
                     },
@@ -150,11 +185,15 @@ class TestTimeWindowStatusSameEntity:
         return {
             "name": model_name,
             "type": "time_window_status",
-            "time_window_dataset": [("a_maintenance_agenda", "maintenance_job_entities")],
-            "status_datasets": [(road_network_name, "road_segment_entities")],
-            "time_window_begin": (None, "job_begin"),
-            "time_window_end": (None, "job_end"),
-            "time_window_status": (None, "status"),
+            "source": ["a_maintenance_agenda", "maintenance_job_entities"],
+            "targets": [
+                {
+                    "entity_group": (road_network_name, "road_segment_entities"),
+                    "attribute": "status",
+                },
+            ],
+            "time_window_begin": "job_begin",
+            "time_window_end": "job_end",
         }
 
     @pytest.fixture
@@ -231,11 +270,15 @@ class TestTimeWindowUndefinedWindow:
         return {
             "name": model_name,
             "type": "time_window_status",
-            "time_window_dataset": [("a_maintenance_agenda", "maintenance_job_entities")],
-            "status_datasets": [(road_network_name, "road_segment_entities")],
-            "time_window_begin": (None, "job_begin"),
-            "time_window_end": (None, "job_end"),
-            "time_window_status": (None, "status"),
+            "source": ["a_maintenance_agenda", "maintenance_job_entities"],
+            "targets": [
+                {
+                    "entity_group": (road_network_name, "road_segment_entities"),
+                    "attribute": "status",
+                },
+            ],
+            "time_window_begin": "job_begin",
+            "time_window_end": "job_end",
         }
 
     @pytest.fixture
@@ -310,14 +353,19 @@ class TestTimeWindowUndefinedWindow:
 class TestTimeWindowInEntitiesDataset:
     @pytest.fixture
     def model_config(self, model_name, road_network_name):
+
         return {
             "name": model_name,
             "type": "time_window_status",
-            "time_window_dataset": [(road_network_name, "road_segment_entities")],
-            "status_datasets": [(road_network_name, "road_segment_entities")],
-            "time_window_begin": (None, "begin"),
-            "time_window_end": (None, "end"),
-            "time_window_status": (None, "status"),
+            "source": [road_network_name, "road_segment_entities"],
+            "targets": [
+                {
+                    "entity_group": (road_network_name, "road_segment_entities"),
+                    "attribute": "status",
+                },
+            ],
+            "time_window_begin": "begin",
+            "time_window_end": "end",
         }
 
     @pytest.fixture
@@ -416,3 +464,9 @@ class TestTimeWindowInEntitiesDataset:
             scenario=scenario,
             global_schema=global_schema,
         )
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

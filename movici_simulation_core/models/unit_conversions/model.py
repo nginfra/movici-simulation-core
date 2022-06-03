@@ -6,11 +6,14 @@ from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
 from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_simulation_core.data_tracker.state import TrackedState
-from ...model_connector.init_data import InitDataHandler, FileType
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
 from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.utils.validate import ensure_valid_config
+
 from . import attributes
 from .entities import FlowEntityGroup, ODEntityGroup
+from ...model_connector.init_data import FileType, InitDataHandler
 
 
 class Model(TrackedModel, name="unit_conversions"):
@@ -30,6 +33,14 @@ class Model(TrackedModel, name="unit_conversions"):
     coefficients_tape: t.Optional[CsvTape]
 
     def __init__(self, model_config: dict):
+        model_config = ensure_valid_config(
+            model_config,
+            "2",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
+            },
+        )
         super().__init__(model_config)
         self.flow_entities = []
         self.flow_types = []
@@ -39,32 +50,37 @@ class Model(TrackedModel, name="unit_conversions"):
 
     def setup(self, state: TrackedState, init_data_handler: InitDataHandler, **_):
         config = self.config
-        flow_entities = config.get("flow_entities", [])
-        flow_types = config.get("flow_types", [])
-        for flow_entity, flow_type in zip(flow_entities, flow_types):
-            self.flow_entities.append(
-                state.register_entity_group(
-                    dataset_name=flow_entity[0],
-                    entity=FlowEntityGroup(name=flow_entity[1]),
-                )
+        for conversion in config["conversions"]:
+            if conversion["class"] == "od":
+                self.setup_od_conversion(conversion, state)
+            elif conversion["class"] == "flow":
+                self.setup_flow_conversion(conversion, state)
+            else:
+                raise ValueError(f"unknown conversion class '{conversion['class']}'")
+
+        self.initialize_coefficients(
+            data_handler=init_data_handler, name=config["parameters_dataset"]
+        )
+
+    def setup_od_conversion(self, conversion: dict, state: TrackedState):
+        dataset, entity_group = conversion["entity_group"]
+        self.od_entities.append(
+            state.register_entity_group(
+                dataset_name=dataset,
+                entity=ODEntityGroup(name=entity_group),
             )
-            self.flow_types.append(flow_type)
+        )
+        self.od_types.append(conversion["modality"])
 
-        od_entities = config.get("od_entities", [])
-        od_types = config.get("od_types", [])
-        for od_entity, od_type in zip(od_entities, od_types):
-            self.od_entities.append(
-                state.register_entity_group(
-                    dataset_name=od_entity[0],
-                    entity=ODEntityGroup(name=od_entity[1]),
-                )
+    def setup_flow_conversion(self, conversion: dict, state: TrackedState):
+        dataset, entity_group = conversion["entity_group"]
+        self.flow_entities.append(
+            state.register_entity_group(
+                dataset_name=dataset,
+                entity=FlowEntityGroup(name=entity_group),
             )
-            self.od_types.append(od_type)
-
-        self.initialize_coefficients(data_handler=init_data_handler, name=config["parameters"][0])
-
-    def initialize(self, state: TrackedState):
-        pass
+        )
+        self.flow_types.append(conversion["modality"])
 
     def initialize_coefficients(self, data_handler: InitDataHandler, name: str):
         dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
@@ -149,3 +165,32 @@ class Model(TrackedModel, name="unit_conversions"):
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/unit_conversions.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/unit_conversions.json"
+
+
+def convert_v1_v2(config):
+
+    return {
+        "parameters_dataset": config["parameters"][0],
+        "conversions": [
+            *[
+                {
+                    "class": "od",
+                    "modality": config["od_types"][i],
+                    "entity_group": config["od_entities"][i],
+                }
+                for i in range(len(config["od_types"]))
+            ],
+            *[
+                {
+                    "class": "flow",
+                    "modality": config["flow_types"][i],
+                    "entity_group": config["flow_entities"][i],
+                }
+                for i in range(len(config["flow_types"]))
+            ],
+        ],
+    }

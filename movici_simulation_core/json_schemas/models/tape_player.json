@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/shortest_path/1.0.1",
+  "type": "object",
+  "required": [
+    "tabular"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tabular": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tabularDef"
+          },
+          "minItems": 1
+        },
+        {
+          "$ref": "#/$defs/tabularDef"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "tabularDef": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "tabular"
+    }
+  }
+}

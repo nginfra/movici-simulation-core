@@ -30,7 +30,7 @@ def init_data(
 
 
 @pytest.fixture
-def model_config(
+def legacy_model_config(
     model_name,
     road_network_name,
     scenario_parameters_csv_name,
@@ -46,6 +46,36 @@ def model_config(
         "od_entities": [[road_network_name, "virtual_node_entities"]],
         "od_types": ["waterways"],
         "parameters": [scenario_parameters_csv_name],
+    }
+
+
+@pytest.fixture
+def model_config(
+    model_name,
+    road_network_name,
+    scenario_parameters_csv_name,
+):
+    return {
+        "name": model_name,
+        "type": "unit_conversions",
+        "conversions": [
+            {
+                "class": "od",
+                "modality": "waterways",
+                "entity_group": [road_network_name, "virtual_node_entities"],
+            },
+            {
+                "class": "flow",
+                "modality": "roads",
+                "entity_group": [road_network_name, "transport_node_entities"],
+            },
+            {
+                "class": "flow",
+                "modality": "waterways",
+                "entity_group": [road_network_name, "road_segment_entities"],
+            },
+        ],
+        "parameters_dataset": scenario_parameters_csv_name,
     }
 
 
@@ -161,3 +191,9 @@ def test_unit_conversions(config, model_name, road_network_name, global_schema):
         rtol=0.01,
         global_schema=global_schema,
     )
+
+
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

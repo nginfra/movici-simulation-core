@@ -1,4 +1,3 @@
-import itertools
 import logging
 import typing as t
 
@@ -16,6 +15,7 @@ from movici_simulation_core.data_tracker.attribute import (
     SUBSCRIBE,
 )
 from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
 from movici_simulation_core.models.common.csv_tape import CsvTape
 from movici_simulation_core.models.common.entities import (
@@ -35,13 +35,13 @@ from movici_simulation_core.models.traffic_demand_calculation.common import (
 from movici_simulation_core.models.traffic_demand_calculation.local_contributors import (
     RouteCostFactor,
     NearestValue,
-    InducedDemand,
     LocalParameterInfo,
     Investment,
     InvestmentContributor,
 )
 from movici_simulation_core.utils.moment import Moment
 from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.utils.validate import ensure_valid_config
 
 DEFAULT_DATA_TYPE = DataType(float, (), False)
 DEFAULT_CSR_DATA_TYPE = DataType(float, (), True)
@@ -73,10 +73,17 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
     _local_mapping_type_to_calculators_dict: t.Dict[str, t.Type[LocalContributor]] = {
         "nearest": NearestValue,
         "route": RouteCostFactor,
-        "extended_route": InducedDemand,
     }
 
     def __init__(self, model_config: dict):
+        model_config = ensure_valid_config(
+            model_config,
+            "2",
+            {
+                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
+                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
+            },
+        )
         super().__init__(model_config)
         self.update_count = 0
         self.max_iterations = model_config.get("max_iterations", 10_000_000)
@@ -94,9 +101,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
         global_contributors = self.get_global_elasticity_contributors(init_data_handler)
         scenario_multipliers = self.get_scenario_multipliers()
-        local_contributors = self.get_local_contributors(
-            settings=settings, state=state, schema=schema, logger=logger
-        )
+        local_contributors = self.get_local_contributors(state=state, schema=schema)
         investments = self.get_investment_contributors()
 
         self.demand_estimation = DemandEstimation(
@@ -106,20 +111,20 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def configure_demand_nodes(self, state: TrackedState, schema: AttributeSchema):
         config = self.config
-        ds_name, demand_entity = config["demand_entity"][0]
+        ds_name, demand_entity, attribute = config["demand_path"]
         self._demand_entity = state.register_entity_group(
             dataset_name=ds_name, entity=PointEntity(name=demand_entity)
         )
         self._demand_attribute = state.register_attribute(
             dataset_name=ds_name,
             entity_name=demand_entity,
-            spec=schema.get_spec(config["demand_property"], DEFAULT_CSR_DATA_TYPE),
+            spec=schema.get_spec(attribute, DEFAULT_CSR_DATA_TYPE),
             flags=INIT | PUB,
             rtol=config.get("rtol", 1e-5),
             atol=config.get("atol", 1e-8),
         )
 
-        if sum_attr_config_in := config.get("total_inward_demand_property"):
+        if sum_attr_config_in := config.get("total_inward_demand_attribute"):
             self._total_inward_demand_attribute = state.register_attribute(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
@@ -127,7 +132,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
                 flags=PUB,
             )
 
-        if sum_attr_config_out := config.get("total_outward_demand_property"):
+        if sum_attr_config_out := config.get("total_outward_demand_attribute"):
             self._total_outward_demand_attribute = state.register_attribute(
                 dataset_name=ds_name,
                 entity_name=demand_entity,
@@ -139,27 +144,20 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self, data_handler: InitDataHandler
     ) -> t.List[GlobalContributor]:
         config = self.config
-        global_parameters = config.get("global_parameters", [])
-        global_elasticities = config.get("global_elasticities", [])
 
-        if len(global_parameters) == 0 and len(global_elasticities) == 0:
+        if (parameter_dataset := config.get("parameter_dataset")) is None:
             return []
-
-        if len(global_parameters) != len(global_elasticities):
-            raise RuntimeError(
-                "global_parameters should have the same length of global_elasticities"
-            )
         self._scenario_parameters_tape = tape = self.get_global_parameters_tape(
-            data_handler, config["scenario_parameters"][0]
+            data_handler, parameter_dataset
         )
         return [
-            GlobalElasticityParameter(param, tape, elasticity)
-            for param, elasticity in zip(global_parameters, global_elasticities)
+            GlobalElasticityParameter(param["name"], tape, param["elasticity"])
+            for param in config.get("global_parameters", [])
         ]
 
     @staticmethod
     def get_global_parameters_tape(data_handler: InitDataHandler, name: str) -> CsvTape:
-        dtype, data = data_handler.ensure_ftype(name, FileType.CSV)
+        _, data = data_handler.ensure_ftype(name, FileType.CSV)
         csv: pd.DataFrame = pd.read_csv(data)
         tape = CsvTape()
         tape.initialize(csv)
@@ -174,24 +172,14 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def get_local_contributors(
         self,
-        settings: Settings,
         state: TrackedState,
         schema: AttributeSchema,
-        logger: logging.Logger,
     ) -> t.List[LocalContributor]:
         config = self.config
         rv = []
-        if "local_entity_groups" not in config or "local_properties" not in config:
-            return rv
 
-        for entity, attr, geom, mapping_type, elasticity in zip(
-            config.get("local_entity_groups", []),
-            config.get("local_properties", []),
-            config.get("local_geometries", []),
-            config.get("local_mapping_type", itertools.repeat("nearest")),
-            config.get("local_elasticities", []),
-        ):
-            ds_name, entity_name = entity
+        for parameter in config.get("local_parameters", []):
+            ds_name, entity_name, attr = parameter["attribute_path"]
             attr_spec = schema.get_spec(attr, DEFAULT_DATA_TYPE)
 
             registered_attr = state.register_attribute(
@@ -203,11 +191,13 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             info = LocalParameterInfo(
                 target_dataset=ds_name,
                 target_entity_group=entity_name,
-                target_geometry=geom,
+                target_geometry=parameter["geometry"],
                 target_attribute=registered_attr,
-                elasticity=elasticity,
+                elasticity=parameter["elasticity"],
             )
-            calculator = self._local_mapping_type_to_calculators_dict[mapping_type](info)
+            calculator = self._local_mapping_type_to_calculators_dict[
+                parameter.get("mapping_type", "nearest")
+            ](info)
             rv.append(calculator)
         return rv
 
@@ -267,3 +257,53 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def shutdown(self, state: TrackedState) -> None:
         self.demand_estimation.close()
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_demand_calculation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_demand_calculation.json"
+
+
+def convert_v1_v2(config):
+    rv = {
+        "demand_path": [*config["demand_entity"][0], config["demand_property"][1]],
+        "global_parameters": [
+            {
+                "name": config["global_parameters"][i],
+                "elasticity": config["global_elasticities"][i],
+            }
+            for i in range(len(config.get("global_parameters", [])))
+        ],
+        "local_parameters": [
+            {
+                "attribute_path": [
+                    *config["local_entity_groups"][i],
+                    config["local_properties"][i][1],
+                ],
+                "geometry": config["local_geometries"][i],
+                "elasticity": config["local_elasticities"][i],
+                "mapping_type": config["local_mapping_type"][i]
+                if "local_mapping_type" in config
+                else "nearest",
+            }
+            for i in range(len(config.get("local_entity_groups", [])))
+        ],
+    }
+    if "scenario_parameters" in config:
+        rv["parameter_dataset"] = config["scenario_parameters"][0]
+
+    if prop := config.get("total_inward_demand_property"):
+        rv["total_inward_demand_attribute"] = prop[1]
+    if prop := config.get("total_outward_demand_property"):
+        rv["total_outward_demand_attribute"] = prop[1]
+
+    for key in (
+        "investment_multipliers",
+        "atol",
+        "rtol",
+        "max_iterations",
+        "scenario_multipliers",
+    ):
+        if key in config:
+            rv[key] = config[key]
+
+    return rv

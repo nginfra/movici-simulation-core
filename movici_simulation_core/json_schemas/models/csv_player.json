@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/csv_player/2.0.0",
+  "required": [
+    "csv_tape",
+    "entity_group",
+    "csv_parameters"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "csv_tape": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "parameters"
+    },
+    "entity_group": {
+      "$ref": "#/$defs/entityGroupDef"
+    },
+    "csv_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "parameter",
+          "target_attribute"
+        ],
+        "properties": {
+          "parameters": {
+            "type": "string"
+          },
+          "target_attribute": {
+            "type": "string",
+            "movici.type": "attribute"
+          }
+        }
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    }
+  }
+}

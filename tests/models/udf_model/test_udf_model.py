@@ -57,7 +57,7 @@ def init_data():
 
 
 @pytest.fixture
-def config():
+def legacy_config():
     return {
         "entity_group": [["some_dataset", "some_entities"]],
         "inputs": {"a": [None, "in_a"], "b": [None, "in_b"], "c": [None, "in_c"]},
@@ -69,6 +69,24 @@ def config():
             {
                 "expression": "a*c",
                 "output": [None, "out_e"],
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def config():
+    return {
+        "entity_group": ["some_dataset", "some_entities"],
+        "inputs": {"a": "in_a", "b": "in_b", "c": "in_c"},
+        "functions": [
+            {
+                "expression": "a+b",
+                "output": "out_d",
+            },
+            {
+                "expression": "a*c",
+                "output": "out_e",
             },
         ],
     }
@@ -187,11 +205,11 @@ def test_model_with_one_function(create_model_tester):
             "inputs": {"a": [None, "in_a"], "b": [None, "in_b"]},
             "functions": [
                 {
-                    "optional": ["a"],
                     "expression": "a+b",
                     "output": [None, "out_d"],
                 },
             ],
+            "optional": ["a"],
         }
     )
     tester.initialize()
@@ -452,13 +470,13 @@ def test_csr_scalar_min(create_model_tester):
     [
         None,
         {
-            "entity_group": [["some_dataset", "some_entities"]],
-            "inputs": {"a": [None, "undef_csr"]},
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "undef_csr"},
             "optional": ["a"],
             "functions": [
                 {
                     "expression": "default(a, 0)",
-                    "output": [None, "out_csr"],
+                    "output": "out_csr",
                 },
             ],
         },
@@ -468,3 +486,7 @@ def test_model_config_schema(config_, config):
     config = config_ or config
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
     assert model_config_validator(schema)(config)
+
+
+def test_convert_legacy_model_config(legacy_config, config):
+    assert UDFModel(legacy_config).config == config

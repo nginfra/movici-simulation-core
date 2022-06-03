@@ -1,0 +1,155 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/traffic_demand_calculation/2.0.0",
+  "type": "object",
+  "required": [
+    "demand_path"
+  ],
+  "properties": {
+    "demand_path": {
+      "$ref": "#/$defs/attributePath"
+    },
+    "global_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "elasticity"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "elasticity": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "local_parameters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "attribute_path",
+          "geometry",
+          "elasticity"
+        ],
+        "properties": {
+          "geometry": {
+            "type": "string",
+            "enum": [
+              "point",
+              "line",
+              "polygon"
+            ]
+          },
+          "attribute_path": {
+            "$ref": "#/$defs/attributePath"
+          },
+          "elasticity": {
+            "type": "number"
+          },
+          "mapping_type": {
+            "type": "string",
+            "enum": [
+              "nearest",
+              "route"
+            ],
+            "default": "nearest"
+          }
+        }
+      }
+    },
+    "parameter_dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "parameters"
+    },
+    "investment_multipliers": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 3,
+        "maxItems": 3
+      }
+    },
+    "scenario_multipliers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "total_inward_demand_attribute": {
+      "$ref": "#/$defs/attributeOrNull"
+    },
+    "total_outward_demand_attribute": {
+      "$ref": "#/$defs/attributeOrNull"
+    },
+    "atol": {
+      "type": "number",
+      "default": 1e-8
+    },
+    "rtol": {
+      "type": "number",
+      "default": 1e-5
+    },
+    "max_iterations": {
+      "type": "number"
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    },
+    "attributePath": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        },
+        {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      ]
+    },
+    "attributeOrNull": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/attributeDef"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

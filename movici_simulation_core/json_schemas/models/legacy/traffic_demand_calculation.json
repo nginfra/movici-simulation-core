@@ -1,0 +1,206 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/traffic_demand_calculation/1.0.0",
+  "type": "object",
+  "required": [
+    "demand_entity"
+  ],
+  "properties": {
+    "atol": {
+      "type": "number"
+    },
+    "rtol": {
+      "type": "number"
+    },
+    "max_iterations": {
+      "type": "number"
+    },
+    "demand_entity": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "demand_property": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "additionalItems": true
+    },
+    "local_geometries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "point", "line","polygon"
+        ]
+      }
+    },
+    "local_properties": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": [
+              {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "additionalItems": false
+    },
+    "global_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "local_elasticities": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "local_mapping_type": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "global_elasticities": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
+    },
+    "local_entity_groups": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": [
+          {
+            "type": "string",
+            "movici.type": "dataset"
+          },
+          {
+            "type": "string",
+            "movici.type": "entityGroup"
+          }
+        ],
+        "maxItems": 2,
+        "minItems": 2
+      }
+    },
+    "scenario_parameters": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "movici.type": "dataset",
+        "movici.datasetType": "parameters"
+      },
+      "maxItems": 1,
+      "minItems": 1
+    },
+    "investment_multipliers": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      }
+    },
+    "scenario_multipliers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "total_inward_demand_property": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "additionalItems": false
+    },
+    "total_outward_demand_property": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": [
+            {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "additionalItems": false
+    }
+  }
+}
