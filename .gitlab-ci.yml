@@ -40,26 +40,29 @@ test:static:
     - pip install -r requirements-dev.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - make lint
 
-test:unit:
+.tests:
   stage: test
-  only:
-    refs:
-      - merge_requests
-      - master
-  artifacts:
-    untracked: true
   before_script:
     - apt-get update && apt-get install -y libsqlite3-mod-spatialite
     - pip install -r requirements-dev.txt
     - pip install -r requirements.txt
     - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
     - pip install --no-deps -e .[models]
+
+test:unit:
+  extends: .tests
+  only:
+    refs:
+      - merge_requests
+      - master
+  artifacts:
+    untracked: true
   script:
     - make coverage
   coverage: '/^TOTAL\s+\d+\s+\d+\s+(\d+\%)$/'
 
 test:numba:
-  stage: test
+  extends: .tests
   only:
     refs:
       - master
@@ -68,11 +71,6 @@ test:numba:
     KUBERNETES_MEMORY_LIMIT: 1536Mi
     KUBERNETES_CPU_REQUEST: 1000m
     KUBERNETES_CPU_LIMIT: 2000m
-  before_script:
-    - pip install -r requirements-dev.txt
-    - pip install -r requirements.txt
-    - pip install -r requirements-models.txt --extra-index-url=$PYPI_SERVER_URL --trusted-host=$PYPI_SERVER_HOST
-    - pip install --no-deps -e .[models]
   script:
     - make test-numba
 
