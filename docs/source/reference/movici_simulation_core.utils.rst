@@ -84,6 +84,16 @@ strategies
    :undoc-members:
    :show-inheritance:
 
+
+
+validate 
+---------
+
+.. automodule:: movici_simulation_core.utils.validate
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 

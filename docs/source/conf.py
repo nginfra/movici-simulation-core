@@ -32,7 +32,6 @@ version = movici_simulation_core.__version__
 # ones.
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx_autodoc_typehints",
     "sphinxcontrib.mermaid",
     "sphinx.ext.doctest",
 ]

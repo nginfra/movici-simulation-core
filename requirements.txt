@@ -8,3 +8,4 @@ pyzmq
 msgpack
 click
 geopandas
+jsonschema
