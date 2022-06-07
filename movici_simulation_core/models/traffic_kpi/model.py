@@ -22,6 +22,10 @@ CO2 = "co2"
 NOX = "nox"
 ENERGY = "energy"
 
+DEFAULT_ENERGY_CONSUMPTION_ATTR = "transport.energy_consumption.hours"
+DEFAULT_CO2_EMISSION_ATTR = "transport.co2_emission.hours"
+DEFAULT_NOX_EMISSION_ATTR = "transport.nox_emission.hours"
+
 
 class Model(TrackedModel, name="traffic_kpi"):
     """
@@ -34,7 +38,6 @@ class Model(TrackedModel, name="traffic_kpi"):
     """
 
     segments: t.Optional[TransportSegments]
-    coefficients_tape: t.Optional[CoefficientsTape]
     modality: t.Literal["roads", "tracks", "waterways"]
     ec_attr: UniformAttribute
     co2_attr: UniformAttribute
@@ -77,9 +80,10 @@ class Model(TrackedModel, name="traffic_kpi"):
         self._passenger_scenario_parameters = self.set_scenario_parameters(
             self.config, config_key="passenger_scenario_parameters"
         )
-        self._initialize_scenario_parameters_tape(
-            data_handler=init_data_handler, name=self.config["scenario_parameters_dataset"]
-        )
+        if "scenario_parameters_dataset" in self.config:
+            self._initialize_scenario_parameters_tape(
+                data_handler=init_data_handler, name=self.config["scenario_parameters_dataset"]
+            )
         self.initialize_coefficients(
             data_handler=init_data_handler, name=self.config["coefficients_dataset"]
         )
@@ -331,7 +335,8 @@ class Model(TrackedModel, name="traffic_kpi"):
             dataset_name,
             entity_name,
             schema.get_spec(
-                config["energy_consumption_attribute"], default_data_type=DataType(float)
+                config.get("energy_consumption_attribute", DEFAULT_ENERGY_CONSUMPTION_ATTR),
+                default_data_type=DataType(float),
             ),
             flags=PUB,
         )
@@ -339,14 +344,20 @@ class Model(TrackedModel, name="traffic_kpi"):
         self.co2_attr = state.register_attribute(
             dataset_name,
             entity_name,
-            schema.get_spec(config["co2_emission_attribute"], default_data_type=DataType(float)),
+            schema.get_spec(
+                config.get("co2_emission_attribute", DEFAULT_CO2_EMISSION_ATTR),
+                default_data_type=DataType(float),
+            ),
             flags=PUB,
         )
 
         self.nox_attr = state.register_attribute(
             dataset_name,
             entity_name,
-            schema.get_spec(config["nox_emission_attribute"], default_data_type=DataType(float)),
+            schema.get_spec(
+                config.get("nox_emission_attribute", DEFAULT_NOX_EMISSION_ATTR),
+                default_data_type=DataType(float),
+            ),
             flags=PUB,
         )
 
@@ -360,15 +371,13 @@ class Model(TrackedModel, name="traffic_kpi"):
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         self._proceed_tapes(moment)
         if not self._coefficient_or_flow_changes():
-            return self._get_next_time_stamp(
-                [self.scenario_parameters_tape, self.coefficients_tape]
-            )
+            return self.next_time()
 
         self.reset_values()
         self._add_contributions_for(self.segments.cargo_flow, CARGO)
         self._add_contributions_for(self.segments.passenger_flow, PASSENGER)
 
-        return self._get_next_time_stamp([self.scenario_parameters_tape, self.coefficients_tape])
+        return self.next_time()
 
     def _proceed_tapes(self, moment: Moment):
         self.coefficients_tape.proceed_to(moment)
@@ -383,7 +392,11 @@ class Model(TrackedModel, name="traffic_kpi"):
             or self.segments.cargo_flow.has_changes()
         )
 
-    def _get_next_time_stamp(self, tape_list: t.List) -> t.Optional[Moment]:
+    def next_time(self) -> t.Optional[Moment]:
+        tape_list = [self.coefficients_tape]
+        if self.scenario_parameters_tape is not None:
+            tape_list.append(self.scenario_parameters_tape)
+
         valid_time_found = False
         min_time = 1.0e12
         for tape in tape_list:
@@ -474,12 +487,23 @@ def convert_v1_v2(config):
         "modality": modality,
         "dataset": dataset,
         "coefficients_dataset": config["coefficients_csv"][0],
-        "scenario_parameters_dataset": config["scenario_parameters"][0],
-        "energy_consumption_attribute": config["energy_consumption_property"][1],
-        "co2_emission_attribute": config["co2_emission_property"][1],
-        "nox_emission_attribute": config["nox_emission_property"][1],
     }
-    for key in ("cargo_scenario_parameters", "passenger_scenario_parameters"):
+
+    if "scenario_parameters" in config:
+        rv["scenario_parameters_dataset"] = config["scenario_parameters"][0]
+
+    for src, tgt in (
+        ("energy_consumption_property", "energy_consumption_attribute"),
+        ("co2_emission_property", "co2_emission_attribute"),
+        ("nox_emission_property", "nox_emission_attribute"),
+    ):
+        if src in config:
+            rv[tgt] = config[src][1]
+
+    for key in (
+        "cargo_scenario_parameters",
+        "passenger_scenario_parameters",
+    ):
         if key in config:
             rv[key] = config[key]
     return rv

@@ -3,11 +3,7 @@
   "$id": "/traffic_kpi/1.0.0",
   "type": "object",
   "required": [
-    "coefficients_csv",
-    "scenario_parameters",
-    "energy_consumption_property",
-    "co2_emission_property",
-    "nox_emission_property"
+    "coefficients_csv"
   ],
   "properties": {
     "roads": {

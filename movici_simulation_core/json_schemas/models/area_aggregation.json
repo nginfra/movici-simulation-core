@@ -49,8 +49,6 @@
             ]
           },
           "source_geometry": {
-            "type": "array",
-            "items": {
               "type": "string",
               "enum": [
                 "point",
@@ -58,7 +56,6 @@
                 "polygon"
               ]
             }
-          }
         }
       }
     },

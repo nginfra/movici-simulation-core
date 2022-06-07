@@ -1,3 +1,4 @@
+import dataclasses
 import pytest
 
 from movici_simulation_core.core.schema import AttributeSpec, DataType
@@ -6,23 +7,16 @@ from movici_simulation_core.data_tracker.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.models.area_aggregation.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
+import typing as t
 
 
-@pytest.fixture
-def source_entity_group1(knotweed_dataset_name):
-    return [knotweed_dataset_name, "knotweed_entities"]
-
-
-@pytest.fixture
-def source_entity_group2(road_network_name):
-    return [road_network_name, "road_segment_entities"]
-
-
-source_attributes1 = [None, "source_a"]
-target_attributes1 = [None, "target_a"]
-
-source_attributes2 = [None, "source_b"]
-target_attributes2 = [None, "target_b"]
+@dataclasses.dataclass
+class Aggregation:
+    source_entity_group: t.List[str]
+    source_attribute: str
+    target_attribute: str
+    function: str
+    source_geometry: str
 
 
 @pytest.fixture
@@ -65,27 +59,19 @@ def init_data(
 
 @pytest.fixture
 def target_entity_group(area_dataset_name):
-    return [[area_dataset_name, "area_entities"]]
+    return [area_dataset_name, "area_entities"]
 
 
 def create_model_config(
     model_name,
-    source_entities,
-    source_attrs,
-    source_geom,
-    functions,
+    aggregations,
     target_entity,
-    target_attrs,
     interval=None,
 ):
     return {
         "name": model_name,
         "type": "area_aggregation",
-        "source_entity_groups": source_entities,
-        "source_properties": source_attrs,
-        "source_geometry_types": source_geom,
-        "aggregation_functions": functions,
-        "target_properties": target_attrs,
+        "aggregations": [dataclasses.asdict(agg) for agg in aggregations],
         "target_entity_group": target_entity,
         "output_interval": interval,
     }
@@ -97,8 +83,23 @@ def state():
 
 
 @pytest.fixture
-def source_geom():
-    return ["point", "line"]
+def aggregations(knotweed_dataset_name, road_network_name):
+    return [
+        Aggregation(
+            source_entity_group=[knotweed_dataset_name, "knotweed_entities"],
+            source_attribute="source_a",
+            target_attribute="target_a",
+            function="max",
+            source_geometry="point",
+        ),
+        Aggregation(
+            source_entity_group=[road_network_name, "road_segment_entities"],
+            source_attribute="source_b",
+            target_attribute="target_b",
+            function="sum",
+            source_geometry="line",
+        ),
+    ]
 
 
 @pytest.fixture
@@ -107,33 +108,16 @@ def output_interval():
 
 
 @pytest.fixture
-def aggregation_functions():
-    return ["max", "sum"]
-
-
-@pytest.fixture
 def model_config(
     model_name,
-    area_dataset_name,
     target_entity_group,
-    aggregation_functions,
-    source_entity_group1,
-    source_entity_group2,
-    source_geom,
+    aggregations,
     output_interval,
 ):
-    source_entities = [source_entity_group1, source_entity_group2]
-    source_attrs = [source_attributes1, source_attributes2]
-    source_geom = source_geom
-    target_attrs = [target_attributes1, target_attributes2]
     config = create_model_config(
         model_name=model_name,
-        source_entities=source_entities,
-        source_attrs=source_attrs,
-        source_geom=source_geom,
-        functions=aggregation_functions,
+        aggregations=aggregations,
         target_entity=target_entity_group,
-        target_attrs=target_attrs,
         interval=output_interval,
     )
     return config
@@ -146,7 +130,7 @@ def model(state, model_config, global_schema):
     return model
 
 
-def test_model_setup_fills_state(model, state):
+def test_model_setup_fills_state(model: Model, state):
     assert model.target_entity.__entity_name__ == "area_entities"
     assert model.target_entity.polygon.is_initialized() is False
     assert len(model.aggregators) == 2
@@ -248,18 +232,16 @@ class TestAreaAggregation:
 
 class TestMultipleAttributesOneEntity:
     @pytest.fixture
-    def source_entity_group2(self, source_entity_group1):
-        return source_entity_group1
-
-    source_attributes1 = [None, "source_a"]
-    target_attributes1 = [None, "target_a"]
-
-    source_attributes2 = [None, "source_b"]
-    target_attributes2 = [None, "target_b"]
-
-    @pytest.fixture
-    def source_geom(self):
-        return ["point", "point"]
+    def aggregations(self, aggregations: t.List[Aggregation]):
+        agg1, agg2 = aggregations
+        return [
+            agg1,
+            dataclasses.replace(
+                agg2,
+                source_entity_group=agg1.source_entity_group,
+                source_geometry=agg1.source_geometry,
+            ),
+        ]
 
     @pytest.fixture
     def init_data(
@@ -352,22 +334,21 @@ class TestTimeIntegration:
         return 2
 
     @pytest.fixture
-    def aggregation_functions(self):
-        return ["integral", "sum"]
-
-    @pytest.fixture
-    def source_entity_group2(self, source_entity_group1):
-        return source_entity_group1
-
-    source_attributes1 = [None, "source_a"]
-    target_attributes1 = [None, "target_a"]
-
-    source_attributes2 = [None, "source_b"]
-    target_attributes2 = [None, "target_b"]
-
-    @pytest.fixture
-    def source_geom(self):
-        return ["point", "point"]
+    def aggregations(self, aggregations: t.List[Aggregation]):
+        agg1, agg2 = aggregations
+        return [
+            dataclasses.replace(
+                agg1,
+                function="integral",
+                source_geometry=agg1.source_geometry,
+            ),
+            dataclasses.replace(
+                agg2,
+                function="sum",
+                source_entity_group=agg1.source_entity_group,
+                source_geometry=agg1.source_geometry,
+            ),
+        ]
 
     @pytest.fixture
     def init_data(
@@ -481,13 +462,27 @@ class TestTimeIntegration:
         )
 
 
-def valid_attr():
-    return [target_attributes1]
+@pytest.fixture
+def legacy_model_config(
+    model_name,
+    aggregations: t.List[Aggregation],
+    target_entity_group,
+    output_interval,
+):
+    return {
+        "name": model_name,
+        "type": "area_aggregation",
+        "source_entity_groups": [agg.source_entity_group for agg in aggregations],
+        "source_properties": [[None, agg.source_attribute] for agg in aggregations],
+        "source_geometry_types": [agg.source_geometry for agg in aggregations],
+        "aggregation_functions": [agg.function for agg in aggregations],
+        "target_properties": [[None, agg.target_attribute] for agg in aggregations],
+        "target_entity_group": [target_entity_group],
+        "output_interval": output_interval,
+    }
 
 
-def valid_target_entity_group():
-    return [["bla", "area_entities"]]
-
-
-def valid_source_entity_group():
-    return [["knotweed_dataset_name", "knotweed_entities"]]
+def test_convert_legacy_model_config(legacy_model_config, model_config):
+    del model_config["name"]
+    del model_config["type"]
+    assert Model(legacy_model_config).config == model_config

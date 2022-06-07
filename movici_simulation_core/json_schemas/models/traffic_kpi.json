@@ -3,11 +3,9 @@
   "$id": "/traffic_kpi/2.0.0",
   "type": "object",
   "required": [
-    "coefficients_dataset",
-    "scenario_parameters_dataset",
-    "energy_consumption_attribute",
-    "co2_emission_attribute",
-    "nox_emission_attribute"
+    "dataset",
+    "modality",
+    "coefficients_dataset"
   ],
   "properties": {
     "dataset": {
