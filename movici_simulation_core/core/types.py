@@ -86,7 +86,7 @@ class Extensible:
     ):
         pass
 
-    def set_strategy(self, tp, inst):
+    def set_strategy(self, tp):
         pass
 
 
