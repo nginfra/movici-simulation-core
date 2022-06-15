@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
 import functools
 import itertools
-import orjson as json
 import typing as t
+from pathlib import Path
 
+import geopandas
+import numpy as np
+import orjson as json
+import pyproj
 from jsonschema.validators import validator_for
+
 from movici_simulation_core.core.attributes import (
     Geometry_Linestring2d,
     Geometry_Linestring3d,
@@ -15,9 +19,6 @@ from movici_simulation_core.core.attributes import (
     Geometry_Y,
     Geometry_Z,
 )
-import geopandas
-import numpy as np
-
 from movici_simulation_core.json_schemas import PATH
 
 GeometryType = t.Literal["points", "lines", "polygons"]
@@ -156,7 +157,9 @@ class CRSTransformation(DatasetOperation):
         self.default_crs = default_crs
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
-        target_crs = deep_get(self.config, "__meta__", "crs", default=self.default_crs)
+        crs_code = deep_get(self.config, "__meta__", "crs", default=self.default_crs)
+        target_crs = pyproj.CRS.from_user_input(crs_code)
+        dataset["epsg_code"] = target_crs.to_epsg()
         for source in sources.values():
             source.to_crs(target_crs)
         return dataset
@@ -169,7 +172,7 @@ class MetadataSetup(DatasetOperation):
 
     _missing = object()
     keys = (
-        ("general", dict),
+        ("general", _missing),
         ("name", _missing),
         ("display_name", _missing),
         ("version", 4),
@@ -359,16 +362,17 @@ class EnumConversion(DatasetOperation):
             for enum_name, values in deep_get(dataset, "general", "enum", default={}).items()
         }
 
-    def set_enums(self, dataset):
+    def set_enums(self, dataset: dict):
         if self.enums:
-            dataset["general"]["enum"] = {k: info.to_list() for k, info in self.enums.items()}
+            general = dataset.setdefault("general", {})
+            general["enum"] = {k: info.to_list() for k, info in self.enums.items()}
 
     def iter_enum_attributes(self, dataset) -> t.Tuple[str, list]:
         for entity_type, entity_dict in self.config["data"].items():
             for attr, attr_conf in entity_dict.items():
                 if attr == "__meta__":
                     continue
-                if enum_name := attr_conf["enum"]:
+                if enum_name := attr_conf.get("enum"):
                     yield enum_name, dataset["data"][entity_type][attr]
 
     def convert_enums(self, attr, enum_name: str):

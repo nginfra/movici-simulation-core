@@ -9,3 +9,4 @@ msgpack
 click
 geopandas
 jsonschema
+pyproj

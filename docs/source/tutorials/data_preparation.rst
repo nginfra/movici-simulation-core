@@ -42,7 +42,7 @@ Dataset Creator Config
           "geometry": "points"
         },
         "my_attribute": {
-          "property": "prop"
+          "property": "prop",
           "loaders": ["int"]
         }
       }

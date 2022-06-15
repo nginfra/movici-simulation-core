@@ -23,6 +23,7 @@ from movici_simulation_core.preprocessing.dataset_creator import (
     MetadataSetup,
     SourcesSetup,
     SpecialValueCollection,
+    create_dataset,
     get_dataset_creator_schema,
 )
 
@@ -404,6 +405,12 @@ class TestCRSTransformation:
             "geometry.x": [exp_x],
             "geometry.y": [exp_y],
         }
+
+    def test_sets_epsg_code(self):
+        config = {"data": {}, "__meta__": {"crs": "EPSG:28992"}}
+        op = CRSTransformation(config)
+        result = op({}, {})
+        assert result["epsg_code"] == 28992
 
 
 class TestAttributeDataExtraction:
@@ -1255,3 +1262,47 @@ class TestSchemaValidation:
     def test_invalid_dataset_creator(self, validator, config):
         with pytest.raises(jsonschema.ValidationError):
             validator.validate(config)
+
+
+def test_create_dataset(create_geojson):
+    x1, exp_x1 = 5, 128410.08537081013
+    y1, exp_y1 = 52, 445806.50883315015
+    x2, exp_x2 = 5.1, 135321.21812639205
+    y2, exp_y2 = 52.1, 456900.4281491477
+    geojson = create_geojson(
+        [
+            Point(x1, y1, attributes={"attr": 1}),
+            Point(x2, y2, attributes={"attr": 2}),
+        ]
+    )
+    dc = {
+        "__meta__": {
+            "crs": "EPSG:28992",
+        },
+        "__sources__": {"my_source": str(geojson)},
+        "name": "test_dataset",
+        "display_name": "Test Dataset",
+        "data": {
+            "test_entities": {
+                "__meta__": {"source": "my_source", "geometry": "points"},
+                "attribute": {
+                    "property": "attr",
+                },
+            }
+        },
+    }
+    assert create_dataset(dc) == {
+        "name": "test_dataset",
+        "display_name": "Test Dataset",
+        "version": 4,
+        "epsg_code": 28992,
+        "bounding_box": [exp_x1, exp_y1, exp_x2, exp_y2],
+        "data": {
+            "test_entities": {
+                "id": [0, 1],
+                "geometry.x": [exp_x1, exp_x2],
+                "geometry.y": [exp_y1, exp_y2],
+                "attribute": [1, 2],
+            }
+        },
+    }
