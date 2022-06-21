@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import typing as t
-from movici_simulation_core.core.utils import configure_global_plugins
-
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
 
 import numpy as np
 
 from . import types
+from .arrays import TrackedCSRArray
 from .attribute_spec import AttributeSpec
 from .data_type import DataType
+from .utils import configure_global_plugins
 
 
 class AttributeSchema(types.Extensible):
@@ -171,3 +170,32 @@ def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRAr
         data.shape[1:],
         is_csr,
     )
+
+
+def infer_data_type_from_list(data: list):
+    # TODO: check for nones
+    # TODO: check for empty lists
+    # TODO: check for int/float (if first item is int, but second is float)
+    # TODO: check for unit shape
+
+    def infer_pytype(d: list):
+        if not len(d):
+            return float
+        first_item = d[0]
+        if first_item is None:
+            return float
+        if (rv := type(first_item)) not in (int, float, bool, str):
+            raise TypeError("Could not infer datatype")
+        return rv
+
+    if not len(data):
+        pytype, csr = float, False
+
+    elif isinstance(data[0], list):
+        pytype = infer_pytype(data[0])
+        csr = True
+    else:
+        pytype = infer_pytype(data)
+        csr = False
+
+    return DataType(pytype, unit_shape=(), csr=csr)

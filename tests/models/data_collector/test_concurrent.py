@@ -1,12 +1,13 @@
 import threading
 import time
-from concurrent.futures import Future
 import typing as t
+from concurrent.futures import Future
+
 import pytest
 
 from movici_simulation_core.models.data_collector.concurrent import (
-    MultipleFutures,
     MultipleException,
+    MultipleFutures,
 )
 
 

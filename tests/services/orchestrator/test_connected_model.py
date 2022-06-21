@@ -2,14 +2,13 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.networking.messages import (
-    RegistrationMessage,
-    UpdateMessage,
-    ResultMessage,
+from movici_simulation_core.messages import (
     AcknowledgeMessage,
+    RegistrationMessage,
+    ResultMessage,
+    UpdateMessage,
 )
-from movici_simulation_core.services.orchestrator.connected_model import ConnectedModel
-from movici_simulation_core.services.orchestrator.timeline import TimelineController
+from movici_simulation_core.services.orchestrator.context import ConnectedModel, TimelineController
 
 
 @pytest.fixture

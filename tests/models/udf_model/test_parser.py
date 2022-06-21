@@ -2,14 +2,14 @@ import numpy as np
 import pytest
 
 from movici_simulation_core.models.udf_model.compiler import (
-    tokenize,
-    parse,
-    get_vars,
-    compile_func,
-    Num,
-    Var,
     BinOp,
     Func,
+    Num,
+    Var,
+    compile_func,
+    get_vars,
+    parse,
+    tokenize,
 )
 
 

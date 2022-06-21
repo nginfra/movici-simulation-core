@@ -102,8 +102,8 @@ to. We start by importing or defining all the attributes that we'll be working w
 
 .. testcode:: m1
 
-  from movici_simulation_core.core.schema import AttributeSpec
-  from movici_simulation_core.core.attributes import (
+  from movici_simulation_core import AttributeSpec
+  from movici_simulation_core.attributes import (
       Geometry_X,
       Geometry_Y,
       Geometry_Linestring2d
@@ -120,8 +120,7 @@ antenna towers, and one for the road segments. Let's start with the antennas:
 
 .. testcode:: m1
 
-  from movici_simulation_core.data_tracker.entity_group import EntityGroup
-  from movici_simulation_core.data_tracker.attribute import field, INIT, SUB
+  from movici_simulation_core import EntityGroup, field, INIT, SUB
   
   class AntennaEntities(EntityGroup, name="antenna_entities"):
       x = field(Geometry_X, flags=INIT)
@@ -144,7 +143,7 @@ Next we define the road segments:
 
 .. testcode:: m1
 
-  from movici_simulation_core.data_tracker.attribute import PUB
+  from movici_simulation_core import PUB
 
   class RoadSegmentEntities(EntityGroup, name="road_segment_entities"):
       geometry = field(Geometry_Linestring2d, flags=INIT)
@@ -160,14 +159,14 @@ Our full data model looks like this:
 
 .. testcode:: m1
 
-  from movici_simulation_core.core.schema import AttributeSpec
-  from movici_simulation_core.core.attributes import (
+  from movici_simulation_core import AttributeSpec
+  from movici_simulation_core.attributes import (
       Geometry_X,
       Geometry_Y,
       Geometry_Linestring2d
   )
-  from movici_simulation_core.data_tracker.entity_group import EntityGroup
-  from movici_simulation_core.data_tracker.attribute import field, INIT, PUB, SUB
+  from movici_simulation_core import EntityGroup, field, INIT, PUB, SUB
+
 
   SignalStrength = AttributeSpec("antennas.signal_strength", float)
 
@@ -207,8 +206,7 @@ whenever it's subscribed data has changed. Let's first look at the structure of 
 
 .. testcode:: m1
 
-  from movici_simulation_core.base_models.tracked_model import TrackedModel
-  from movici_simulation_core.data_tracker.state import TrackedState
+  from movici_simulation_core import TrackedModel, TrackedState
   
   class SignalStrengthModel(TrackedModel, name="signal_strength"):
       def setup(self, state: TrackedState, **_):
@@ -231,8 +229,7 @@ Next, we'll look at the implementation of the three methods, starting with ``set
 
 .. testcode:: m1
 
-  from movici_simulation_core.base_models.tracked_model import TrackedModel
-  from movici_simulation_core.data_tracker.state import TrackedState
+  from movici_simulation_core import TrackedModel, TrackedState
   
   class SignalStrengthModel(TrackedModel, name="signal_strength"):
       def setup(self, state: TrackedState, **_):
@@ -369,14 +366,26 @@ Final example code
 .. testcode:: m2
 
   import numpy as np
-  from movici_simulation_core.core.schema import AttributeSpec
-  from movici_simulation_core.core.attributes import Geometry_X, Geometry_Y, Geometry_Linestring2d
-  from movici_simulation_core.data_tracker.entity_group import EntityGroup
-  from movici_simulation_core.data_tracker.attribute import field, INIT, PUB, SUB
-  from movici_simulation_core.base_models.tracked_model import TrackedModel
-  from movici_simulation_core.data_tracker.state import TrackedState
   from movici_geo_query.geo_query import GeoQuery
   from movici_geo_query.geometry import LinestringGeometry, PointGeometry
+  
+  from movici_simulation_core import (
+      INIT,
+      PUB,
+      SUB,
+      AttributeSchema,
+      AttributeSpec,
+      EntityGroup,
+      TrackedModel,
+      TrackedState,
+      field,
+  )
+  from movici_simulation_core.attributes import (
+      Geometry_Linestring2d,
+      Geometry_X,
+      Geometry_Y,
+  )
+
 
   SignalStrength = AttributeSpec("antennas.signal_strength", float)
 
@@ -453,9 +462,9 @@ objects we need for testing:
 
 .. testcode:: m2
     
-    from movici_simulation_core.testing.model_tester import ModelTester
-    from movici_simulation_core.core.schema import AttributeSchema
-    from movici_simulation_core.core.attributes import GlobalAttributes
+    from movici_simulation_core.core import AttributeSchema
+    from movici_simulation_core.attributes import GlobalAttributes
+    from movici_simulation_core.testing import ModelTester
 
     def get_model():
         return SignalStrengthModel({"antennas": "some_antennas", "roads": "some_roads"})

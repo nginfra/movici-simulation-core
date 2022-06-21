@@ -1,8 +1,4 @@
-from movici_simulation_core.preprocessing.tapefile import (
-    InterpolatingTapefile,
-    TimeDependentAttribute,
-)
-
+from movici_simulation_core.preprocessing import InterpolatingTapefile, TimeDependentAttribute
 
 # given some init data
 init_data = {

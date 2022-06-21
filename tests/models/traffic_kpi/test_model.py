@@ -3,10 +3,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.traffic_kpi.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
-from movici_simulation_core.utils.moment import Moment
 
 
 @pytest.fixture

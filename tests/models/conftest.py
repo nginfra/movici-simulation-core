@@ -1,19 +1,18 @@
 import dataclasses
 import itertools
 import json
-import pytest
 import shutil
 import typing as t
 from pathlib import Path
-from movici_simulation_core.core import Model
-from movici_simulation_core.core.schema import AttributeSchema
 
-from movici_simulation_core.model_connector.init_data import (
-    DirectoryInitDataHandler,
-)
+import pytest
+
+from movici_simulation_core.core import Model
+from movici_simulation_core.core.moment import TimelineInfo
+from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
 from movici_simulation_core.models.common.attributes import CommonAttributes
 from movici_simulation_core.testing.model_tester import ModelTester
-from movici_simulation_core.utils.moment import TimelineInfo
 
 
 @pytest.fixture

@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.abspath("."))
 
 import movici_simulation_core  # noqa
 
-
 # -- Project information -----------------------------------------------------
 
 project = "Movici"

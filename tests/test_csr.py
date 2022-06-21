@@ -2,16 +2,16 @@ import numpy as np
 import pytest
 
 from movici_simulation_core.core.data_type import UNDEFINED
-from movici_simulation_core.data_tracker.csr_helpers import (
+from movici_simulation_core.csr import (
     csr_binop,
-    isclose,
-    rows_equal,
-    rows_contain,
-    rows_intersect,
     generate_update,
-    row_wise_sum,
+    isclose,
     row_wise_max,
     row_wise_min,
+    row_wise_sum,
+    rows_contain,
+    rows_equal,
+    rows_intersect,
 )
 
 

@@ -3,19 +3,19 @@ import typing as t
 import numpy as np
 import pytest
 
-from movici_simulation_core.core import AttributeSpec, DataType, AttributeSchema
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core import AttributeSchema, AttributeSpec, DataType
+from movici_simulation_core.core.data_format import EntityInitDataFormat
+from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.core.moment import Moment, TimelineInfo
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.models.time_window_status.dataset import (
+    Connection,
+    ScheduleEvent,
     TimeWindowEntity,
     TimeWindowStatusEntity,
-    ScheduleEvent,
-    Connection,
 )
 from movici_simulation_core.models.time_window_status.time_window_status import TimeWindowStatus
-from movici_simulation_core.utils.moment import TimelineInfo, Moment
 
 T = t.TypeVar("T", bound=EntityGroup)
 

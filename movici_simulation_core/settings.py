@@ -4,8 +4,9 @@ import tempfile
 import typing as t
 from pathlib import Path
 
-from pydantic import BaseSettings, Field, DirectoryPath
-from movici_simulation_core.utils.moment import TimelineInfo
+from pydantic import BaseSettings, DirectoryPath, Field
+
+from movici_simulation_core.core.moment import TimelineInfo
 
 
 class Settings(BaseSettings):

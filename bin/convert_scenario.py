@@ -3,11 +3,12 @@
 import glob
 import itertools
 import json
-from pathlib import Path
 import traceback
 import typing as t
+from pathlib import Path
 
 import click
+
 from movici_simulation_core.core.types import Extensible, Model, Plugin
 from movici_simulation_core.core.utils import configure_global_plugins
 

@@ -1,8 +1,6 @@
-import inspect
-
-import warnings
-
 import functools
+import inspect
+import warnings
 
 deprecation_warning = functools.partial(warnings.warn, category=DeprecationWarning, stacklevel=2)
 

@@ -1,13 +1,14 @@
 import dataclasses
+import typing as t
+
 import pytest
 
+from movici_simulation_core.core.attribute import INIT, SUB
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.data_tracker.attribute import INIT, SUB
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.models.area_aggregation.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
-import typing as t
 
 
 @dataclasses.dataclass

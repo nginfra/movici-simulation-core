@@ -1,18 +1,18 @@
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, PUB, OPT
+from movici_simulation_core.core.attribute import OPT, PUB, field
+from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.models.unit_conversions.attributes import (
-    Transport_TotalOutwardCargoDemandVehicles,
-    Transport_TotalInwardCargoDemandVehicles,
-    Transport_TotalOutwardPassengerDemandVehicles,
-    Transport_TotalInwardPassengerDemandVehicles,
-    Transport_TotalOutwardCargoDemand,
-    Transport_TotalInwardCargoDemand,
-    Transport_TotalOutwardPassengerDemand,
-    Transport_TotalInwardPassengerDemand,
-    Transport_PassengerVehicleFlow,
+    Transport_CargoFlow,
     Transport_CargoVehicleFlow,
     Transport_PassengerFlow,
-    Transport_CargoFlow,
+    Transport_PassengerVehicleFlow,
+    Transport_TotalInwardCargoDemand,
+    Transport_TotalInwardCargoDemandVehicles,
+    Transport_TotalInwardPassengerDemand,
+    Transport_TotalInwardPassengerDemandVehicles,
+    Transport_TotalOutwardCargoDemand,
+    Transport_TotalOutwardCargoDemandVehicles,
+    Transport_TotalOutwardPassengerDemand,
+    Transport_TotalOutwardPassengerDemandVehicles,
 )
 
 

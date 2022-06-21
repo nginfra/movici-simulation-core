@@ -6,16 +6,6 @@ orchestrator
 
 
 
-connected\_model 
------------------
-
-.. automodule:: movici_simulation_core.services.orchestrator.connected_model
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
 context 
 --------
 
@@ -46,16 +36,6 @@ interconnectivity
 
 
 
-model\_collection 
-------------------
-
-.. automodule:: movici_simulation_core.services.orchestrator.model_collection
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
 service 
 --------
 
@@ -80,16 +60,6 @@ stopwatch
 ----------
 
 .. automodule:: movici_simulation_core.services.orchestrator.stopwatch
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
-timeline 
----------
-
-.. automodule:: movici_simulation_core.services.orchestrator.timeline
    :members:
    :undoc-members:
    :show-inheritance:

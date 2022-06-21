@@ -4,7 +4,7 @@ import sys
 import typing as t
 import warnings
 
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.settings import Settings
 
 
 def get_logger(settings: Settings, name=None, capture_warnings=True):

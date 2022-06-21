@@ -1,6 +1,7 @@
 import dataclasses
-import numpy as np
 import typing as t
+
+import numpy as np
 
 T = t.TypeVar("T", bool, int, float, str)
 

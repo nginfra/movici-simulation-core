@@ -3,17 +3,18 @@ import typing as t
 import pandas as pd
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.attribute import PUB, UniformAttribute
+from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
+from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common import model_util
 from movici_simulation_core.models.common.csv_tape import CsvTape
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CoefficientsTape
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.validate import ensure_valid_config
+
 from .entities import TransportSegments
 
 CARGO = "cargo"

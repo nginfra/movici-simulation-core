@@ -2,22 +2,22 @@ from pathlib import Path
 
 import pytest
 
-from movici_simulation_core.networking.messages import (
-    RegistrationMessage,
-    load_message,
-    dump_message,
-    UpdateMessage,
-    UpdateSeriesMessage,
-    ResultMessage,
-    NewTimeMessage,
+from movici_simulation_core.messages import (
     AcknowledgeMessage,
-    QuitMessage,
-    GetDataMessage,
-    PutDataMessage,
     ClearDataMessage,
     DataMessage,
     ErrorMessage,
+    GetDataMessage,
+    NewTimeMessage,
     PathMessage,
+    PutDataMessage,
+    QuitMessage,
+    RegistrationMessage,
+    ResultMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
+    dump_message,
+    load_message,
 )
 
 

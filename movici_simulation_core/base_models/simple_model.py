@@ -3,29 +3,28 @@ from __future__ import annotations
 import logging
 import typing as t
 
-from movici_simulation_core.base_models.common import EntityAwareInitDataHandler
-from movici_simulation_core.core import Model
-from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.core import AttributeSchema, Model, Moment
 from movici_simulation_core.core.types import ModelAdapterBase
-from movici_simulation_core.model_connector.init_data import InitDataHandler
-from movici_simulation_core.networking.messages import (
+from movici_simulation_core.messages import (
     NewTimeMessage,
+    QuitMessage,
     UpdateMessage,
     UpdateSeriesMessage,
-    QuitMessage,
 )
-from movici_simulation_core.postprocessing.results import merge_updates
+from movici_simulation_core.model_connector import InitDataHandler
+from movici_simulation_core.postprocessing import merge_updates
+from movici_simulation_core.settings import Settings
 from movici_simulation_core.types import (
     DataMask,
     InternalSerializationStrategy,
-    Timestamp,
-    RawUpdateData,
     RawResult,
+    RawUpdateData,
+    Timestamp,
     UpdateData,
 )
 from movici_simulation_core.utils import strategies
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.settings import Settings
+
+from .common import EntityAwareInitDataHandler
 
 
 class SimpleModelAdapter(ModelAdapterBase):

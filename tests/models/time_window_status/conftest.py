@@ -1,6 +1,7 @@
 import pytest
 
-from movici_simulation_core.core import AttributeSchema, DataType, AttributeSpec
+from movici_simulation_core.core import AttributeSchema, AttributeSpec, DataType
+
 from ..conftest import get_dataset
 
 

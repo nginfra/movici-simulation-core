@@ -2,17 +2,17 @@ import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core import DataType
+from movici_simulation_core.core.attribute import OPT
+from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, attributes_from_dict
-from movici_simulation_core.data_tracker.attribute import OPT
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.validate import ensure_valid_config
 
+from ..common.model_util import try_get_geometry_type
 from . import dataset as ds
 from .overlap_status import OverlapStatus
-from ..common.model_util import try_get_geometry_type
 
 
 class Model(TrackedModel, name="overlap_status"):

@@ -3,8 +3,8 @@ import operator
 import numpy as np
 import pytest
 
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray, TrackedArray
-from movici_simulation_core.data_tracker.attribute import ensure_csr_data
+from movici_simulation_core.core.arrays import TrackedArray, TrackedCSRArray
+from movici_simulation_core.core.attribute import ensure_csr_data
 
 
 def assert_equal_csr_arrays(a, b):

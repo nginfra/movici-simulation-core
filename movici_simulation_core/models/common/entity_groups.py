@@ -1,26 +1,23 @@
 import typing as t
-from abc import abstractmethod
 
 import numpy as np
 
-
-from movici_simulation_core.core.attributes import (
-    Geometry_X,
-    Geometry_Y,
+from ...attributes import (
     Geometry_Linestring2d,
     Geometry_Linestring3d,
     Geometry_Polygon,
+    Geometry_X,
+    Geometry_Y,
+    Reference,
     Topology_FromNodeId,
     Topology_ToNodeId,
-    Reference,
 )
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, OPT, CSRAttribute, INIT
-from movici_simulation_core.exceptions import NotReady
-from movici_simulation_core.models.common.attributes import (
-    Transport_MaxSpeed,
+from ...core import INIT, OPT, CSRAttribute, EntityGroup, field
+from ...exceptions import NotReady
+from ...models.common.attributes import (
     Transport_Capacity_Hours,
     Transport_Layout,
+    Transport_MaxSpeed,
 )
 
 
@@ -33,10 +30,10 @@ def delayed_raise(err: Exception):
 
 try:
     from movici_geo_query.geometry import (
+        ClosedPolygonGeometry,
         Geometry,
         LinestringGeometry,
         PointGeometry,
-        ClosedPolygonGeometry,
     )
 except ImportError as e:
 
@@ -59,13 +56,11 @@ except ImportError as e:
 class GeometryEntity(EntityGroup):
     reference = field(Reference, flags=OPT)
 
-    @abstractmethod
     def get_geometry(self) -> Geometry:
-        ...
+        raise NotImplementedError
 
-    @abstractmethod
     def get_single_geometry(self, index: int) -> BaseGeometry:
-        ...
+        raise NotImplementedError
 
 
 class PointEntity(GeometryEntity):

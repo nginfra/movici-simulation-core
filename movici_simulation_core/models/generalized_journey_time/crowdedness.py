@@ -1,5 +1,5 @@
-import scipy.stats
 import numpy as np
+import scipy.stats
 
 
 def linreg(values):

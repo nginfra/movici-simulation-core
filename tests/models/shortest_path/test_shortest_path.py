@@ -1,11 +1,13 @@
 import json
 import typing as t
+
 import jsonschema
-from movici_simulation_core.models.shortest_path import MODEL_CONFIG_SCHEMA_PATH
-from movici_simulation_core.models.shortest_path.model import ShortestPathModel
-from movici_simulation_core.testing.model_schema import model_config_validator
 import numpy as np
 import pytest
+
+from movici_simulation_core.models.shortest_path import MODEL_CONFIG_SCHEMA_PATH
+from movici_simulation_core.models.shortest_path.model import ShortestPathModel
+from movici_simulation_core.validate import validate_and_process
 
 
 @pytest.fixture
@@ -370,7 +372,7 @@ def test_validate_model_config(
         model_config = get_model_config(calculation)
     if extra_props:
         model_config.update(extra_props)
-    assert model_config_validator(json_schema)(model_config)
+    assert validate_and_process(model_config, json_schema)
 
 
 @pytest.mark.parametrize(
@@ -413,7 +415,7 @@ def test_invalid_model_config(
     if extra_props:
         model_config.update(extra_props)
     with pytest.raises(jsonschema.ValidationError):
-        model_config_validator(json_schema)(model_config)
+        validate_and_process(model_config, json_schema)
 
 
 def test_convert_legacy_model_config(legacy_model_config, model_config):

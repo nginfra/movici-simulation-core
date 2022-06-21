@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import functools
 import inspect
-from abc import abstractmethod, ABC
 import typing as t
+from abc import ABC, abstractmethod
 
 T = t.TypeVar("T")
 E = t.TypeVar("E")

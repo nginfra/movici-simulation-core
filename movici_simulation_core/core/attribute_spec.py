@@ -1,7 +1,6 @@
 import dataclasses
 import typing as t
 
-
 from .data_type import DataType
 
 

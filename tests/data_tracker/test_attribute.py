@@ -1,16 +1,16 @@
 import numpy as np
 import pytest
-from movici_simulation_core.core import DataType
 
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray, TrackedArray
-from movici_simulation_core.data_tracker.attribute import (
-    UniformAttribute,
-    AttributeOptions,
+from movici_simulation_core.core import DataType
+from movici_simulation_core.core.arrays import TrackedArray, TrackedCSRArray
+from movici_simulation_core.core.attribute import (
     Attribute,
+    AttributeOptions,
+    CSRAttribute,
+    UniformAttribute,
+    create_empty_attribute,
     ensure_csr_data,
     ensure_uniform_data,
-    create_empty_attribute,
-    CSRAttribute,
 )
 
 

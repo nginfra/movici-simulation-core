@@ -1,16 +1,18 @@
 from __future__ import annotations
+
+import typing as t
 from dataclasses import dataclass
 
 import numpy as np
 
-from movici_simulation_core.core.attributes import (
-    Reference,
+from movici_simulation_core.attributes import (
     Connection_ToDataset,
     Connection_ToReferences,
+    Reference,
 )
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, INIT, UniformAttribute, OPT
-import typing as t
+from movici_simulation_core.core import attribute
+from movici_simulation_core.core.attribute import INIT, OPT, field
+from movici_simulation_core.core.entity_group import EntityGroup
 
 
 @dataclass
@@ -27,7 +29,7 @@ class ScheduleEvent:
 
 class TimeWindowStatusEntity(EntityGroup):
     reference = field(Reference, flags=INIT)
-    time_window_status: UniformAttribute = None
+    time_window_status: attribute.UniformAttribute = None
     event_count: np.array = None
 
     def initialize_event_count(self):
@@ -43,8 +45,8 @@ class TimeWindowStatusEntity(EntityGroup):
 class TimeWindowEntity(EntityGroup):
     connection_to_dataset = field(Connection_ToDataset, flags=OPT)
     connection_to_references = field(Connection_ToReferences, flags=OPT)
-    time_window_begin: UniformAttribute = None
-    time_window_end: UniformAttribute = None
+    time_window_begin: attribute.UniformAttribute = None
+    time_window_end: attribute.UniformAttribute = None
 
     connections: t.List[t.List[Connection]] = None
 

@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.core import attributes
+from movici_simulation_core import attributes
 from movici_simulation_core.core.data_type import NP_TYPES
 from movici_simulation_core.core.schema import (
-    DataType,
-    infer_data_type_from_array,
     AttributeSchema,
     AttributeSpec,
+    DataType,
+    infer_data_type_from_array,
 )
 
 

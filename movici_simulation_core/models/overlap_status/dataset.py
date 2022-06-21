@@ -1,18 +1,17 @@
-from movici_simulation_core.core.attributes import (
-    Connection_FromId,
-    Connection_ToId,
-    Connection_FromReference,
-    Connection_ToReference,
+from movici_simulation_core.attributes import (
     Connection_FromDataset,
+    Connection_FromId,
+    Connection_FromReference,
     Connection_ToDataset,
+    Connection_ToId,
+    Connection_ToReference,
+    DisplayName,
     Geometry_X,
     Geometry_Y,
-    DisplayName,
 )
-
+from movici_simulation_core.core.attribute import PUB, field
+from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, PUB
 
 Overlap_Active = AttributeSpec("overlap.active", data_type=DataType(bool))
 

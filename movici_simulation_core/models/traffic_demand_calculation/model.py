@@ -5,43 +5,40 @@ import numpy as np
 import pandas as pd
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.attribute import (
-    PUB,
-    UniformAttribute,
-    CSRAttribute,
+from movici_simulation_core.core.attribute import (
     INIT,
+    PUB,
     PUBLISH,
     SUBSCRIBE,
+    CSRAttribute,
+    UniformAttribute,
 )
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.schema import AttributeSchema, DataType
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.model_connector.init_data import InitDataHandler, FileType
+from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common.csv_tape import CsvTape
-from movici_simulation_core.models.common.entities import (
-    GeometryEntity,
-    PointEntity,
+from movici_simulation_core.models.common.entity_groups import GeometryEntity, PointEntity
+from movici_simulation_core.models.traffic_demand_calculation.common import (
+    DemandEstimation,
+    GlobalContributor,
+    LocalContributor,
+    LocalMapper,
 )
 from movici_simulation_core.models.traffic_demand_calculation.global_contributors import (
     GlobalElasticityParameter,
     ScalarParameter,
 )
-from movici_simulation_core.models.traffic_demand_calculation.common import (
-    LocalContributor,
-    GlobalContributor,
-    DemandEstimation,
-    LocalMapper,
-)
 from movici_simulation_core.models.traffic_demand_calculation.local_contributors import (
-    RouteCostFactor,
-    NearestValue,
-    LocalParameterInfo,
     Investment,
     InvestmentContributor,
+    LocalParameterInfo,
+    NearestValue,
+    RouteCostFactor,
 )
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.settings import Settings
-from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.settings import Settings
+from movici_simulation_core.validate import ensure_valid_config
 
 DEFAULT_DATA_TYPE = DataType(float, (), False)
 DEFAULT_CSR_DATA_TYPE = DataType(float, (), True)

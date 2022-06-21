@@ -1,35 +1,33 @@
 import logging
 import typing as t
-from unittest.mock import Mock, call, MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, Mock, PropertyMock, call, patch
 
 import pytest
 
-from movici_simulation_core.networking.messages import (
-    RegistrationMessage,
+from movici_simulation_core.messages import (
     AcknowledgeMessage,
+    ErrorMessage,
+    Message,
+    NewTimeMessage,
+    QuitMessage,
+    RegistrationMessage,
     ResultMessage,
     UpdateMessage,
-    NewTimeMessage,
     UpdateSeriesMessage,
-    QuitMessage,
     dump_message,
     load_message,
-    Message,
-    ErrorMessage,
 )
-from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
+from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
 from movici_simulation_core.services.orchestrator import Orchestrator
-from movici_simulation_core.services.orchestrator.connected_model import (
-    ConnectedModel,
-)
 from movici_simulation_core.services.orchestrator.context import (
+    ConnectedModel,
     Context,
+    ModelCollection,
+    TimelineController,
 )
 from movici_simulation_core.services.orchestrator.fsm import FSM
-from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
 from movici_simulation_core.services.orchestrator.states import StartInitializingPhase
-from movici_simulation_core.services.orchestrator.timeline import TimelineController
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.settings import Settings
 
 
 @pytest.fixture

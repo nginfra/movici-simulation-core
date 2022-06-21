@@ -4,20 +4,20 @@ import typing as t
 
 import pytest
 
+from movici_simulation_core.core.attribute import REQUIRED, SUB, UniformAttribute
 from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
-from movici_simulation_core.data_tracker.attribute import UniformAttribute, SUB, REQUIRED
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.udf_model import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.udf_model.udf_model import (
-    get_input_attributes,
-    get_udf_infos,
     UDFInfo,
     UDFModel,
+    get_input_attributes,
+    get_udf_infos,
     prepare_optional_attributes,
 )
 from movici_simulation_core.testing.helpers import data_mask_compare
-from movici_simulation_core.testing.model_schema import model_config_validator
 from movici_simulation_core.testing.model_tester import ModelTester
+from movici_simulation_core.validate import validate_and_process
 
 
 @pytest.fixture
@@ -485,7 +485,7 @@ def test_csr_scalar_min(create_model_tester):
 def test_model_config_schema(config_, config):
     config = config_ or config
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
-    assert model_config_validator(schema)(config)
+    assert validate_and_process(config, schema)
 
 
 def test_convert_legacy_model_config(legacy_config, config):

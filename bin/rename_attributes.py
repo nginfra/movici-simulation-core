@@ -1,9 +1,11 @@
 #! /usr/bin/env python3
-import click
 import csv
 import shutil
-from pathlib import Path
 import typing as t
+from pathlib import Path
+
+import click
+
 from movici_simulation_core.data_tracker.data_format import data_keys
 from movici_simulation_core.data_tracker.state import parse_special_values
 

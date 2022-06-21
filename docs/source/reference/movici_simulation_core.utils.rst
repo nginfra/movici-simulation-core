@@ -36,40 +36,10 @@ logging
 
 
 
-moment 
--------
-
-.. automodule:: movici_simulation_core.utils.moment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
 path 
 -----
 
 .. automodule:: movici_simulation_core.utils.path
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
-plugin 
--------
-
-.. automodule:: movici_simulation_core.utils.plugin
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
-settings 
----------
-
-.. automodule:: movici_simulation_core.utils.settings
    :members:
    :undoc-members:
    :show-inheritance:
@@ -86,10 +56,20 @@ strategies
 
 
 
-validate 
----------
+time 
+-----
 
-.. automodule:: movici_simulation_core.utils.validate
+.. automodule:: movici_simulation_core.utils.time
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+
+unicode 
+--------
+
+.. automodule:: movici_simulation_core.utils.unicode
    :members:
    :undoc-members:
    :show-inheritance:

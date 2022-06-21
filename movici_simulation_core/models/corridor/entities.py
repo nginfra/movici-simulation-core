@@ -1,24 +1,24 @@
-from movici_simulation_core.core.attributes import (
-    Shape_Length,
-    Geometry_Linestring2d,
+from movici_simulation_core.attributes import (
     Connection_FromIds,
     Connection_ToIds,
+    Geometry_Linestring2d,
+    Shape_Length,
 )
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, PUB, OPT, SUB
-from movici_simulation_core.models.common.entities import TransportSegmentEntity, PointEntity
+from movici_simulation_core.core.attribute import OPT, PUB, SUB, field
+from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.models.common.entity_groups import PointEntity, TransportSegmentEntity
 from movici_simulation_core.models.corridor.attributes import (
     TrafficProperties_AverageTime,
-    Transport_VolumeToCapacityRatio,
-    Transport_DelayFactor,
-    Transport_PassengerVehicleFlow,
-    Transport_CargoVehicleFlow,
-    Transport_PassengerCarUnit,
-    Transport_Co2Emission_Hours,
-    Transport_NoxEmission_Hours,
-    Transport_EnergyConsumption_Hours,
-    Transport_PassengerDemand,
     Transport_CargoDemand,
+    Transport_CargoVehicleFlow,
+    Transport_Co2Emission_Hours,
+    Transport_DelayFactor,
+    Transport_EnergyConsumption_Hours,
+    Transport_NoxEmission_Hours,
+    Transport_PassengerCarUnit,
+    Transport_PassengerDemand,
+    Transport_PassengerVehicleFlow,
+    Transport_VolumeToCapacityRatio,
 )
 
 

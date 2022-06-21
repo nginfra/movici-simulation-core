@@ -3,15 +3,10 @@ from functools import singledispatchmethod
 from pathlib import Path
 
 from movici_simulation_core.core import Service
-from movici_simulation_core.networking.messages import (
-    ModelMessage,
-    ErrorMessage,
-    GetDataMessage,
-    PathMessage,
-)
-from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
+from movici_simulation_core.messages import ErrorMessage, GetDataMessage, ModelMessage, PathMessage
+from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
+from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
-from movici_simulation_core.utils.settings import Settings
 
 
 class InitDataService(Service):

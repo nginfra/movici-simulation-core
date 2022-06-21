@@ -1,19 +1,25 @@
+import numpy as np
 from movici_geo_query.geo_query import GeoQuery
 from movici_geo_query.geometry import LinestringGeometry, PointGeometry
-from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.attributes import (
+
+from movici_simulation_core import (
+    INIT,
+    PUB,
+    SUB,
+    AttributeSchema,
+    AttributeSpec,
+    EntityGroup,
+    TrackedModel,
+    TrackedState,
+    field,
+)
+from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
     Geometry_X,
     Geometry_Y,
     GlobalAttributes,
 )
-from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec
-from movici_simulation_core.data_tracker.attribute import INIT, PUB, SUB, field
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
-from movici_simulation_core.testing.model_tester import ModelTester
-import numpy as np
+from movici_simulation_core.testing import ModelTester, assert_dataset_dicts_equal
 
 SignalStrength = AttributeSpec("antennas.signal_strength", float)
 

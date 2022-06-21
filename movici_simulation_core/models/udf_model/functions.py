@@ -2,15 +2,10 @@ import typing as t
 
 import numpy as np
 
+from movici_simulation_core.core.arrays import TrackedCSRArray
+from movici_simulation_core.core.data_format import is_undefined_csr, is_undefined_uniform
 from movici_simulation_core.core.schema import infer_data_type_from_array
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.csr_helpers import (
-    row_wise_sum,
-    row_wise_min,
-    row_wise_max,
-    csr_binop,
-)
-from movici_simulation_core.data_tracker.data_format import is_undefined_uniform, is_undefined_csr
+from movici_simulation_core.csr import csr_binop, row_wise_max, row_wise_min, row_wise_sum
 
 functions = {}
 

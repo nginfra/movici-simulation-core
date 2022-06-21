@@ -2,7 +2,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.services.orchestrator.stopwatch import Stopwatch, ReportingStopwatch
+from movici_simulation_core.services.orchestrator.stopwatch import ReportingStopwatch, Stopwatch
 
 
 class Clock:

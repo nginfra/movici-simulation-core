@@ -3,13 +3,9 @@ from unittest.mock import Mock, call
 import pytest
 
 from movici_simulation_core.base_models.simple_model import SimpleModel, SimpleModelAdapter
+from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.networking.messages import (
-    NewTimeMessage,
-    UpdateMessage,
-    UpdateSeriesMessage,
-)
-from movici_simulation_core.utils.moment import Moment
+from movici_simulation_core.messages import NewTimeMessage, UpdateMessage, UpdateSeriesMessage
 
 
 class TestSimpleModelAdapter:

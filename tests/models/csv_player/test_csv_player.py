@@ -1,13 +1,14 @@
-from pathlib import Path
 import json
 import typing as t
+from pathlib import Path
+
+import pytest
 
 from movici_simulation_core.models.csv_player import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.csv_player.csv_player import CSVPlayer
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
-from movici_simulation_core.testing.model_schema import model_config_validator
 from movici_simulation_core.testing.model_tester import ModelTester
-import pytest
+from movici_simulation_core.validate import validate_and_process
 
 
 @pytest.fixture
@@ -141,7 +142,7 @@ def test_csv_player_update_1(tester: ModelTester, dataset_name):
 
 def test_model_config_schema(model_config):
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
-    assert model_config_validator(schema)(model_config)
+    assert validate_and_process(model_config, schema)
 
 
 def test_convert_legacy_model_config(legacy_model_config, model_config):

@@ -12,30 +12,26 @@ import pytest
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core import Service
+from movici_simulation_core.core.attribute import PUB, SUB
+from movici_simulation_core.core.data_format import EntityInitDataFormat
+from movici_simulation_core.core.moment import Moment, TimelineInfo, get_timeline_info
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.attribute import PUB, SUB
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import StartupFailure
-from movici_simulation_core.networking.messages import ModelMessage, ErrorMessage
-from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
+from movici_simulation_core.messages import ErrorMessage, ModelMessage
+from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
+from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import (
-    Simulation,
-    ServiceInfo,
-    ServiceRunner,
+    ModelFromInstanceInfo,
     ModelFromTypeInfo,
     ModelRunner,
-    ModelFromInstanceInfo,
-    ServiceTypeInfo,
     ModelTypeInfo,
+    ServiceInfo,
+    ServiceRunner,
+    ServiceTypeInfo,
+    Simulation,
 )
 from movici_simulation_core.testing.dummy import DummyModel
-from movici_simulation_core.utils.moment import (
-    Moment,
-    TimelineInfo,
-    get_timeline_info,
-)
-from movici_simulation_core.utils.settings import Settings
 
 
 class SimpleModel(TrackedModel):

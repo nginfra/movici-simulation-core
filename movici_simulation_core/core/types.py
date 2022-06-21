@@ -4,17 +4,11 @@ import abc
 import logging
 import typing as t
 
-from movici_simulation_core.networking.messages import (
-    NewTimeMessage,
-    QuitMessage,
-    UpdateMessage,
-    UpdateSeriesMessage,
-)
-from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
-from movici_simulation_core.types import DataMask, RawResult, RawUpdateData, FileType
-from movici_simulation_core.utils.path import DatasetPath
-from movici_simulation_core.utils.settings import Settings
-
+from ..messages import NewTimeMessage, QuitMessage, UpdateMessage, UpdateSeriesMessage
+from ..networking.stream import MessageRouterSocket, Stream
+from ..settings import Settings
+from ..types import DataMask, FileType, RawResult, RawUpdateData
+from ..utils.path import DatasetPath
 from .attribute_spec import AttributeSpec
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.data_tracker.index import Index, build_index, query_idx, IndexParams
+from movici_simulation_core.core.index import Index, IndexParams, build_index, query_idx
 
 
 class TestIndex:

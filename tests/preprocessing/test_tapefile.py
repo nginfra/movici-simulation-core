@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from movici_simulation_core.preprocessing.tapefile import (
-    TimeDependentAttribute,
     InterpolatingTapefile,
+    TimeDependentAttribute,
 )
 
 

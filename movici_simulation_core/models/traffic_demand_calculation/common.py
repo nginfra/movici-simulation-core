@@ -5,15 +5,15 @@ import typing as t
 from collections import defaultdict
 
 import numpy as np
-from movici_geo_query.geo_query import QueryResult, GeoQuery
+from movici_geo_query.geo_query import GeoQuery, QueryResult
 from movici_geo_query.geometry import Geometry
 
+from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.common.csv_tape import CsvTape
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.settings import Settings
 
 
 class DemandEstimation:

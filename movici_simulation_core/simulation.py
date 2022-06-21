@@ -5,37 +5,40 @@ import sys
 import traceback
 import typing as t
 from multiprocessing import Process
+
 import zmq
 from zmq import Socket
 
-from movici_simulation_core.core.types import ModelAdapterBase, Service, Plugin, Model, Extensible
-from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
-from movici_simulation_core.core.utils import configure_global_plugins
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.serialization import UpdateDataFormat
+from movici_simulation_core.core import (
+    AttributeSchema,
+    AttributeSpec,
+    EntityInitDataFormat,
+    Extensible,
+    Model,
+    ModelAdapterBase,
+    Plugin,
+    Service,
+    TimelineInfo,
+    UpdateDataFormat,
+    configure_global_plugins,
+    set_timeline_info,
+)
 from movici_simulation_core.exceptions import StartupFailure
-from movici_simulation_core.model_connector.connector import (
-    ModelConnector,
-    UpdateDataClient,
+from movici_simulation_core.messages import ErrorMessage, QuitMessage
+from movici_simulation_core.model_connector import (
     ConnectorStreamHandler,
-)
-from movici_simulation_core.model_connector.init_data import (
+    ModelConnector,
     ServicedInitDataHandler,
+    UpdateDataClient,
 )
-from movici_simulation_core.networking.messages import ErrorMessage, QuitMessage
-from movici_simulation_core.networking.stream import (
-    MessageRouterSocket,
-    Stream,
-    MessageDealerSocket,
-)
+from movici_simulation_core.networking import MessageDealerSocket, MessageRouterSocket, Stream
 from movici_simulation_core.types import (
     ExternalSerializationStrategy,
     InternalSerializationStrategy,
 )
-from movici_simulation_core.utils.logging import get_logger
-from movici_simulation_core.utils.moment import TimelineInfo, set_timeline_info
-from movici_simulation_core.utils.settings import Settings
-from movici_simulation_core.utils import strategies
+from movici_simulation_core.utils import get_logger, strategies
+
+from .settings import Settings
 
 DEFAULT_SERVICE_ADDRESS = "tcp://127.0.0.1"
 

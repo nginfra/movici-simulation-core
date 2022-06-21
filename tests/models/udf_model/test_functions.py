@@ -1,13 +1,14 @@
+import numpy as np
+import pytest
+
+from movici_simulation_core.core.attribute import ensure_csr_data
 from movici_simulation_core.core.data_type import UNDEFINED, DataType
-from movici_simulation_core.data_tracker.attribute import ensure_csr_data
 from movici_simulation_core.models.udf_model.functions import (
     default_func,
     max_func,
     min_func,
     sum_func,
 )
-import numpy as np
-import pytest
 
 
 @pytest.mark.parametrize(

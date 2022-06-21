@@ -1,15 +1,17 @@
 import numpy as np
 import pytest
+from movici_geo_query.geometry import ClosedPolygonGeometry, LinestringGeometry, PointGeometry
 
+from movici_simulation_core.core.arrays import TrackedCSRArray
+from movici_simulation_core.core.attribute import UniformAttribute
 from movici_simulation_core.core.data_type import UNDEFINED, DataType
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.attribute import UniformAttribute
-from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.models.common.entities import PointEntity, LineEntity, PolygonEntity
-from movici_simulation_core.models.overlap_status.overlap_status import (
-    OverlapStatus,
+from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.models.common.entity_groups import (
+    LineEntity,
+    PointEntity,
+    PolygonEntity,
 )
-from movici_geo_query.geometry import PointGeometry, LinestringGeometry, ClosedPolygonGeometry
+from movici_simulation_core.models.overlap_status.overlap_status import OverlapStatus
 
 
 def get_point_entity(point_collection: PointGeometry) -> PointEntity:

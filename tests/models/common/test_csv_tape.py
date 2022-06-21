@@ -1,9 +1,11 @@
-import numpy as np
-import pytest
-import pandas as pd
 from contextlib import nullcontext as does_not_raise
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from movici_simulation_core.core.moment import Moment, TimelineInfo
 from movici_simulation_core.models.common.csv_tape import CsvTape
-from movici_simulation_core.utils.moment import TimelineInfo, Moment
 
 
 @pytest.fixture

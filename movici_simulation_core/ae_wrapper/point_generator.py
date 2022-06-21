@@ -30,9 +30,10 @@ class PointGenerator:
         for point in points:
             self.add_point(point)
 
-    def generate_and_add(self, reference_point: t.Union[PointLike]) -> np.ndarray:
-        if isinstance(reference_point, (list, tuple)):
-            reference_point = np.array(reference_point)
+    def generate_and_add(self, reference_point: PointLike) -> np.ndarray:
+        reference_point = np.asarray(reference_point, dtype=float)
+        if reference_point.shape != (2,):
+            raise TypeError("reference point must contain a single x and y value")
 
         new_point = reference_point
         while tuple(new_point) in self._points:

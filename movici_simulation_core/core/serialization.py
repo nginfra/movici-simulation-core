@@ -1,6 +1,7 @@
-from movici_simulation_core.types import InternalSerializationStrategy
 import msgpack
 import numpy as np
+
+from ..types import InternalSerializationStrategy
 
 
 class UpdateDataFormat(InternalSerializationStrategy):

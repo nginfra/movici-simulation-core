@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from movici_simulation_core.core.schema import (
-    AttributeSpec,
-    attribute_plugin_from_dict,
-)
 from movici_simulation_core.core import DataType
+from movici_simulation_core.core.schema import AttributeSpec, attribute_plugin_from_dict
 
 Transport_AverageTime = AttributeSpec("transport.average_time", data_type=DataType(float))
 Transport_CargoAverageTime = AttributeSpec(

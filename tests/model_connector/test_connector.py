@@ -2,34 +2,34 @@ from pathlib import Path
 from unittest.mock import Mock, call
 
 import pytest
-from movici_simulation_core.core.types import ModelAdapterBase
 
+from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.exceptions import InvalidMessage, StreamDone
+from movici_simulation_core.messages import (
+    AcknowledgeMessage,
+    ClearDataMessage,
+    DataMessage,
+    ErrorMessage,
+    GetDataMessage,
+    NewTimeMessage,
+    PutDataMessage,
+    QuitMessage,
+    RegistrationMessage,
+    ResultMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
+)
 from movici_simulation_core.model_connector.connector import (
     ConnectorStreamHandler,
     ModelConnector,
     UpdateDataClient,
 )
 from movici_simulation_core.model_connector.init_data import (
-    InitDataHandler,
     DirectoryInitDataHandler,
     FileType,
+    InitDataHandler,
 )
 from movici_simulation_core.networking.client import Sockets
-from movici_simulation_core.networking.messages import (
-    RegistrationMessage,
-    NewTimeMessage,
-    UpdateMessage,
-    UpdateSeriesMessage,
-    QuitMessage,
-    DataMessage,
-    GetDataMessage,
-    ErrorMessage,
-    AcknowledgeMessage,
-    PutDataMessage,
-    ClearDataMessage,
-    ResultMessage,
-)
 
 
 @pytest.fixture

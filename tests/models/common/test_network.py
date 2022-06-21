@@ -1,19 +1,15 @@
 from unittest import mock
+
 import numpy as np
 import pytest
 
-from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.models.common.entities import (
-    PointEntity,
+from movici_simulation_core.core.index import Index
+from movici_simulation_core.models.common.entity_groups import (
     LinkEntity,
+    PointEntity,
     TransportSegmentEntity,
 )
-from movici_simulation_core.models.common.network import (
-    build_graph,
-    Graph,
-    Network,
-    link_indices,
-)
+from movici_simulation_core.models.common.network import Graph, Network, build_graph, link_indices
 from movici_simulation_core.testing.helpers import create_entity_group_with_data
 
 

@@ -2,21 +2,21 @@ import typing as t
 
 import numpy as np
 import pytest
-from movici_simulation_core.core import DataType
+from movici_geo_query.geo_query import QueryResult
 
-from movici_simulation_core.data_tracker.attribute import UniformAttribute, PUB
+from movici_simulation_core.core import DataType
+from movici_simulation_core.core.attribute import PUB, UniformAttribute
 from movici_simulation_core.models.area_aggregation.aggregators import (
     AttributeAggregator,
     func_avg,
-    func_sum,
     func_integral,
-    func_integral_minutes,
-    func_integral_hours,
     func_integral_days,
-    func_min,
+    func_integral_hours,
+    func_integral_minutes,
     func_max,
+    func_min,
+    func_sum,
 )
-from movici_geo_query.geo_query import QueryResult
 
 
 @pytest.fixture

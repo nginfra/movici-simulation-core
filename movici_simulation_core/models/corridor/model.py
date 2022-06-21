@@ -6,22 +6,22 @@ import numpy as np
 from movici_simulation_core.ae_wrapper.collections import GraphPath
 from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.models.common import model_util, ae_util
-from movici_simulation_core.models.common.entities import PointEntity, VirtualLinkEntity
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.utils.settings import Settings
-from movici_simulation_core.utils.validate import ensure_valid_config
-from . import attributes
-from .entities import (
-    CorridorEntity,
-    CorridorTransportSegmentEntity,
-    DemandNodeEntity,
+from movici_simulation_core.core import (
+    AttributeSpec,
+    Index,
+    Moment,
+    TrackedCSRArray,
+    TrackedState,
+    attributes_from_dict,
 )
+from movici_simulation_core.json_schemas import SCHEMA_PATH
+from movici_simulation_core.models.common import ae_util, model_util
+from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity
+from movici_simulation_core.settings import Settings
+from movici_simulation_core.validate import ensure_valid_config
+
+from . import attributes
+from .entities import CorridorEntity, CorridorTransportSegmentEntity, DemandNodeEntity
 
 
 class Model(TrackedModel, name="corridor"):

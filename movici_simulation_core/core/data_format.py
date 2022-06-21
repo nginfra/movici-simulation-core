@@ -5,22 +5,24 @@ import msgpack
 import numpy as np
 import orjson as json
 
-from movici_simulation_core.core.schema import (
-    DEFAULT_ROWPTR_KEY,
-    has_rowptr_key,
-    infer_data_type_from_array,
-    AttributeSchema,
-    get_rowptr,
-)
-from movici_simulation_core.core import DataType
-from movici_simulation_core.data_tracker.arrays import TrackedCSRArray
-from movici_simulation_core.data_tracker.unicode_helpers import get_unicode_dtype
 from movici_simulation_core.types import (
     ExternalSerializationStrategy,
     FileType,
     NumpyAttributeData,
 )
 from movici_simulation_core.utils import lifecycle
+from movici_simulation_core.utils.unicode import get_unicode_dtype
+
+from .arrays import TrackedCSRArray
+from .data_type import DataType
+from .schema import (
+    DEFAULT_ROWPTR_KEY,
+    AttributeSchema,
+    get_rowptr,
+    has_rowptr_key,
+    infer_data_type_from_array,
+    infer_data_type_from_list,
+)
 
 
 @lifecycle.has_deprecations
@@ -130,35 +132,6 @@ def parse_list(data: list, data_type: DataType) -> NumpyAttributeData:
     if data_type.csr:
         return parse_csr_list(data, data_type)
     return parse_uniform_list(data, data_type)
-
-
-def infer_data_type_from_list(data: list):
-    # TODO: check for nones
-    # TODO: check for empty lists
-    # TODO: check for int/float (if first item is int, but second is float)
-    # TODO: check for unit shape
-
-    def infer_pytype(d: list):
-        if not len(d):
-            return float
-        first_item = d[0]
-        if first_item is None:
-            return float
-        if (rv := type(first_item)) not in (int, float, bool, str):
-            raise TypeError("Could not infer datatype")
-        return rv
-
-    if not len(data):
-        pytype, csr = float, False
-
-    elif isinstance(data[0], list):
-        pytype = infer_pytype(data[0])
-        csr = True
-    else:
-        pytype = infer_pytype(data)
-        csr = False
-
-    return DataType(pytype, unit_shape=(), csr=csr)
 
 
 def parse_uniform_list(data: list, data_type: DataType) -> NumpyAttributeData:

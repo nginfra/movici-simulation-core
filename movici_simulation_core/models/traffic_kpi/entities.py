@@ -1,10 +1,10 @@
-from movici_simulation_core.core.attributes import Shape_Length
+from movici_simulation_core.attributes import Shape_Length
+from movici_simulation_core.core.attribute import INIT, OPT, PUB, field
+from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import field, INIT, PUB, OPT
 from movici_simulation_core.models.common.attributes import (
-    Transport_PassengerVehicleFlow,
     Transport_CargoVehicleFlow,
+    Transport_PassengerVehicleFlow,
 )
 
 Transport_EnergyConsumption_Hours = AttributeSpec(

@@ -1,9 +1,10 @@
 from logging import WARN
 from unittest.mock import Mock, call
 
-from movici_simulation_core.core.attribute_spec import AttributeSpec
-from movici_simulation_core.core.data_type import UNDEFINED, DataType
-from movici_simulation_core.data_tracker.attribute import (
+import numpy as np
+import pytest
+
+from movici_simulation_core.core.attribute import (
     INIT,
     INITIALIZE,
     OPT,
@@ -14,8 +15,10 @@ from movici_simulation_core.data_tracker.attribute import (
     SUBSCRIBE,
     AttributeField,
 )
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.state import (
+from movici_simulation_core.core.attribute_spec import AttributeSpec
+from movici_simulation_core.core.data_type import UNDEFINED, DataType
+from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.core.state import (
     EntityDataHandler,
     StateProxy,
     TrackedState,
@@ -28,8 +31,6 @@ from movici_simulation_core.testing.helpers import (
     dataset_dicts_equal,
     get_attribute,
 )
-import numpy as np
-import pytest
 
 
 class MyEntity(EntityGroup, name="my_entities"):

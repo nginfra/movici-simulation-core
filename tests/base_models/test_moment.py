@@ -3,11 +3,11 @@ from datetime import datetime
 
 import pytest
 
-from movici_simulation_core.utils.moment import (
-    TimelineInfo,
-    set_timeline_info,
-    get_timeline_info,
+from movici_simulation_core.core.moment import (
     Moment,
+    TimelineInfo,
+    get_timeline_info,
+    set_timeline_info,
     string_to_datetime,
 )
 

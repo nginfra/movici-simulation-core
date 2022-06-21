@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.data_tracker.arrays import TrackedArray, TrackedCSRArray
-from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.models.common.entities import PointEntity, LinkEntity
+from movici_simulation_core.core.arrays import TrackedArray, TrackedCSRArray
+from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.models.common.entity_groups import LinkEntity, PointEntity
 from movici_simulation_core.models.corridor.entities import (
     CorridorEntity,
     CorridorTransportSegmentEntity,

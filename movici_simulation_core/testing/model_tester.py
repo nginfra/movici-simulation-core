@@ -2,50 +2,43 @@ import json
 import logging
 import shutil
 import tempfile
+import typing as t
 from pathlib import Path
 
 from movici_simulation_core.base_models.simple_model import SimpleModelAdapter
-from movici_simulation_core.base_models.tracked_model import (
-    TrackedModelAdapter,
-    TrackedModel,
-)
-from movici_simulation_core.core import Model
-from movici_simulation_core.core.types import Extensible
-from movici_simulation_core.data_tracker.data_format import (
-    dump_dataset_data,
+from movici_simulation_core.base_models.tracked_model import TrackedModel, TrackedModelAdapter
+from movici_simulation_core.core import (
     EntityInitDataFormat,
-)
-from movici_simulation_core.data_tracker.serialization import (
+    Model,
     UpdateDataFormat,
     dump_update,
     load_update,
 )
-from movici_simulation_core.core.schema import AttributeSpec, AttributeSchema
-from movici_simulation_core.core.types import ModelAdapterBase
-from movici_simulation_core.model_connector.init_data import (
-    InitDataHandler,
-    DirectoryInitDataHandler,
-)
-from movici_simulation_core.networking.messages import (
-    UpdateMessage,
-    UpdateSeriesMessage,
+from movici_simulation_core.core.data_format import dump_dataset_data
+from movici_simulation_core.core.moment import set_timeline_info
+from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec
+from movici_simulation_core.core.types import Extensible, ModelAdapterBase
+from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
 )
+from movici_simulation_core.model_connector.init_data import (
+    DirectoryInitDataHandler,
+    InitDataHandler,
+)
+from movici_simulation_core.settings import Settings
 from movici_simulation_core.testing.helpers import compare_dataset_dicts
 from movici_simulation_core.types import (
-    UpdateData,
-    RawResult,
-    Result,
-    RawUpdateData,
-    NextTime,
     DataMask,
+    NextTime,
+    RawResult,
+    RawUpdateData,
+    Result,
+    UpdateData,
 )
-import typing as t
 from movici_simulation_core.utils import strategies
-
-from movici_simulation_core.utils.moment import set_timeline_info
-from movici_simulation_core.utils.settings import Settings
 
 
 class PreProcessor:

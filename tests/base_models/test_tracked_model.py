@@ -1,34 +1,26 @@
 import json
 import typing as t
-from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
 from unittest.mock import Mock, call
 
 import numpy as np
 import pytest
 
-from movici_simulation_core.base_models.tracked_model import (
-    TrackedModelAdapter,
-    TrackedModel,
-)
-from movici_simulation_core.data_tracker.serialization import dump_update, load_update
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import (
-    field,
-    INIT,
-    SUB,
-    PUB,
-)
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.base_models.tracked_model import TrackedModel, TrackedModelAdapter
+from movici_simulation_core.core.attribute import INIT, PUB, SUB, field
+from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
+from movici_simulation_core.core.serialization import dump_update, load_update
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
-from movici_simulation_core.model_connector.init_data import FileType
-from movici_simulation_core.networking.messages import (
-    UpdateMessage,
+from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
+    UpdateMessage,
     UpdateSeriesMessage,
 )
+from movici_simulation_core.model_connector.init_data import FileType
 from movici_simulation_core.testing.helpers import dataset_data_to_numpy, dataset_dicts_equal
-from movici_simulation_core.utils.moment import Moment
 
 
 @pytest.fixture

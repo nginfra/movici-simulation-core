@@ -16,16 +16,6 @@ client
 
 
 
-messages 
----------
-
-.. automodule:: movici_simulation_core.networking.messages
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-
 stream 
 -------
 

@@ -2,9 +2,11 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.networking.messages import UpdateMessage, NewTimeMessage
-from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
-from movici_simulation_core.services.orchestrator.timeline import TimelineController
+from movici_simulation_core.messages import NewTimeMessage, UpdateMessage
+from movici_simulation_core.services.orchestrator.context import (
+    ModelCollection,
+    TimelineController,
+)
 from tests.services.orchestrator.test_connected_model import get_model
 
 

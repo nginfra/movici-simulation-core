@@ -1,11 +1,14 @@
 import json
-from unittest import mock
 import typing as t
+from unittest import mock
 
+import numpy as np
+import pytest
+
+from movici_simulation_core.core.attribute import CSRAttribute, UniformAttribute
+from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import DataType
-from movici_simulation_core.data_tracker.attribute import CSRAttribute, UniformAttribute
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.common.network import Network
 from movici_simulation_core.models.generalized_journey_time import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.generalized_journey_time.crowdedness import crowdedness
@@ -13,10 +16,8 @@ from movici_simulation_core.models.generalized_journey_time.gjt_model import (
     GJTCalculator,
     GJTModel,
 )
-from movici_simulation_core.testing.model_schema import model_config_validator
 from movici_simulation_core.testing.model_tester import ModelTester
-import numpy as np
-import pytest
+from movici_simulation_core.validate import validate_and_process
 
 
 @pytest.fixture
@@ -256,7 +257,7 @@ def test_crowdedness():
 
 def test_model_config_schema(model_config):
     schema = json.loads(MODEL_CONFIG_SCHEMA_PATH.read_text())
-    assert model_config_validator(schema)(model_config)
+    assert validate_and_process(model_config, schema)
 
 
 def test_convert_legacy_model_config(legacy_model_config, model_config):

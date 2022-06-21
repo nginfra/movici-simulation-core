@@ -1,6 +1,8 @@
 import typing as t
+
 import numpy as np
-from .entities import PointEntity, LineEntity, PolygonEntity
+
+from .entity_groups import LineEntity, PointEntity, PolygonEntity
 
 modality_link_entities = {
     "roads": "road_segment_entities",
@@ -50,10 +52,6 @@ def get_transport_info(model_config: t.Dict[str, t.Optional[t.List[str]]]) -> t.
         )
 
     return return_dataset_type, return_dataset
-
-
-def get_transport_type(model_config: t.Dict[str, t.Optional[t.List[str]]]) -> str:
-    return get_transport_info(model_config)[0]
 
 
 def try_get_geometry_type(geometry_type):

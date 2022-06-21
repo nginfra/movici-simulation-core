@@ -5,18 +5,15 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.core.attribute_spec import AttributeSpec
-
+from . import attribute
 from . import state as state_
-from .attribute import AttributeField, PropertyField
+from .attribute_spec import AttributeSpec
 from .index import Index
-from ..utils import lifecycle
 
 
-@lifecycle.has_deprecations
 class EntityGroup:
     state: state_.StateProxy = None
-    attributes: t.Dict[str, AttributeField] = {}
+    attributes: t.Dict[str, attribute.AttributeField] = {}
     __entity_name__: t.Optional[str] = None
 
     def __init__(self, name: str = None):
@@ -25,11 +22,10 @@ class EntityGroup:
 
     def __init_subclass__(cls, **kwargs):
         cls.__entity_name__ = kwargs.get("name", cls.__entity_name__)
-        # TODO: PropertyField is deprecated
         cls.attributes = {
             key: value
             for key, value in vars(cls).items()
-            if isinstance(value, (PropertyField, AttributeField))
+            if isinstance(value, attribute.AttributeField)
         }
 
     def __len__(self):
@@ -66,19 +62,10 @@ class EntityGroup:
     def register_attribute(self, spec: AttributeSpec, flags: int = 0, rtol=0.00001, atol=1e-8):
         return self.state.register_attribute(spec, flags, rtol, atol)
 
-    @lifecycle.deprecated(alternative="EntityGroup.get_attribute")
-    def get_property(self, identifier: str):
-        return self.get_attribute(identifier)
-
     @classmethod
-    def all_attributes(cls) -> t.Dict[str, AttributeField]:
+    def all_attributes(cls) -> t.Dict[str, attribute.AttributeField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
         return dict(itertools.chain.from_iterable(b.attributes.items() for b in reversed(bases)))
-
-    @lifecycle.deprecated(alternative="EntityGroup.all_attributes")
-    @classmethod
-    def all_properties(cls) -> t.Dict[str, AttributeField]:
-        return cls.all_attributes()
 
     @property
     def index(self) -> Index:

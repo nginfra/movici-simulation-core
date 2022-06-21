@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 import pkg_resources
 
-from movici_simulation_core.core import types
+from . import types
 
 
 def configure_global_plugins(

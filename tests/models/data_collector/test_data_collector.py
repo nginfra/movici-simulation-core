@@ -4,17 +4,17 @@ from unittest.mock import Mock
 
 import pytest
 
+from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
 from movici_simulation_core.models.data_collector.data_collector import (
-    UpdateInfo,
     DataCollector,
     LocalStorageStrategy,
+    UpdateInfo,
 )
+from movici_simulation_core.settings import Settings
 from movici_simulation_core.testing.helpers import list_dir
 from movici_simulation_core.testing.model_tester import ModelTester
 from movici_simulation_core.types import UpdateData
-from movici_simulation_core.utils.settings import Settings
 
 
 @pytest.fixture

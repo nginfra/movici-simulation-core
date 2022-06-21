@@ -38,7 +38,13 @@ test-numba:
 black-check:
 	black --check .
 
-lint: flake8 black-check bandit safety pylint mypy
+isort:
+	isort .
+	
+isort-check:
+	isort -c .
+
+lint: flake8 black-check isort-check bandit safety pylint mypy
 	
 test-all: coverage lint
 

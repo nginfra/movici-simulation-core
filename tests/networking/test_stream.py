@@ -1,24 +1,18 @@
-from unittest.mock import Mock, call, MagicMock
+import typing as t
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
-import typing as t
-
 import zmq
 
-from movici_simulation_core.networking.messages import (
-    Message,
-    dump_message,
-    AcknowledgeMessage,
-    QuitMessage,
-)
+from movici_simulation_core.exceptions import InvalidMessage
+from movici_simulation_core.messages import AcknowledgeMessage, Message, QuitMessage, dump_message
 from movici_simulation_core.networking.stream import (
+    MessageDealerSocket,
+    MessageReqSocket,
     MessageRouterSocket,
     Stream,
-    MessageDealerSocket,
     get_message_socket,
-    MessageReqSocket,
 )
-from movici_simulation_core.exceptions import InvalidMessage
 
 
 @pytest.fixture

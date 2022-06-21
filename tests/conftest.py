@@ -1,12 +1,11 @@
 import pytest
-from movici_simulation_core.core.attributes import GlobalAttributes
 
+from movici_simulation_core.attributes import GlobalAttributes
+from movici_simulation_core.core.data_format import EntityInitDataFormat
+from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.data_tracker.data_format import EntityInitDataFormat
-from movici_simulation_core.data_tracker.serialization import UpdateDataFormat
+from movici_simulation_core.core.serialization import UpdateDataFormat
 from movici_simulation_core.utils import strategies
-
-from movici_simulation_core.utils.moment import set_timeline_info
 
 
 def pytest_configure(config):

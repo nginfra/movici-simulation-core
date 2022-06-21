@@ -1,16 +1,13 @@
 import logging
 
 from movici_simulation_core.core.types import Service
-from movici_simulation_core.utils.settings import Settings
-from movici_simulation_core.simulation import Simulation
-from movici_simulation_core.networking.messages import ModelMessage, Message
+from movici_simulation_core.messages import Message, ModelMessage
 from movici_simulation_core.networking.stream import Stream
-from .context import (
-    Context,
-)
-from .timeline import TimelineController
-from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
-from movici_simulation_core.services.orchestrator.connected_model import ConnectedModel
+from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
+from movici_simulation_core.settings import Settings
+from movici_simulation_core.simulation import Simulation
+
+from .context import Context, TimelineController
 from .fsm import FSM, FSMDone
 from .states import StartInitializingPhase
 

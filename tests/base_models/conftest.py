@@ -1,7 +1,7 @@
 import pytest
 
-from movici_simulation_core.utils.moment import TimelineInfo
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.core.moment import TimelineInfo
+from movici_simulation_core.settings import Settings
 
 
 @pytest.fixture

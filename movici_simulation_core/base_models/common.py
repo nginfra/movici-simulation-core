@@ -1,7 +1,7 @@
 import typing as t
 
-from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
-from movici_simulation_core.types import ExternalSerializationStrategy
+from movici_simulation_core.model_connector import InitDataHandler
+from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.path import DatasetPath
 

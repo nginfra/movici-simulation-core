@@ -6,19 +6,19 @@ import typing as t
 import numpy as np
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import AttributeSchema, DataType
-from movici_simulation_core.data_tracker.attribute import (
-    SUB,
+from movici_simulation_core.core.attribute import (
     PUB,
-    AttributeObject,
-    UniformAttribute,
-    CSRAttribute,
     REQUIRED,
+    SUB,
+    AttributeObject,
+    CSRAttribute,
+    UniformAttribute,
 )
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.schema import AttributeSchema, DataType
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.udf_model import compiler
-from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.validate import ensure_valid_config
 
 
 class UDFModel(TrackedModel, name="udf"):

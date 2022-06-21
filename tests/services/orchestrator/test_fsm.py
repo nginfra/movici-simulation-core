@@ -5,13 +5,13 @@ import pytest
 
 from movici_simulation_core.services.orchestrator.fsm import (
     FSM,
+    Always,
+    Condition,
+    Event,
     FSMDone,
+    FSMStarted,
     State,
     TransitionsT,
-    Always,
-    Event,
-    FSMStarted,
-    Condition,
 )
 
 

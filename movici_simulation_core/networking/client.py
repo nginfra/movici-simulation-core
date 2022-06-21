@@ -3,7 +3,7 @@ import typing as t
 import zmq
 
 from movici_simulation_core.exceptions import InvalidMessage
-from movici_simulation_core.networking.messages import Message, ErrorMessage
+from movici_simulation_core.messages import ErrorMessage, Message
 from movici_simulation_core.networking.stream import get_message_socket
 
 

@@ -91,8 +91,7 @@ Our ``squares.py`` now looks as following:
   import json
   from pathlib import Path
   from tempfile import mkdtemp
-  from movici_simulation_core import Simulation
-  from movici_simulation_core.core import AttributeSpec
+  from movici_simulation_core import AttributeSpec, Simulation
 
   input_dir = mkdtemp(prefix='movici-input-')
   output_dir = mkdtemp(prefix='movici-output-')
@@ -119,7 +118,7 @@ a model calculate these. For this, we'll make use of the included ``UDFModel``. 
 
 .. testcode:: python
 
-  from movici_simulation_core.models.udf_model import UDFModel
+  from movici_simulation_core.models import UDFModel
 
   sim.add_model("square_maker", UDFModel( {
             "entity_group": [["figures", "square_entities"]],
@@ -151,14 +150,14 @@ completeness, we also register the output attribute to the simulation.
 Now, we have a single model that does a calculation. However, the results of this calculation are 
 not going anywhere, currently, they stay in the simulation, and disappear as soon as the simulation
 is completed. In order to save the results, we need to add a second, special model called
-``DataCollector``. This model takes all updates that other models produce, and stores them in the
+``DataCollectorModel``. This model takes all updates that other models produce, and stores them in the
 output directory ``storage_dir``. 
 
 .. testcode:: python
 
-  from movici_simulation_core.models.data_collector import DataCollector
+  from movici_simulation_core.models import DataCollectorModel
 
-  sim.add_model("data_collector", DataCollector({}))
+  sim.add_model("data_collector", DataCollectorModel({}))
 
 There, we are now ready to run our first simulation. The final ``squares.py`` looks like this:
 
@@ -167,10 +166,10 @@ There, we are now ready to run our first simulation. The final ``squares.py`` lo
   import json
   from pathlib import Path
   from tempfile import mkdtemp
-  from movici_simulation_core import Simulation
-  from movici_simulation_core.core import AttributeSpec
-  from movici_simulation_core.models.udf_model import UDFModel
-  from movici_simulation_core.models.data_collector import DataCollector
+
+  from movici_simulation_core import AttributeSpec, Simulation
+  from movici_simulation_core.models import DataCollectorModel, UDFModel
+
 
   input_dir = mkdtemp(prefix='movici-input-')
   output_dir = mkdtemp(prefix='movici-output-')
@@ -205,7 +204,7 @@ There, we are now ready to run our first simulation. The final ``squares.py`` lo
       }
     )
   )
-  sim.add_model("data_collector", DataCollector({}))
+  sim.add_model("data_collector", DataCollectorModel({}))
 
   sim.run()
 

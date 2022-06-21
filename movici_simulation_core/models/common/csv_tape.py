@@ -3,7 +3,7 @@ import typing as t
 import numpy as np
 import pandas as pd
 
-from movici_simulation_core.utils.moment import Moment, TimelineInfo, get_timeline_info
+from movici_simulation_core.core.moment import Moment, TimelineInfo, get_timeline_info
 
 
 class CsvTape:

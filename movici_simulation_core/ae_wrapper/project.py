@@ -9,24 +9,20 @@ from types import TracebackType
 
 import numpy as np
 from aequilibrae import (
-    Project,
-    Graph,
     AequilibraeMatrix,
+    Graph,
+    PathResults,
+    Project,
     TrafficAssignment,
     TrafficClass,
-    PathResults,
 )
 from pyproj import Transformer
 
-from movici_simulation_core.ae_wrapper.collections import (
-    NodeCollection,
-    LinkCollection,
-    AssignmentResultCollection,
-    GraphPath,
-)
-from movici_simulation_core.ae_wrapper.id_generator import IdGenerator
-from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
-from movici_simulation_core.data_tracker.csr_helpers import get_row
+from movici_simulation_core.csr import get_row
+
+from .collections import AssignmentResultCollection, GraphPath, LinkCollection, NodeCollection
+from .id_generator import IdGenerator
+from .point_generator import PointGenerator
 
 EPSILON = 1e-12
 

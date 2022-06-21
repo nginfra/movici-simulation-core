@@ -1,6 +1,5 @@
-import typing as t
-
 import time
+import typing as t
 
 
 class Stopwatch:

@@ -1,12 +1,13 @@
 import functools
 
+import numpy as np
+import pytest
+
 from movici_simulation_core.core.attribute_spec import AttributeSpec
+from movici_simulation_core.core.data_format import EntityInitDataFormat, extract_dataset_data
 from movici_simulation_core.core.data_type import UNDEFINED, DataType
-from movici_simulation_core.data_tracker.data_format import (
-    EntityInitDataFormat,
-    extract_dataset_data,
-)
-from movici_simulation_core.data_tracker.index import Index
+from movici_simulation_core.core.index import Index
+from movici_simulation_core.core.moment import TimelineInfo, string_to_datetime
 from movici_simulation_core.postprocessing.results import (
     ReversibleUpdate,
     SimulationResults,
@@ -14,9 +15,6 @@ from movici_simulation_core.postprocessing.results import (
     merge_updates,
 )
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
-from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
-import numpy as np
-import pytest
 
 
 @pytest.fixture

@@ -8,14 +8,11 @@ from _pytest.fixtures import SubRequest
 from aequilibrae import Graph
 
 from movici_simulation_core.ae_wrapper.collections import (
-    NodeCollection,
-    LinkCollection,
     AssignmentResultCollection,
+    LinkCollection,
+    NodeCollection,
 )
-from movici_simulation_core.ae_wrapper.project import (
-    ProjectWrapper,
-    AssignmentParameters,
-)
+from movici_simulation_core.ae_wrapper.project import AssignmentParameters, ProjectWrapper
 
 
 @pytest.fixture

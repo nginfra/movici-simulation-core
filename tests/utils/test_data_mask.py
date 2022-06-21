@@ -1,6 +1,6 @@
 import pytest
 
-from movici_simulation_core.utils.data_mask import validate_mask, masks_overlap, filter_data
+from movici_simulation_core.utils.data_mask import filter_data, masks_overlap, validate_mask
 
 pub_sub_masks = [
     (

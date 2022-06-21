@@ -6,10 +6,10 @@ import pathlib
 import typing as t
 
 from movici_simulation_core.core.types import InitDataHandlerBase
-from movici_simulation_core.utils.path import DatasetPath
+from movici_simulation_core.messages import GetDataMessage, PathMessage
 from movici_simulation_core.networking.client import RequestClient, Sockets
-from movici_simulation_core.networking.messages import GetDataMessage, PathMessage
 from movici_simulation_core.types import FileType
+from movici_simulation_core.utils.path import DatasetPath
 
 
 class InitDataHandler(InitDataHandlerBase):

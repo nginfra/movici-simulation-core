@@ -1,7 +1,8 @@
 from pathlib import Path
 
-from movici_simulation_core.utils.moment import TimelineInfo, string_to_datetime
-from movici_simulation_core.postprocessing.results import SimulationResults
+from movici_simulation_core import TimelineInfo
+from movici_simulation_core.postprocessing import SimulationResults
+from movici_simulation_core.utils import string_to_datetime
 
 EXAMPLES_DIR = Path(__file__).parent
 INIT_DATA_DIR = EXAMPLES_DIR / "data"

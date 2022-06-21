@@ -1,24 +1,6 @@
 import pytest
 
-from movici_simulation_core.models.common.model_util import get_transport_info, get_transport_type
-
-
-@pytest.mark.parametrize(
-    ("config", "expected_dataset"),
-    [
-        ({"roads": ["a"]}, "roads"),
-        (
-            {
-                "waterways": ["a"],
-            },
-            "waterways",
-        ),
-        ({"tracks": ["a"]}, "tracks"),
-        ({"roads": ["a"], "waterways": []}, "roads"),
-    ],
-)
-def test_transport_type_of_valid_transport_config(config, expected_dataset):
-    assert get_transport_type(config) == expected_dataset
+from movici_simulation_core.models.common.model_util import get_transport_info
 
 
 @pytest.mark.parametrize(

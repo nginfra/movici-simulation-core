@@ -36,10 +36,10 @@ csv\_tape
 
 
 
-entities 
----------
+entity\_groups 
+---------------
 
-.. automodule:: movici_simulation_core.models.common.entities
+.. automodule:: movici_simulation_core.models.common.entity_groups
    :members:
    :undoc-members:
    :show-inheritance:

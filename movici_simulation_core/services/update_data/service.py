@@ -3,20 +3,20 @@ import typing as t
 from functools import singledispatchmethod
 
 from movici_simulation_core.core.types import Service
-from movici_simulation_core.simulation import Simulation
-from movici_simulation_core.networking.messages import (
-    ModelMessage,
-    ErrorMessage,
-    GetDataMessage,
-    DataMessage,
-    PutDataMessage,
+from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ClearDataMessage,
+    DataMessage,
+    ErrorMessage,
+    GetDataMessage,
+    ModelMessage,
+    PutDataMessage,
 )
-from movici_simulation_core.networking.stream import Stream, MessageRouterSocket
+from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
+from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.types import InternalSerializationStrategy
 from movici_simulation_core.utils import strategies
-from movici_simulation_core.utils.data_mask import validate_mask, filter_data
+from movici_simulation_core.utils.data_mask import filter_data, validate_mask
 
 
 class UpdateDataService(Service):

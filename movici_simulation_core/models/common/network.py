@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import typing as t
 
 import numpy as np
@@ -7,16 +8,9 @@ from numba import njit
 from scipy.sparse.csgraph import shortest_path
 from scipy.sparse.csr import csr_matrix
 
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
+from movici_simulation_core.core import EntityGroup, Index, TrackedState
 
-from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.data_tracker.state import TrackedState
-from .entities import (
-    PointEntity,
-    LinkEntity,
-    TransportLinkEntity,
-    TransportSegmentEntity,
-)
+from .entity_groups import LinkEntity, PointEntity, TransportLinkEntity, TransportSegmentEntity
 
 
 class NetworkEntities(t.TypedDict):

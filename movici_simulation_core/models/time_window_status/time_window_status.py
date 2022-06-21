@@ -3,14 +3,14 @@ from collections import deque
 
 import numpy as np
 
+from movici_simulation_core.core.moment import Moment, TimelineInfo
 from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.models.time_window_status.dataset import (
-    TimeWindowEntity,
-    TimeWindowStatusEntity,
     Connection,
     ScheduleEvent,
+    TimeWindowEntity,
+    TimeWindowStatusEntity,
 )
-from movici_simulation_core.utils.moment import TimelineInfo, Moment
 
 
 class TimeWindowStatus:

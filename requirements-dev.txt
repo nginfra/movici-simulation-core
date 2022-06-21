@@ -9,3 +9,4 @@ flake8>=3.8.4
 black==22.1.0
 jsonschema
 bump2version
+isort

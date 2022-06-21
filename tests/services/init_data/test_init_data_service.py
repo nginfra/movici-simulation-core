@@ -4,10 +4,10 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.networking.messages import GetDataMessage
+from movici_simulation_core.messages import GetDataMessage
 from movici_simulation_core.networking.stream import Stream
 from movici_simulation_core.services.init_data.service import InitDataService
-from movici_simulation_core.utils.settings import Settings
+from movici_simulation_core.settings import Settings
 
 
 @pytest.fixture

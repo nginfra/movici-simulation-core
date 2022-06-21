@@ -1,8 +1,9 @@
 import typing as t
 
 import numpy as np
-from movici_simulation_core.data_tracker.attribute import UniformAttribute
 from movici_geo_query.geo_query import QueryResult
+
+from movici_simulation_core.core import UniformAttribute
 
 SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60

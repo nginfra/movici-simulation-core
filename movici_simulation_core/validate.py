@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from pathlib import Path
 import re
 import typing as t
+from pathlib import Path
 
 from jsonschema import exceptions, validators
 
-from movici_simulation_core.core.schema import AttributeSchema
+import movici_simulation_core.core.schema as schema
 
 
 class MoviciTypeReport(exceptions.ValidationError):
@@ -170,7 +170,7 @@ class AttributeSchemaLookup(MoviciTypeLookup):
     def __init__(
         self,
         dataset_names: t.Optional[t.Sequence[str]] = None,
-        schema: t.Optional[AttributeSchema] = None,
+        schema: t.Optional[schema.AttributeSchema] = None,
     ):
         self.dataset_names = set(dataset_names) if dataset_names is not None else None
         self.schema = schema

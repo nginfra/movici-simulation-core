@@ -1,31 +1,23 @@
-from movici_simulation_core.data_tracker.attribute import (
-    field,
-    SUB,
-    PUB,
-    OPT,
-)
+from movici_simulation_core.core.attribute import OPT, PUB, SUB, field
 from movici_simulation_core.models.common.attributes import (
+    Transport_AdditionalTime,
     Transport_AverageTime,
+    Transport_Capacity_Hours,
     Transport_CargoAllowed,
     Transport_CargoAverageTime,
+    Transport_CargoDemand,
+    Transport_CargoVehicleFlow,
     Transport_CargoVehicleMaxSpeed,
+    Transport_DelayFactor,
     Transport_MaxSpeed,
     Transport_PassengerAverageTime,
-    Transport_PassengerVehicleMaxSpeed,
-    Transport_PassengerVehicleFlow,
-    Transport_CargoVehicleFlow,
-    Transport_DelayFactor,
-    Transport_VolumeToCapacityRatio,
     Transport_PassengerCarUnit,
     Transport_PassengerDemand,
-    Transport_CargoDemand,
-    Transport_AdditionalTime,
-    Transport_Capacity_Hours,
+    Transport_PassengerVehicleFlow,
+    Transport_PassengerVehicleMaxSpeed,
+    Transport_VolumeToCapacityRatio,
 )
-from movici_simulation_core.models.common.entities import (
-    TransportSegmentEntity,
-    PointEntity,
-)
+from movici_simulation_core.models.common.entity_groups import PointEntity, TransportSegmentEntity
 from movici_simulation_core.models.unit_conversions.attributes import (
     Transport_CargoFlow,
     Transport_PassengerFlow,

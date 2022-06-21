@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.typing as npt
 
-from movici_simulation_core.data_tracker.index import Index
+from movici_simulation_core.core import Index
 
 
 class IdGenerator:

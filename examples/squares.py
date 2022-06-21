@@ -1,10 +1,9 @@
 import json
 from pathlib import Path
 from tempfile import mkdtemp
-from movici_simulation_core import Simulation
-from movici_simulation_core.core import AttributeSpec
-from movici_simulation_core.models.udf_model import UDFModel
-from movici_simulation_core.models.data_collector import DataCollector
+
+from movici_simulation_core import AttributeSpec, Simulation
+from movici_simulation_core.models import DataCollectorModel, UDFModel
 
 input_dir = mkdtemp(prefix="movici-input-")
 output_dir = mkdtemp(prefix="movici-output-")
@@ -42,7 +41,7 @@ sim.add_model(
         }
     ),
 )
-sim.add_model("data_collector", DataCollector({}))
+sim.add_model("data_collector", DataCollectorModel({}))
 
 sim.run()
 print(f"results stored in {output_dir}")

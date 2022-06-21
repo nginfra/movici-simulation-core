@@ -2,11 +2,11 @@ import typing as t
 
 import numba
 import numpy as np
-from numba.core.types import real_domain, complex_domain, number_domain
+from numba.core.types import complex_domain, number_domain, real_domain
 from numba.np.numpy_support import type_can_asarray
 
-from .numba_extensions import generated_jit
-from .unicode_helpers import largest_unicode_dtype
+from .core.numba_extensions import generated_jit
+from .utils.unicode import largest_unicode_dtype
 
 
 @numba.njit(cache=True)

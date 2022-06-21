@@ -1,11 +1,7 @@
 import pytest
-
-from movici_simulation_core.utils.validate import (
-    MoviciDataRefInfo,
-    validate_and_process,
-    FromDictLookup,
-)
 from jsonschema import exceptions
+
+from movici_simulation_core.validate import FromDictLookup, MoviciDataRefInfo, validate_and_process
 
 
 @pytest.fixture

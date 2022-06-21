@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import logging
+import typing as t
 from collections import defaultdict
 from dataclasses import dataclass
 from logging import WARN
-import logging
-import typing as t
 
 import numpy as np
 
+from ..types import EntityData, NumpyAttributeData, ValueType
 from . import entity_group as eg
+from . import index as index_
 from .attribute import (
     OPT,
     PUBLISH,
@@ -18,11 +20,9 @@ from .attribute import (
     create_empty_attribute,
     create_empty_attribute_for_data,
 )
-from .index import Index
-from ..core.attribute_spec import AttributeSpec
-from ..core.schema import AttributeSchema
-from ..data_tracker.data_format import extract_dataset_data
-from ..types import EntityData, NumpyAttributeData, ValueType
+from .attribute_spec import AttributeSpec
+from .data_format import extract_dataset_data
+from .schema import AttributeSchema
 
 AttributeDict = t.Dict[str, AttributeObject]
 
@@ -31,7 +31,7 @@ NO_TRACK_UNKNOWN = 0
 
 class TrackedState:
     attributes: t.Dict[str, t.Dict[str, AttributeDict]]
-    index: t.Dict[str, t.Dict[str, Index]]
+    index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
 
     def __init__(
@@ -236,7 +236,7 @@ class TrackedState:
         try:
             return target[entity_type]
         except KeyError:
-            index = Index()
+            index = index_.Index()
             target[entity_type] = index
             return index
 
@@ -274,7 +274,7 @@ class EntityDataHandler:
     def __init__(
         self,
         attributes: AttributeDict,
-        index: Index,
+        index: index_.Index,
         track_unknown: t.Union[int, bool] = 0,
         process_undefined=False,
     ):

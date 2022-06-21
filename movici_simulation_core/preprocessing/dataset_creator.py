@@ -11,7 +11,7 @@ import orjson as json
 import pyproj
 from jsonschema.validators import validator_for
 
-from movici_simulation_core.core.attributes import (
+from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
     Geometry_Linestring3d,
     Geometry_Polygon,

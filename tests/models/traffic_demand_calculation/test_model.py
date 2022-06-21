@@ -4,6 +4,7 @@ import pytest
 
 from movici_simulation_core.models.traffic_demand_calculation.model import TrafficDemandCalculation
 from movici_simulation_core.testing.model_tester import ModelTester
+
 from ..conftest import get_dataset
 
 

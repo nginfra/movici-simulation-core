@@ -1,30 +1,29 @@
 from __future__ import annotations
 
+import abc
 import dataclasses
 import dataclasses as dc
-
-import abc
 import functools
-import numpy as np
 import typing as t
 
-from movici_simulation_core.core.data_type import get_undefined
+import numpy as np
 
-from .arrays import TrackedArrayType, TrackedCSRArray, TrackedArray
-from .csr_helpers import generate_update, remove_undefined_csr, isclose
-from .data_format import is_undefined_uniform, is_undefined_csr
+from movici_simulation_core.csr import generate_update, isclose, remove_undefined_csr
+from movici_simulation_core.types import CSRAttributeData, NumpyAttributeData, UniformAttributeData
+from movici_simulation_core.utils.unicode import determine_new_unicode_dtype
+
+from .arrays import TrackedArray, TrackedArrayType, TrackedCSRArray
+from .data_format import is_undefined_csr, is_undefined_uniform
+from .data_type import get_undefined
 from .index import Index
-from .unicode_helpers import determine_new_unicode_dtype
-from ..core.schema import (
+from .schema import (
+    DEFAULT_ROWPTR_KEY,
     AttributeSpec,
     DataType,
-    DEFAULT_ROWPTR_KEY,
-    has_rowptr_key,
     get_rowptr,
+    has_rowptr_key,
     infer_data_type_from_array,
 )
-from ..types import UniformAttributeData, CSRAttributeData, NumpyAttributeData
-from ..utils import lifecycle
 
 if t.TYPE_CHECKING:
     from .entity_group import EntityGroup
@@ -91,11 +90,6 @@ class AttributeField:
     @property
     def key(self):
         return self.spec.name
-
-
-@lifecycle.deprecated(alternative="AttributeField")
-class PropertyField(AttributeField):
-    pass
 
 
 field = AttributeField
@@ -212,11 +206,6 @@ class Attribute(abc.ABC):
     @abc.abstractmethod
     def reset(self):
         pass
-
-
-@lifecycle.deprecated(alternative="Attribute")
-class Property(Attribute):
-    pass
 
 
 class UniformAttribute(Attribute):
@@ -341,11 +330,6 @@ class UniformAttribute(Attribute):
 
     def reset(self):
         self.array.reset()
-
-
-@lifecycle.deprecated(alternative="UniformAttribute")
-class UniformProperty(UniformAttribute):
-    pass
 
 
 class CSRAttribute(Attribute):
@@ -508,11 +492,6 @@ class CSRAttribute(Attribute):
         self.csr.reset()
 
 
-@lifecycle.deprecated(alternative="CSRAttributeAttribute")
-class CSRProperty(CSRAttribute):
-    pass
-
-
 AttributeObject = t.Union[UniformAttribute, CSRAttribute]
 
 
@@ -542,22 +521,12 @@ def create_empty_attribute(data_type, length=None, rtol=1e-5, atol=1e-8, options
     return attr_t(arr, data_type, rtol=rtol, atol=atol, options=options)
 
 
-@lifecycle.deprecated(alternative="create_empty_attribute")
-def create_empty_property(data_type, length=None, rtol=1e-5, atol=1e-8, options=None):
-    return create_empty_attribute(data_type, length, rtol, atol, options)
-
-
 def create_empty_attribute_for_data(data: NumpyAttributeData, length: int):
     data_type = infer_data_type_from_array(data)
     return create_empty_attribute(
         data_type,
         length=length,
     )
-
-
-@lifecycle.deprecated(alternative="create_empty_attribute_for_data")
-def create_empty_property_for_data(data: NumpyAttributeData, length: int):
-    return create_empty_attribute_for_data(data, length)
 
 
 def ensure_uniform_data(
@@ -648,13 +617,6 @@ def get_attribute_aggregate(
     return get_array_aggregate(np.asarray(data), func, exclude=undefined)
 
 
-@lifecycle.deprecated(alternative="get_attribute_aggregate")
-def get_property_aggregate(
-    prop: AttributeObject, func: callable
-) -> t.Union[None, bool, int, float]:
-    return get_attribute_aggregate(prop, func)
-
-
 def get_array_aggregate(array, func, exclude=None):
     try:
         if exclude is not None:
@@ -669,13 +631,3 @@ def get_array_aggregate(array, func, exclude=None):
 
 attribute_min = functools.partial(get_attribute_aggregate, func=np.nanmin)
 attribute_max = functools.partial(get_attribute_aggregate, func=np.nanmax)
-
-
-@lifecycle.deprecated(alternative="attribute_min")
-def property_min(attr: AttributeObject) -> t.Union[None, bool, int, float]:
-    return attribute_min(attr)
-
-
-@lifecycle.deprecated(alternative="attribute_max")
-def property_max(attr: AttributeObject) -> t.Union[None, bool, int, float]:
-    return attribute_max(attr)

@@ -5,35 +5,36 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
-from movici_simulation_core.data_tracker.attribute import (
+from movici_simulation_core.base_models import TrackedModel
+from movici_simulation_core.core import (
     PUB,
     SUB,
+    AttributeSchema,
+    AttributeSpec,
     CSRAttribute,
+    DataType,
+    TrackedState,
     UniformAttribute,
     field,
 )
-from movici_simulation_core.data_tracker.state import TrackedState
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common.attributes import (
     Transport_Capacity_Hours,
     Transport_MaxSpeed,
-    Transport_PassengerVehicleFrequency,
     Transport_PassengerVehicleCapacity,
+    Transport_PassengerVehicleFrequency,
 )
-from movici_simulation_core.models.common.entities import (
+from movici_simulation_core.models.common.entity_groups import (
     PointEntity,
     TransportSegmentEntity,
     VirtualLinkEntity,
 )
 from movici_simulation_core.models.common.model_util import safe_divide
 from movici_simulation_core.models.common.network import Network, NetworkEntities
-from movici_simulation_core.utils.moment import Moment
-from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.utils.validate import ensure_valid_config
+from movici_simulation_core.validate import ensure_valid_config
 
 from .crowdedness import crowdedness
-
 
 Transport_PassengerFlow = AttributeSpec("transport.passenger_flow", data_type=float)
 

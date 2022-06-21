@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from abc import ABC
 
-from movici_simulation_core.networking.messages import QuitMessage
+from movici_simulation_core.messages import QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
-    State,
-    Condition,
     Always,
-    TransitionsT,
+    Condition,
     FSMDone,
+    State,
+    TransitionsT,
 )
 
 

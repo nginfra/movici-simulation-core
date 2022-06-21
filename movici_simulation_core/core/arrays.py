@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 import typing as t
+
 import numpy as np
 
-from .csr_helpers import (
+from movici_simulation_core.csr import (
     csr_binop,
     get_row,
-    update_csr_array,
-    slice_csr_array,
-    rows_equal,
     rows_contain,
+    rows_equal,
     rows_intersect,
+    slice_csr_array,
+    update_csr_array,
 )
-from .unicode_helpers import equal_str_dtypes
+from movici_simulation_core.utils.unicode import equal_str_dtypes
 
 
 class TrackedArray(np.ndarray):

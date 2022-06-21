@@ -2,11 +2,12 @@ import typing as t
 from dataclasses import dataclass
 
 import numpy as np
+from movici_geo_query.geo_query import GeoQuery
 from shapely.ops import nearest_points
 
-from movici_geo_query.geo_query import GeoQuery
-from movici_simulation_core.data_tracker.attribute import Attribute, UniformAttribute
-from movici_simulation_core.models.common.entities import GeometryEntity, LineEntity
+from movici_simulation_core.core.attribute import Attribute, UniformAttribute
+from movici_simulation_core.models.common.entity_groups import GeometryEntity, LineEntity
+
 from .dataset import OverlapEntity
 
 

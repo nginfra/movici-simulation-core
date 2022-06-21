@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 import functools
 import os
 import pathlib
-from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 import typing as t
+
+from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 
 def _dataset_path(cls: t.Type[DatasetPath]):

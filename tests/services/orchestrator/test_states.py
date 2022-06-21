@@ -3,18 +3,17 @@ from unittest.mock import Mock, call
 import pytest
 
 from movici_simulation_core.exceptions import SimulationExit
-from movici_simulation_core.networking.messages import QuitMessage
-from movici_simulation_core.services.orchestrator.model_collection import ModelCollection
-from movici_simulation_core.services.orchestrator.connected_model import ConnectedModel
-from movici_simulation_core.services.orchestrator.fsm import send_silent, FSMDone
+from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
+from movici_simulation_core.services.orchestrator.fsm import FSMDone, send_silent
 from movici_simulation_core.services.orchestrator.states import (
-    WaitForModels,
+    EndFinalizingPhase,
+    NewTime,
+    OrchestratorState,
+    StartFinalizingPhase,
     StartInitializingPhase,
     StartRunningPhase,
-    OrchestratorState,
-    NewTime,
-    StartFinalizingPhase,
-    EndFinalizingPhase,
+    WaitForModels,
 )
 
 

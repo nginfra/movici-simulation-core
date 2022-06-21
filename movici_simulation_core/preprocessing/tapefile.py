@@ -18,13 +18,14 @@ as the values at 2025 for all years earlier than 2025
 """
 
 from __future__ import annotations
+
 import dataclasses
 import datetime
 import functools
 import json
-
-from pathlib import Path
 import typing as t
+from pathlib import Path
+
 import pandas as pd
 
 

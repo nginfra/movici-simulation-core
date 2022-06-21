@@ -6,17 +6,17 @@ import typing as t
 import numba
 import numpy as np
 
-from movici_simulation_core.data_tracker.attribute import AttributeObject, CSRAttribute
-from movici_simulation_core.data_tracker.index import Index
-from movici_simulation_core.data_tracker.state import TrackedState
-from movici_simulation_core.models.common.entities import GeometryEntity
+from movici_simulation_core.core.attribute import AttributeObject, CSRAttribute
+from movici_simulation_core.core.index import Index
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.models.common.entity_groups import GeometryEntity
 from movici_simulation_core.models.common.model_util import (
     find_y_in_x,
     safe_divide,
     try_get_geometry_type,
 )
 from movici_simulation_core.models.common.network import Network, NetworkEntities
-from movici_simulation_core.utils.moment import Moment
 
 from .common import LocalContributor, LocalMapper
 

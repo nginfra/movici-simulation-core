@@ -3,14 +3,14 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.data_tracker.serialization import dump_update, load_update
-from movici_simulation_core.networking.messages import (
-    PutDataMessage,
-    GetDataMessage,
+from movici_simulation_core.core.serialization import dump_update, load_update
+from movici_simulation_core.messages import (
     AcknowledgeMessage,
-    DataMessage,
     ClearDataMessage,
+    DataMessage,
     ErrorMessage,
+    GetDataMessage,
+    PutDataMessage,
 )
 from movici_simulation_core.networking.stream import Stream
 from movici_simulation_core.services.update_data import UpdateDataService

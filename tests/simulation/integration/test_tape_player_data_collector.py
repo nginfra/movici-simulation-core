@@ -2,11 +2,11 @@ import json
 
 import pytest
 
-from movici_simulation_core.models.tape_player.model import Model as TapePlayer
+from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.models.data_collector.data_collector import DataCollector
+from movici_simulation_core.models.tape_player.model import Model as TapePlayer
 from movici_simulation_core.simulation import Simulation
 from movici_simulation_core.testing.helpers import list_dir
-from movici_simulation_core.utils.moment import TimelineInfo
 
 
 @pytest.fixture

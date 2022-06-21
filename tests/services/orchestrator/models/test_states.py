@@ -2,29 +2,27 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.networking.messages import (
-    Message,
+from movici_simulation_core.messages import (
+    AcknowledgeMessage,
     ErrorMessage,
+    Message,
+    NewTimeMessage,
     QuitMessage,
     RegistrationMessage,
-    NewTimeMessage,
-    UpdateMessage,
-    AcknowledgeMessage,
     ResultMessage,
+    UpdateMessage,
 )
-from movici_simulation_core.services.orchestrator.connected_model import (
+from movici_simulation_core.services.orchestrator.context import (
     BaseModelState,
-    NewTime,
-    Idle,
     Busy,
+    ConnectedModel,
+    Done,
+    Idle,
+    NewTime,
     ProcessPendingQuit,
     ProcessPendingUpdates,
-    Updating,
-    Done,
-)
-from movici_simulation_core.services.orchestrator.connected_model import (
-    ConnectedModel,
     Registration,
+    Updating,
     WaitingForMessage,
 )
 from movici_simulation_core.services.orchestrator.fsm import next_state

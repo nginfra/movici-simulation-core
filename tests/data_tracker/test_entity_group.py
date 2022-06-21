@@ -1,12 +1,9 @@
 from unittest.mock import Mock
 
 import pytest
-from movici_simulation_core.data_tracker.entity_group import EntityGroup
-from movici_simulation_core.data_tracker.attribute import (
-    INIT,
-    PUB,
-)
 
+from movici_simulation_core.core.attribute import INIT, PUB
+from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.testing.helpers import get_attribute
 
 

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from functools import singledispatchmethod
 import dataclasses
 import itertools
 import typing as t
-from movici_simulation_core.core.types import ModelAdapterBase
+from functools import singledispatchmethod
 
-from movici_simulation_core.exceptions import StreamDone
-from movici_simulation_core.model_connector.init_data import InitDataHandler
-from movici_simulation_core.networking.client import RequestClient, Sockets
-from movici_simulation_core.networking.messages import (
+from ..core.types import ModelAdapterBase
+from ..exceptions import StreamDone
+from ..messages import (
     AcknowledgeMessage,
     ClearDataMessage,
     DataMessage,
@@ -23,8 +21,10 @@ from movici_simulation_core.networking.messages import (
     UpdateMessage,
     UpdateSeriesMessage,
 )
-from movici_simulation_core.networking.stream import Stream
-from movici_simulation_core.types import DataMask
+from ..model_connector.init_data import InitDataHandler
+from ..networking.client import RequestClient, Sockets
+from ..networking.stream import Stream
+from ..types import DataMask
 
 
 @dataclasses.dataclass

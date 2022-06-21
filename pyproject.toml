@@ -18,3 +18,8 @@ exclude = '''(
 )/
 )
 '''
+
+[tool.isort]
+profile = "black"
+line_length = 99
+known_first_party = ["movici_simulation_core"]

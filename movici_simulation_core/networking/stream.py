@@ -4,8 +4,8 @@ import typing as t
 
 import zmq
 
-from .messages import Message, ModelMessage, load_message, dump_message, MultipartMessage
 from ..exceptions import InvalidMessage, StreamDone
+from ..messages import Message, ModelMessage, MultipartMessage, dump_message, load_message
 
 T = t.TypeVar("T")
 

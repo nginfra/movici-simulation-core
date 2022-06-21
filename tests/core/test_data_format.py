@@ -2,22 +2,18 @@ import json
 
 import numpy as np
 import pytest
-from movici_simulation_core.core.data_type import UNDEFINED
 
-from movici_simulation_core.data_tracker.data_format import (
-    create_array,
-    EntityInitDataFormat,
-    parse_list,
-    infer_data_type_from_list,
-    data_keys,
-)
-from movici_simulation_core.data_tracker.serialization import load_update, dump_update
-from movici_simulation_core.core.schema import (
-    AttributeSpec,
-    DEFAULT_ROWPTR_KEY,
-    AttributeSchema,
-)
 from movici_simulation_core.core import DataType
+from movici_simulation_core.core.data_format import (
+    EntityInitDataFormat,
+    create_array,
+    data_keys,
+    infer_data_type_from_list,
+    parse_list,
+)
+from movici_simulation_core.core.data_type import UNDEFINED
+from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY, AttributeSchema, AttributeSpec
+from movici_simulation_core.core.serialization import dump_update, load_update
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.types import FileType
 

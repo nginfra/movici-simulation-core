@@ -3,14 +3,14 @@ from unittest.mock import call
 
 import pytest
 
-from movici_simulation_core.networking.messages import UpdateMessage
+from movici_simulation_core.core.moment import TimelineInfo, set_timeline_info
+from movici_simulation_core.messages import UpdateMessage
 from movici_simulation_core.testing.dummy import DummyModel
 from movici_simulation_core.testing.model_tester import (
-    ModelTester,
     DEFAULT_PREPROCESSORS,
+    ModelTester,
     compare_results,
 )
-from movici_simulation_core.utils.moment import set_timeline_info, TimelineInfo
 
 
 class TranparentProxy:

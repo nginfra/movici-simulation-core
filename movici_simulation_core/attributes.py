@@ -4,11 +4,8 @@ for common, generic, attribute types that can be used in datasets
 
 from __future__ import annotations
 
-from movici_simulation_core.core.schema import (
-    AttributeSpec,
-    attribute_plugin_from_dict,
-)
-from movici_simulation_core.core import DataType
+from .core.data_type import DataType
+from .core.schema import AttributeSpec, attribute_plugin_from_dict
 
 Id = AttributeSpec("id", data_type=DataType(int))
 Reference = AttributeSpec("reference", data_type=DataType(str))
