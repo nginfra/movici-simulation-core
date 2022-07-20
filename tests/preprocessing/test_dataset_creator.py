@@ -464,6 +464,10 @@ class TestAttributeDataExtraction:
             ("1.1", ["float", "int"], 1),
             ("0.1", "bool", True),
             ("0.1", ["float", "int", "bool"], False),
+            (None, "bool", None),
+            ("[null]", ["json", "bool"], [None]),
+            (np.nan, "bool", None),
+            (float("nan"), "bool", None),
         ],
     )
     def test_complex_data_loading(

@@ -235,6 +235,8 @@ def load_primitive(prim):
     def _to_primitive_helper(obj):
         if isinstance(obj, (tuple, list)):
             return [_to_primitive_helper(item) for item in obj]
+        if obj is None or (isinstance(obj, (float, np.number)) and np.isnan(obj)):
+            return None
         return prim(obj)
 
     return _to_primitive_helper

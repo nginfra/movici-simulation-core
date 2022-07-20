@@ -7,6 +7,6 @@ orjson>=3
 pyzmq
 msgpack
 click
-geopandas
+geopandas<0.11
 jsonschema
 pyproj
