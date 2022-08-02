@@ -334,8 +334,7 @@ class ProjectWrapper:
             parameters = AssignmentParameters()
 
         graph = self._graph
-
-        assignment = TrafficAssignment(self._project.project_base_path)
+        assignment = TrafficAssignment(self._project)
 
         od_matrix_passenger = self.convert_od_matrix(od_matrix_passenger, "passenger_demand")
         tc_passenger = TrafficClass("passenger", graph, od_matrix_passenger)

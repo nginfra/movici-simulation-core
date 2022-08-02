@@ -56,7 +56,7 @@ setup(
             f"update_data_service = {SVC_PATH}.update_data.service:UpdateDataService",
             f"init_data_service = {SVC_PATH}.init_data.service:InitDataService",
 
-            "global_attributes = movici_simulation_core.core.attributes:GlobalAttributes",
+            "global_attributes = movici_simulation_core.attributes:GlobalAttributes",
             "common_attributes = movici_simulation_core.models.common.attributes:CommonAttributes",
 
             f"area_aggregation = {MODEL_PATH}.area_aggregation.model:Model",
