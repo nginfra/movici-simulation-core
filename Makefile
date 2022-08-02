@@ -1,5 +1,4 @@
 MODULE_NAME = movici_simulation_core
-PYPI_SERVER = https://pypi.movici.nl
 
 unittest:
 	NUMBA_DISABLE_JIT=1 pytest -v tests/
@@ -44,7 +43,7 @@ isort:
 isort-check:
 	isort -c .
 
-lint: flake8 black-check isort-check bandit safety pylint mypy
+lint: flake8 black-check isort-check bandit safety mypy
 	
 test-all: coverage lint
 
