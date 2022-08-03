@@ -43,6 +43,10 @@ jobs:
         with:
           os: ${{ matrix.os }}
 
+      - name: Install Fiona
+        if: startsWith(matrix.os, 'windows')
+        run: pip install fiona==1.9a2
+        
       - name: Install dependencies
         run: |
           pip install -e .[models,dev]
