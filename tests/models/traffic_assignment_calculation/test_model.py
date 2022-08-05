@@ -1,9 +1,18 @@
+import sys
 import pytest
 
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.models.traffic_assignment_calculation.model import Model
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.testing.model_tester import ModelTester
+
+
+def open_hook(evt, args):
+    if evt == "open":
+        print(evt, args)
+
+
+# sys.addaudithook(open_hook)
 
 
 @pytest.fixture
@@ -388,6 +397,7 @@ class TestRoadLinksChanges:
         )
 
     def test_roads_capacity_changes(self, road_segment_data, tester: ModelTester):
+
         result, _ = tester.update(
             0,
             road_segment_data(

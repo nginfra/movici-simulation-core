@@ -9,7 +9,6 @@ from types import TracebackType
 
 import numpy as np
 from aequilibrae import (
-    AequilibraeMatrix,
     Graph,
     PathResults,
     Project,
@@ -23,6 +22,7 @@ from movici_simulation_core.csr import get_row
 from .collections import AssignmentResultCollection, GraphPath, LinkCollection, NodeCollection
 from .id_generator import IdGenerator
 from .point_generator import PointGenerator
+from .patches import AequilibraeMatrix
 
 EPSILON = 1e-12
 
@@ -102,13 +102,15 @@ class ProjectWrapper:
     def close(self) -> None:
         try:
             if self._project is not None:
+                for handler in self._project.logger.handlers:
+                    handler.flush()
+                    handler.close()
                 self._project.close()
                 self._project = None
-        except AttributeError as e:
-            print(e)
-        finally:
             if self._delete_on_close and self.project_dir.exists():
                 shutil.rmtree(self.project_dir)
+        except IOError:
+            pass
 
     def add_nodes(self, nodes: NodeCollection) -> None:
         new_node_ids = self._node_id_generator.get_new_ids(nodes.ids)
@@ -337,39 +339,45 @@ class ProjectWrapper:
         assignment = TrafficAssignment(self._project)
 
         od_matrix_passenger = self.convert_od_matrix(od_matrix_passenger, "passenger_demand")
-        tc_passenger = TrafficClass("passenger", graph, od_matrix_passenger)
-
         od_matrix_cargo = self.convert_od_matrix(od_matrix_cargo, "cargo_demand")
-        tc_cargo = TrafficClass("cargo", graph, od_matrix_cargo)
-        tc_cargo.set_pce(parameters.cargo_pcu)
+        try:
+            tc_passenger = TrafficClass("passenger", graph, od_matrix_passenger)
 
-        assignment.set_classes([tc_passenger, tc_cargo])
-        assignment.set_vdf(parameters.volume_delay_function)
-        assignment.set_vdf_parameters({"alpha": parameters.vdf_alpha, "beta": parameters.vdf_beta})
+            tc_cargo = TrafficClass("cargo", graph, od_matrix_cargo)
+            tc_cargo.set_pce(parameters.cargo_pcu)
 
-        assignment.set_capacity_field("capacity")
-        assignment.set_time_field("free_flow_time")
+            assignment.set_classes([tc_passenger, tc_cargo])
+            assignment.set_vdf(parameters.volume_delay_function)
+            assignment.set_vdf_parameters(
+                {"alpha": parameters.vdf_alpha, "beta": parameters.vdf_beta}
+            )
 
-        assignment.set_algorithm(parameters.algorithm)
-        assignment.max_iter = parameters.max_iter
-        assignment.rgap_target = parameters.rgap_target
+            assignment.set_capacity_field("capacity")
+            assignment.set_time_field("free_flow_time")
 
-        assignment.execute()
+            assignment.set_algorithm(parameters.algorithm)
+            assignment.max_iter = parameters.max_iter
+            assignment.rgap_target = parameters.rgap_target
 
-        results = assignment.results()
-        ids = self._link_id_generator.query_original_ids(results.index)
-        passenger_flow, cargo_flow = results.passenger_demand_tot, results.cargo_demand_tot
-        congested_time = results.Congested_Time_Max
+            assignment.execute()
 
-        return AssignmentResultCollection(
-            ids=ids,
-            passenger_flow=passenger_flow,
-            cargo_flow=cargo_flow,
-            congested_time=congested_time,
-            delay_factor=results.Delay_factor_Max,
-            volume_to_capacity=results.VOC_max,
-            passenger_car_unit=results.PCE_tot,
-        )
+            results = assignment.results()
+            ids = self._link_id_generator.query_original_ids(results.index)
+            passenger_flow, cargo_flow = results.passenger_demand_tot, results.cargo_demand_tot
+            congested_time = results.Congested_Time_Max
+
+            return AssignmentResultCollection(
+                ids=ids.copy(),
+                passenger_flow=passenger_flow.copy(),
+                cargo_flow=cargo_flow.copy(),
+                congested_time=congested_time.copy(),
+                delay_factor=results.Delay_factor_Max.copy(),
+                volume_to_capacity=results.VOC_max.copy(),
+                passenger_car_unit=results.PCE_tot.copy(),
+            )
+        finally:
+            od_matrix_cargo.close()
+            od_matrix_passenger.close()
 
     def get_shortest_path(
         self, from_node: int, to_node: int, path_results: t.Optional[PathResults] = None

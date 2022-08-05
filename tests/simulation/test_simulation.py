@@ -186,14 +186,16 @@ class TestServiceRunnerEntryPoint:
 class TestModelRunner:
     @pytest.fixture
     def settings(self):
-        return Settings(
+        settings = Settings(
             service_discovery={
                 "orchestrator": "tcp://127.0.0.1:8001",
                 "update_data": "tcp://127.0.0.1:8002",
                 "init_data": "tcp://127.0.0.1:8003",
             },
-            timeline_info=TimelineInfo(0, 1, 0),
+            
         )
+        settings.timeline_info =TimelineInfo(0, 1, 0)
+        return settings
 
     @pytest.fixture
     def stream_run(self):
@@ -212,7 +214,8 @@ class TestModelRunner:
         runner.close = Mock()
         return runner
 
-    def test_run_model_sets_process(self, runner, model_info):
+    def test_run_model_sets_process(self, settings, runner, model_info):
+        runner = ModelRunner(model_info, settings, None)
         runner.start()
         assert isinstance(model_info.process, Process)
 

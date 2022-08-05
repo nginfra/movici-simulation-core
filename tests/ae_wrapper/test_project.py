@@ -1,11 +1,13 @@
 import shutil
 import sqlite3
 from pathlib import Path
+import sys
+import uuid
 
 import numpy as np
 import pytest
 from _pytest.fixtures import SubRequest
-from aequilibrae import Graph
+from aequilibrae import Graph, Project
 
 from movici_simulation_core.ae_wrapper.collections import (
     AssignmentResultCollection,
@@ -13,6 +15,8 @@ from movici_simulation_core.ae_wrapper.collections import (
     NodeCollection,
 )
 from movici_simulation_core.ae_wrapper.project import AssignmentParameters, ProjectWrapper
+
+
 
 
 @pytest.fixture
@@ -40,6 +44,9 @@ def test_can_create_empty_project(project_dir):
         assert len(project.get_links().ids) == 0
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win32"), reason="Aequilbrae cleanup fails under windows"
+)
 def test_can_create_project_after_deletion(project_dir):
     delete_project_if_exists(project_dir)
     with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
