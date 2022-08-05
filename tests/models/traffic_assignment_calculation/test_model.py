@@ -388,7 +388,6 @@ class TestRoadLinksChanges:
         )
 
     def test_roads_capacity_changes(self, road_segment_data, tester: ModelTester):
-
         result, _ = tester.update(
             0,
             road_segment_data(
