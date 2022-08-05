@@ -150,8 +150,8 @@ class Simulation(Extensible):
         return [mod for mod in self.active_modules.values() if isinstance(mod, ServiceInfo)]
 
     def set_default_strategies(self):
-        strategies.set(UpdateDataFormat)
-        strategies.set(EntityInitDataFormat)
+        self.set_strategy(UpdateDataFormat)
+        self.set_strategy(EntityInitDataFormat)
 
     def configure(self, config: dict):
         """Configure a simulation by scenario config. All model types and additional services that
@@ -318,6 +318,8 @@ class Simulation(Extensible):
 
 
 class Runner:
+    ctx = multiprocessing.get_context()
+
     def __init__(
         self, strategies: t.List[type], schema: t.Optional[AttributeSchema] = None
     ) -> None:
@@ -370,8 +372,8 @@ class ServiceRunner(Runner):
         self.settings = settings
 
     def start(self):
-        recv, send = multiprocessing.Pipe(duplex=False)
-        proc = Process(
+        recv, send = self.ctx.Pipe(duplex=False)
+        proc = self.ctx.Process(
             target=self.entry_point,
             args=(send,),
             daemon=self.service.daemon,
@@ -442,7 +444,7 @@ class ModelRunner(Runner):
         self.model_info = model_info
 
     def start(self):
-        proc = Process(
+        proc = self.ctx.Process(
             target=self.entry_point, daemon=False, name="Process-" + self.model_info.name
         )
         proc.start()

@@ -3,7 +3,7 @@ import logging
 import re
 import sys
 import typing as t
-from multiprocessing import Process
+from multiprocessing import process
 from pathlib import Path
 from unittest.mock import Mock, call, patch
 
@@ -11,9 +11,8 @@ import numpy as np
 import pytest
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core import Service
+from movici_simulation_core.core import EntityInitDataFormat, Service, UpdateDataFormat
 from movici_simulation_core.core.attribute import PUB, SUB
-from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.moment import Moment, TimelineInfo, get_timeline_info
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.core.state import TrackedState
@@ -132,11 +131,13 @@ def settings():
 class TestServiceRunner:
     @pytest.fixture
     def runner(self, settings, service_info):
-        return ServiceRunner(service_info, settings)
+        return ServiceRunner(
+            service_info, settings, strategies=[UpdateDataFormat, EntityInitDataFormat]
+        )
 
     def test_run_service_sets_process(self, runner, service_info):
         runner.start()
-        assert isinstance(service_info.process, Process)
+        assert isinstance(service_info.process, process.BaseProcess)
 
     def test_run_service_sets_address(self, runner, service_info):
         runner.start()
@@ -192,9 +193,8 @@ class TestModelRunner:
                 "update_data": "tcp://127.0.0.1:8002",
                 "init_data": "tcp://127.0.0.1:8003",
             },
-            
         )
-        settings.timeline_info =TimelineInfo(0, 1, 0)
+        settings.timeline_info = TimelineInfo(0, 1, 0)
         return settings
 
     @pytest.fixture
@@ -217,7 +217,7 @@ class TestModelRunner:
     def test_run_model_sets_process(self, settings, runner, model_info):
         runner = ModelRunner(model_info, settings, None)
         runner.start()
-        assert isinstance(model_info.process, Process)
+        assert isinstance(model_info.process, process.BaseProcess)
 
     def test_entry_point_sets_timeline_info(self, runner):
         assert get_timeline_info() is None
