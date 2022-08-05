@@ -13,18 +13,18 @@ jobs:
     strategy:
       matrix:
         include:
-          # - os: ubuntu-latest
-          #   python-version: "cp38-manylinux_x86_64"
-          # - os: ubuntu-latest
-          #   python-version: "cp39-manylinux_x86_64"
+          - os: ubuntu-latest
+            python-version: "cp38-manylinux_x86_64"
+          - os: ubuntu-latest
+            python-version: "cp39-manylinux_x86_64"
           - os: ubuntu-latest
             python-version: "cp310-manylinux_x86_64"
-          # - os: windows-latest
-          #   python-version: "cp38-win_amd64"
-          # - os: windows-latest
-          #   python-version: "cp39-win_amd64"
-          # - os: windows-latest
-          #   python-version: "cp310-win_amd64"
+          - os: windows-latest
+            python-version: "cp38-win_amd64"
+          - os: windows-latest
+            python-version: "cp39-win_amd64"
+          - os: windows-latest
+            python-version: "cp310-win_amd64"
 
     runs-on: ${{ matrix.os }}
 
