@@ -8,21 +8,15 @@ from pathlib import Path
 from types import TracebackType
 
 import numpy as np
-from aequilibrae import (
-    Graph,
-    PathResults,
-    Project,
-    TrafficAssignment,
-    TrafficClass,
-)
+from aequilibrae import Graph, PathResults, Project, TrafficAssignment, TrafficClass
 from pyproj import Transformer
 
 from movici_simulation_core.csr import get_row
 
 from .collections import AssignmentResultCollection, GraphPath, LinkCollection, NodeCollection
 from .id_generator import IdGenerator
-from .point_generator import PointGenerator
 from .patches import AequilibraeMatrix
+from .point_generator import PointGenerator
 
 EPSILON = 1e-12
 
