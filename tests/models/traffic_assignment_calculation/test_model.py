@@ -6,11 +6,6 @@ from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.testing.model_tester import ModelTester
 
 
-def open_hook(evt, args):
-    if evt == "open":
-        print(evt, args)
-
-
 @pytest.fixture
 def model_name():
     return "test_traffic_assignment_calculation"
