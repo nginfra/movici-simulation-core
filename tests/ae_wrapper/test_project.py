@@ -1,13 +1,12 @@
 import shutil
 import sqlite3
-from pathlib import Path
 import sys
-import uuid
+from pathlib import Path
 
 import numpy as np
 import pytest
 from _pytest.fixtures import SubRequest
-from aequilibrae import Graph, Project
+from aequilibrae import Graph
 
 from movici_simulation_core.ae_wrapper.collections import (
     AssignmentResultCollection,
@@ -15,8 +14,6 @@ from movici_simulation_core.ae_wrapper.collections import (
     NodeCollection,
 )
 from movici_simulation_core.ae_wrapper.project import AssignmentParameters, ProjectWrapper
-
-
 
 
 @pytest.fixture

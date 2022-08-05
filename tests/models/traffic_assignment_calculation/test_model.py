@@ -1,4 +1,3 @@
-import sys
 import pytest
 
 from movici_simulation_core.core.schema import AttributeSchema
@@ -10,9 +9,6 @@ from movici_simulation_core.testing.model_tester import ModelTester
 def open_hook(evt, args):
     if evt == "open":
         print(evt, args)
-
-
-# sys.addaudithook(open_hook)
 
 
 @pytest.fixture

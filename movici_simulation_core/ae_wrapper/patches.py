@@ -9,10 +9,6 @@ class AequilibraeMatrix(AequilibraeMatrix_):
         return super().get_matrix(core, copy=copy)
 
     def close(self):
-        """
-        Removes matrix from memory and flushes all data to disk, or closes the OMX file if that is the case
-        """
-
         if self.__omx:
             self.omx_file.close()
         else:
@@ -21,4 +17,3 @@ class AequilibraeMatrix(AequilibraeMatrix_):
 
         for attr in ("index", "indices", "matrix", "matrices", "matrix_view"):
             delattr(self, attr)
-

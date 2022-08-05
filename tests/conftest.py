@@ -1,6 +1,8 @@
 import shutil
 import uuid
+
 import pytest
+from aequilibrae import Project
 
 from movici_simulation_core.attributes import GlobalAttributes
 from movici_simulation_core.core.data_format import EntityInitDataFormat
@@ -8,7 +10,6 @@ from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.serialization import UpdateDataFormat
 from movici_simulation_core.utils import strategies
-from aequilibrae import Project
 
 
 def pytest_configure(config):
