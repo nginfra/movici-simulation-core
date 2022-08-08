@@ -1,5 +1,6 @@
 import shutil
 import sqlite3
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +41,9 @@ def test_can_create_empty_project(project_dir):
         assert len(project.get_links().ids) == 0
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win32"), reason="Aequilbrae cleanup fails under windows"
+)
 def test_can_create_project_after_deletion(project_dir):
     delete_project_if_exists(project_dir)
     with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:

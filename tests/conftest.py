@@ -1,4 +1,8 @@
+import shutil
+import uuid
+
 import pytest
+from aequilibrae import Project
 
 from movici_simulation_core.attributes import GlobalAttributes
 from movici_simulation_core.core.data_format import EntityInitDataFormat
@@ -44,3 +48,21 @@ def clean_strategies(global_schema):
     strategies.set(UpdateDataFormat)
     yield
     strategies.reset()
+
+
+@pytest.fixture(scope="session")
+def clean_project(tmp_path_factory):
+    path = str(tmp_path_factory.mktemp("clean_project") / uuid.uuid4().hex)
+    project = Project()
+    project.new(path)
+    project.close()
+    return path
+
+
+@pytest.fixture(autouse=True)
+def patch_aequilibrae(monkeypatch, clean_project):
+    def new(self, project_dir):
+        shutil.copytree(clean_project, project_dir)
+        self.open(project_dir)
+
+    monkeypatch.setattr(Project, "new", new)

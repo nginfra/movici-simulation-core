@@ -135,6 +135,7 @@ class Simulation(Extensible):
         if debug:
             self.settings.log_level = "DEBUG"
 
+        self.strategies: t.List[type] = []
         self.set_default_strategies()
 
         if use_global_plugins:
@@ -149,8 +150,8 @@ class Simulation(Extensible):
         return [mod for mod in self.active_modules.values() if isinstance(mod, ServiceInfo)]
 
     def set_default_strategies(self):
-        strategies.set(UpdateDataFormat)
-        strategies.set(EntityInitDataFormat)
+        self.set_strategy(UpdateDataFormat)
+        self.set_strategy(EntityInitDataFormat)
 
     def configure(self, config: dict):
         """Configure a simulation by scenario config. All model types and additional services that
@@ -216,11 +217,6 @@ class Simulation(Extensible):
     def _prepare(self):
         self._activate_services()
         self._activate_models()
-        self._configure_strategies()
-
-    def _configure_strategies(self):
-        strategies.get_instance(ExternalSerializationStrategy, schema=self.schema)
-        strategies.get_instance(InternalSerializationStrategy)
 
     def _activate_services(self):
         active_svc_names = set(name for name, svc in self.service_types.items() if svc.auto_use)
@@ -255,10 +251,14 @@ class Simulation(Extensible):
             self._start_model(module)
 
     def _start_service(self, service: ServiceInfo):
-        return ServiceRunner(service, self.settings).start()
+        return ServiceRunner(
+            service, self.settings, strategies=self.strategies, schema=self.schema
+        ).start()
 
     def _start_model(self, model: ModelInfo):
-        return ModelRunner(model, self.settings, schema=self.schema).start()
+        return ModelRunner(
+            model, self.settings, strategies=self.strategies, schema=self.schema
+        ).start()
 
     def use(self, plugin: t.Type[Plugin]):
         """Using a plugin allows a model_type or service to register itself for availability. This
@@ -313,10 +313,31 @@ class Simulation(Extensible):
         self.schema.add_attributes(attributes)
 
     def set_strategy(self, strat):
+        self.strategies.append(strat)
         strategies.set(strat)
 
 
-class ServiceRunner:
+class Runner:
+    ctx = multiprocessing.get_context()
+
+    def __init__(
+        self, strategies: t.List[type], schema: t.Optional[AttributeSchema] = None
+    ) -> None:
+        self.strategies = strategies
+        self.schema = schema
+
+    def prepare_subprocess(self):
+        self._configure_strategies()
+
+    def _configure_strategies(self):
+        if self.strategies is not None:
+            for strat in self.strategies:
+                strategies.set(strat)
+        strategies.get_instance(ExternalSerializationStrategy, schema=self.schema)
+        strategies.get_instance(InternalSerializationStrategy)
+
+
+class ServiceRunner(Runner):
     """
     Provides logic for:
 
@@ -339,13 +360,20 @@ class ServiceRunner:
 
     TIMEOUT = 5
 
-    def __init__(self, service: ServiceInfo, settings: Settings):
+    def __init__(
+        self,
+        service: ServiceInfo,
+        settings: Settings,
+        strategies: t.List[type] = None,
+        schema: t.Optional[AttributeSchema] = None,
+    ):
+        super().__init__(strategies=strategies, schema=schema)
         self.service = service
         self.settings = settings
 
     def start(self):
-        recv, send = multiprocessing.Pipe(duplex=False)
-        proc = Process(
+        recv, send = self.ctx.Pipe(duplex=False)
+        proc = self.ctx.Process(
             target=self.entry_point,
             args=(send,),
             daemon=self.service.daemon,
@@ -360,6 +388,7 @@ class ServiceRunner:
         self.service.set_port(recv.recv())
 
     def entry_point(self, conn: multiprocessing.connection.Connection):
+        self.prepare_subprocess()
         self.settings.name = self.service.name
         zmq_socket, port = self._get_bound_socket(self.service.name)
         socket = MessageRouterSocket(zmq_socket)
@@ -381,7 +410,7 @@ class ServiceRunner:
         return socket, port
 
 
-class ModelRunner:
+class ModelRunner(Runner):
     """
     Provides logic for:
 
@@ -404,20 +433,25 @@ class ModelRunner:
     socket: t.Optional[MessageDealerSocket] = None
 
     def __init__(
-        self, model_info: ModelInfo, settings: Settings, schema: t.Optional[AttributeSchema]
+        self,
+        model_info: ModelInfo,
+        settings: Settings,
+        strategies: t.Optional[t.List[type]] = None,
+        schema: t.Optional[AttributeSchema] = None,
     ):
-        self.model_info = model_info
+        super().__init__(strategies=strategies, schema=schema)
         self.settings = settings
-        self.schema = schema
+        self.model_info = model_info
 
     def start(self):
-        proc = Process(
+        proc = self.ctx.Process(
             target=self.entry_point, daemon=False, name="Process-" + self.model_info.name
         )
         proc.start()
         self.model_info.process = proc
 
     def entry_point(self):
+        self.prepare_subprocess()
         self.settings.name = self.model_info.name
         logger = get_logger(self.settings)
         self.socket = self._get_orchestrator_socket()

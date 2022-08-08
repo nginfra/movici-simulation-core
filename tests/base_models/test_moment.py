@@ -65,7 +65,7 @@ def test_from_seconds(seconds, expected, timeline_info):
     "datetimestring, expected",
     [
         ("2020", 0),
-        ("1577833200", 0),
+        (str(int(datetime(2020, 1, 1).timestamp())), 0),
         ("01-01-2020", 0),
         ("02-01-2020", 86400),
     ],

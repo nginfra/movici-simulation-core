@@ -1269,10 +1269,10 @@ class TestSchemaValidation:
 
 
 def test_create_dataset(create_geojson):
-    x1, exp_x1 = 5, 128410.08537081013
-    y1, exp_y1 = 52, 445806.50883315015
-    x2, exp_x2 = 5.1, 135321.21812639205
-    y2, exp_y2 = 52.1, 456900.4281491477
+    x1, exp_x1 = 5, 128410.085
+    y1, exp_y1 = 52, 445806.509
+    x2, exp_x2 = 5.1, 135321.218
+    y2, exp_y2 = 52.1, 456900.428
     geojson = create_geojson(
         [
             Point(x1, y1, attributes={"attr": 1}),
@@ -1295,7 +1295,16 @@ def test_create_dataset(create_geojson):
             }
         },
     }
-    assert create_dataset(dc) == {
+    result = create_dataset(dc)
+
+    def round_inplace(items: list, precision: int):
+        items[:] = [round(pos, precision) for pos in items]
+
+    round_inplace(result["bounding_box"], 3)
+    round_inplace(result["data"]["test_entities"]["geometry.x"], 3)
+    round_inplace(result["data"]["test_entities"]["geometry.y"], 3)
+
+    assert result == {
         "name": "test_dataset",
         "display_name": "Test Dataset",
         "version": 4,
