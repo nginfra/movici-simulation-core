@@ -9,66 +9,36 @@ on:
       - v[0-9]+.[0-9]+.[0-9]+
 
 jobs:
-  build-wheels-and-test:
+  test-all-platforms:
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            python-version: "cp38-manylinux_x86_64"
-          - os: ubuntu-latest
-            python-version: "cp39-manylinux_x86_64"
-          - os: ubuntu-latest
-            python-version: "cp310-manylinux_x86_64"
-          - os: windows-latest
-            python-version: "cp38-win_amd64"
-          - os: windows-latest
-            python-version: "cp39-win_amd64"
-          - os: windows-latest
-            python-version: "cp310-win_amd64"
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.8", "3.9", "3.10"]
 
     runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v2.8.0
-        env:
-          CIBW_BUILD: ${{ matrix.python-version }}
-          CIBW_ENVIRONMENT: BOOST_DIR=${{ env.BOOST_DIR }}
-          CIBW_BEFORE_TEST: pip install pytest
-          CIBW_TEST_EXTRAS: models
-          CIBW_TEST_COMMAND: pytest {project}/tests/
-        with:
-          output-dir: dist/
-
-      - uses: actions/upload-artifact@v3
-        with:
-          path: ./dist/*
-          name: 'distributions'
-  
-  build-sdist:
-    # if: startsWith(github.ref, 'refs/tags')
-    runs-on: ubuntu-latest
-    env:
-      SDIST_FORMATS: gztar
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python 3.10
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
         with:
-          python-version: "3.10"
-
-      - name: Build source distribution
-        run: |
-          python setup.py sdist --formats ${SDIST_FORMATS} --dist-dir dist/
-
-      - uses: actions/upload-artifact@v3
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install Spatialite
+        uses: ./.github/actions/install-spatialite
         with:
-          path: ./dist/*
-          name: distributions
-  
+          os: ${{ matrix.os }}
+        
+      - name: Install
+        run: |
+          pip install .[models,dev]
+
+      - name: Run tests
+        run: |
+          cd tests
+          pytest .
+
   deploy:
     # We only want to run the deploy job if we've just created a version tag. in `on.push.tags`
     # we've specified to only this workflow on specific tags (and the main branch and pull
@@ -77,12 +47,11 @@ jobs:
     environment: PyPI Test
     runs-on: ubuntu-latest
     needs: [build-wheels-and-test, build-sdist]
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: distributions
-          path: dist/
-      
+    steps:    
+      - name: Build wheel
+        run: |
+          pip wheel --no-deps --wheel-dir dist/ .
+
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
