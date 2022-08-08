@@ -6,6 +6,11 @@ from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.testing.model_tester import ModelTester
 
 
+@pytest.fixture(autouse=True)
+def patch_aquilibrae(patch_aequilibrae):
+    return patch_aequilibrae
+
+
 @pytest.fixture
 def model_name():
     return "test_traffic_assignment_calculation"

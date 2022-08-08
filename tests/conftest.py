@@ -59,7 +59,7 @@ def clean_project(tmp_path_factory):
     return path
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture()
 def patch_aequilibrae(monkeypatch, clean_project):
     def new(self, project_dir):
         shutil.copytree(clean_project, project_dir)
