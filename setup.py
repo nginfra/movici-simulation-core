@@ -40,10 +40,16 @@ SVC_PATH = "movici_simulation_core.services"
 setup(
     name="movici-simulation-core",
     version=VERSION,
-    description="Movici Simulation Core",
+    description="Core package for running Movici geospatial temporal simulations",
     long_description=README,
-    author="Pelle Koster",
-    author_email="pelle.koster@nginfra.nl",
+    long_description_content_type="text/x-rst",
+    author="NGinfra Movici",
+    author_email="movici@nginfra.nl",
+    project_urls={
+        "Homepage": "https://www.movici.nl/",
+        "Documentation": "https://docs.movici.nl/",
+        "Source": "https://github.com/nginfra/movici-simulation-core/",
+    },
     url="http://www.movici.nl",
     license=LICENSE,
     scripts=[

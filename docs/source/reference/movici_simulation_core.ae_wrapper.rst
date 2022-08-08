@@ -26,6 +26,16 @@ id\_generator
 
 
 
+patches 
+--------
+
+.. automodule:: movici_simulation_core.ae_wrapper.patches
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+
 point\_generator 
 -----------------
 
