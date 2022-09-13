@@ -16,6 +16,11 @@ from movici_simulation_core.ae_wrapper.collections import (
 from movici_simulation_core.ae_wrapper.project import AssignmentParameters, ProjectWrapper
 
 
+@pytest.fixture(autouse=True)
+def patch_aquilibrae(patch_aequilibrae):
+    return patch_aequilibrae
+
+
 @pytest.fixture
 def project_dir(tmp_path):
     return tmp_path

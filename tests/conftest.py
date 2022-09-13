@@ -51,18 +51,23 @@ def clean_strategies(global_schema):
 
 
 @pytest.fixture(scope="session")
-def clean_project(tmp_path_factory):
-    path = str(tmp_path_factory.mktemp("clean_project") / uuid.uuid4().hex)
+def clean_aequilibrae_project(tmp_path_factory):
+    path = str(tmp_path_factory.mktemp("clean_aequilibrae_project") / uuid.uuid4().hex)
     project = Project()
-    project.new(path)
+    if hasattr(project, "_new_original"):
+        project._new_original(path)
+    else:
+        project.new(path)
     project.close()
     return path
 
 
-@pytest.fixture(autouse=True)
-def patch_aequilibrae(monkeypatch, clean_project):
+@pytest.fixture
+def patch_aequilibrae(monkeypatch, clean_aequilibrae_project):
     def new(self, project_dir):
-        shutil.copytree(clean_project, project_dir)
+        shutil.copytree(clean_aequilibrae_project, project_dir)
         self.open(project_dir)
 
+    if not hasattr(Project, "_new_original"):
+        Project._new_original = Project.new
     monkeypatch.setattr(Project, "new", new)

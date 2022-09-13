@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  python-version: "3.10"
+  python-version: "3.9"
 
 jobs:
   linting:
@@ -24,7 +24,7 @@ jobs:
       - name: Run linters
         run: |
           make lint
-  
+
   coverage:
     strategy:
       fail-fast: false
@@ -47,7 +47,7 @@ jobs:
       - name: Install Fiona
         if: startsWith(matrix.os, 'windows')
         run: pip install fiona==1.9a2
-        
+
       - name: Install dependencies
         run: |
           pip install -e .[models,dev]
@@ -55,7 +55,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           make coverage
-  
+
   test-docs:
     runs-on: ubuntu-latest
     steps:
