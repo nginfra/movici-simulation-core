@@ -36,6 +36,7 @@ EXTRA_REQUIREMENTS["all"] = (
 
 MODEL_PATH = "movici_simulation_core.models"
 SVC_PATH = "movici_simulation_core.services"
+
 setup(
     name="movici-simulation-core",
     version=VERSION,
@@ -98,10 +99,9 @@ setup(
             # fmt: on
         ],
     },
-    packages=find_packages(),
+    packages=find_packages(exclude=["tests*"]),
     install_requires=REQUIREMENTS,
     extras_require=EXTRA_REQUIREMENTS,
-    include_package_data=True,
     package_data={
         "": ["*.json"],
     },
