@@ -22,7 +22,6 @@ def read_file_or_empty_str(file, comment_tag=None):
 
 
 README = read_file_or_empty_str("README.rst")
-LICENSE = read_file_or_empty_str("LICENSE")
 VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
 REQUIREMENTS = parse_requirements("requirements.txt")
@@ -45,13 +44,29 @@ setup(
     long_description_content_type="text/x-rst",
     author="NGinfra Movici",
     author_email="movici@nginfra.nl",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Developers",
+        "License :: Free for non-commercial use",
+        "License :: Other/Proprietary License",
+        "Operating System :: Microsoft :: Windows",
+        "Operating System :: POSIX :: Linux",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3 :: Only",
+        "Topic :: Software Development :: Libraries",
+        "Topic :: Scientific/Engineering :: GIS",
+    ],
     project_urls={
         "Homepage": "https://www.movici.nl/",
         "Documentation": "https://docs.movici.nl/",
         "Source": "https://github.com/nginfra/movici-simulation-core/",
     },
     url="http://www.movici.nl",
-    license=LICENSE,
+    license="Movici Public License",
     scripts=[
         "bin/rename_attributes.py",
     ],
