@@ -15,9 +15,10 @@ Movici Simulation Core is the main package needed to run Movici simulations. It 
 Installation
 ------------
 
-```
-pip install movici-simulation-core
-```
+.. code-block::
+
+  pip install movici-simulation-core
+
 
 Installing Models
 -----------------
