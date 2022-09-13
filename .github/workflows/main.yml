@@ -58,9 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     # needs: [test-all-platforms]
     steps:
-      - name: inspect
-        run: |
-          ls -la .
+      - uses: actions/checkout@v3
 
       - name: Build wheel
         run: |
