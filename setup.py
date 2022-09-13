@@ -21,7 +21,7 @@ def read_file_or_empty_str(file, comment_tag=None):
         return ""
 
 
-README = read_file_or_empty_str("README.md")
+README = read_file_or_empty_str("README.rst")
 LICENSE = read_file_or_empty_str("LICENSE")
 VERSION = read_file_or_empty_str("VERSION", comment_tag="#")
 
