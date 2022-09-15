@@ -5,7 +5,8 @@
   "description": "schema that defines config files to instantiate dataset creators",
   "type": "object",
   "required": [
-    "data", "name"
+    "data",
+    "name"
   ],
   "additionalProperties": false,
   "properties": {
@@ -59,14 +60,14 @@
               "source_type": {
                 "type": "string",
                 "enum": [
-                  "file"
+                  "file",
+                  "netcdf"
                 ]
               },
               "path": {
                 "type": "string"
               }
-            },
-            "additionalProperties": false
+            }
           }
         ]
       }
@@ -136,8 +137,12 @@
               "enum": [
                 "points",
                 "lines",
-                "polygons"
+                "polygons",
+                "cells"
               ]
+            },
+            "id_link": {
+              "$ref": "#/$defs/geometry_id_link_item"
             }
           },
           "additionalProperties": false
@@ -158,8 +163,17 @@
     },
     "attribute": {
       "type": "object",
-      "required": [
-        "property"
+      "oneOf": [
+        {
+          "required": [
+            "property"
+          ]
+        },
+        {
+          "required": [
+            "value"
+          ]
+        }
       ],
       "additionalProperties": false,
       "properties": {
@@ -169,11 +183,25 @@
         "property": {
           "type": "string"
         },
-        "const": {
-          "type": [
-            "boolean",
-            "number",
-            "string"
+        "value": {
+          "oneOf": [
+            {
+              "type": [
+                "boolean",
+                "number",
+                "string"
+              ]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": [
+                  "boolean",
+                  "number",
+                  "string"
+                ]
+              }
+            }
           ]
         },
         "id_link": {
@@ -226,6 +254,18 @@
           "type": "string"
         },
         "property": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "geometry_id_link_item": {
+      "type": "object",
+      "required": [
+        "entity_group"
+      ],
+      "properties": {
+        "entity_group": {
           "type": "string"
         }
       },

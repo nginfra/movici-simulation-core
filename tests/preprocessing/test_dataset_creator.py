@@ -6,18 +6,24 @@ from pathlib import Path
 
 import geopandas
 import jsonschema
+import netCDF4
 import numpy as np
 import pytest
 from jsonschema.validators import validator_for
 
+from movici_simulation_core.preprocessing.data_sources import (
+    DataSource,
+    GeopandasSource,
+    NetCDFGridSource,
+    NumpyDataSource,
+)
 from movici_simulation_core.preprocessing.dataset_creator import (
     AttributeDataLoading,
     BoundingBoxCalculation,
+    ConstantValueAssigning,
     CRSTransformation,
     DatasetCreator,
-    DataSource,
     EnumConversion,
-    GeopandasSource,
     IDGeneration,
     IDLinking,
     MetadataSetup,
@@ -438,20 +444,15 @@ class TestAttributeDataExtraction:
             }
         }
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "some_entities": {
-                        "__meta__": {"source": "some_points"},
-                        "multidim": {"property": "json_list", "loaders": ["json"]},
-                    }
+    def test_data_loading_with_json_data(self, sources):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"source": "some_points"},
+                    "multidim": {"property": "json_list", "loaders": ["json"]},
                 }
             }
-        ],
-    )
-    def test_data_loading_with_json_data(self, config, sources):
+        }
         op = AttributeDataLoading(config)
         result = op({}, sources=sources)
         assert result["data"]["some_entities"]["multidim"] == [[1, 2], [3, 4]]
@@ -490,37 +491,27 @@ class TestAttributeDataExtraction:
         result = op({}, sources=sources)
         assert result["data"]["some_entities"]["attribute"] == [expected]
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "some_entities": {
-                        "__meta__": {"source": "some_points"},
-                        "non-existing": {"property": "invalid"},
-                    }
+    def test_raises_when_property_does_not_exists(self, sources):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"source": "some_points"},
+                    "non-existing": {"property": "invalid"},
                 }
             }
-        ],
-    )
-    def test_raises_when_property_does_not_exists(self, config, sources):
+        }
         with pytest.raises(ValueError):
             AttributeDataLoading(config)({}, sources=sources)
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "some_entities": {
-                        "__meta__": {"source": "primary"},
-                        "foo": {"property": "foo", "source": "secondary"},
-                    }
+    def test_read_attribute_from_secondary_source(self, create_data_sources):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"source": "primary"},
+                    "foo": {"property": "foo", "source": "secondary"},
                 }
             }
-        ],
-    )
-    def test_read_attribute_from_secondary_source(self, config, create_data_sources):
+        }
         sources = create_data_sources(
             {
                 "primary": [Point(0, 0), Point(0, 0)],
@@ -533,20 +524,15 @@ class TestAttributeDataExtraction:
         result = AttributeDataLoading(config)({}, sources=sources)["data"]["some_entities"]
         assert result == {"foo": [10, 11]}
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "some_entities": {
-                        "__meta__": {"source": "primary"},
-                        "foo": {"property": "foo", "source": "secondary"},
-                    }
+    def test_validates_length_of_secondary_source(self, create_data_sources):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"source": "primary"},
+                    "foo": {"property": "foo", "source": "secondary"},
                 }
             }
-        ],
-    )
-    def test_validates_length_of_secondary_source(self, config, create_data_sources):
+        }
         sources = create_data_sources(
             {
                 "primary": [Point(0, 0), Point(0, 0)],
@@ -568,20 +554,15 @@ class TestAttributeDataExtraction:
         result = result["data"]["some_entities"]["some.attr"]
         assert result == [None]
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "some_entities": {
-                        "__meta__": {"source": "source"},
-                        "some.attr": {"property": "foo", "loaders": ["csv", "int"]},
-                    }
+    def test_skips_None_in_loaders(self, create_data_sources):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"source": "source"},
+                    "some.attr": {"property": "foo", "loaders": ["csv", "int"]},
                 }
             }
-        ],
-    )
-    def test_skips_None_in_loaders(self, config, create_data_sources):
+        }
         sources = create_data_sources(
             {
                 "source": [Point(0, 0, attributes={"foo": None})],
@@ -590,6 +571,30 @@ class TestAttributeDataExtraction:
         result = AttributeDataLoading(config)({}, sources=sources)
         result = result["data"]["some_entities"]["some.attr"]
         assert result == [None]
+
+
+class TestConstantValueAssigning:
+    def test_reads_constant_value(self):
+        config = {
+            "data": {
+                "some_entities": {
+                    "__meta__": {"count": 3},
+                    "some.attr": {"value": 12},
+                }
+            }
+        }
+        dataset = DatasetCreator(
+            [
+                AttributeDataLoading,
+                IDGeneration,
+            ],
+            sources={},
+            validate_config=False,
+        ).create(config)
+
+        result = ConstantValueAssigning(config)(dataset, sources=sources)
+        result = result["data"]["some_entities"]["some.attr"]
+        assert result == [12, 12, 12]
 
 
 class TestEnumConversion:
@@ -993,6 +998,10 @@ class TestIDLinking:
                     Point(0, 0, attributes={"ref": "point_0"}),
                     Point(1, 1, attributes={"ref": "point_1"}),
                 ],
+                "other_points": [
+                    Point(2, 2, attributes={"also_ref": "point_2"}),
+                    Point(3, 3, attributes={"also_ref": "point_3"}),
+                ],
                 "some_lines": [
                     LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": "point_0"}),
                     LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": "point_1"}),
@@ -1002,6 +1011,10 @@ class TestIDLinking:
                     Point(0, 0, attributes={"node_ref": "[]"}),
                     Point(1, 1, attributes={"node_ref": '["point_1"]'}),
                     Point(1, 1, attributes={"node_ref": '["point_0", "point_1"]'}),
+                ],
+                "multi_target_points": [
+                    Point(0, 0, attributes={"node_ref": "point_0"}),
+                    Point(1, 1, attributes={"node_ref": "point_2"}),
                 ],
             }
         )
@@ -1026,69 +1039,154 @@ class TestIDLinking:
                         "property": "node_ref",
                         "id_link": {"entity_group": "points", "property": "ref"},
                     },
+                    "node_ref": {"property": "node_ref"},
                 },
             }
         }
 
     @pytest.fixture
-    def dataset(self, sources, config):
-        return DatasetCreator(
-            [
-                AttributeDataLoading,
-                IDGeneration,
-            ],
-            sources=sources,
-            validate_config=False,
-        ).create(config)
+    def prepare_dataset(self, sources):
+        def _prepare_dataset(config):
+
+            return DatasetCreator(
+                [
+                    AttributeDataLoading,
+                    IDGeneration,
+                ],
+                sources=sources,
+                validate_config=False,
+            ).create(config)
+
+        return _prepare_dataset
 
     @staticmethod
     def get_val_for_id(entity_group, key, id):
         idx = entity_group["id"].index(id)
         return entity_group[key][idx]
 
-    def test_links_ids_to_other_entity_group(self, config, dataset, sources):
+    def test_links_ids_to_other_entity_group(self, config, prepare_dataset, sources):
+        dataset = prepare_dataset(config)
         op = IDLinking(config)
         result = op(dataset, sources=sources)
-
-        for node_id in result["data"]["lines"]["node_id"]:
+        node_refs = result["data"]["lines"]["node_ref"]
+        for idx, node_id in enumerate(result["data"]["lines"]["node_id"]):
             assert isinstance(node_id, int)
-            assert self.get_val_for_id(result["data"]["points"], "reference", node_id), node_id
+            assert (
+                self.get_val_for_id(result["data"]["points"], "reference", node_id)
+                == node_refs[idx]
+            )
 
-    @pytest.mark.parametrize(
-        "config",
-        [
-            {
-                "data": {
-                    "points": {
-                        "__meta__": {
-                            "source": "some_points",
-                            "geometry": "points",
-                        },
-                        "reference": {"property": "ref"},
+    def test_link_ids_from_list_of_entries(self, prepare_dataset, sources):
+        config = {
+            "data": {
+                "points": {
+                    "__meta__": {
+                        "source": "some_points",
+                        "geometry": "points",
                     },
-                    "multi_ref": {
-                        "__meta__": {
-                            "source": "multi_ref_points",
-                            "geometry": "points",
-                        },
-                        "node_ids": {
-                            "property": "node_ref",
-                            "id_link": {"entity_group": "points", "property": "ref"},
-                            "loaders": ["json"],
-                        },
+                    "reference": {"property": "ref"},
+                },
+                "multi_ref": {
+                    "__meta__": {
+                        "source": "multi_ref_points",
+                        "geometry": "points",
                     },
-                }
+                    "node_ids": {
+                        "property": "node_ref",
+                        "id_link": {"entity_group": "points", "property": "ref"},
+                        "loaders": ["json"],
+                    },
+                    "node_refs": {"property": "node_ref", "loaders": ["json"]},
+                },
             }
-        ],
-    )
-    def test_link_ids_from_list_of_entries(self, config, dataset, sources):
+        }
+        dataset = prepare_dataset(config)
         op = IDLinking(config)
         result = op(dataset, sources=sources)
-
-        for items, exp_len in zip(result["data"]["multi_ref"]["node_ids"], [0, 1, 2]):
+        node_refs = result["data"]["multi_ref"]["node_refs"]
+        for i, (items, exp_len) in enumerate(
+            zip(result["data"]["multi_ref"]["node_ids"], [0, 1, 2])
+        ):
             assert len(items) == exp_len
-            for node_id in items:
-                self.get_val_for_id(result["data"]["points"], "reference", node_id), node_id
+            for j, node_id in enumerate(items):
+                assert (
+                    self.get_val_for_id(result["data"]["points"], "reference", node_id)
+                    == node_refs[i][j]
+                )
+
+    def test_link_ids_to_multiple_entity_groups(self, prepare_dataset, sources):
+        config = {
+            "data": {
+                "points": {
+                    "__meta__": {
+                        "source": "some_points",
+                        "geometry": "points",
+                    },
+                    "reference": {"property": "ref"},
+                },
+                "more_points": {
+                    "__meta__": {
+                        "source": "other_points",
+                        "geometry": "points",
+                    },
+                    "reference": {"property": "also_ref"},
+                },
+                "multi_targets": {
+                    "__meta__": {
+                        "source": "multi_target_points",
+                        "geometry": "points",
+                    },
+                    "node_ids": {
+                        "property": "node_ref",
+                        "id_link": [
+                            {"entity_group": "points", "property": "ref"},
+                            {"entity_group": "more_points", "property": "also_ref"},
+                        ],
+                    },
+                },
+            }
+        }
+        dataset = prepare_dataset(config)
+        op = IDLinking(config)
+        result = op(dataset, sources=sources)
+        node_ids = result["data"]["multi_targets"]["node_ids"]
+        assert self.get_val_for_id(result["data"]["points"], "reference", node_ids[0]) == "point_0"
+        assert (
+            self.get_val_for_id(result["data"]["more_points"], "reference", node_ids[1])
+            == "point_2"
+        )
+
+    def test_link_geometry_attribute(self, prepare_dataset, sources):
+        config = {
+            "data": {
+                "cells": {
+                    "__meta__": {
+                        "source": "some_cells",
+                        "geometry": "cells",
+                        "id_link": {"entity_group": "points"},
+                    },
+                    "grid.grid_points": {"property": "grid_points"},
+                },
+                "points": {
+                    "__meta__": {
+                        "source": "some_points",
+                        "geometry": "points",
+                    }
+                },
+            }
+        }
+
+        class CellSource(NumpyDataSource):
+            def get_geometry(self, geometry_type):
+                return {}
+
+        sources["some_cells"] = CellSource({"grid_points": np.array([[1, 0]])})
+        dataset = prepare_dataset(config)
+        op = IDLinking(config)
+        result = op(dataset, sources=sources)["data"]
+        grid_point_ids = result["points"]["id"]
+        expected = [[grid_point_ids[1], grid_point_ids[0]]]
+        assert result["cells"]["grid.grid_points"] == expected
 
     @pytest.mark.parametrize(
         "config, error_msg",
@@ -1140,8 +1238,9 @@ class TestIDLinking:
         ],
     )
     def test_error_when_other_entity_group_does_not_exists(
-        self, dataset, config, error_msg, sources
+        self, prepare_dataset, config, error_msg, sources
     ):
+        dataset = prepare_dataset(config)
         op = IDLinking(config)
         with pytest.raises(ValueError) as e:
             op(dataset, sources=sources)
@@ -1202,6 +1301,15 @@ class TestSchemaValidation:
                 **min_required,
             },
             {"version": 4, **min_required},
+            {
+                "name": "some_name",
+                "data": {
+                    "some_entities": {
+                        "__meta__": {"source": "foo"},
+                        "attribute": {"value": 12},
+                    }
+                },
+            },
         ],
     )
     @pytest.mark.no_validate_config
@@ -1260,12 +1368,160 @@ class TestSchemaValidation:
                 },
             },
             {"version": 3, **min_required},
+            {
+                "name": "some_name",
+                "data": {
+                    "some_entities": {
+                        "__meta__": {"source": "foo"},
+                        "attribute": {"value": 12, "property": "prop"},
+                    }
+                },
+            },
         ],
     )
     @pytest.mark.no_validate_config
     def test_invalid_dataset_creator(self, validator, config):
         with pytest.raises(jsonschema.ValidationError):
             validator.validate(config)
+
+
+class TestNetCDFConversion:
+    @pytest.fixture
+    def small_grid(self):
+        return np.array(
+            [
+                [(0, 2), (2, 2), (2, 4), (0, 4)],
+                [(2, 2), (4, 2), (4, 4), (2, 4)],
+            ],
+            dtype=float,
+        )
+
+    @pytest.fixture
+    def large_grid(self):
+        return np.array(
+            [
+                [(0, 2), (2, 2), (2, 4), (0, 4)],
+                [(2, 2), (4, 2), (4, 4), (2, 4)],
+                [(0, 0), (2, 0), (2, 2), (0, 2)],
+                [(2, 1), (3, 1), (3, 2), (2, 2)],
+                [(3, 1), (4, 1), (4, 2), (3, 2)],
+                [(2, 0), (3, 0), (3, 1), (2, 1)],
+                [(3, 0), (4, 0), (4, 1), (3, 1)],
+            ],
+            dtype=float,
+        )
+
+    @pytest.fixture
+    def netcdf_file(self, tmp_path, small_grid):
+        file = tmp_path / "grid.nc"
+        self.add_attribute(file, small_grid[:, :, 0], "gridCellX", ("nElem", "nElemPoints"))
+        self.add_attribute(file, small_grid[:, :, 1], "gridCellY", ("nElem", "nElemPoints"))
+        return file
+
+    def add_attribute(self, netcdf_file, data, varname, dimensions):
+        data = np.asarray(data)
+        with netCDF4.Dataset(netcdf_file, mode="r+") as nc:
+            for idx, dim in enumerate(dimensions):
+                if dim not in nc.dimensions:
+                    nc.createDimension(dim, data.shape[idx])
+            try:
+                var = nc.variables[varname]
+            except KeyError:
+                var = nc.createVariable(varname, datatype=data.dtype, dimensions=dimensions)
+            var[...] = data
+
+    @pytest.fixture
+    def source(self, netcdf_file):
+        return NetCDFGridSource(file=netcdf_file)
+
+    def test_create_netcdf_source(self, netcdf_file):
+        op = SourcesSetup(
+            {
+                "__sources__": {"grid": {"source_type": "netcdf", "path": str(netcdf_file)}},
+                "data": {},
+            }
+        )
+        sources = {}
+        op({}, sources=sources)
+        assert isinstance(sources["grid"], NetCDFGridSource)
+
+    def test_get_point_geometry(self, source: NetCDFGridSource):
+        assert source.get_geometry("points") == {
+            "geometry.x": [0, 2, 2, 0, 4, 4],
+            "geometry.y": [2, 2, 4, 4, 2, 4],
+        }
+
+    def test_get_cell_grid_points(self, source: NetCDFGridSource):
+        assert source.get_geometry("cells") == {
+            "grid.grid_points": [
+                [0, 1, 2, 3],
+                [1, 4, 5, 2],
+            ],
+        }
+
+    def test_get_attribute(self, source: NetCDFGridSource):
+        self.add_attribute(source.file, [[0, 1]], "wh", ("time", "nElem"))
+        assert source.get_attribute("wh") == [0, 1]
+
+    def test_get_attribute_at_time_idx(self, source: NetCDFGridSource):
+        self.add_attribute(source.file, [[0, 1], [2, 3], [4, 5]], "wh", ("time", "nElem"))
+        assert source.get_attribute("wh", time_idx=1) == [2, 3]
+
+    def test_get_timestamps(self, source: NetCDFGridSource):
+        self.add_attribute(source.file, [0, 10, 20], "time", ("time",))
+        assert source.get_timestamps() == [0, 10, 20]
+
+    def test_get_bounding_box(self, source: NetCDFGridSource):
+        assert source.get_bounding_box() == [0, 2, 4, 4]
+
+    def test_create_dataset(self, netcdf_file):
+        dc = {
+            "__meta__": {
+                "crs": "EPSG:28992",
+            },
+            "__sources__": {
+                "my_source": {
+                    "source_type": "netcdf",
+                    "path": str(netcdf_file),
+                }
+            },
+            "name": "test_dataset",
+            "display_name": "Test Dataset",
+            "data": {
+                "points": {
+                    "__meta__": {"source": "my_source", "geometry": "points"},
+                },
+                "cells": {
+                    "__meta__": {
+                        "source": "my_source",
+                        "geometry": "cells",
+                        "id_link": {"entity_group": "points"},
+                    },
+                },
+            },
+        }
+        result = create_dataset(dc)
+        assert result == {
+            "name": "test_dataset",
+            "display_name": "Test Dataset",
+            "version": 4,
+            "epsg_code": 28992,
+            "bounding_box": [0.0, 2.0, 4.0, 4.0],
+            "data": {
+                "points": {
+                    "id": [0, 1, 2, 3, 4, 5],
+                    "geometry.x": [0.0, 2.0, 2.0, 0.0, 4.0, 4.0],
+                    "geometry.y": [2.0, 2.0, 4.0, 4.0, 2.0, 4.0],
+                },
+                "cells": {
+                    "id": [6, 7],
+                    "grid.grid_points": [
+                        [0, 1, 2, 3],
+                        [1, 4, 5, 2],
+                    ],
+                },
+            },
+        }
 
 
 def test_create_dataset(create_geojson):

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "/shortest_path/1.0.1",
+  "$id": "/tape_player/1.0.1",
   "type": "object",
   "required": [
     "tabular"
