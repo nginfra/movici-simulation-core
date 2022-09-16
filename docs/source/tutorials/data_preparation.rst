@@ -214,7 +214,6 @@ to use the |create_dataset| function:
 
 .. testsetup:: create-dataset
 
-  import json
   from pathlib import Path
   config = {"name": "foo", "data": {}}
   Path("source_a.csv").write_text("a,b\n0,0")
@@ -226,6 +225,7 @@ to use the |create_dataset| function:
   
 .. testcode:: create-dataset
 
+  import json
   from movici_simulation_core.preprocessing.dataset_creator import create_dataset
 
   dataset = create_dataset(config)
