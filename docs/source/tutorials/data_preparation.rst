@@ -571,6 +571,68 @@ values for an ``int`` property, it is recommended to add the ``int`` loader to y
 config to ensure the correct data type.
 
 
+.. _dataset-creator-recipes-custom-data-source:
+
+Preprocess data and custom data sources
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes, it is necessary to perform additional preprocessing to the geospatial data before 
+converting it to a Movici dataset. The preferred, and most flexible, way to do this is to first
+read the data in a ``geopandas.GeoDataFrame`` and perform any operations you want directly on the
+dataframe. You can then hand over the dataframe to a |code_DatasetCreator| and use it to create the
+Movici dataset. Consider the following example:
+
+.. testcode:: custom-data-source
+
+  import geopandas
+
+  from movici_simulation_core.preprocessing import GeopandasSource, create_dataset
+
+
+  # Here we create a GeoJSON on the fly. Alternatively, you can read an existing GeoJSON or
+  # shapefile by using ``geopandas.read_file(<filename>)``
+  gdf = geopandas.GeoDataFrame.from_features(
+      {
+          "type": "FeatureCollection",
+          "features": [
+              {
+                  "type": "Feature",
+                  "geometry": {"type": "Point", "coordinates": [0, 0]},
+                  "properties": {"a": 1, "b": 2},
+              },
+              {
+                  "type": "Feature",
+                  "geometry": {"type": "Point", "coordinates": [1, 1]},
+                  "properties": {"a": 3, "b": 4},
+              },
+          ],
+      },
+      crs="WGS84",
+  )
+  # We can now do any preprocessing / dataframe operations that we want
+  gdf["c"] = gdf["a"] + gdf["b"]
+
+  # We can now use the source and the new property to create our dataset
+  config = {
+      "__meta__": {"crs": "WGS84"},
+      "name": "customized_data",
+      "data": {
+          "point_entities": {
+              "__meta__": {
+                  "source": "my_custom_source",
+                  "geometry": "points",
+              },
+              "some_attribute": {"property": "c"},
+          }
+      },
+  }
+  dataset = create_dataset(config, sources={"my_custom_source": GeopandasSource(gdf)})
+  print(dataset['data']['point_entities']["some_attribute"]) # [3, 7]
+
+.. testoutput:: custom-data-source
+
+  [3, 7]
+
 
 .. _tutorial-dataset-creator-config-schema:
 
