@@ -571,6 +571,20 @@ values for an ``int`` property, it is recommended to add the ``int`` loader to y
 config to ensure the correct data type.
 
 
+.. _dataset-creator-recipes-custom-data-source:
+
+Preprocess data and custom data sources
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Sometimes, it is necessary to perform additional preprocessing to the geospatial data before 
+converting it to a Movici dataset. The preferred, and most flexible, way to do this is to first
+read the data in a ``geopandas.GeoDataFrame`` and perform any operations you want directly on the
+dataframe. You can then hand over the dataframe to a |code_DatasetCreator| and use it to create the
+Movici dataset. Consider the following example:
+
+.. literalinclude:: ../../../examples/custom_datasource.py
+  :language: python
+
 
 .. _tutorial-dataset-creator-config-schema:
 
