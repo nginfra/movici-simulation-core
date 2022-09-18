@@ -71,7 +71,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libsqlite3-mod-spatialite
           pip install -e .[all]
 
-      - name: Run tests with coverage
+      - name: Test docs
         run: |
           make docs
           make doctest
