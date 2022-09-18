@@ -43,4 +43,3 @@ config = {
     },
 }
 dataset = create_dataset(config, sources={"my_custom_source": GeopandasSource(gdf)})
-print(dataset["data"]["point_entities"]["some_attribute"])  # [3, 7]
