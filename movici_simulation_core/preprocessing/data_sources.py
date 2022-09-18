@@ -73,7 +73,7 @@ class DataSource:
 
 
 class NumpyDataSource(DataSource):
-    """DataSource non geospatial Numpy or pandas data
+    """DataSource for non-geospatial Numpy or pandas data
 
     :param data: Either a dictionary ``typing.Dict[str, np.ndarray]`` with keys being the property
         names and the values being the property data array or a Pandas dataframe
@@ -101,6 +101,11 @@ class GeopandasSource(DataSource):
 
     def __init__(self, geodataframe: geopandas.GeoDataFrame):
         self.gdf = geodataframe
+
+    @classmethod
+    def from_source_info(cls, source_info):
+        gdf = geopandas.read_file(source_info["path"])
+        return cls(gdf)
 
     def to_crs(self, crs: t.Union[str, int]):
         self.gdf = self.gdf.to_crs(crs)
@@ -196,6 +201,14 @@ class NetCDFGridSource(DataSource):
         self.x_var = x_var
         self.y_var = y_var
         self.time_var = time_var
+
+    @classmethod
+    def from_source_info(cls, source_info):
+        args = {"file": source_info["path"]}
+        for param in ("x_var", "y_var", "time_var"):
+            if param in source_info:
+                args[param] = source_info[param]
+        return cls(**args)
 
     def get_attribute(self, name: str, time_idx=0):
         if name in self.data:

@@ -5,7 +5,6 @@ import itertools
 import typing as t
 from pathlib import Path
 
-import geopandas
 import numpy as np
 import orjson as json
 import pyproj
@@ -120,7 +119,10 @@ class SourcesSetup(DatasetOperation):
         read_sources = self.config.get("__sources__", {})
         for (key, source_info) in read_sources.items():
             if key not in sources:
-                source = self.make_source(source_info)
+                try:
+                    source = self.make_source(source_info)
+                except ValueError as e:
+                    raise ValueError(f"Error for source '{key}': {str(e)}")
                 sources[key] = source
         return dataset
 
@@ -128,10 +130,14 @@ class SourcesSetup(DatasetOperation):
         if isinstance(source_info, str):
             source_info = {"source_type": "file", "path": source_info}
 
-        if source_info["source_type"] == "file":
-            return GeopandasSource(geodataframe=geopandas.read_file(source_info["path"]))
-        if source_info["source_type"] == "netcdf":
-            return NetCDFGridSource(file=source_info["path"])
+        source_type = source_info["source_type"]
+        if source_type == "file":
+            cls = GeopandasSource
+        elif source_type == "netcdf":
+            cls = NetCDFGridSource
+        else:
+            raise ValueError(f"Unknown source type '{source_type}'")
+        return cls.from_source_info(source_info)
 
     @staticmethod
     def get_file_path(path_str):
