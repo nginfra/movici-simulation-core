@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/netcdf_player/1.0.0",
+  "required": [
+    "netcdf_tape",
+    "entity_group",
+    "attributes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "netcdf_tape": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "flooding_tape"
+    },
+    "entity_group": {
+      "$ref": "#/$defs/entityGroupDef"
+    },
+    "attributes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string",
+            "movici.type": "attribute"
+          }
+        }
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    }
+  }
+}
