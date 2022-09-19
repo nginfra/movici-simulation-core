@@ -808,6 +808,17 @@ class TestSpecialValueCollection:
             "expected": {},
         },
         {
+            "name": "No additional attributes",
+            "config": {
+                "data": {
+                    "some_entities": {
+                        "__meta__": {"source": "foo"},
+                    }
+                }
+            },
+            "expected": {},
+        },
+        {
             "name": "Can collect special values",
             "config": {
                 "data": {
@@ -1542,6 +1553,7 @@ def test_create_dataset(create_geojson):
         "__sources__": {"my_source": str(geojson)},
         "name": "test_dataset",
         "display_name": "Test Dataset",
+        "type": "some_type",
         "data": {
             "test_entities": {
                 "__meta__": {"source": "my_source", "geometry": "points"},
@@ -1563,6 +1575,7 @@ def test_create_dataset(create_geojson):
     assert result == {
         "name": "test_dataset",
         "display_name": "Test Dataset",
+        "type": "some_type",
         "version": 4,
         "epsg_code": 28992,
         "bounding_box": [exp_x1, exp_y1, exp_x2, exp_y2],

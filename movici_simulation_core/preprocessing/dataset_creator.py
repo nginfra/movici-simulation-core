@@ -177,6 +177,7 @@ class MetadataSetup(DatasetOperation):
         ("general", _missing),
         ("name", _missing),
         ("display_name", _missing),
+        ("type", _missing),
         ("version", 4),
     )
 
