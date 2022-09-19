@@ -31,6 +31,9 @@
     "display_name": {
       "type": "string"
     },
+    "type": {
+      "type":  "string"
+    },
     "version": {
       "const": 4
     },

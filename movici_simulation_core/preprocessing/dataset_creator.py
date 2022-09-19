@@ -175,6 +175,7 @@ class MetadataSetup(DatasetOperation):
         ("general", _missing),
         ("name", _missing),
         ("display_name", _missing),
+        ("type", _missing),
         ("version", 4),
     )
 
@@ -213,16 +214,20 @@ class SpecialValueCollection(DatasetOperation):
                 return {key: config["special"]}
             return {}
         else:
-            return functools.reduce(
-                lambda prev, curr: {**prev, **curr},
-                (
-                    self.extract_special_values(
-                        conf, key=f"{key}.{new_key}" if key else new_key, level=level + 1
-                    )
-                    for new_key, conf in config.items()
-                    if not new_key.startswith("__")
-                ),
-            )
+            try:
+                return functools.reduce(
+                    lambda prev, curr: {**prev, **curr},
+                    (
+                        self.extract_special_values(
+                            conf, key=f"{key}.{new_key}" if key else new_key, level=level + 1
+                        )
+                        for new_key, conf in config.items()
+                        if not new_key.startswith("__")
+                    ),
+                )
+            except TypeError:
+                # no attributes found (emtpy iterable)
+                return {}
 
 
 def load_csv(obj: str):
