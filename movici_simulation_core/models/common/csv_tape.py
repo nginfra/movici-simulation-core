@@ -44,6 +44,9 @@ class BaseTapefile:
 
         return Moment(self.timeline[next_pos])
 
+    def get_data(self, key: str):
+        raise NotImplementedError
+
 
 class CsvTape(BaseTapefile):
     def __init__(self, timeline_info: t.Optional[TimelineInfo] = None):
