@@ -3,6 +3,7 @@ from .corridor.model import Model as CorridorModel
 from .csv_player.csv_player import CSVPlayer as CSVPlayerModel
 from .data_collector.data_collector import DataCollector as DataCollectorModel
 from .generalized_journey_time.gjt_model import GJTModel as GeneralizedJourneyTimeModel
+from .netcdf_player.netcdf_player import NetCDFPlayer as NetCDFPlayerModel
 from .opportunities.model import Model as OpportunitiesModel
 from .overlap_status.model import Model as OverlapStatusModel
 from .shortest_path.model import ShortestPathModel
@@ -22,6 +23,7 @@ __all__ = [
     "CSVPlayerModel",
     "DataCollectorModel",
     "GeneralizedJourneyTimeModel",
+    "NetCDFPlayerModel",
     "OpportunitiesModel",
     "OverlapStatusModel",
     "ShortestPathModel",
