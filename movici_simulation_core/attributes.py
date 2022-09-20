@@ -22,6 +22,7 @@ Geometry_Linestring3d = AttributeSpec(
     "geometry.linestring_3d", data_type=DataType(float, (3,), True)
 )
 Geometry_Polygon = AttributeSpec("geometry.polygon", data_type=DataType(float, (2,), True))
+Grid_GridPoints = AttributeSpec("grid.grid_points", data_type=DataType(int, csr=True))
 
 Topology_FromNodeId = AttributeSpec("topology.from_node_id", data_type=DataType(int))
 Topology_ToNodeId = AttributeSpec("topology.to_node_id", data_type=DataType(int))

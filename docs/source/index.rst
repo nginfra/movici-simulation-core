@@ -16,9 +16,10 @@ To get started, please read the Introduction below
    getting_started/index
    movici_way/index
    tutorials/index
-   models/index
+   creating_models/index
    simulations/index
    in_depth/index
+   models/index
    glossary
    reference/modules
    

@@ -10,7 +10,10 @@
     "travel_time": {
       "$ref": "#/$defs/attributeDef"
     },
-    "transport_segments": {}
+    "transport_segments": {
+      "$ref": "#/$defs/entityGroupDef"
+
+    }
   },
   "$defs": {
     "attributeDef": {

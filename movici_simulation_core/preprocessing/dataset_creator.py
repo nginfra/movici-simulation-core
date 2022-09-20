@@ -5,23 +5,15 @@ import itertools
 import typing as t
 from pathlib import Path
 
-import geopandas
 import numpy as np
 import orjson as json
 import pyproj
 from jsonschema.validators import validator_for
 
-from movici_simulation_core.attributes import (
-    Geometry_Linestring2d,
-    Geometry_Linestring3d,
-    Geometry_Polygon,
-    Geometry_X,
-    Geometry_Y,
-    Geometry_Z,
-)
+from movici_simulation_core.attributes import Grid_GridPoints
 from movici_simulation_core.json_schemas import PATH
 
-GeometryType = t.Literal["points", "lines", "polygons"]
+from .data_sources import GeometryType, GeopandasSource, NetCDFGridSource, SourcesDict
 
 _dataset_creator_schema = None
 
@@ -91,6 +83,7 @@ class DatasetCreator:
             BoundingBoxCalculation,
             IDGeneration,
             IDLinking,
+            ConstantValueAssigning,
         )
 
     @classmethod
@@ -126,7 +119,10 @@ class SourcesSetup(DatasetOperation):
         read_sources = self.config.get("__sources__", {})
         for (key, source_info) in read_sources.items():
             if key not in sources:
-                source = self.make_source(source_info)
+                try:
+                    source = self.make_source(source_info)
+                except ValueError as e:
+                    raise ValueError(f"Error for source '{key}': {str(e)}")
                 sources[key] = source
         return dataset
 
@@ -134,8 +130,14 @@ class SourcesSetup(DatasetOperation):
         if isinstance(source_info, str):
             source_info = {"source_type": "file", "path": source_info}
 
-        if source_info["source_type"] == "file":
-            return GeopandasSource(geodataframe=geopandas.read_file(source_info["path"]))
+        source_type = source_info["source_type"]
+        if source_type == "file":
+            cls = GeopandasSource
+        elif source_type == "netcdf":
+            cls = NetCDFGridSource
+        else:
+            raise ValueError(f"Unknown source type '{source_type}'")
+        return cls.from_source_info(source_info)
 
     @staticmethod
     def get_file_path(path_str):
@@ -297,16 +299,17 @@ class AttributeDataLoading(DatasetOperation):
 
         for key in entity_config.keys() - {"__meta__"}:
             attr_config = entity_config[key]
-            rv[key] = self.get_attribute_data(attr_config, primary_source)
+            if "property" in attr_config:
+                rv[key] = self.get_attribute_data(attr_config, primary_source)
 
         return rv
 
     def get_geometry(self, geom_type: GeometryType, source_name) -> t.Optional[dict]:
         source = self.get_source(source_name)
-        rv = source.get_geometry(geom_type)
-        if rv is None:
-            raise ValueError(f"No geometry available for source '{source_name}'")
-        return rv
+        try:
+            return source.get_geometry(geom_type)
+        except ValueError as e:
+            raise ValueError(f"Error for source '{source_name}': {str(e)}")
 
     def get_attribute_data(self, attr_config: dict, primary_source_name: str):
         source = self.get_source(primary_source_name)
@@ -320,6 +323,7 @@ class AttributeDataLoading(DatasetOperation):
             source = attr_source
 
         loaders = self.get_loaders(attr_config)
+
         return [pipe(loaders, attr) for attr in source.get_attribute(attr_config["property"])]
 
     def get_source(self, source_name):
@@ -484,7 +488,7 @@ class IDGeneration(DatasetOperation):
 
 class IDLinking(DatasetOperation):
     """some attributes may reference another entity's id in the same dataset using the ``id_link``
-    field in the attribute config. The ``IDLinking`` operation, looks up the correct id for an
+    field in the attribute config. The ``IDLinking`` operation looks up the correct id for an
     entity's id-link and places the correct id in the attribute. See <create datasets> for more
     information.
     """
@@ -496,25 +500,74 @@ class IDLinking(DatasetOperation):
         self.index = {}
         for entity_type, entity_dict in self.config["data"].items():
             for attr, conf in entity_dict.items():
-                if attr == "__meta__":
-                    continue
                 if link_config := conf.get("id_link"):
-                    try:
-                        current_values = dataset["data"][entity_type][attr]
-                    except KeyError:
-                        continue
-                    dataset["data"][entity_type][attr] = self.link_attribute(
-                        link_config, values=current_values, dataset=dataset, sources=sources
-                    )
+                    if attr == "__meta__":
+                        self.link_geometry_attribute(
+                            conf, entity_type, link_config, dataset=dataset, sources=sources
+                        )
+                    else:
+                        self.link_attribute(
+                            entity_type, attr, link_config, dataset=dataset, sources=sources
+                        )
         return dataset
 
     def link_attribute(
-        self, link_config: t.Union[list, dict], values: list, dataset: dict, sources: SourcesDict
+        self,
+        entity_type,
+        attribute,
+        link_config: t.Union[list, dict],
+        dataset: dict,
+        sources: SourcesDict,
+    ):
+        try:
+            current_values = dataset["data"][entity_type][attribute]
+        except KeyError:
+            return
+        dataset["data"][entity_type][attribute] = self.link_attribute_by_values(
+            link_config, values=current_values, dataset=dataset, sources=sources
+        )
+
+    def link_geometry_attribute(
+        self,
+        metadata,
+        entity_type,
+        link_config: t.Union[list, dict],
+        dataset: dict,
+        sources: SourcesDict,
+    ):
+        geometry = metadata.get("geometry")
+        if geometry == "cells":
+            attribute = Grid_GridPoints.name
+        else:
+            raise ValueError(
+                f"Cannot perform geometry linking for entity group {entity_type} with "
+                f"geometry {geometry}"
+            )
+        try:
+            current_values = dataset["data"][entity_type][attribute]
+        except KeyError:
+            return
+        dataset["data"][entity_type][attribute] = self.link_attribute_by_values(
+            link_config,
+            values=current_values,
+            dataset=dataset,
+            sources=sources,
+            values_are_indices=True,
+        )
+
+    def link_attribute_by_values(
+        self,
+        link_config: t.Union[list, dict],
+        values: list,
+        dataset: dict,
+        sources: SourcesDict,
+        values_are_indices=False,
     ) -> t.List[int]:
         if not isinstance(link_config, list):
             link_config = [link_config]
+        get_indexes = self.get_indices_link_index if values_are_indices else self.get_link_index
         link_indexers = [
-            self.get_link_index(conf, dataset=dataset, sources=sources) for conf in link_config
+            get_indexes(conf, dataset=dataset, sources=sources) for conf in link_config
         ]
         return self.get_indexed_values_or_raise(values, link_indexers)
 
@@ -544,6 +597,13 @@ class IDLinking(DatasetOperation):
 
         return self.index[key]
 
+    def get_indices_link_index(self, link_config: dict, dataset: dict, sources: SourcesDict):
+        entity_type = link_config["entity_group"]
+        try:
+            return dataset["data"][entity_type]["id"]
+        except KeyError:
+            raise ValueError(f"ids not found for '{entity_type}'")
+
     @classmethod
     def get_indexed_values_or_raise(cls, values, indexers):
         if isinstance(values, t.Sequence) and not isinstance(values, (bytes, str)):
@@ -560,173 +620,23 @@ class IDLinking(DatasetOperation):
         raise ValueError(f"cannot find link for value {value}")
 
 
-class DataSource:
-    r"""Base class for creating custom ``DataSource``\s. Subclasses must implement
-    ``get_attribute`` and ``__len``. In case the ``DataSource`` handles geospatial data, subclasses
-    must also implement ``to_crs``, ``get_geometry`` and ``get_bounding_box``
+class ConstantValueAssigning(DatasetOperation):
+    """Assign a constant value for every entity in an entity group. This Operation must come after
+    IDGeneration, because only then the number of entities is guaranteed to be known
     """
 
-    def get_attribute(self, name: str):
-        """Return a property as a ``list`` of values from the source data, one entry per feature.
+    def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
+        self.index = {}
+        for entity_type, entity_dict in self.config["data"].items():
+            entity_data = dataset["data"][entity_type]
+            for attr, conf in entity_dict.items():
+                if attr == "__meta__":
+                    continue
+                if "value" in conf:
+                    num_entities = len(entity_data["id"])
+                    entity_data[attr] = [conf["value"]] * num_entities
 
-        :param name: The property name
-
-        """
-        raise NotImplementedError
-
-    def to_crs(self, crs: t.Union[str, int]) -> None:
-        """Convert the source geometry data the coordinate reference system specified in the
-        ``crs`` argument
-
-        :param crs: The CRS to convert to, either a CRS string (eg. "WGS 84" or "EPSG:28992")
-          or an EPSG code integer (eg. 4326).
-
-        """
-        return None
-
-    def get_geometry(self, geometry_type: GeometryType) -> t.Optional[dict]:
-        """Return the geometry of the source features as a dictionary attribute lists. The
-        resulting dictionary should have attributes based on the ``geometry_type``:
-
-        * ``points``: ``geometry.x``, ``geometry.y`` and optionally ``geometry.z``
-        * ``lines``: either ``geometry.linestring_2d`` or ``geometry.linestring_3d``
-        * ``polygons``: ``geometry.polygon``
-
-        See :ref:`movici-geometries` for more information on geometry attributes.
-
-        This method may raise an Exception if a ``geometry_type`` is requested that does not match
-        the source geometry.
-
-        :param geometry_type: One of ``points``, ``lines`` or ``polygons``
-        """
-        return None
-
-    def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
-        """Return the bounding box that envelops all geospatial features in the source data
-
-        :return: A bounding box as a tuple of four values: (min_x, min_y, max_x, max_y) or ``None``
-          in case no bounding box can be calculated
-        """
-        return None
-
-    def __len__(self):
-        """Return the number of features in the source data"""
-        raise NotImplementedError
-
-
-class NumpyDataSource(DataSource):
-    """DataSource non geospatial Numpy or pandas data
-
-    :param data: Either a dictionary ``typing.Dict[str, np.ndarray]`` with keys being the property
-        names and the values being the property data array or a Pandas dataframe
-    """
-
-    def __init__(self, data: t.Mapping[str, np.ndarray]) -> None:
-        self.data = data
-
-    def get_attribute(self, name: str):
-        try:
-            return list(self.data[name])
-        except KeyError:
-            raise ValueError(f"'{name}' was not found as a property")
-
-    def __len__(self):
-        # this ensures compatibility with both a dictionary of numpy arrays an pandas.DataFrame
-        return len(self.data[next(iter(self.data.keys()))])
-
-
-PandasDataSource = NumpyDataSource
-
-
-class GeopandasSource(DataSource):
-    """DataSource for querying a ``geopandas.GeoDataFrame``"""
-
-    def __init__(self, geodataframe: geopandas.GeoDataFrame):
-        self.gdf = geodataframe
-
-    def to_crs(self, crs: t.Union[str, int]):
-        self.gdf = self.gdf.to_crs(crs)
-
-    def get_geometry(self, geometry_type: GeometryType):
-        methods = {
-            "points": self.get_points,
-            "lines": self.get_lines,
-            "polygons": self.get_polygons,
-        }
-        try:
-            method = methods[geometry_type]
-        except KeyError:
-            raise ValueError(
-                "Unknown geometry type, must be one of 'points', 'lines', or 'polygons"
-            ) from None
-        return method(self.gdf["geometry"])
-
-    def get_points(self, geom):
-        xs, ys, zs = [], [], []
-        has_z = False
-        for feat in geom:
-            self.feature_type_or_raise(feat, "Point")
-
-            xs.append(feat.x)
-            ys.append(feat.y)
-            if feat.has_z:
-                has_z = True
-                zs.append(feat.z)
-            else:
-                zs.append(None)
-
-        rv = {
-            Geometry_X.name: xs,
-            Geometry_Y.name: ys,
-        }
-        if has_z:
-            rv[Geometry_Z.name] = zs
-        return rv
-
-    def get_lines(self, geom):
-        all_coordinates = []
-        size = 3
-        for feat in geom:
-            self.feature_type_or_raise(feat, "LineString")
-
-            coords = np.asarray(feat.coords)
-            if coords.shape[1] == 2:
-                size = 2
-            all_coordinates.append(coords)
-
-        attr = (Geometry_Linestring2d if size == 2 else Geometry_Linestring3d).name
-
-        return {attr: [coord[:, :size].tolist() for coord in all_coordinates]}
-
-    def get_polygons(self, geom):
-        polygons = []
-        for feat in geom:
-            self.feature_type_or_raise(feat, "Polygon")
-            polygons.append(np.asarray(feat.exterior.coords)[:, :2].tolist())
-        return {Geometry_Polygon.name: polygons}
-
-    def get_bounding_box(self):
-        return self.gdf.total_bounds
-
-    def get_attribute(self, name: str):
-        try:
-            return list(self.gdf[name])
-        except KeyError:
-            raise ValueError(
-                f"'{name}' was not found as a feature property, perhaps it has an "
-                "incompatible data type and was not loaded"
-            )
-
-    @staticmethod
-    def feature_type_or_raise(feature, expected):
-        if feature.geom_type != expected:
-            raise TypeError(f"Invalid feature {feature.geom_type}, must be '{expected}'")
-
-    def __len__(self):
-        return len(self.gdf)
-
-
-SourcesDict = t.Dict[str, DataSource]
+        return dataset
 
 
 def deep_get(obj, *path: t.Union[str, int], default=None):

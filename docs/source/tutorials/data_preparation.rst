@@ -240,7 +240,7 @@ in the config's ``__sources__`` key:
 .. testcode:: create-dataset
   
   import pandas as pd
-  from movici_simulation_core.preprocessing.dataset_creator import create_dataset, PandasDataSource 
+  from movici_simulation_core.preprocessing import create_dataset, PandasDataSource
 
   additional_sources = {
     "source_a": PandasDataSource(pd.read_csv('source_a.csv')),
@@ -586,6 +586,60 @@ Movici dataset. Consider the following example:
   :language: python
 
 
+
+.. _dataset-creator-recipes-read-netcdf-grid:
+
+Read a grid from a NetCDF file
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+NetCDF files are supported if they contain a grid according to certain specifications.
+|code_DatasetCreator| can extract this grid in case of the following:
+
+* The grid is given as grid cells with `x` and `y` coordinates in NetCDF variables. `x` and `y` are
+  stored in separate variables
+* The `x` and `y` variable have the first dimension as the individual cells, and the second dimension
+  is for every vertex point of the cell
+* The `x` and `y` variable have a default name of ``gridCellX`` and ``gridCellY`` respectively, but
+  this can be customized
+* The CRS can not be converted for ``netcdf`` data sources. The CRS must be specified to be the
+  same CRS as the ``netcdf`` data source
+* the grid cell entities can read additional attributes from the netcdf, the point entities cannot
+
+Below is given an example of a dataset creator config snippet
+
+
+.. code-block::
+
+  {
+    "__meta__": {
+      "crs": "EPSG:3414"
+    },
+    "__sources__": {
+      "netcdf_grid": {
+        "source_type": "netcdf",
+        "path": "/path/to/netcdf.nc"
+      }
+    },
+    "data": {
+      "grid_points": {
+        "__meta__": {
+          "geometry": "points",
+          "source": "netcdf_grid"
+        }
+      },
+      "grid_cells": {
+        "__meta__": {
+          "geometry": "cells",
+          "source": "netcdf_grid"
+        },
+        "some_attribute": {
+          "property": "additional_netcdf_var"
+        }
+      }
+    }
+  }
+
+
 .. _tutorial-dataset-creator-config-schema:
 
 Dataset Creator Config Schema Reference
@@ -600,6 +654,7 @@ DatasetCreatorConfig
   | ``__sources__``: :ref:`DatasetCreatorDatasetSources`
   | ``name``: ``string``, a `snake_case` dataset name |required|
   | ``display_name``: ``string``, a human readable name suitable for displaying
+  | ``type``: ``string``, a snake_case dataset_type
   | ``version``: literal ``4``, only dataset version v4 is supported
   | ``general``: :ref:`DatasetCreatorGeneralSection`
   | ``data``: :ref:`DatasetCreatorDataSection` |required|
@@ -640,7 +695,8 @@ DatasetCreatorSource
 | ``type``: ``object``
 
 ``properties``:
-  | ``source_type``: literal ``file``. Only file-based sources are supported
+  | ``source_type``: One of ``file``, ``netcdf``. Use ``netcdf`` for NetCDF-files, ``file`` for any
+    other supported geospatial data file
   | ``path``: ``string`` location on disk to a source file
 
 Source files are read using ``geopandas`` which uses  ``Fiona`` under the hood and may be any file
@@ -730,7 +786,7 @@ DatasetCreatorEntityGroupMeta
 
 ``properties``:
   | ``source``: ``string`` name of a data source |required|
-  | ``geometry``: ``string`` one of ``points``, ``lines`` or ``polygons``
+  | ``geometry``: ``string`` one of ``points``, ``lines``, ``polygons`` or ``cells``
 
 --------
 
@@ -750,7 +806,7 @@ DatasetCreatorAttribute
 ``properties``:
   | ``source``: ``string`` Source name. Can be used to override the entity group's default source
   | ``property``: ``string`` Name of the property in the data source
-  | ``const``: ``boolean`` \| ``number`` \| ``string`` Constant attribute value when no source is given
+  | ``value``: ``boolean`` \| ``number`` \| ``string`` Constant attribute value when no source is given
   | ``id_link``: :ref:`DatasetCreatorIDLink`
   | ``special``: ``number`` \| ``integer`` \| ``string`` The attribute's special value
   | ``enum``: ``string`` Enum name

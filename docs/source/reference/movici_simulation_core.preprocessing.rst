@@ -6,6 +6,16 @@ preprocessing
 
 
 
+data\_sources 
+--------------
+
+.. automodule:: movici_simulation_core.preprocessing.data_sources
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+
 dataset\_creator 
 -----------------
 

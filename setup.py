@@ -86,6 +86,7 @@ setup(
             f"csv_player = {MODEL_PATH}.csv_player.csv_player:CSVPlayer",
             f"data_collector = {MODEL_PATH}.data_collector.data_collector:DataCollector",
             f"generalized_journey_time = {MODEL_PATH}.generalized_journey_time.gjt_model:GJTModel",
+            f"netcdf_player = {MODEL_PATH}.netcdf_player.netcdf_player:NetCDFPlayer",
             f"opportunities = {MODEL_PATH}.opportunities.model:Model",
             f"overlap_status = {MODEL_PATH}.overlap_status.model:Model",
             f"shortest_path = {MODEL_PATH}.shortest_path.model:ShortestPathModel",

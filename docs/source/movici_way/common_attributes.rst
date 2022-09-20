@@ -18,23 +18,23 @@ are already defined in the system. The following tabel gives an overview of thes
   * - ``id``
     - ``int``
     - \-
-
     - Entity identifier, must be unique within a dataset
+
   * - ``display_name``
     - ``str``
     - \-
-
     - An attribute to provide a human readable name for an entity
+
   * - ``reference``
     - ``str``
     - \-
-
     - An attribute that can be used to provide a (unique) asset id
+
   * - ``labels``
     - ``int`` , ``csr``
     - \-
-
     - Assign 0 or more labels to an entity, uses the ``label`` enum
+
   * - ``geometry.x``
     - ``float``
     - ``m`` or ``deg`` depending on CRS
@@ -59,6 +59,13 @@ are already defined in the system. The following tabel gives an overview of thes
     - ``float``, ``(2,)`` , ``csr``
     - ``m`` or ``deg`` depending on CRS
     - Geometry of a 2D (closed) Polygon
+  * - ``grid.grid_points``
+    - ``int``, ``csr``
+    - \-
+    - Used in grid-type datasets where every entity represents a grid cell. Values refer to the 
+      ``id`` of entities that form the vertices for each grid cell. Those entities are expected to
+      have a point geometry (``geometry.x`` and ``geometry.y``)
+
   * - ``topology.from_node_id``
     - ``int``
     - \-
