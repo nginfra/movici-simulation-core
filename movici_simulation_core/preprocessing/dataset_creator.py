@@ -414,7 +414,7 @@ class EnumInfo:
         self.items: t.Dict[str, int] = {val: idx for idx, val in enumerate(enum_values)}
 
     def ensure(self, text: str) -> int:
-        if pos := self.get_pos(text) is not None:
+        if (pos := self.get_pos(text)) is not None:
             return pos
         return self.add(text)
 
