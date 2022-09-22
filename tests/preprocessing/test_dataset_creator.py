@@ -603,7 +603,8 @@ class TestEnumConversion:
         return {
             "enumerable": [
                 Point(0, 0, attributes={"attr": "bar"}),
-                Point(1, 1, attributes={"attr": "baz"}),
+                Point(1, 1, attributes={"attr": "bar"}),
+                Point(2, 2, attributes={"attr": "baz"}),
             ],
         }
 
@@ -702,7 +703,7 @@ class TestEnumConversion:
     )
     def test_converts_string_into_enum_values(self, config, sources, dataset):
         result = EnumConversion(config)(dataset, sources=sources)
-        assert result["data"]["foo_entities"]["attr"] == [0, 1]
+        assert result["data"]["foo_entities"]["attr"] == [0, 0, 1]
 
     @pytest.mark.parametrize(
         "config, sources_dict",
