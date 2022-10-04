@@ -8,7 +8,8 @@ import numpy as np
 from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
     Geometry_Linestring3d,
-    Geometry_Polygon,
+    Geometry_Polygon2d,
+    Geometry_Polygon3d,
     Geometry_X,
     Geometry_Y,
     Geometry_Z,
@@ -162,11 +163,18 @@ class GeopandasSource(DataSource):
         return {attr: [coord[:, :size].tolist() for coord in all_coordinates]}
 
     def get_polygons(self, geom):
-        polygons = []
+        all_coordinates = []
+        size = 3
         for feat in geom:
             self.feature_type_or_raise(feat, "Polygon")
-            polygons.append(np.asarray(feat.exterior.coords)[:, :2].tolist())
-        return {Geometry_Polygon.name: polygons}
+            coords = np.asarray(feat.exterior.coords)
+            if coords.shape[1] == 2:
+                size = 2
+            all_coordinates.append(coords)
+
+        attr = (Geometry_Polygon2d if size == 2 else Geometry_Polygon3d).name
+
+        return {attr: [coord[:, :size].tolist() for coord in all_coordinates]}
 
     def get_bounding_box(self):
         return self.gdf.total_bounds

@@ -82,6 +82,7 @@ class TestGJTModel:
                         "reference",
                         "geometry.x",
                         "geometry.y",
+                        "geometry.z",
                         "transport.passenger_vehicle_frequency",
                         "transport.passenger_vehicle_capacity",
                     },
@@ -96,6 +97,7 @@ class TestGJTModel:
                         "reference",
                         "geometry.x",
                         "geometry.y",
+                        "geometry.z",
                     },
                     "track_segment_entities": {
                         "reference",

@@ -132,7 +132,7 @@ class Model(TrackedModel, name="area_aggregation"):
 
     def ensure_ready(self):
         for entity_group in [*self.src_entities, self.target_entity]:
-            if hasattr(self.target_entity, "ensure_ready"):
+            if hasattr(entity_group, "ensure_ready"):
                 entity_group.ensure_ready()
 
     def resolve_mapping(self):
