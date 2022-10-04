@@ -18,8 +18,10 @@ and ``Polygon``:
 |           |            | ``geometry.linestring_3d``     |  of elevation component              |
 +-----------+------------+--------------------------------+--------------------------------------+
 | Polygon   | Polygon    | ``geometry.polygon``           | Supports only outer polygons.        |
-|           |            |                                | Polygons are always 2-dimensional.   |
-|           |            |                                | Polygons must be closed loops.       |
+|           |            | ``geometry.polygon_2d``        | ``2d``/ ``3d`` depends on existence  |
+|           |            | ``geometry.polygon_3d``        | of elevation component.              |
+|           |            |                                | ``geometry.polygon`` is implicitly   |
+|           |            |                                | 2d.  Polygons must be closed loops.  |
 +-----------+------------+--------------------------------+--------------------------------------+
 
 
