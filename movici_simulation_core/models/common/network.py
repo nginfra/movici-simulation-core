@@ -5,8 +5,8 @@ import typing as t
 import numpy as np
 import numpy.typing as npt
 from numba import njit
+from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import shortest_path
-from scipy.sparse.csr import csr_matrix
 
 from movici_simulation_core.core import EntityGroup, Index, TrackedState
 

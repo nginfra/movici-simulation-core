@@ -18,7 +18,7 @@ from movici_simulation_core import (
 
 from ...json_schemas import SCHEMA_PATH
 from ...models.common import try_get_geometry_type
-from ...models.common.entity_groups import GeometryEntity, LineEntity, PolygonEntity
+from ...models.common.entity_groups import GeometryEntity, PolygonEntity
 from ...validate import ensure_valid_config
 from .aggregators import AttributeAggregator, functions
 
@@ -126,14 +126,14 @@ class Model(TrackedModel, name="area_aggregation"):
                 f"should be one-dimensional"
             )
 
-    def initialize(self, state: TrackedState):
+    def initialize(self, **_):
         self.ensure_ready()
         self.resolve_mapping()
 
     def ensure_ready(self):
-        for entity in self.src_entities:
-            if isinstance(entity, LineEntity):
-                entity.ensure_ready()
+        for entity_group in [*self.src_entities, self.target_entity]:
+            if hasattr(self.target_entity, "ensure_ready"):
+                entity_group.ensure_ready()
 
     def resolve_mapping(self):
         mappings = {}

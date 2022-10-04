@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/operational_status/1.0.0",
+  "type": "object",
+  "required": [
+    "entity_group",
+    "geometry"
+  ],
+  "properties": {
+    "entity_group": {
+      "$ref": "#/$defs/entityGroupDef"
+    },
+    "geometry": {
+      "$ref": "#/$defs/geometry"
+    },
+    "elevation_attribute": {
+      "$ref": "#/$defs/attributeDef"
+    },
+    "flooding": {
+      "$ref": "#/$defs/floodingSettings"
+    }
+  },
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    },
+    "geometry": {
+      "type": "string",
+      "enum": [
+        "point",
+        "line",
+        "polygon"
+      ]
+    },
+    "floodingSettings": {
+      "type": "object",
+      "required": [
+        "flooding_cells",
+        "flooding_points"
+      ],
+      "properties": {
+        "flooding_cells": {
+          "$ref": "#/$defs/entityGroupDef"
+        },
+        "flooding_points": {
+          "$ref": "#/$defs/entityGroupDef"
+        },
+        "flooding_threshold": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

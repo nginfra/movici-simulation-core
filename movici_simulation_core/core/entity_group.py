@@ -42,6 +42,10 @@ class EntityGroup:
     def _eq_key(self):
         return type(self), self.state, self.__entity_name__
 
+    def _assert_state(self):
+        if self.state is None:
+            raise RuntimeError("EntityGroup must be registered to a TrackedState first")
+
     def is_similiar(self, other: EntityGroup):
         return (self.dataset_name, self.__entity_name__) == (
             other.dataset_name,
@@ -69,10 +73,12 @@ class EntityGroup:
 
     @property
     def index(self) -> Index:
+        self._assert_state()
         return self.state.get_index()
 
     @property
     def dataset_name(self):
+        self._assert_state()
         return self.state.dataset_name
 
 

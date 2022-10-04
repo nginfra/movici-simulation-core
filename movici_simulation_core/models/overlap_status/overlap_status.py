@@ -6,7 +6,7 @@ from movici_geo_query.geo_query import GeoQuery
 from shapely.ops import nearest_points
 
 from movici_simulation_core.core.attribute import Attribute, UniformAttribute
-from movici_simulation_core.models.common.entity_groups import GeometryEntity, LineEntity
+from movici_simulation_core.models.common.entity_groups import GeometryEntity
 
 from .dataset import OverlapEntity
 
@@ -50,11 +50,8 @@ class OverlapStatus:
         self._next_overlap_index: int = 0
 
     def is_ready(self) -> bool:
-        if isinstance(self._from_entity, LineEntity) and not self._from_entity.is_ready():
-            return False
-
-        for entity in self._to_entities:
-            if isinstance(entity, LineEntity) and not entity.is_ready():
+        for entity in [*self._to_entities, self._from_entity]:
+            if hasattr(entity, "is_ready") and not entity.is_ready():
                 return False
 
         if (

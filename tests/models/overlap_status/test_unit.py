@@ -38,8 +38,10 @@ def get_line_entity(line_collection: LinestringGeometry) -> LineEntity:
 def get_polygon_entity(polygon_collection: ClosedPolygonGeometry) -> PolygonEntity:
     state = TrackedState()
     polygon = state.register_entity_group("ds", PolygonEntity("entity"))
-    polygon.polygon.initialize(len(polygon_collection.row_ptr) - 1)
-    polygon.polygon.csr = TrackedCSRArray(polygon_collection.points, polygon_collection.row_ptr)
+    polygon._polygon_legacy.initialize(len(polygon_collection.row_ptr) - 1)
+    polygon._polygon_legacy.csr = TrackedCSRArray(
+        polygon_collection.points, polygon_collection.row_ptr
+    )
     return polygon
 
 
