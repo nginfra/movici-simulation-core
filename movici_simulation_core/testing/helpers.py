@@ -31,9 +31,11 @@ def get_attribute(name="attr", **kwargs):
 T = t.TypeVar("T", bound=EntityGroup)
 
 
-def create_entity_group_with_data(entity_type: t.Union[T, t.Type[T]], data: dict) -> T:
+def create_entity_group_with_data(
+    entity_type: t.Union[T, t.Type[T]], data: dict, state: t.Optional[TrackedState] = None
+) -> T:
     DATASET = "dummy"
-    state = TrackedState()
+    state = state or TrackedState()
     entity_group = state.register_entity_group(DATASET, entity_type)
     schema = AttributeSchema(attr.spec for attr in entity_type.all_attributes().values())
     schema.add_attribute(AttributeSpec("id", DataType(int)))

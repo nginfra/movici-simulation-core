@@ -204,6 +204,8 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         return []
 
     def initialize(self, state: TrackedState):
+        self._demand_entity.ensure_ready()
+
         demand_geometry = self._demand_entity.get_geometry()
         mapper = LocalMapper(demand_geometry)
         self.demand_estimation.initialize(mapper)

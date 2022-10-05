@@ -107,6 +107,7 @@ class TestShortestPathModel:
                         "reference",
                         "geometry.x",
                         "geometry.y",
+                        "geometry.z",
                     },
                     "virtual_link_entities": {
                         "reference",
@@ -119,6 +120,7 @@ class TestShortestPathModel:
                         "reference",
                         "geometry.x",
                         "geometry.y",
+                        "geometry.z",
                     },
                     "road_segment_entities": {
                         "reference",

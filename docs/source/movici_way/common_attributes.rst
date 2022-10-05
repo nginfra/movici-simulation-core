@@ -55,10 +55,18 @@ are already defined in the system. The following tabel gives an overview of thes
     - ``float``, ``(3,)`` , ``csr``
     - ``m`` or ``deg`` depending on CRS
     - Geometry of a 3D LineString
-  * - ``geometry.polygon``
+  * - ``geometry.polygon_2d``
     - ``float``, ``(2,)`` , ``csr``
     - ``m`` or ``deg`` depending on CRS
     - Geometry of a 2D (closed) Polygon
+  * - ``geometry.polygon_3d``
+    - ``float``, ``(3,)`` , ``csr``
+    - ``m`` or ``deg`` depending on CRS
+    - Geometry of a 3D (closed) Polygon
+  * - ``geometry.polygon``
+    - ``float``, ``(2,)`` , ``csr``
+    - ``m`` or ``deg`` depending on CRS
+    - Legacy geometry attribute, equivalent to ``geometry.polygon_2d``
   * - ``grid.grid_points``
     - ``int``, ``csr``
     - \-

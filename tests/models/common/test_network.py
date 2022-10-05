@@ -60,7 +60,7 @@ def network_1():
                \->(7)<-/
     """
     transport_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [1, 2, 3, 4, 5]})
-    virtual_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [6, 7, 8]})
+    virtual_nodes = create_entity_group_with_data(PointEntity("v"), {"id": [6, 7, 8]})
     transport_links = create_entity_group_with_data(
         TransportSegmentEntity("tl"),
         {

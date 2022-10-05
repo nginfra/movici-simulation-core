@@ -79,7 +79,7 @@ class LineString(Feature):
 
 @dataclass
 class Polygon(LineString):
-    geometry: t.List[t.Tuple[float, float]]
+    geometry: t.List[t.Union[t.Tuple[float, float], t.Tuple[float, float, float]]]
     attributes: t.Dict[str, t.Any] = field(default_factory=dict)
 
     def feature_type(self):
@@ -207,6 +207,14 @@ class TestGeopandasDataSource:
         )
 
     @pytest.fixture
+    def polygons_3d_geojson(self, create_gdf):
+        return create_gdf(
+            [
+                Polygon([(0, 0, 0), (1, 0, 1), (1, 1, 1), (0, 1, 0), (0, 0, 0)], {"attr": 10}),
+            ]
+        )
+
+    @pytest.fixture
     def complex_polygon_geojson(self, tmp_path):
         file = tmp_path / "complex_polygon.geojson"
         file.write_text(
@@ -278,19 +286,27 @@ class TestGeopandasDataSource:
             ]
         }
 
-    def test_get_polygon(self, polygons_geojson):
+    def test_get_polygon_2d(self, polygons_geojson):
         source = GeopandasSource(polygons_geojson)
         assert source.get_geometry("polygons") == {
-            "geometry.polygon": [
+            "geometry.polygon_2d": [
                 [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
                 [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9], [0.1, 0.1]],
+            ]
+        }
+
+    def test_get_polygon_3d(self, polygons_3d_geojson):
+        source = GeopandasSource(polygons_3d_geojson)
+        assert source.get_geometry("polygons") == {
+            "geometry.polygon_3d": [
+                [[0, 0, 0], [1, 0, 1], [1, 1, 1], [0, 1, 0], [0, 0, 0]],
             ]
         }
 
     def test_only_gets_outer_ring_for_complex_polygon(self, complex_polygon_geojson):
         source = GeopandasSource(complex_polygon_geojson)
         assert source.get_geometry("polygons") == {
-            "geometry.polygon": [
+            "geometry.polygon_2d": [
                 [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
             ]
         }
@@ -305,7 +321,7 @@ class TestGeopandasDataSource:
         )
 
         assert source.get_geometry("polygons") == {
-            "geometry.polygon": [
+            "geometry.polygon_2d": [
                 [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]],
             ]
         }

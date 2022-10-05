@@ -133,7 +133,7 @@ def model(state, model_config, global_schema):
 
 def test_model_setup_fills_state(model: Model, state):
     assert model.target_entity.__entity_name__ == "area_entities"
-    assert model.target_entity.polygon.is_initialized() is False
+    assert model.target_entity._polygon_legacy.is_initialized() is False
     assert len(model.aggregators) == 2
     assert len(model.src_entities) == 2
 
