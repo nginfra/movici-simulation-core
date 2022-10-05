@@ -63,7 +63,8 @@ class OperationalStatus(TrackedModel, name="operational_status"):
         for module in self.modules:
             module.update()
 
-    def get_schema_attributes(self):
+    @classmethod
+    def get_schema_attributes(cls):
         return [Flooding_WaterHeight, Flooding_WaterDepth]
 
 
