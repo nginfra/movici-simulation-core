@@ -4,6 +4,7 @@ import numpy as np
 
 from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.data_format import is_undefined_csr, is_undefined_uniform
+from movici_simulation_core.core.data_type import NP_TYPES
 from movici_simulation_core.core.schema import infer_data_type_from_array
 from movici_simulation_core.csr import csr_binop, row_wise_max, row_wise_min, row_wise_sum
 
@@ -157,3 +158,29 @@ def default_func(
         rv = arr.copy()
         rv.update(default_values, undefined)
         return rv
+
+
+@func("if")
+def if_func(*arrays_or_values):
+    """calculate row-wise maximum value of n arrays or values. Every array must have the same
+    length in the first dimension. Values are broadcasted along the first axis
+    """
+    if len(arrays_or_values) != 3:
+        raise TypeError("function 'if' requires 3 arguments: COND, IF_TRUE, IF_FALSE")
+    cond, if_true, if_false = arrays_or_values
+
+    if isinstance(if_true, TrackedCSRArray) or isinstance(if_false, TrackedCSRArray):
+        raise TypeError("function 'if' does not support csr attributes (yet)")
+
+    if isinstance(cond, bool):
+        return if_true if cond else if_false
+
+    if isinstance(cond, np.ndarray) and cond.dtype in [bool, NP_TYPES[bool], NP_TYPES[int]]:
+        cond = np.asarray(cond, dtype=bool)
+        dtype = if_true.dtype if isinstance(if_true, np.ndarray) else type(if_true)
+        rv = np.empty_like(cond, dtype=dtype)
+        rv[cond] = if_true[cond] if isinstance(if_true, np.ndarray) else if_true
+        rv[~cond] = if_false[~cond] if isinstance(if_false, np.ndarray) else if_false
+        return rv
+
+    raise TypeError("conditional for 'if' must be boolean or boolean array")

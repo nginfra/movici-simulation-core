@@ -9,7 +9,8 @@ from .core.schema import AttributeSpec, attribute_plugin_from_dict
 
 Id = AttributeSpec("id", data_type=DataType(int))
 Reference = AttributeSpec("reference", data_type=DataType(str))
-Labels = AttributeSpec("labels", data_type=DataType(int, csr=True))
+Labels = AttributeSpec("labels", data_type=DataType(int, csr=True), enum_name="label")
+Label = AttributeSpec("label", data_type=int, enum_name="label")
 DisplayName = AttributeSpec("display_name", data_type=DataType(str))
 
 Geometry_X = AttributeSpec("geometry.x", data_type=DataType(float))

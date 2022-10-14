@@ -209,6 +209,24 @@ class TrackedCSRArray:
     def __truediv__(self, other):
         return self.__bin_op__(other, np.divide)
 
+    def __eq__(self, other):
+        return self.__bin_op__(other, np.equal)
+
+    def __ne__(self, other):
+        return self.__bin_op__(other, np.not_equal)
+
+    def __lt__(self, other):
+        return self.__bin_op__(other, np.less)
+
+    def __le__(self, other):
+        return self.__bin_op__(other, np.less_equal)
+
+    def __gt__(self, other):
+        return self.__bin_op__(other, np.greater)
+
+    def __ge__(self, other):
+        return self.__bin_op__(other, np.greater_equal)
+
     def copy(self):
         return TrackedCSRArray(
             data=self.data.copy(),
