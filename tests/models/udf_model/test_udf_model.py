@@ -26,6 +26,8 @@ def additional_attributes():
         AttributeSpec("id", DataType(int)),
         AttributeSpec("in_a", DataType(float)),
         AttributeSpec("in_b", DataType(float)),
+        AttributeSpec("in_c", DataType(float)),
+        AttributeSpec("in_bool", DataType(bool)),
         AttributeSpec("in_csr", DataType(float, csr=True)),
         AttributeSpec("in_csr2", DataType(float, csr=True)),
         AttributeSpec("undef", DataType(float)),
@@ -48,6 +50,8 @@ def init_data():
                 "id": [1, 2, 3],
                 "in_a": [1.0, 2.0, 3.0],
                 "in_b": [1.1, 2.2, 3.3],
+                "in_c": [1.1, 2.1, 2.9],
+                "in_bool": [True, True, False],
                 "in_csr": [[10, 11], [20, 22], []],
                 "undef_csr": [[10], [], None],
                 "in_csr2": [[100, 110], [200, 220], []],
@@ -433,6 +437,60 @@ def test_csr_uniform_min(create_model_tester):
             "some_entities": {
                 "id": [1, 2, 3],
                 "out_csr": [[1, 1], [2, 2], []],
+            }
+        }
+    }
+
+
+def test_csr_uniform_if(create_model_tester):
+
+    tester: ModelTester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"cond": "in_bool", "a": "in_a", "b": "in_b"},
+            "functions": [
+                {
+                    "expression": "if(cond, a, b)",
+                    "output": "out",
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out": [1.0, 2.0, 3.3],
+            }
+        }
+    }
+
+
+def test_csr_uniform_if_2(create_model_tester):
+
+    tester: ModelTester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"c": "in_c", "a": "in_a", "b": "in_b"},
+            "functions": [
+                {
+                    "expression": "if(a<c, 3, 4)",
+                    "output": "out",
+                },
+            ],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+
+    assert result == {
+        "some_dataset": {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "out": [3, 3, 4],
             }
         }
     }

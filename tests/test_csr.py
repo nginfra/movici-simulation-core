@@ -266,6 +266,7 @@ def test_generate_update_unicode(data, row_ptr, mask, changed, exp_data, exp_row
         (np.multiply, [1, 4, 8]),
         (np.divide, [1, 1, 2]),
         (np.minimum, [1, 2, 2]),
+        (np.equal, [True, True, False]),
     ],
 )
 def test_csr_binop(operator, expected):

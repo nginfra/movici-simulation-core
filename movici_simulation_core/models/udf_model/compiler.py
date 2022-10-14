@@ -13,6 +13,12 @@ TOKENS = {
     "/": r"/",
     "+": r"\+",
     "-": r"-",
+    "==": r"==",
+    "!=": r"!=",
+    "<": r"<",
+    ">": r">",
+    "<=": r"<=",
+    ">=": r">=",
     "(": r"\(",
     ")": r"\)",
     ",": r",",
@@ -156,20 +162,32 @@ class Parser:
             return False
 
     def expr(self):
-        """expr   : ["+"|"-"] term (("+" | "-") term)*"""
-        if op := self.peek("+", "-"):
+        return self.comp_expr()
+
+    def comp_expr(self):
+        """comp_expr: add_expr (("==" | "!=") add_expr)*"""
+        node = self.add_expr()
+        if op := self.peek("==", "!=", "<", ">", "<=", ">="):
             self.expect(op.type)
-            node = BinOp(op.type, Num("0"), self.term())
-        else:
-            node = self.term()
-        while op := self.peek("+", "-"):
-            self.expect(op.type)
-            node = BinOp(op.type, left=node, right=self.term())
+            node = BinOp(op.type, left=node, right=self.add_expr())
 
         return node
 
-    def term(self):
-        """term : atom ((MUL | DIV) atom)*"""
+    def add_expr(self):
+        """add_expr : ["+"|"-"] mul_expr (("+" | "-") mul_expr)*"""
+        if op := self.peek("+", "-"):
+            self.expect(op.type)
+            node = BinOp(op.type, Num("0"), self.mul_expr())
+        else:
+            node = self.mul_expr()
+        while op := self.peek("+", "-"):
+            self.expect(op.type)
+            node = BinOp(op.type, left=node, right=self.mul_expr())
+
+        return node
+
+    def mul_expr(self):
+        """mul_expr : atom ((MUL | DIV) atom)*"""
         node = self.atom()
 
         while op := self.peek("*", "/"):
@@ -262,6 +280,12 @@ class UDFCompiler(NodeVisitor):
             "-": operator.sub,
             "*": operator.mul,
             "/": operator.truediv,
+            "==": operator.eq,
+            "!=": operator.ne,
+            "<": operator.lt,
+            "<=": operator.le,
+            ">": operator.gt,
+            ">=": operator.ge,
         }[node.val]
         left = node.left.accept_node(self)
         right = node.right.accept_node(self)
