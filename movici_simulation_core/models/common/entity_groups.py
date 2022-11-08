@@ -67,7 +67,7 @@ class GeometryEntity(EntityGroup):
     def dimensions(self):
         raise NotImplementedError
 
-    def get_geometry(self) -> Geometry:
+    def get_geometry(self, slice=None) -> Geometry:
         raise NotImplementedError
 
     def get_single_geometry(self, index: int) -> BaseGeometry:
@@ -92,8 +92,11 @@ class PointEntity(GeometryEntity):
     def is_ready(self):
         return self.x.is_initialized() and self.y.is_initialized()
 
-    def get_geometry(self) -> PointGeometry:
-        return PointGeometry(points=np.stack((self.x.array, self.y.array), axis=-1))
+    def get_geometry(self, slice=None) -> PointGeometry:
+        x, y = self.x.array, self.y.array
+        if slice is not None:
+            x, y = x[slice], y[slice]
+        return PointGeometry(points=np.stack((x, y), axis=-1))
 
     def get_single_geometry(self, index: int) -> Point:
         return Point(self.x.array[index], self.y.array[index])
@@ -127,10 +130,12 @@ class LineEntity(GeometryEntity):
     def is_ready(self) -> bool:
         return self._linestring3d.is_initialized() or self._linestring2d.is_initialized()
 
-    def get_geometry(self) -> LinestringGeometry:
-        return LinestringGeometry(
-            points=self.linestring.csr.data[:, 0:2], row_ptr=self.linestring.csr.row_ptr
-        )
+    def get_geometry(self, slice=None) -> LinestringGeometry:
+        points = self.linestring.csr.data[:, 0:2]
+        row_ptr = self.linestring.csr.row_ptr
+        if slice is not None:
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
+        return LinestringGeometry(points=points, row_ptr=row_ptr)
 
     def get_single_geometry(self, index: int) -> LineString:
         return LineString(self.linestring.csr.slice([index]).data[:, 0:2])
@@ -170,10 +175,13 @@ class PolygonEntity(GeometryEntity):
             for pol in [self._polygon3d, self._polygon2d, self._polygon_legacy]
         )
 
-    def get_geometry(self) -> ClosedPolygonGeometry:
-        return ClosedPolygonGeometry(
-            points=self.polygon.csr.data[:, 0:2], row_ptr=self.polygon.csr.row_ptr
-        )
+    def get_geometry(self, slice=None) -> ClosedPolygonGeometry:
+        points = self.polygon.csr.data[:, 0:2]
+        row_ptr = self.polygon.csr.row_ptr
+        if slice is not None:
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
+
+        return ClosedPolygonGeometry(points=points, row_ptr=row_ptr)
 
     def get_single_geometry(self, index: int) -> Polygon:
         return Polygon(self.polygon.csr.slice([index]).data[:, 0:2])
@@ -187,16 +195,20 @@ class GridCellEntity(GeometryEntity):
     def set_points(self, points: PointEntity):
         self.points = points
 
-    def get_geometry(self) -> ClosedPolygonGeometry:
-        polygon_data = self._resolve_polygons()
+    def get_geometry(self, slice=None) -> ClosedPolygonGeometry:
+        points = self._resolve_polygons()
+        row_ptr = self.grid_points.csr.row_ptr
+        if slice is not None:
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
+
         return OpenPolygonGeometry(
-            points=polygon_data,
+            points=points,
             row_ptr=self.grid_points.csr.row_ptr,
         )
 
     def get_single_geometry(self, index: int) -> Polygon:
         polygon_data = self._resolve_polygons()
-        geometry = slice_csr_array(polygon_data, self.grid_points.csr.row_ptr, [index])
+        geometry, _ = slice_csr_array(polygon_data, self.grid_points.csr.row_ptr, [index])
         return Polygon(geometry[:, 0:2])
 
     def is_ready(self):

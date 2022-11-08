@@ -122,3 +122,11 @@ class TestPolygonEntity:
         )
         geom = entity_group.get_single_geometry(0)
         assert geom.bounds == (0.0, 0.0, 1.0, 1.0)
+
+    def test_geometry_slice(self):
+        polygon_data = self.polygon_data["2d"]
+        entity_group = create_entity_group_with_data(
+            PolygonEntity("polygons"),
+            {"id": [10, 11], "geometry.polygon_2d": polygon_data},
+        )
+        np.testing.assert_array_equal(entity_group.get_geometry([1]).points, polygon_data[1])
