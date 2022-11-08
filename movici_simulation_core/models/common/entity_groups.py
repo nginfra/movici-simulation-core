@@ -134,7 +134,7 @@ class LineEntity(GeometryEntity):
         points = self.linestring.csr.data[:, 0:2]
         row_ptr = self.linestring.csr.row_ptr
         if slice is not None:
-            points, row_ptr = slice_csr_array(points, row_ptr, slice)
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
         return LinestringGeometry(points=points, row_ptr=row_ptr)
 
     def get_single_geometry(self, index: int) -> LineString:
@@ -179,7 +179,7 @@ class PolygonEntity(GeometryEntity):
         points = self.polygon.csr.data[:, 0:2]
         row_ptr = self.polygon.csr.row_ptr
         if slice is not None:
-            points, row_ptr = slice_csr_array(points, row_ptr, slice)
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
 
         return ClosedPolygonGeometry(points=points, row_ptr=row_ptr)
 
@@ -199,7 +199,7 @@ class GridCellEntity(GeometryEntity):
         points = self._resolve_polygons()
         row_ptr = self.grid_points.csr.row_ptr
         if slice is not None:
-            points, row_ptr = slice_csr_array(points, row_ptr, slice)
+            points, row_ptr = slice_csr_array(points, row_ptr, np.asarray(slice))
 
         return OpenPolygonGeometry(
             points=points,
