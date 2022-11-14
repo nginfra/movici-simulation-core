@@ -229,18 +229,18 @@ class TestModelRunner:
         assert stream_run.call_count == 1
 
     def test_entry_point_handles_exception(self, runner, stream_run):
-        stream_run.side_effect = ValueError
+        stream_run.side_effect = ValueError("An expected error")
         runner.entry_point()
         error_resp = runner._get_orchestrator_socket().send.call_args[0][0]
         assert isinstance(error_resp, ErrorMessage)
 
     def test_shuts_down_model_on_exception(self, runner, stream_run):
-        stream_run.side_effect = ValueError
+        stream_run.side_effect = ValueError("An expected error")
         runner.entry_point()
         assert DummyModel.shutdown.call_count == 1
 
     def test_entry_point_exits_on_exception(self, runner, stream_run, sys_exit):
-        stream_run.side_effect = ValueError
+        stream_run.side_effect = ValueError("An expected error")
         runner.entry_point()
         assert sys_exit.call_args == call(1)
 
