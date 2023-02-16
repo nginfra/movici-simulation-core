@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         exclude:
           # somehow these versions fail in ci, something to do with sqlite/spatialite
           - os: windows-latest
@@ -34,10 +34,6 @@ jobs:
         uses: ./.github/actions/install-spatialite
         with:
           os: ${{ matrix.os }}
-
-      - name: Install Fiona
-        if: startsWith(matrix.os, 'windows')
-        run: pip install fiona==1.9a2
 
       - name: Install
         run: |
