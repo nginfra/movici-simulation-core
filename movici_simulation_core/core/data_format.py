@@ -160,14 +160,21 @@ def create_array(uniform_data: list, data_type: DataType):
 
     dtype = data_type.np_type
     if np.issubdtype(dtype, str):
+        uniform_data = _substitute_undefined(uniform_data, undefined)
         dtype = get_unicode_dtype(_max_str_length(uniform_data))
+
     try:
         return np.array(uniform_data, dtype=dtype)
-    except ValueError:
-        for idx, val in enumerate(uniform_data):
-            if attribute_is_undefined(val):
-                uniform_data[idx] = undefined
+    except (ValueError, TypeError):
+        uniform_data = _substitute_undefined(uniform_data, undefined)
         return np.array(uniform_data, dtype=dtype)
+
+
+def _substitute_undefined(uniform_data, undefined):
+    for idx, val in enumerate(uniform_data):
+        if attribute_is_undefined(val):
+            uniform_data[idx] = undefined
+    return uniform_data
 
 
 def _max_str_length(uniform_data: list) -> int:
