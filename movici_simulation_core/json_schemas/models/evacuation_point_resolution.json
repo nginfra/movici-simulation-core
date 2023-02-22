@@ -11,19 +11,31 @@
       "movici.type": "dataset"
     },
     "evacuation_points": {
-      "type": "string",
-      "movici.type": "entityGroup"
+      "$ref": "#/$defs/evacuationLabelDef"
     },
     "road_segments": {
-      "type": "string",
-      "movici.type": "entityGroup"
-    },
-    "mode": {
-      "type": "string",
-      "enum": [ "id", "label" ]
+      "$ref": "#/$defs/evacuationLabelDef"
     }
-
   },
-  "additionalProperties": false
-
+  "additionalProperties": false,
+  "$defs": {
+    "attributeDef": {
+      "type": "string",
+      "movici.type": "attribute"
+    },
+    "evacuationLabelDef": {
+      "type": "object",
+      "required": [ "entity_group", "attribute" ],
+      "properties": {
+        "entity_group": {
+          "type": "string",
+          "movici.type": "entityGroup"
+        },
+        "attribute": {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      }
+    }
+  }
 }
