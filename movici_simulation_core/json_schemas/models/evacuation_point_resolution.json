@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "/evacuation_point_resolution/1.0.0",
+  "$id": "/evacuation_point_resolution/1.1.0",
   "required": [
     "dataset"
   ],
