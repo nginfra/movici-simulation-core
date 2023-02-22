@@ -85,6 +85,7 @@ setup(
             f"corridor = {MODEL_PATH}.corridor.model:Model",
             f"csv_player = {MODEL_PATH}.csv_player.csv_player:CSVPlayer",
             f"data_collector = {MODEL_PATH}.data_collector.data_collector:DataCollector",
+            f"evacuation_point_resolution = {MODEL_PATH}.evacuation_point_resolution:EvacuatonPointResolution",  # noqa: E501
             f"generalized_journey_time = {MODEL_PATH}.generalized_journey_time.gjt_model:GJTModel",
             f"netcdf_player = {MODEL_PATH}.netcdf_player.netcdf_player:NetCDFPlayer",
             f"operational_status = {MODEL_PATH}:OperationalStatusModel",
