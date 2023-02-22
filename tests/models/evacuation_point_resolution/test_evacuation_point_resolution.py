@@ -16,9 +16,11 @@ from movici_simulation_core.validate import validate_and_process
 def model_config():
     return {
         "dataset": "road_dataset",
-        "evacuation_points": "evacuation_point_entities",
-        "road_segments": "road_segment_entities",
-        "mode": "id",
+        "evacuation_points": {"entity_group": "evacuation_point_entities", "attribute": "id"},
+        "road_segments": {
+            "entity_group": "road_segment_entities",
+            "attribute": "evacuation.label",
+        },
     }
 
 
@@ -64,14 +66,14 @@ def test_create_mapping(model_config):
 
 
 @pytest.mark.parametrize(
-    "mode, expected",
+    "attribute, expected",
     [
         ("label", [2, 2, 3, 2, 2, 3]),
-        ("id", [0, 0, 1, 0, 0, 1]),
+        ("id", [4, 4, 5, 4, 4, 5]),
     ],
 )
-def test_calculate_in_different_mode(mode, expected, create_model_tester, model_config):
-    model_config["mode"] = mode
+def test_calculate_in_different_mode(attribute, expected, create_model_tester, model_config):
+    model_config["evacuation_points"]["attribute"] = attribute
     tester = create_model_tester(
         EvacuatonPointResolution, model_config, raise_on_premature_shutdown=False
     )
@@ -87,7 +89,7 @@ def test_calculate_in_different_mode(mode, expected, create_model_tester, model_
             }
         },
     )
-    labels = result["road_dataset"]["road_segment_entities"]["label"]
+    labels = result["road_dataset"]["road_segment_entities"]["evacuation.label"]
     assert labels == expected
 
 
@@ -97,19 +99,9 @@ def test_with_road_ids_in_initial_data(dataset, create_model_tester, model_confi
         EvacuatonPointResolution, model_config, raise_on_premature_shutdown=False
     )
     tester.initialize()
-    result, _ = tester.update(
-        0,
-        {
-            "road_dataset": {
-                "road_segment_entities": {
-                    "id": [1, 2, 3, 4, 5, 6],
-                    "evacuation.last_id": [1, 2, 3, 1, 2, 3],
-                }
-            }
-        },
-    )
-    labels = result["road_dataset"]["road_segment_entities"]["label"]
-    assert labels == [0, 0, 1, 0, 0, 1]
+    result, _ = tester.update(0, None)
+    labels = result["road_dataset"]["road_segment_entities"]["evacuation.label"]
+    assert labels == [4, 4, 5, 4, 4, 5]
 
 
 def test_multiple_updates(create_model_tester, model_config):
@@ -139,10 +131,10 @@ def test_multiple_updates(create_model_tester, model_config):
             }
         },
     )
-    labels = result["road_dataset"]["road_segment_entities"]["label"]
+    labels = result["road_dataset"]["road_segment_entities"]["evacuation.label"]
     ids = result["road_dataset"]["road_segment_entities"]["id"]
     assert ids == [5, 6]
-    assert labels == [1, 0]
+    assert labels == [5, 4]
 
 
 @pytest.mark.parametrize(
@@ -150,16 +142,15 @@ def test_multiple_updates(create_model_tester, model_config):
     [
         {
             "dataset": "some_dataset",
-            "evacuation_points": "some_entities",
-            "road_segments": "some_roads",
-            "mode": "id",
+            "evacuation_points": {"entity_group": "some_entities", "attribute": "id"},
+            "road_segments": {"entity_group": "some_roads", "attribute": "evacuation.label"},
         },
         {
             "dataset": "some_dataset",
         },
         {
             "dataset": "some_dataset",
-            "mode": "label",
+            "evacuation_points": {"entity_group": "some_entities", "attribute": "id"},
         },
     ],
 )
@@ -172,7 +163,11 @@ def test_model_config_schema(config):
     "config",
     [
         {},
-        {"dataset": "some_dataset", "mode": "invalid"},
+        {
+            "dataset": "some_dataset",
+            "evacuation_points": {"entity_group": "some_entities"},
+            "road_segments": {"entity_group": "some_roads", "attribute": "evacuation.label"},
+        },
     ],
 )
 def test_invalid_model_config_schema(config):
