@@ -6,8 +6,8 @@ import numpy as np
 
 from movici_simulation_core import (
     INIT,
+    OPT,
     PUB,
-    SUB,
     AttributeSchema,
     AttributeSpec,
     DataType,
@@ -24,6 +24,7 @@ Evacuation_RoadIds = AttributeSpec("evacuation.road_ids", DataType(int, csr=True
 Evacuation_LastId = AttributeSpec("evacuation.last_id", int)
 Evacuation_EvacuationPointId = AttributeSpec("evacuation.evacuation_point_id", int)
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/evacuation_point_resolution.json"
+DEFAULT_SPECIAL_VALUE = -9999
 
 
 class EvacuationPoints(EntityGroup):
@@ -31,7 +32,7 @@ class EvacuationPoints(EntityGroup):
 
 
 class RoadSegments(EntityGroup):
-    last_id = field(Evacuation_LastId, flags=SUB)
+    last_id = field(Evacuation_LastId, flags=OPT)
 
 
 class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution"):
@@ -90,12 +91,23 @@ class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution")
         self.create_label_mapping(self.evac_points.road_ids.csr, labels)
 
     def update(self, **_):
-        changed_indices = np.flatnonzero(self.roads.last_id.changed)
-        if len(changed_indices) == 0:
-            changed_indices = np.arange(len(self.roads))
         target = self.roads.get_attribute(self.config["road_segments"]["attribute"])
-        for idx in changed_indices:
-            target[idx] = self.label_mapping[self.roads.last_id[idx]]
+        target_special_value = target.options.special
+        if target_special_value is None:
+            target_special_value = DEFAULT_SPECIAL_VALUE
+
+        changed: np.ndarray = self.roads.last_id.changed
+        if np.all(~changed):
+            changed = np.full_like(self.roads.last_id, fill_value=True, dtype=bool)
+
+        is_special = changed & self.roads.last_id.is_special()
+        is_valid = changed & ~is_special & ~self.roads.last_id.is_undefined()
+
+        last_ids = self.roads.last_id.array
+        if np.any(is_valid):
+            mapping_func = np.vectorize(lambda i: self.label_mapping[i])
+            target[is_valid] = mapping_func(last_ids[is_valid])
+        target[is_special] = target.options.special
 
     def create_label_mapping(
         self, road_ids: TrackedCSRArray, labels: np.ndarray

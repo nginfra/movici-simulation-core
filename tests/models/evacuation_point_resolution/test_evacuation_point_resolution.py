@@ -28,6 +28,12 @@ def model_config():
 def dataset():
     return {
         "name": "road_dataset",
+        "general": {
+            "special": {
+                "road_segment_entities.evacuation.last_id": -1,
+                "road_segment_entities.evacuation.label": -2,
+            }
+        },
         "data": {
             "road_segment_entities": {
                 "id": [1, 2, 3, 4, 5, 6],
@@ -135,6 +141,27 @@ def test_multiple_updates(create_model_tester, model_config):
     ids = result["road_dataset"]["road_segment_entities"]["id"]
     assert ids == [5, 6]
     assert labels == [5, 4]
+
+
+def test_emits_special_when_no_evacuation_possible(create_model_tester, model_config):
+
+    tester = create_model_tester(
+        EvacuatonPointResolution, model_config, raise_on_premature_shutdown=False
+    )
+    tester.initialize()
+    result, _ = tester.update(
+        0,
+        {
+            "road_dataset": {
+                "road_segment_entities": {
+                    "id": [1],
+                    "evacuation.last_id": [-1],
+                }
+            }
+        },
+    )
+    labels = result["road_dataset"]["road_segment_entities"]["evacuation.label"]
+    assert labels == [-2]
 
 
 @pytest.mark.parametrize(
