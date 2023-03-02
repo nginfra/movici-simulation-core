@@ -67,9 +67,6 @@ jobs:
         with:
           os: ubuntu-latest
 
-      - name: Install PlantUML
-        uses: ./.github/actions/install-plantuml
-
       - name: Install dependencies
         run: |
           sudo apt-get install

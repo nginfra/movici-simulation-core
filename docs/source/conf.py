@@ -62,3 +62,8 @@ add_module_names = False
 autodoc_default_options = {
     "undoc-members": True,
 }
+
+
+# Plant UML
+local_plantuml_path = os.path.join(os.path.dirname(__file__), "../utils", "plantuml-1.2023.2.jar")
+plantuml = f"java -Djava.awt.headless=true -jar {local_plantuml_path}"
