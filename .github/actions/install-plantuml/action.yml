@@ -2,6 +2,7 @@ name: "Install PlantUML"
 
 runs:
   using: "composite"
+  shell: bash
   steps:
     - name: Install PlantUML
       run: |
