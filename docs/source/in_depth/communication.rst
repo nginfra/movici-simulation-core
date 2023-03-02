@@ -79,7 +79,7 @@ Message reference
 Message               Payload                                            Associated Service
 ====================  =================================================  ================================
 ``READY``             ``pub``, ``sub``                                   Orchestrator
-``ACK``               \-                                                 Orchestrator
+``ACK``               \-                                                 Orchestrator, Update
 ``CLEAR``             ``prefix``                                         Update
 ``DATA``              ``data``, ``size``                                 Update
 ``END``               \-                                                 Orchestrator
@@ -95,3 +95,5 @@ Message               Payload                                            Associa
 
 .. [*] ``UPDATE_SERIES`` payload consists of multiple frames, each containing one ``UPDATE`` 
   payload
+
+
