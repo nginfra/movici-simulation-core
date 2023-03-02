@@ -2,9 +2,9 @@ name: "Install PlantUML"
 
 runs:
   using: "composite"
-  shell: bash
   steps:
     - name: Install PlantUML
+      shell: bash
       run: |
         sudo apt update
         sudo apt install -y graphviz default-jre
