@@ -17,6 +17,7 @@
 .. |Services| replace:: :term:`Services<Service>`
 .. |Simulation| replace:: :term:`Simulation`
 .. |Special| replace:: :term:`Special`
+.. |Timestamp| replace:: :term:`Timestamp`
 .. |Update| replace:: :term:`Update`
 .. |Updates| replace:: :term:`Updates<Update>`
 .. |World state| replace:: :term:`World state`
