@@ -157,7 +157,7 @@ def test_max_volume_to_capacity(model: Model):
 
 def test_geometry(model: Model):
     model._transport_segments._linestring2d.csr = TrackedCSRArray(
-        np.array([[0, 0], [0, 1], [0, 0], [1, 0], [0, 0], [0, 1], [0, 1], [1, 0]]),
+        np.array([[0, 0], [0, 1], [0, 0], [1, 0], [0, 0], [0, 1], [0, 1], [1, 0]]).astype(float),
         np.array([0, 2, 4, 6, 8]),
     )
     model._transport_directions = np.array([1, 1, -1, 0])
