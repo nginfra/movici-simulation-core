@@ -6,6 +6,7 @@ import operator
 import re
 import typing as t
 
+from movici_simulation_core.models.common.model_util import safe_divide
 from movici_simulation_core.models.udf_model import functions
 
 TOKENS = {
@@ -279,7 +280,7 @@ class UDFCompiler(NodeVisitor):
             "+": operator.add,
             "-": operator.sub,
             "*": operator.mul,
-            "/": operator.truediv,
+            "/": safe_divide,
             "==": operator.eq,
             "!=": operator.ne,
             "<": operator.lt,

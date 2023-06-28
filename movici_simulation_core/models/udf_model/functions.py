@@ -162,9 +162,6 @@ def default_func(
 
 @func("if")
 def if_func(*arrays_or_values):
-    """calculate row-wise maximum value of n arrays or values. Every array must have the same
-    length in the first dimension. Values are broadcasted along the first axis
-    """
     if len(arrays_or_values) != 3:
         raise TypeError("function 'if' requires 3 arguments: COND, IF_TRUE, IF_FALSE")
     cond, if_true, if_false = arrays_or_values

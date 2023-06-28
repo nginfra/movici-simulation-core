@@ -124,9 +124,13 @@ class Moment:
         return cls(timeline_info.seconds_to_timestamp(seconds), timeline_info)
 
     @classmethod
-    def from_string(cls, datetime_str: str, timeline_info: t.Optional[TimelineInfo] = None):
+    def from_string(
+        cls, datetime_str: str, timeline_info: t.Optional[TimelineInfo] = None, **kwargs
+    ):
         timeline_info = cls.assert_timeline_info(timeline_info)
-        return cls.from_datetime(string_to_datetime(datetime_str, dayfirst=True), timeline_info)
+        return cls.from_datetime(
+            string_to_datetime(datetime_str, **{"dayfirst": True, **kwargs}), timeline_info
+        )
 
     @classmethod
     def from_datetime(cls, dt: datetime.datetime, timeline_info: t.Optional[TimelineInfo] = None):
