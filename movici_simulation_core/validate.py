@@ -28,28 +28,47 @@ class MoviciTypeReport(exceptions.ValidationError):
         return MoviciDataRefInfo(path=self.path, movici_type=self.movici_type, value=self.instance)
 
 
-def movici_dataset_type(validator, ds_type, instance, schema):
-    if not validator.is_type(instance, "string"):
-        return
+def movici_dataset_type(lookup):
+    def movici_dataset_type_(validator, ds_type, instance, schema):
+        if not validator.is_type(instance, "string"):
+            return
 
-    if not (movici_type := schema.get("movici.type")) == "dataset":
-        return
+        if not (movici_type := schema.get("movici.type")) == "dataset":
+            return
 
-    # In case the instance is not a valid dataset, there is no need to also valid its
-    # (hypothetical) dataset type
-    if validator.validate_movici_type(instance, movici_type) is not None:
-        return
+        # In case the instance is not a valid dataset, there is no need to also valid its
+        # (hypothetical) dataset type
+        if validate_movici_type(instance, movici_type, lookup) is not None:
+            return
 
-    if not validator.has_dataset_type(instance, ds_type):
-        yield exceptions.ValidationError(f"dataset '{instance}' is not of type '{ds_type}'")
+        if not has_dataset_type(instance, ds_type, lookup):
+            yield exceptions.ValidationError(f"dataset '{instance}' is not of type '{ds_type}'")
+
+    return movici_dataset_type_
 
 
-def movici_type(validator, movici_type, instance, schema):
-    if not validator.is_type(instance, "string"):
-        return
-    if error := validator.validate_movici_type(instance, movici_type):
-        yield exceptions.ValidationError(error)
-    yield MoviciTypeReport(movici_type, instance)
+def movici_type(lookup):
+    def movici_type_(validator, movici_type, instance, schema):
+        if not validator.is_type(instance, "string"):
+            return
+        if error := validate_movici_type(instance, movici_type, lookup):
+            yield exceptions.ValidationError(error)
+        yield MoviciTypeReport(movici_type, instance)
+
+    return movici_type_
+
+
+def validate_movici_type(instance, movici_type, lookup):
+    if movici_type == "dataset" and not lookup.dataset(instance):
+        return f"dataset '{instance}' is not available in the scenario"
+    if movici_type == "entityGroup" and not lookup.entity_group(instance):
+        return f"Entity type '{instance}' does not exist"
+    if movici_type == "attribute" and not lookup.attribute(instance):
+        return f"Attribute '{instance}' does not exist"
+
+
+def has_dataset_type(instance: str, dataset_type: str, lookup):
+    return lookup.dataset_type(instance, dataset_type)
 
 
 # The following functions ``anyOf`` and ``oneOf`` are adapted from ``jsonschema._validators``
@@ -248,29 +267,17 @@ def _extract_reports_from_error(
 
 
 def movici_validator(schema, lookup: MoviciTypeLookup = FromDictLookup()):
-    BaseValidator = validators.extend(
+    Validator = validators.extend(
         validators.validator_for(schema, default=validators.Draft7Validator),
         {
             "oneOf": oneOf,
             "anyOf": anyOf,
-            "movici.datasetType": movici_dataset_type,
-            "movici.type": movici_type,
+            "movici.datasetType": movici_dataset_type(lookup),
+            "movici.type": movici_type(lookup),
         },
     )
-
-    class MoviciValidator(BaseValidator):
-        def validate_movici_type(self, instance, movici_type):
-            if movici_type == "dataset" and not lookup.dataset(instance):
-                return f"dataset '{instance}' is not available in the scenario"
-            if movici_type == "entityGroup" and not lookup.entity_group(instance):
-                return f"Entity type '{instance}' does not exist"
-            if movici_type == "attribute" and not lookup.attribute(instance):
-                return f"Attribute '{instance}' does not exist"
-
-        def has_dataset_type(self, instance: str, dataset_type: str):
-            return lookup.dataset_type(instance, dataset_type)
-
-    return MoviciValidator
+    Validator.lookup = lookup
+    return Validator
 
 
 @dataclasses.dataclass

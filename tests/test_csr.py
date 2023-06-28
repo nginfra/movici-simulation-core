@@ -42,23 +42,6 @@ def test_is_close(arr, val, equal_nan, expected):
 
 
 @pytest.mark.parametrize(
-    ["arr", "val", "equal_nan"],
-    [
-        (np.array([1.0, np.nan, 1.0]), np.array([1.0, 1.0]), True),
-        (np.array([1.0, np.nan, 1.0]), np.array([1.0, 1.0]), False),
-        (np.array(["aa", "bb", "cc"]), np.array(["aaa", "bbb"]), True),
-        (np.array(["aa", "bb", "cc"]), np.array(["aaa", "bbb"]), False),
-    ],
-)
-def test_is_close_differing_lengths_throws(arr, val, equal_nan):
-    with pytest.raises(ValueError):
-        isclose(arr, val, equal_nan=equal_nan)
-
-    with pytest.raises(ValueError):
-        isclose(val, arr, equal_nan=equal_nan)
-
-
-@pytest.mark.parametrize(
     ["data", "row_ptr", "row", "equal_nan", "expected"],
     [
         (

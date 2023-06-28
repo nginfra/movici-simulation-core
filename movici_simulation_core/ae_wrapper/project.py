@@ -313,6 +313,10 @@ class ProjectWrapper:
             matrix_names=[matrix_name],
             index_names=["index"],
         )
+        # TODO: casting the index dtype is a temporary workaround until
+        # https://github.com/AequilibraE/aequilibrae/issues/424 get fixed
+        matrix.indices = matrix.indices.astype(int, copy=False)
+        matrix.index = matrix.index.astype(int, copy=False)
         matrix.index[:] = node_ids
         matrix.matrix[matrix_name][:] = od_matrix[:]
 
