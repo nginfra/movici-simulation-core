@@ -337,12 +337,7 @@ class AttributeDataLoading(DatasetOperation):
             return lambda v: v if v is None else loader(v)
 
         loaders = (self.loaders[key] for key in attr_config.get("loaders", []))
-        return [skip_none(l) for l in itertools.chain(loaders, self.default_loaders())]
-
-    def default_loaders(self):
-        return [
-            self.nan_loader,
-        ]
+        return [self.nan_loader, *(skip_none(l) for l in loaders)]
 
     @staticmethod
     def nan_loader(val):

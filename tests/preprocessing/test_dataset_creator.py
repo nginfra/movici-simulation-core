@@ -331,8 +331,8 @@ class TestGeopandasDataSource:
         [
             ([10, None], [10.0, float("NaN")]),
             ([10.1, None], [10.1, float("NaN")]),
-            ([True, None], [True, None]),
-            (["bla", None], ["bla", None]),
+            ([True, None], [True, float("NaN")]),
+            (["bla", None], ["bla", float("NaN")]),
         ],
     )
     def test_undefined_property(self, input, expected, create_gdf):
@@ -1560,7 +1560,7 @@ def test_create_dataset(create_geojson):
     geojson = create_geojson(
         [
             Point(x1, y1, attributes={"attr": 1}),
-            Point(x2, y2, attributes={"attr": 2}),
+            Point(x2, y2, attributes={"attr": None}),
         ]
     )
     dc = {
@@ -1601,7 +1601,7 @@ def test_create_dataset(create_geojson):
                 "id": [0, 1],
                 "geometry.x": [exp_x1, exp_x2],
                 "geometry.y": [exp_y1, exp_y2],
-                "attribute": [1, 2],
+                "attribute": [1, None],
             }
         },
     }
