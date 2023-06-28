@@ -182,11 +182,11 @@ class GeopandasSource(DataSource):
     def get_attribute(self, name: str):
         try:
             return list(self.gdf[name])
-        except KeyError:
+        except KeyError as e:
             raise ValueError(
                 f"'{name}' was not found as a feature property, perhaps it has an "
                 "incompatible data type and was not loaded"
-            )
+            ) from e
 
     @staticmethod
     def feature_type_or_raise(feature, expected):
