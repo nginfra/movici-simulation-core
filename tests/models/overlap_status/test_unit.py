@@ -21,9 +21,9 @@ def get_point_entity(point_collection: PointGeometry) -> PointEntity:
     nb_points = len(point_collection.points)
     point.x.initialize(nb_points)
     point.y.initialize(nb_points)
-
-    point.x[:] = point_collection.points[:, 0]
-    point.y[:] = point_collection.points[:, 1]
+    points = point_collection.points.astype(float)
+    point.x[:] = points[:, 0]
+    point.y[:] = points[:, 1]
     return point
 
 
@@ -31,7 +31,9 @@ def get_line_entity(line_collection: LinestringGeometry) -> LineEntity:
     state = TrackedState()
     line = state.register_entity_group("ds", LineEntity("entity"))
     line._linestring2d.initialize(len(line_collection.row_ptr) - 1)
-    line._linestring2d.csr = TrackedCSRArray(line_collection.points, line_collection.row_ptr)
+    line._linestring2d.csr = TrackedCSRArray(
+        line_collection.points.astype(float), line_collection.row_ptr
+    )
     return line
 
 
@@ -40,7 +42,7 @@ def get_polygon_entity(polygon_collection: ClosedPolygonGeometry) -> PolygonEnti
     polygon = state.register_entity_group("ds", PolygonEntity("entity"))
     polygon._polygon_legacy.initialize(len(polygon_collection.row_ptr) - 1)
     polygon._polygon_legacy.csr = TrackedCSRArray(
-        polygon_collection.points, polygon_collection.row_ptr
+        polygon_collection.points.astype(float), polygon_collection.row_ptr
     )
     return polygon
 
