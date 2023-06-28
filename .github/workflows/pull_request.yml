@@ -4,26 +4,26 @@ on:
   pull_request:
 
 env:
-  python-version: "3.10"
+  python-version: "3.11"
 
 jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Python ${{ env.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.python-version }}
+    - name: Set up Python ${{ env.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.python-version }}
 
-      - name: Build and install
-        run: |
-          pip install -r requirements-dev.txt
+    - name: Build and install
+      run: |
+        pip install -r requirements-dev.txt
 
-      - name: Run linters
-        run: |
-          make lint
+    - name: Run linters
+      run: |
+        make lint
 
   coverage:
     strategy:
@@ -32,47 +32,47 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
+    - name: Set up Python ${{ env.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.python-version }}
 
-      - name: Install Spatialite
-        uses: ./.github/actions/install-spatialite
-        with:
-          os: ${{ matrix.os }}
+    - name: Install Spatialite
+      uses: ./.github/actions/install-spatialite
+      with:
+        os: ${{ matrix.os }}
 
-      - name: Install dependencies
-        run: |
-          pip install -e .[models,dev]
+    - name: Install dependencies
+      run: |
+        pip install -e .[models,dev]
 
-      - name: Run tests with coverage
-        run: |
-          make coverage
+    - name: Run tests with coverage
+      run: |
+        make coverage
 
   test-docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+    - uses: actions/checkout@v3
 
-      - name: Set up Python ${{ env.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.python-version }}
+    - name: Set up Python ${{ env.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.python-version }}
 
-      - name: Install Spatialite
-        uses: ./.github/actions/install-spatialite
-        with:
-          os: ubuntu-latest
+    - name: Install Spatialite
+      uses: ./.github/actions/install-spatialite
+      with:
+        os: ubuntu-latest
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get install
-          pip install -e .[all]
+    - name: Install dependencies
+      run: |
+        sudo apt-get install
+        pip install -e .[all]
 
-      - name: Test docs
-        run: |
-          make docs
-          make doctest
+    - name: Test docs
+      run: |
+        make docs
+        make doctest
