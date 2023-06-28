@@ -78,11 +78,8 @@ def safe_divide(numerator, denominator, fill_value=None):
         return np.nan_to_num(rv)
 
     if isinstance(rv, np.ndarray):
-        rv[numerator == 0] = 0
         rv[~np.isfinite(rv)] = fill_value
     else:
-        if numerator == 0:
-            rv = 0
         if not np.isfinite(rv):
             rv = fill_value
     return rv
