@@ -70,8 +70,19 @@ def find_y_in_x(x: np.ndarray, y: np.ndarray):
     return np.searchsorted(x, y, sorter=np.argsort(x))
 
 
-def safe_divide(numerator, denominator, fill_value):
+def safe_divide(numerator, denominator, fill_value=None):
     with np.errstate(divide="ignore", invalid="ignore"):
-        rv = numerator / denominator
-    rv[~np.isfinite(rv)] = fill_value
+        rv = np.asarray(numerator) / np.asarray(denominator)
+
+    if fill_value is None:
+        return np.nan_to_num(rv)
+
+    if isinstance(rv, np.ndarray):
+        rv[numerator == 0] = 0
+        rv[~np.isfinite(rv)] = fill_value
+    else:
+        if numerator == 0:
+            rv = 0
+        if not np.isfinite(rv):
+            rv = fill_value
     return rv
