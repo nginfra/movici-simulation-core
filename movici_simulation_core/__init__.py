@@ -83,4 +83,4 @@ __all__ = [
     "UpdateDataClient",
 ]
 
-__version__ = "2.10.4"
+__version__ = "2.10.5"
