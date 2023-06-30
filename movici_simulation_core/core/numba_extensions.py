@@ -1,4 +1,3 @@
-import functools
 import os
 
 import numba
@@ -6,27 +5,6 @@ import numpy as np
 from numba.core.config import reload_config
 from numba.core.extending import overload, register_jitable
 from numba.np.numpy_support import type_can_asarray
-
-
-def generated_jit(func=None, **kwargs):
-    """Custom decorator that replaces `numba.generated_jit` and works also when the jit compiler
-    is disabled
-    """
-    if numba.config.DISABLE_JIT:
-        if func is None:
-            return generated_jit
-        return _fake_generated_jit(func)
-    return numba.generated_jit(func, **kwargs)
-
-
-def _fake_generated_jit(func):
-    @functools.wraps(func)
-    def run_generated_jit_func(*args, **kwargs):
-        arg_types = (numba.typeof(arg) for arg in args)
-        kwargs_types = {k: numba.typeof(v) for k, v in kwargs.items()}
-        return func(*arg_types, **kwargs_types)(*args, **kwargs)
-
-    return run_generated_jit_func
 
 
 def disable_jit():
