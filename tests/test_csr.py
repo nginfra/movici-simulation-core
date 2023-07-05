@@ -28,6 +28,7 @@ from movici_simulation_core.csr import (
         (np.zeros(1000), np.nan, True, np.zeros(1000, dtype=bool)),
         (np.zeros(1000), np.ones(1000), True, np.zeros(1000, dtype=bool)),
         (np.zeros(1000), np.zeros(1000), True, np.ones(1000, dtype=bool)),
+        # these two tests below cause issues. disable them to expose more issues...
         (np.zeros((1000, 2)), np.zeros((1000, 2)), True, np.ones((1000, 2), dtype=bool)),
         (np.zeros((1000, 2)), np.ones((1000, 2)), True, np.zeros((1000, 2), dtype=bool)),
         (np.array(["a", "b"]), "a", False, [True, False]),
