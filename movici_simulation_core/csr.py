@@ -2,10 +2,10 @@ import typing as t
 
 import numba
 import numpy as np
-from numba.core.types import complex_domain, real_domain
-from numba.extending import overload
+from numba.core.types import complex_domain, number_domain, real_domain
 from numba.np.numpy_support import type_can_asarray
 
+from .core.numba_extensions import generated_jit
 from .utils.unicode import largest_unicode_dtype
 
 
@@ -16,7 +16,7 @@ def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         rv[i] = (data_row.shape == row.shape) and np.all(
-            isclose_(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
+            isclose_numba(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
         )
     return rv
 
@@ -26,7 +26,7 @@ def rows_contain(data, row_ptr, val, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
-        rv[i] = np.any(isclose_(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
+        rv[i] = np.any(isclose_numba(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
     return rv
 
 
@@ -37,46 +37,48 @@ def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         for item in vals:
-            if np.any(isclose_(data_row, item, rtol=rtol, atol=atol, equal_nan=equal_nan)):
+            if np.any(isclose_numba(data_row, item, rtol=rtol, atol=atol, equal_nan=equal_nan)):
                 rv[i] = True
                 break
     return rv
 
 
+@generated_jit
 def row_wise_sum(data, row_ptr):
     assert_numeric_array(data)
-    return row_wise_sum_njit(data, row_ptr)
+
+    def impl(data, row_ptr):
+        return reduce_rows(data, row_ptr, np.sum)
+
+    return impl
 
 
-@numba.njit(cache=True)
-def row_wise_sum_njit(data, row_ptr):
-    return reduce_rows(data, row_ptr, np.sum)
-
-
+@generated_jit
 def row_wise_max(data, row_ptr, empty_row=None):
     assert_numeric_array(data)
-    return row_wise_max_njit(data, row_ptr, empty_row)
+
+    def impl(data, row_ptr, empty_row=None):
+
+        if empty_row is None:
+            return reduce_rows(data, row_ptr, np.max)
+
+        return reduce_rows(data, row_ptr, _substituted_max, empty_row)
+
+    return impl
 
 
-@numba.njit
-def row_wise_max_njit(data, row_ptr, empty_row=None):
-    if empty_row is None:
-        return reduce_rows(data, row_ptr, np.max)
-
-    return reduce_rows(data, row_ptr, _substituted_max, empty_row)
-
-
+@generated_jit
 def row_wise_min(data, row_ptr, empty_row=None):
     assert_numeric_array(data)
-    return row_wise_min_njit(data, row_ptr, empty_row)
 
+    def impl(data, row_ptr, empty_row=None):
 
-@numba.njit
-def row_wise_min_njit(data, row_ptr, empty_row=None):
-    if empty_row is None:
-        return reduce_rows(data, row_ptr, np.min)
+        if empty_row is None:
+            return reduce_rows(data, row_ptr, np.min)
 
-    return reduce_rows(data, row_ptr, _substituted_min, empty_row)
+        return reduce_rows(data, row_ptr, _substituted_min, empty_row)
+
+    return impl
 
 
 @numba.njit(cache=True)
@@ -119,7 +121,7 @@ def csr_binop(data, row_ptr, operand, operator):
 
 
 def assert_numeric_array(arr):
-    if not np.issubdtype(arr.dtype, np.number):
+    if getattr(arr, "dtype", None) not in number_domain:
         raise TypeError("Only numeric arrays are supported")
 
 
@@ -162,7 +164,7 @@ def update_csr_array(
 
         if changes is not None:
             is_equal = (old_row.shape == new_row.shape) and np.all(
-                isclose_(old_row, new_row, rtol, atol, equal_nan)
+                isclose_numba(old_row, new_row, rtol, atol, equal_nan)
             )
             changes[pos] = not is_equal
         set_row(new_data, new_row_ptr, pos, new_row)
@@ -190,7 +192,7 @@ def remove_undefined_csr(
         idx = row_ptr[i]
         idx2 = row_ptr[i + 1]
         data_field = data[idx:idx2]
-        if len(data_field) == 1 and np.all(isclose_(data_field, undefined, equal_nan=True)):
+        if len(data_field) == 1 and np.all(isclose_numba(data_field, undefined, equal_nan=True)):
             continue
         new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
         new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field
@@ -264,28 +266,11 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             a = np.asarray(a, dtype=dtype)
         if isinstance(b, np.ndarray):
             b = np.asarray(b, dtype=dtype)
-    return isclose_(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    return isclose_numba(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
 
 
-@numba.njit(cache=True)
-def isclose_(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    return isclose_base(a, b, rtol, atol, equal_nan)
-
-
-def isclose_base(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    if (is_number_array(a) or isinstance(a, (float, int))) and (
-        is_number_array(b) or isinstance(b, (float, int))
-    ):
-        return np.isclose(a, b, rtol, atol, equal_nan)
-    return a == b
-
-
-def is_number_array(val):
-    return isinstance(val, np.ndarray) and np.issubdtype(val.dtype, np.number)
-
-
-@overload(isclose_base)
-def isclose_base_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+@generated_jit(cache=True, nopython=True)
+def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     inexact_domain = real_domain | complex_domain
     if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
         getattr(b, "dtype", None) in inexact_domain or b in inexact_domain
