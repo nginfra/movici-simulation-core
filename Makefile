@@ -1,10 +1,10 @@
 MODULE_NAME = movici_simulation_core
 
 unittest:
-	NUMBA_DISABLE_JIT=1 pytest -v tests/
+	pytest -v tests/
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
+	pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
 
 flake8:
 	flake8
@@ -39,12 +39,12 @@ black-check:
 
 isort:
 	isort .
-	
+
 isort-check:
 	isort -c .
 
 lint: flake8 black-check isort-check bandit safety mypy
-	
+
 test-all: coverage lint
 
 level=patch
