@@ -4,7 +4,12 @@ import tempfile
 import typing as t
 from pathlib import Path
 
-from pydantic import BaseSettings, DirectoryPath, Field
+from pydantic import DirectoryPath, Field
+
+try:
+    from pydantic import BaseSettings
+except ImportError:
+    from pydantic_settings import BaseSettings
 
 from movici_simulation_core.core.moment import TimelineInfo
 
