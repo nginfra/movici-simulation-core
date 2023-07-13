@@ -132,6 +132,6 @@ class AttributeAggregator:
         self.previous_source = self.source.array.copy()
 
     @staticmethod
-    def ensure_special_value(attr, special_value):
+    def ensure_special_value(attr: UniformAttribute, special_value):
         if attr.options.special is None:
             attr.options.special = special_value

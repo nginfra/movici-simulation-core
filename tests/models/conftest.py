@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from movici_simulation_core.core import Model
+from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
@@ -39,6 +40,19 @@ def global_timeline_info():
 def global_schema(global_schema):
     global_schema.use(CommonAttributes)
     return global_schema
+
+
+@pytest.fixture
+def parser(global_schema):
+    return EntityInitDataFormat(global_schema)
+
+
+@pytest.fixture
+def dataset_to_array_format(parser: EntityInitDataFormat):
+    def dataset_to_array_format_(dataset_dict):
+        return parser.load_json(dataset_dict)
+
+    return dataset_to_array_format_
 
 
 @pytest.fixture
