@@ -53,8 +53,10 @@ def tokenize(string: str, patterns: t.Optional[dict] = None) -> t.Iterator[Token
             raise SyntaxError(f"Invalid syntax: '{string[:10]}")
 
 
-def parse(tokens: t.Iterable[Token]):
-    return Parser(tokens).parse()
+def parse(text_or_tokens: t.Union[str, t.Iterable[Token]]):
+    if isinstance(text_or_tokens, str):
+        text_or_tokens = tokenize(text_or_tokens)
+    return Parser(text_or_tokens).parse()
 
 
 def get_vars(node: Node):
@@ -77,7 +79,7 @@ class Node:
         """
         return visitor.visit(self)
 
-    def accept(self, visitor, top_down=False):
+    def accept(self, visitor):
         """Accept a visitor and traverse the tree. Branch nodes must override
         `Node.accept_children`
 
@@ -85,14 +87,10 @@ class Node:
         :param top_down: whether to first the branch nodes and then the children (top_down=True) or
             first the children and then the branch nodes (top_down=False)
         """
-        if top_down:
-            visitor.visit(self)
-        self.accept_children(visitor)
-        if not top_down:
-            visitor.visit(self)
+        self.traverse_children(visitor)
         self.accept_node(visitor)
 
-    def accept_children(self, visitor):
+    def traverse_children(self, visitor):
         """Branch nodes should override this to let the visitor visit the node's children"""
         pass
 
@@ -112,7 +110,7 @@ class BinOp(Node):
     left: t.Optional[Node] = None
     right: t.Optional[Node] = None
 
-    def accept_children(self, visitor):
+    def traverse_children(self, visitor):
         if self.left:
             self.left.accept(visitor)
         if self.right:
@@ -123,7 +121,7 @@ class BinOp(Node):
 class Func(Node):
     args: t.Tuple[Node, ...] = ()
 
-    def accept_children(self, visitor):
+    def traverse_children(self, visitor):
         for arg in self.args:
             arg.accept(visitor)
 
