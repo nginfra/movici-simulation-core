@@ -311,10 +311,27 @@ class TestFunctionBlock(BaseTestBlock):
 
 class TestOutputBlock(BaseTestBlock):
     @pytest.fixture
-    def block(self, entity_group):
-        return OutputBlock(source=entity_group, attribute_name="some_attribute")
+    def block(self, entity_group, state):
+        result = OutputBlock(
+            source=InputBlock(entity_group, "some_attribute"), attribute_name="other_attribute"
+        )
+        result.setup(state=state)
+        return result
 
     def test_setup_sets_up_state(self, block, state: TrackedState):
-        block.setup(state=state)
         assert isinstance(block.attribute_object, UniformAttribute)
-        assert state.get_attribute("my_dataset", "my_entities", "some_attribute").flags == PUB
+        assert state.get_attribute("my_dataset", "my_entities", "other_attribute").flags == PUB
+
+    def test_update_sets_data(self, block, state, add_data):
+        add_data(
+            {
+                "id": [0, 1],
+                "some_attribute": [1.0, 2.0],
+            },
+            is_initial=True,
+        )
+        block.initialize()
+        block.update()
+
+        attr = state.get_attribute("my_dataset", "my_entities", "other_attribute")
+        assert np.array_equal(attr.array, [1.0, 2.0])

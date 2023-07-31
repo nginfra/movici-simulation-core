@@ -7,10 +7,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from movici_geo_query import GeoQuery, QueryResult
 
-from movici_simulation_core import TrackedState
-from movici_simulation_core.core.attribute import PUB, SUB, AttributeObject, get_undefined_array
-from movici_simulation_core.core.data_type import DataType
-from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core import PUB, SUB, AttributeSchema, DataType, TrackedState
+from movici_simulation_core.core.attribute import AttributeObject, get_undefined_array
 from movici_simulation_core.csr import row_wise_max, row_wise_min, row_wise_sum
 from movici_simulation_core.models.common.entity_groups import (
     GeometryEntity,
@@ -106,7 +104,7 @@ class DataBlock(Block):
 
 
 @dataclass(unsafe_hash=True)
-class InputBlock(Block):
+class InputBlock(DataBlock):
     entity_group: EntityGroupBlock
     attribute_name: str
     attribute_object: AttributeObject = non_data_field(None)
@@ -262,7 +260,7 @@ class OutputBlock(Block):
 
     @property
     def entity_group(self):
-        return self.source
+        return self.source.entity_group
 
     def setup(self, state: TrackedState, schema=None, **_):
         schema = schema or state.schema
@@ -270,6 +268,9 @@ class OutputBlock(Block):
             spec=schema.get_spec(self.attribute_name, DataType(float)),
             flags=PUB,
         )
+
+    def update(self, **_):
+        self.attribute_object[:] = self.source.data
 
     def get_sources(self) -> t.List[Block]:
         return [self.source]
