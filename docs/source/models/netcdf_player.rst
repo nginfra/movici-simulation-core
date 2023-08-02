@@ -4,11 +4,11 @@
 NetCDFPlayer Model
 ===================================================================================================
 
-The ``NetCDFPlayerModel`` can read a (specifically organized) netCDF file and write variables 
+The ``NetCDFPlayerModel`` can read a (specifically organized) netCDF file and write variables
 inside this netCDF to attributes in an entity group. The netCDF file must adhere to the following
 specification:
 
-* There must be a ``time`` variable with a number of timestamps. The timestamps represent the number 
+* There must be a ``time`` variable with a number of timestamps. The timestamps represent the number
   of seconds sinces ``t=0``
 * There must be at least one other variable which has the length of ``time`` as the first dimension
   and the length of the number of (target) entities as the second dimension
@@ -22,8 +22,8 @@ on an "index" basis, not on an "id" basis.
 Example Configuration
 ---------------------------------------------------------------------------------------------------
 
-.. code-block:: 
-  
+.. code-block::
+
   {
     "name": "my_player",
     "type": "netcdf_player",
@@ -40,7 +40,7 @@ Example Configuration
 NetCDFPlayer Model Config Schema Reference
 ---------------------------------------------------------------------------------------------------
 
-DatasetCreatorConfig
+NetCDFPlayerConfig
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 | ``type``: ``object``
