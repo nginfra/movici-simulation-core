@@ -2,14 +2,14 @@
 .. |required| replace:: (**required**)
 
 Traffic Assignment Model
----------------------------------------------------------------------------------------------------
+===================================================================================================
 
 The traffic assignment model (``'traffic_assignment'``) can be used to calculate traffic flows on
 a transport network dataset. Internally it uses `Aequilibrae <https://aequilibrae.com>`_ to
 calculate traffic flows. The model merely acts as a wrapper.
 
 Dataset requirements
-^^^^^^^^^^^^^^^^^^^^
+--------------------
 The traffic assignement model expects a dataset with a certain set of entity groups and attributes.
 
 **virtual_node_entities**. These are the incoming and outgoing nodes of the network and contain the
