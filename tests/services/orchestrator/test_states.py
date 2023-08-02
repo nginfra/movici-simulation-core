@@ -111,7 +111,7 @@ class TestStartFinalizingPhase(BaseTestState):
 
     def test_replaces_queue_with_quit_message(self, state, context):
         state.run()
-        assert type(context.models.queue_all.call_args[0][0]) == QuitMessage
+        assert type(context.models.queue_all.call_args[0][0]) is QuitMessage
 
 
 class TestEndFinalizingPhase(BaseTestState):
