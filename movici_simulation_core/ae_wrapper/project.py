@@ -294,8 +294,13 @@ class ProjectWrapper:
         self._project.network.build_graphs(modes=[TransportMode.CAR])
         graph = self._graph
         graph.set_graph(cost_field)
+
         graph.set_blocked_centroid_flows(block_centroid_flows)
         return graph
+
+    def exclude_segments(self, segment_ids: t.Sequence[int]):
+        link_ids = self._link_id_generator.query_new_ids(segment_ids)
+        self._graph.exclude_links(link_ids)
 
     def convert_od_matrix(self, od_matrix: np.ndarray, matrix_name: str) -> AequilibraeMatrix:
         nodes = self.get_nodes()

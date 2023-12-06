@@ -70,7 +70,7 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
                 conf.get("single_source_entity_id"), conf.get("single_source_entity_reference")
             ):
                 output_dtype = DataType(float, csr=False)
-                if conf.get("singleSourceEntityReference") is not None:
+                if conf.get("single_source_entity_reference") is not None:
                     self.entity_groups["virtual_nodes"].reference.flags |= REQUIRED
             else:
                 output_dtype = DataType(float, csr=True)
