@@ -11,6 +11,6 @@ click
 geopandas
 jsonschema
 pyproj
-Fiona>=1.9; sys_platform == "win32"
-Fiona>=1.8; sys_platform != "win32"
+Fiona>=1.9, <1.9.5; sys_platform == "win32"
+Fiona>=1.8, <1.9.5; sys_platform != "win32"
 netCDF4
