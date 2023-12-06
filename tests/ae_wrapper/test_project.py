@@ -403,6 +403,13 @@ class TestTrafficAssignment:
             results.delay_factor, [1.72969568, 1.22497946, 101.50623908, 1.72969523]
         )
 
+    def test_assign_traffic_with_links_excluded(self, project: ProjectWrapper):
+        od_passenger = np.array([[0, 0, 0], [1, 0, 0], [0, 0, 0]], dtype=float)
+        od_cargo = np.zeros_like(od_passenger)
+        project.exclude_segments([104])
+        results = project.assign_traffic(od_passenger, od_cargo, AssignmentParameters())
+        assert np.allclose(results.passenger_flow, [1, 0, 0, 0], atol=0.01)
+
 
 @pytest.fixture
 def p(request: SubRequest):
