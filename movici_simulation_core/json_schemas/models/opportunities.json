@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/opportunities/1.0.0",
+  "type": "object",
+  "required": [
+    "overlap_dataset",
+    "opportunity_taken_property",
+    "total_length_property",
+    "opportunity_entity",
+    "cost_per_meter"
+  ],
+  "properties": {
+    "overlap_dataset": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "string",
+        "movici.type": "dataset"
+      }
+    },
+    "opportunity_taken_property": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "#/$defs/attributeSpec"
+      }
+    },
+    "total_length_property": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "#/$defs/attributeSpec"
+      }
+    },
+    "opportunity_entity": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "#/$defs/entityGroupDef"
+      }
+    },
+    "cost_per_meter": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "attributeSpec": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": ["string", "null"],
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      ]
+    },
+    "entityGroupDef": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": [
+        {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        {
+          "type": "string",
+          "movici.type": "entityGroup"
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}

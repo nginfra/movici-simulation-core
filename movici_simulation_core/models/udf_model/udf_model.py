@@ -118,8 +118,8 @@ def get_udf_infos(config):
         )
 
 
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/udf.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/udf.json"
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/udf_model.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/udf_model.json"
 
 
 def convert_v1_v2(config):

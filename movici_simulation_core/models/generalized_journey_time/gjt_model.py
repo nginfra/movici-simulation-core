@@ -42,7 +42,7 @@ Transport_GeneralizedJourneyTime = AttributeSpec(
     "transport.generalized_journey_time", data_type=DataType(float, csr=True)
 )
 
-DEFAULT_TRAVEL_TIME_ATTRIBUTE = (None, "transport.passenger_average_time")
+DEFAULT_TRAVEL_TIME_ATTRIBUTE = "transport.passenger_average_time"
 DEFAULT_DATA_TYPE = DataType(float)
 
 
