@@ -1,51 +1,279 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "movici-simulation-core"
+version = "2.10.6"
+description = "Core package for running Movici geospatial temporal simulations"
+readme = {file = "README.rst", content-type = "text/x-rst"}
+license = {text = "Movici Public License"}
+authors = [
+    {name = "NGinfra Movici", email = "movici@nginfra.nl"}
+]
+maintainers = [
+    {name = "NGinfra Movici", email = "movici@nginfra.nl"}
+]
+requires-python = ">=3.8,<3.13"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research", 
+    "Intended Audience :: Developers",
+    "License :: Free for non-commercial use",
+    "License :: Other/Proprietary License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+keywords = ["simulation", "geospatial", "temporal", "gis", "movici"]
+
+# Core dependencies
+dependencies = [
+    # Core Python libraries
+    "pydantic>=1.10.0,<3.0.0",
+    "msgpack>=1.0.0",
+    "click>=8.0.0",
+    "PyYAML>=6.0",
+    "typing-extensions>=4.0.0",
+    
+    # Scientific computing
+    "numpy>=1.26.0,<2.0.0",
+    "numba>=0.58.0",
+    "scipy>=1.9.0",
+    "pandas>=1.5.0",
+    
+    # Geospatial libraries
+    "geopandas",
+    "pyproj>=3.0.1",
+    # Fiona with platform-specific versions for optimal compatibility
+    "Fiona>=1.9; sys_platform == 'win32'",
+    "Fiona>=1.8.22; sys_platform == 'linux'", 
+    "Fiona>=1.8.22; sys_platform == 'darwin'",
+    "Shapely>=2.0.0",
+    
+    # Database and serialization
+    "h5py>=3.0.0",
+    "sqlite-utils>=3.0.0",
+    
+    # Network analysis
+    "networkx>=2.8.0",
+    
+    # Utilities
+    "tqdm>=4.60.0",
+    "more-itertools>=9.0.0",
+]
+
+# Optional dependencies
+[project.optional-dependencies]
+models = [
+    # Traffic assignment models
+    "aequilibrae>=1.4.0",
+    
+    # Additional model dependencies
+    "netCDF4>=1.6.0",
+    "xarray>=2022.0.0",
+]
+
+dev = [
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    
+    # Code quality
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    
+    # Development tools
+    "pre-commit>=3.0.0",
+    "tox>=4.0.0",
+    "wheel>=0.40.0",
+]
+
+docs = [
+    # Documentation
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+    "sphinx-autodoc-typehints>=1.24.0",
+]
+
+# All optional dependencies combined
+all = [
+    # Traffic assignment models
+    "aequilibrae>=1.4.0",
+    
+    # Additional model dependencies
+    "netCDF4>=1.6.0",
+    "xarray>=2022.0.0",
+    
+    # Testing
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    
+    # Code quality
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    
+    # Development tools
+    "pre-commit>=3.0.0",
+    "tox>=4.0.0",
+    "wheel>=0.40.0",
+    
+    # Documentation
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+    "sphinx-autodoc-typehints>=1.24.0",
+]
+
+[project.urls]
+Homepage = "https://www.movici.nl/"
+Documentation = "https://docs.movici.nl/"
+Repository = "https://github.com/nginfra/movici-simulation-core/"
+"Bug Tracker" = "https://github.com/nginfra/movici-simulation-core/issues"
+
+[project.scripts]
+rename_attributes = "bin.rename_attributes:main"
+
+[project.entry-points."movici.plugins"]
+# Services
+orchestrator = "movici_simulation_core.services.orchestrator.service:Orchestrator"
+update_data_service = "movici_simulation_core.services.update_data.service:UpdateDataService"
+init_data_service = "movici_simulation_core.services.init_data.service:InitDataService"
+
+# Attributes
+global_attributes = "movici_simulation_core.attributes:GlobalAttributes"
+common_attributes = "movici_simulation_core.models.common.attributes:CommonAttributes"
+
+# Models
+area_aggregation = "movici_simulation_core.models.area_aggregation.model:Model"
+corridor = "movici_simulation_core.models.corridor.model:Model"
+csv_player = "movici_simulation_core.models.csv_player.csv_player:CSVPlayer"
+data_collector = "movici_simulation_core.models.data_collector.data_collector:DataCollector"
+evacuation_point_resolution = "movici_simulation_core.models.evacuation_point_resolution:EvacuatonPointResolution"
+generalized_journey_time = "movici_simulation_core.models.generalized_journey_time.gjt_model:GJTModel"
+netcdf_player = "movici_simulation_core.models.netcdf_player.netcdf_player:NetCDFPlayer"
+operational_status = "movici_simulation_core.models:OperationalStatusModel"
+opportunities = "movici_simulation_core.models.opportunities.model:Model"
+overlap_status = "movici_simulation_core.models.overlap_status.model:Model"
+shortest_path = "movici_simulation_core.models.shortest_path.model:ShortestPathModel"
+tape_player = "movici_simulation_core.models.tape_player.model:Model"
+time_window_status = "movici_simulation_core.models.time_window_status.model:Model"
+traffic_assignment_calculation = "movici_simulation_core.models.traffic_assignment_calculation.model:Model"
+traffic_demand_calculation = "movici_simulation_core.models.traffic_demand_calculation.model:TrafficDemandCalculation"
+traffic_kpi = "movici_simulation_core.models.traffic_kpi.model:Model"
+udf = "movici_simulation_core.models.udf_model.udf_model:UDFModel"
+unit_conversions = "movici_simulation_core.models.unit_conversions.model:Model"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json"]
+
 [tool.black]
-line-length = 99
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
 include = '\.pyi?$'
-exclude = '''(
+extend-exclude = '''
 /(
-  | \.direnv
-  | \.eggs
+  # directories
+  \.eggs
   | \.git
   | \.hg
   | \.mypy_cache
   | \.tox
   | \.venv
-  | _build
-  | buck-out
   | build
   | dist
-
 )/
-)
 '''
 
 [tool.isort]
 profile = "black"
-line_length = 99
+multi_line_output = 3
+line_length = 100
 known_first_party = ["movici_simulation_core"]
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "--tb=short"
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
 
 [tool.mypy]
-disallow_untyped_calls = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-disallow_untyped_decorators = true
-check_untyped_defs = true
+python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
-show_error_context = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
 
 [[tool.mypy.overrides]]
 module = [
-  'numpy.*',
-  'numba.*',
+    "geopandas.*",
+    "pyproj.*", 
+    "fiona.*",
+    "shapely.*",
+    "aequilibrae.*",
+    "netCDF4.*",
+    "h5py.*",
+    "sqlite_utils.*",
+    "msgpack.*",
 ]
 ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["movici_simulation_core"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101", "B601"]  # Skip assert_used and shell_injection_process_start
