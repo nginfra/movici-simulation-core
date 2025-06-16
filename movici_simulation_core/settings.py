@@ -8,8 +8,11 @@ from pydantic import DirectoryPath, Field
 
 try:
     from pydantic import BaseSettings
+    PYDANTIC_V1 = True
 except ImportError:
     from pydantic_settings import BaseSettings
+    from pydantic import ConfigDict
+    PYDANTIC_V1 = False
 
 from movici_simulation_core.core.moment import TimelineInfo
 
@@ -28,19 +31,28 @@ class Settings(BaseSettings):
     start_time: int = 0
     duration: int = 0
 
-    datasets: t.List[dict] = Field(default_factory=list, env="")
-    model_names: t.List[str] = Field(default_factory=list, env="")
-    models: t.List[dict] = Field(default_factory=list, env="")
-    service_types: t.List[str] = Field(default_factory=list, env="")
-    scenario_config: t.Optional[dict] = Field(default=None, env="")
-    service_discovery: t.Dict[str, str] = Field(default_factory=dict, env="")
+    datasets: t.List[dict] = Field(default_factory=list)
+    model_names: t.List[str] = Field(default_factory=list)
+    models: t.List[dict] = Field(default_factory=list)
+    service_types: t.List[str] = Field(default_factory=list)
+    scenario_config: t.Optional[dict] = Field(default=None)
+    service_discovery: t.Dict[str, str] = Field(default_factory=dict)
 
-    class Config:
-        env_prefix = "movici_"
-        fields = {
-            "log_level": {"env": ["movici_log_level", "movici_loglevel"]},
-            "log_format": {"env": ["movici_log_format", "movici_logformat"]},
-        }
+    if PYDANTIC_V1:
+        class Config:
+            env_prefix = "movici_"
+            fields = {
+                "log_level": {"env": ["movici_log_level", "movici_loglevel"]},
+                "log_format": {"env": ["movici_log_format", "movici_logformat"]},
+            }
+    else:
+        model_config = ConfigDict(
+            env_prefix="movici_",
+            extra="forbid",
+            protected_namespaces=('settings_',),
+        )
+        # Note: Pydantic V2 doesn't support multiple env names in the same way as V1
+        # The functionality to use multiple environment variable names has been removed
 
     def apply_scenario_config(self, config: dict):
         self.scenario_config = config

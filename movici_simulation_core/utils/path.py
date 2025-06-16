@@ -12,7 +12,6 @@ def _dataset_path(cls: t.Type[DatasetPath]):
     # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
     # initialization method. So instead we use a custom factory function posing as a class
     # constructor, to set additional attributes
-    cls._flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
 
     @functools.wraps(cls)
     def constructor(

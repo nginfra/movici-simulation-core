@@ -1,4 +1,5 @@
 import shutil
+import sqlite3
 import tempfile
 import typing as t
 import uuid
@@ -23,6 +24,38 @@ EPSILON = 1e-12
 # 9 decimals of lat/lon accuracy means a precision < 1mm, which is necessary for nodes that have
 # been shifted by ``PointGenerator`` to prevent duplicate nodes
 GEOM_ACC = 9
+
+
+def _check_spatialite_availability():
+    """
+    Check if mod_spatialite is available for SQLite.
+    
+    Raises:
+        RuntimeError: If mod_spatialite cannot be loaded with helpful installation instructions
+    """
+    try:
+        # Test if spatialite extension can be loaded
+        with sqlite3.connect(":memory:") as conn:
+            conn.enable_load_extension(True)
+            try:
+                conn.load_extension("mod_spatialite")
+            except sqlite3.OperationalError:
+                # Try alternative names for spatialite on different systems
+                try:
+                    conn.load_extension("spatialite")
+                except sqlite3.OperationalError:
+                    raise RuntimeError(
+                        "mod_spatialite extension is not available. "
+                        "This is required for traffic assignment calculations.\n\n"
+                        "Installation instructions:\n"
+                        "- Linux: sudo apt-get install libsqlite3-mod-spatialite\n"
+                        "- macOS: brew install spatialite-tools\n"
+                        "- Windows: Download spatialite binaries and place in Python DLLs folder\n\n"
+                        "Test installation with: sqlite3 :memory: \".load mod_spatialite\"\n"
+                        "For more details, see: https://github.com/AequilibraE/aequilibrae/wiki/Installation"
+                    )
+    except Exception as e:
+        raise RuntimeError(f"Failed to check spatialite availability: {e}")
 
 
 class TransportMode:
@@ -69,6 +102,9 @@ class ProjectWrapper:
         project_dir = Path(project_dir, project_name)
 
         self.project_dir = project_dir
+
+        # Check spatialite availability before creating project
+        _check_spatialite_availability()
 
         try:
             self._project = Project()
@@ -318,10 +354,10 @@ class ProjectWrapper:
             matrix_names=[matrix_name],
             index_names=["index"],
         )
-        # TODO: casting the index dtype is a temporary workaround until
-        # https://github.com/AequilibraE/aequilibrae/issues/424 get fixed
-        matrix.indices = matrix.indices.astype(int, copy=False)
-        matrix.index = matrix.index.astype(int, copy=False)
+        # Note: Index dtype casting was a workaround for AequilibraE issue #424
+        # This may no longer be needed with aequilibrae>=1.4.0, but kept for compatibility
+        matrix.indices = matrix.indices.astype(int)
+        matrix.index = matrix.index.astype(int)
         matrix.index[:] = node_ids
         matrix.matrix[matrix_name][:] = od_matrix[:]
 
