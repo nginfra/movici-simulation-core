@@ -2,17 +2,28 @@ import typing as t
 
 import numba
 import numpy as np
-from numba.core.types import complex_domain, number_domain, real_domain
+from numba import types
+from numba.core import cgutils
+from numba.core.types import complex_domain, real_domain
+from numba.core.typing import signature
 from numba.np.numpy_support import type_can_asarray
 
-from .core.numba_extensions import generated_jit
+from .core.numba_extensions import register_jitable
 from .utils.unicode import largest_unicode_dtype
+
+# NumPy 2.0 compatibility: use np.bool_ for numba compatibility, but this will work in NumPy 2.0
+try:
+    # Test if np.bool_ exists (NumPy < 2.0) 
+    BOOL_DTYPE = np.bool_
+except AttributeError:
+    # NumPy 2.0+ - np.bool_ is removed, use np.bool_() constructor or just bool
+    BOOL_DTYPE = bool
 
 
 @numba.njit(cache=True)
 def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
-    rv = np.zeros((n_rows,), dtype=np.bool_)
+    rv = np.zeros((n_rows,), dtype=BOOL_DTYPE)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         rv[i] = (data_row.shape == row.shape) and np.all(
@@ -24,7 +35,7 @@ def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
 @numba.njit(cache=True)
 def rows_contain(data, row_ptr, val, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
-    rv = np.zeros((n_rows,), dtype=np.bool_)
+    rv = np.zeros((n_rows,), dtype=BOOL_DTYPE)
     for i in range(n_rows):
         rv[i] = np.any(isclose_numba(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
     return rv
@@ -33,7 +44,7 @@ def rows_contain(data, row_ptr, val, rtol=1e-05, atol=1e-08, equal_nan=False):
 @numba.njit(cache=True)
 def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False):
     n_rows = row_ptr.size - 1
-    rv = np.zeros((n_rows,), dtype=np.bool_)
+    rv = np.zeros((n_rows,), dtype=BOOL_DTYPE)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         for item in vals:
@@ -43,66 +54,49 @@ def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False)
     return rv
 
 
-@generated_jit
-def row_wise_sum(data, row_ptr):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr):
-        return reduce_rows(data, row_ptr, np.sum)
-
-    return impl
-
-
-@generated_jit
-def row_wise_max(data, row_ptr, empty_row=None):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr, empty_row=None):
-
-        if empty_row is None:
-            return reduce_rows(data, row_ptr, np.max)
-
-        return reduce_rows(data, row_ptr, _substituted_max, empty_row)
-
-    return impl
-
-
-@generated_jit
-def row_wise_min(data, row_ptr, empty_row=None):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr, empty_row=None):
-
-        if empty_row is None:
-            return reduce_rows(data, row_ptr, np.min)
-
-        return reduce_rows(data, row_ptr, _substituted_min, empty_row)
-
-    return impl
-
-
 @numba.njit(cache=True)
-def reduce_rows(data, row_ptr, func, *args):
+def row_wise_sum(data, row_ptr):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=data.dtype)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
-        rv[i] = func(data_row, *args)
+        rv[i] = np.sum(data_row)
     return rv
 
 
 @numba.njit(cache=True)
-def _substituted_max(data, empty_row):
-    if len(data) == 0:
-        return empty_row
-    return np.max(data)
+def row_wise_max(data, row_ptr, empty_row=None):
+    n_rows = row_ptr.size - 1
+    rv = np.zeros((n_rows,), dtype=data.dtype)
+    for i in range(n_rows):
+        data_row = get_row(data, row_ptr, i)
+        if len(data_row) == 0:
+            if empty_row is not None:
+                rv[i] = empty_row
+            else:
+                # Handle empty row case - use dtype minimum or 0
+                rv[i] = 0  # Could also use np.finfo(data.dtype).min for float types
+        else:
+            rv[i] = np.max(data_row)
+    return rv
 
 
 @numba.njit(cache=True)
-def _substituted_min(data, empty_row):
-    if len(data) == 0:
-        return empty_row
-    return np.min(data)
+def row_wise_min(data, row_ptr, empty_row=None):
+    n_rows = row_ptr.size - 1
+    rv = np.zeros((n_rows,), dtype=data.dtype)
+    for i in range(n_rows):
+        data_row = get_row(data, row_ptr, i)
+        if len(data_row) == 0:
+            if empty_row is not None:
+                rv[i] = empty_row
+            else:
+                # Handle empty row case - use dtype maximum or 0
+                rv[i] = 0  # Could also use np.finfo(data.dtype).max for float types
+        else:
+            rv[i] = np.min(data_row)
+    return rv
+
 
 
 def csr_binop(data, row_ptr, operand, operator):
@@ -120,9 +114,6 @@ def csr_binop(data, row_ptr, operand, operator):
     return rv
 
 
-def assert_numeric_array(arr):
-    if getattr(arr, "dtype", None) not in number_domain:
-        raise TypeError("Only numeric arrays are supported")
 
 
 @numba.njit(cache=True)
@@ -269,37 +260,20 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return isclose_numba(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
 
 
-@generated_jit(cache=True, nopython=True)
-def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    inexact_domain = real_domain | complex_domain
-    if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
-        getattr(b, "dtype", None) in inexact_domain or b in inexact_domain
-    ):
+# Overload has been imported at top of file
 
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            return np.isclose(a, b, rtol, atol, equal_nan)
-
-    elif type_can_asarray(a) and not type_can_asarray(b):
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            a = np.asarray(a)
-            rv = np.zeros_like(a, dtype=np.bool_)
-            for i in range(a.size):
-                rv.flat[i] = a.flat[i] == b
-            return rv
-
-    elif type_can_asarray(b) and not type_can_asarray(a):
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            b = np.asarray(b)
-            rv = np.zeros_like(b, dtype=np.bool_)
-            for i in range(b.size):
-                rv.flat[i] = b.flat[i] == a
-            return rv
-
-    else:
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+@numba.extending.overload(np.isclose)
+def isclose_overload(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    # Handle string/unicode types
+    if isinstance(a, (types.UnicodeType, types.CharSeq, types.StringLiteral)) or \
+       (hasattr(a, 'dtype') and isinstance(a.dtype, (types.UnicodeCharSeq, types.CharSeq))):
+        def isclose_string_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             return a == b
+        return isclose_string_impl
+    # For numeric types, use the standard implementation
+    return None
 
-    return impl
+@numba.njit(cache=True)
+def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    # This will use our overload for strings and built-in for numerics
+    return np.isclose(a, b, rtol, atol, equal_nan)

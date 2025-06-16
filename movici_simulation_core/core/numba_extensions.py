@@ -16,7 +16,30 @@ def generated_jit(func=None, **kwargs):
         if func is None:
             return generated_jit
         return _fake_generated_jit(func)
-    return numba.generated_jit(func, **kwargs)
+    # Try to use generated_jit if available (older numba versions)
+    # Otherwise, use overload_method for newer versions
+    try:
+        return numba.generated_jit(func, **kwargs)
+    except AttributeError:
+        # For newer numba versions, we need a different approach
+        # Since generated_jit was used for creating specialized implementations,
+        # we'll create a wrapper that mimics this behavior
+        if func is None:
+            return lambda f: generated_jit(f, **kwargs)
+        
+        @functools.wraps(func)
+        def wrapper(*args, **kw):
+            # Get the types of the arguments
+            arg_types = tuple(numba.typeof(arg) for arg in args)
+            # Create a specialized implementation
+            impl_func = func(*arg_types)
+            # JIT compile the implementation
+            # Use the kwargs as-is, they're properly set by the caller
+            jitted_impl = numba.jit(**kwargs)(impl_func)
+            # Call the jitted implementation
+            return jitted_impl(*args, **kw)
+        
+        return wrapper
 
 
 def _fake_generated_jit(func):
@@ -32,6 +55,80 @@ def _fake_generated_jit(func):
 def disable_jit():
     os.environ["NUMBA_DISABLE_JIT"] = "1"
     reload_config()
+
+
+def configure_numba_performance():
+    """Configure Numba for optimal performance.
+    
+    Call this function early in your application to set optimal Numba configuration
+    for the movici-simulation-core workload.
+    """
+    # Enable parallel execution for supported operations
+    os.environ.setdefault("NUMBA_ENABLE_THREADING_LAYER", "1")
+    
+    # Use optimal cache directory location
+    cache_dir = os.environ.get("NUMBA_CACHE_DIR")
+    if cache_dir is None:
+        # Use a more persistent cache location if available
+        import tempfile
+        cache_dir = os.path.join(tempfile.gettempdir(), "numba_cache", "movici")
+        os.environ["NUMBA_CACHE_DIR"] = cache_dir
+    
+    # Enable debugging info in development
+    debug_mode = os.environ.get("MOVICI_DEBUG", "").lower() in ("1", "true", "yes")
+    if debug_mode:
+        os.environ.setdefault("NUMBA_DEBUG", "1")
+        os.environ.setdefault("NUMBA_DEVELOPER_MODE", "1")
+    
+    # Optimize for scientific computing workloads
+    os.environ.setdefault("NUMBA_BOUNDSCHECK", "0")  # Disable bounds checking for performance
+    os.environ.setdefault("NUMBA_FASTMATH", "1")     # Enable fast math optimizations
+    
+    reload_config()
+
+
+# Performance-optimized decorator for hot paths
+def fast_njit(func=None, **kwargs):
+    """Numba JIT decorator optimized for performance-critical code paths.
+    
+    This decorator applies optimal settings for scientific computing workloads
+    in movici-simulation-core.
+    
+    Usage:
+        @fast_njit
+        def my_function(data):
+            return result
+            
+        # Or with custom options:
+        @fast_njit(parallel=True)
+        def parallel_function(data):
+            return result
+    """
+    default_kwargs = {
+        'cache': True,           # Always cache compiled functions
+        'fastmath': True,        # Enable fast math optimizations
+        'nogil': True,          # Release GIL for better parallelization
+        'boundscheck': False,   # Disable bounds checking for speed
+    }
+    
+    # Handle caching gracefully for inline/testing code
+    if func is not None:
+        try:
+            # Check if we can cache this function
+            import inspect
+            filename = inspect.getfile(func)
+            if filename == '<string>' or '<stdin>' in filename:
+                default_kwargs['cache'] = False
+        except (OSError, TypeError):
+            default_kwargs['cache'] = False
+    default_kwargs.update(kwargs)
+    
+    if func is None:
+        # Called with arguments: @fast_njit(parallel=True)
+        return lambda f: numba.njit(**default_kwargs)(f)
+    else:
+        # Called without arguments: @fast_njit
+        return numba.njit(**default_kwargs)(func)
 
 
 @overload(np.isclose, jit_options=dict(cache=True))
