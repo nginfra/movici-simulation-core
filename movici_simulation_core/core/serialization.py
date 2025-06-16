@@ -19,7 +19,7 @@ class UpdateDataFormat(InternalSerializationStrategy):
         if ver is None:
             return obj
         if ver == 1:
-            return np.ndarray(shape=obj["shape"], dtype=obj["dtype"], buffer=obj["data"]).copy()
+            return np.frombuffer(obj["data"], dtype=obj["dtype"]).reshape(obj["shape"]).copy()
         raise TypeError("Unsupported Numpy encoding version")
 
     @classmethod
@@ -29,7 +29,7 @@ class UpdateDataFormat(InternalSerializationStrategy):
                 "__np_encode_version__": cls.CURRENT_VERSION,
                 "dtype": obj.dtype.str,
                 "shape": obj.shape,
-                "data": obj.data,
+                "data": obj.tobytes(),
             }
         return obj
 

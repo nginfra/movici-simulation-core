@@ -134,7 +134,7 @@ class TrackedCSRArray:
 
     def slice(self, indices):
         indices = np.asarray(indices)
-        if indices.dtype.type in [bool, np.bool_]:
+        if indices.dtype.type in [bool]:
             indices = np.flatnonzero(indices)
         slice_data, slice_row_ptr = slice_csr_array(
             self.data, self.row_ptr, np.asarray(indices, dtype=int)

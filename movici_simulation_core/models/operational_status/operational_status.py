@@ -93,11 +93,13 @@ class FloodingStatusModule(StatusModule):
         water_height: UniformAttribute,
         target: GeometryEntity,
         water_depth: UniformAttribute,
+        flooding_threshold: float = 0.0,
     ) -> None:
         self.cells = cells
         self.water_height = water_height
         self.target = target
         self.water_depth = water_depth
+        self.flooding_threshold = flooding_threshold
 
     def initialize(self):
         self.cells.ensure_ready()
@@ -127,8 +129,10 @@ class FloodingStatusModule(StatusModule):
         water_height = cells.register_attribute(Flooding_WaterHeight, SUB)
         water_depth = target.register_attribute(Flooding_WaterDepth, PUB)
 
-        # TODO: read threshold from config to publish status
-        return FloodingStatusModule(cells, water_height, target, water_depth)
+        # Read threshold from config
+        flooding_threshold = module_config.get("flooding_threshold", 0.0)
+        
+        return FloodingStatusModule(cells, water_height, target, water_depth, flooding_threshold)
 
     def update(self):
         wh = self.water_height[self.mapping.indices]
@@ -140,7 +144,11 @@ class FloodingStatusModule(StatusModule):
         if self.row_ptr is not None:
             wd = row_wise_max(wd, self.row_ptr, empty_row=0)
 
-        self.water_depth[:] = wd
+        # Apply flooding threshold for operational status determination
+        # Water depth above threshold indicates operational impact
+        affected_depth = np.where(wd > self.flooding_threshold, wd, 0.0)
+        
+        self.water_depth[:] = affected_depth
 
 
 ALL_MODULES = {"flooding": FloodingStatusModule}
