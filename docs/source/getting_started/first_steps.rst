@@ -113,7 +113,7 @@ Our ``squares.py`` now looks as following:
 Now that we have data, we can add and configure our models. In our dataset, we have
 ``square_entities`` that have an ``shape.edge_length`` but no ``shape.area`` yet. We are going to let
 a model calculate these. For this, we'll make use of the included ``UDFModel``. ``UDF`` stands for
-*User Defined Function* and thi model can do basic arithmetic operations on attributes. We add the
+*User Defined Function* and this model can do basic arithmetic operations on attributes. We add the
 ``UDFModel`` as following
 
 .. testcode:: python

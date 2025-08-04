@@ -157,7 +157,7 @@ This updates the value for ``transport.max_speed`` for entities ``2`` and ``3``,
 Data Types
 ------------------------
 
-In order to support high performant numercial calculations, Movici relies heavily on ``numpy``.
+In order to support high performance numerical calculations, Movici relies heavily on ``numpy``.
 Inside ``movici-simulation-core``, every attribute array is converted into a ``numpy.ndarray``.
 Since numpy arrays are statically typed, every attribute must also be statically typed. In order to
 be consistent, the attribute's data type should be predefined. This can be done by registering an
