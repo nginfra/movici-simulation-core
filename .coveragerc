@@ -1,0 +1,54 @@
+# Configuration for coverage.py
+# This file provides fallback configuration if pyproject.toml is not available
+
+[run]
+source = movici_simulation_core
+branch = true
+parallel = true
+data_file = .coverage
+omit = 
+    */tests/*
+    */test_*
+    setup.py
+    bin/*
+    examples/*
+    docs/*
+    */__init__.py
+    */conftest.py
+    */testing/dummy.py
+    */ae_wrapper/patches.py
+
+[report]
+precision = 2
+show_missing = true
+skip_covered = false
+sort = Cover
+fail_under = 80.0
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    def __str__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if False:
+    if __name__ == __main__:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    @abstractmethod
+    except ImportError:
+    pass
+    \.\.\.
+
+[html]
+directory = htmlcov
+show_contexts = true
+
+[xml]
+output = coverage.xml
+
+[json]
+output = coverage.json
+show_contexts = true

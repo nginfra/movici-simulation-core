@@ -26,6 +26,8 @@ __pycache__/
 # Coverage report
 .coverage
 coverage.xml
+coverage.json
+htmlcov/
 
 # pylint
 pylint.txt

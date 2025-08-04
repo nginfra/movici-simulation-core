@@ -4,7 +4,22 @@ unittest:
 	NUMBA_DISABLE_JIT=1 pytest -v tests/
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
+	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml --cov-report=html --cov-report=json --cov-fail-under=0 tests/
+	@echo ""
+	@python scripts/coverage_summary.py
+
+coverage-report:
+	coverage report --show-missing
+	coverage html
+	coverage xml
+	coverage json
+	@python scripts/coverage_summary.py
+
+coverage-clean:
+	rm -rf htmlcov/
+	rm -f coverage.xml
+	rm -f coverage.json
+	rm -f .coverage
 
 flake8:
 	flake8
@@ -24,6 +39,14 @@ mypy:
 
 clean:
 	rm -rf dist/
+	rm -rf build/
+	rm -rf *.egg-info/
+	rm -rf htmlcov/
+	rm -f coverage.xml
+	rm -f coverage.json
+	rm -f .coverage
+	find . -type d -name __pycache__ -exec rm -rf {} +
+	find . -type f -name "*.pyc" -delete
 
 docker:
 	docker build -t model-engine .
