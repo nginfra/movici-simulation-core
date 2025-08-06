@@ -29,7 +29,7 @@ bandit:
 	bandit -f json -o bandit-report.json --recursive $(MODULE_NAME) bin
 
 safety:
-	safety check -r requirements.txt --full-report
+	safety check --full-report
 
 pylint:
 	pylint $(MODULE_NAME) --exit-zero -r n | tee pylint.txt
