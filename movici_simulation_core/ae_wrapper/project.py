@@ -109,7 +109,18 @@ class ProjectWrapper:
         try:
             self._project = Project()
             self._project.new(str(self.project_dir))
-            self._db = self._project.conn
+            # In newer aequilibrae versions, db_connection is a context manager
+            # We need a persistent connection for the wrapper's lifetime
+            # Get the database path and create our own connection with spatialite
+            db_path = self._project._project_database_path
+            self._db = sqlite3.connect(db_path)
+            # Enable spatialite extensions for geometric functions
+            self._db.enable_load_extension(True)
+            try:
+                self._db.load_extension("mod_spatialite")
+            except sqlite3.OperationalError:
+                # Try alternative name
+                self._db.load_extension("spatialite")
 
             self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
 
@@ -131,6 +142,10 @@ class ProjectWrapper:
 
     def close(self) -> None:
         try:
+            # Close our own database connection first
+            if hasattr(self, '_db') and self._db is not None:
+                self._db.close()
+                self._db = None
             if self._project is not None:
                 for handler in self._project.logger.handlers:
                     handler.flush()
