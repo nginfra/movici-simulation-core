@@ -21,8 +21,8 @@ coverage-clean:
 	rm -f coverage.json
 	rm -f .coverage
 
-flake8:
-	flake8
+ruff:
+	ruff check .
 
 bandit:
 	bandit --recursive $(MODULE_NAME) bin
@@ -66,7 +66,7 @@ isort:
 isort-check:
 	isort -c .
 
-lint: flake8 black-check isort-check bandit safety mypy
+lint: ruff black-check isort-check bandit safety mypy
 	
 test-all: coverage lint
 

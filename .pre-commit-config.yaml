@@ -1,33 +1,63 @@
 repos:
-- repo: https://github.com/ambv/black
-  rev: 22.1.0
-  hooks:
-  - id: black
-    language_version: python3.8
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: ['--fix=lf']
 
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.8.3
-  hooks:
-  - id: flake8
-    language_version: python3.8
+  # Python code formatting
+  - repo: https://github.com/psf/black
+    rev: 24.8.0
+    hooks:
+      - id: black
+        args: [--line-length=100]
+        language_version: python3
 
-- repo: https://github.com/pycqa/isort
-  rev: 5.10.1
-  hooks:
-    - id: isort
-      name: isort (python)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ['--profile', 'black', '--line-length', '100']
 
-- repo: local
-  hooks:
-  - id: bandit
-    name: Bandit
-    files: '.+\.py'
-    exclude: 'tests/.*'
-    entry: bandit
-    language: python
-  - id: python-safety-dependencies-check
-    entry: safety
-    name: Safety
-    args: [check, -r, requirements.txt, --full-report]
-    language: system
-    pass_filenames: false
+  # Python linting (ruff replaces flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Python type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports]
+        additional_dependencies: [types-setuptools]
+
+  # Security checks
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ['-c', 'pyproject.toml']
+        additional_dependencies: ["bandit[toml]"]
+        exclude: '^tests/'
+
+  # Python version upgrade suggestions
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.15.1
+    hooks:
+      - id: pyupgrade
+        args: ['--py38-plus']
