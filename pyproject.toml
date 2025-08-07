@@ -225,7 +225,7 @@ line_length = 100
 known_first_party = ["movici_simulation_core"]
 
 [tool.pytest.ini_options]
-minversion = "7.0"
+minversion = "8.0"
 addopts = "-ra -q --strict-markers"
 testpaths = ["tests"]
 markers = [
