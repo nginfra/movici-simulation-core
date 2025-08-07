@@ -383,6 +383,9 @@ class CSRAttribute(Attribute):
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
 
         is_undefined = isclose(value.data, self.data_type.undefined, equal_nan=True)
+        # Ensure is_undefined is always an array, even for scalar results
+        if not isinstance(is_undefined, np.ndarray):
+            is_undefined = np.array(is_undefined)
         if len(is_undefined.shape) > 1:
             num_undefined = np.sum(np.all(is_undefined, axis=-1))
             new_data_shape = (value.data.shape[0] - num_undefined, *value.data.shape[1:])
