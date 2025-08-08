@@ -64,8 +64,20 @@ def row_wise_sum(data, row_ptr):
     return rv
 
 
+def _validate_numeric_dtype(data):
+    """Validate that the array has a numeric dtype."""
+    if not np.issubdtype(data.dtype, np.number):
+        raise TypeError("Only numeric arrays are supported")
+
+
+def _validate_empty_data(data):
+    """Validate that the data array is not empty."""
+    if len(data) == 0:
+        raise ValueError()
+
+
 @numba.njit(cache=True)
-def row_wise_max(data, row_ptr, empty_row=None):
+def _row_wise_max_impl(data, row_ptr, empty_row=None):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=data.dtype)
     for i in range(n_rows):
@@ -81,8 +93,14 @@ def row_wise_max(data, row_ptr, empty_row=None):
     return rv
 
 
+def row_wise_max(data, row_ptr, empty_row=None):
+    _validate_numeric_dtype(data)
+    _validate_empty_data(data)
+    return _row_wise_max_impl(data, row_ptr, empty_row)
+
+
 @numba.njit(cache=True)
-def row_wise_min(data, row_ptr, empty_row=None):
+def _row_wise_min_impl(data, row_ptr, empty_row=None):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=data.dtype)
     for i in range(n_rows):
@@ -96,6 +114,12 @@ def row_wise_min(data, row_ptr, empty_row=None):
         else:
             rv[i] = np.min(data_row)
     return rv
+
+
+def row_wise_min(data, row_ptr, empty_row=None):
+    _validate_numeric_dtype(data)
+    _validate_empty_data(data)
+    return _row_wise_min_impl(data, row_ptr, empty_row)
 
 
 
