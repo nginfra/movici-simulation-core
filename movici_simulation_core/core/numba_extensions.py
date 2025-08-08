@@ -3,6 +3,7 @@ import os
 
 import numba
 import numpy as np
+from numba import types
 from numba.core.config import reload_config
 from numba.core.extending import overload, register_jitable
 from numba.np.numpy_support import type_can_asarray
@@ -137,8 +138,39 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     https://github.com/numba/numba/issues/5977
     """
 
-    if not type_can_asarray(a) or not type_can_asarray(b):
+    # Allow scalar strings to pass through
+    a_is_scalar_string = isinstance(a, (types.UnicodeType, types.CharSeq))
+    b_is_scalar_string = isinstance(b, (types.UnicodeType, types.CharSeq))
+    
+    if not (type_can_asarray(a) or a_is_scalar_string) or not (type_can_asarray(b) or b_is_scalar_string):
         raise numba.TypingError("Inputs a and b must be array-like.")
+
+    # Check if inputs are string/unicode types  
+    a_type = getattr(a, 'dtype', a) if hasattr(a, 'dtype') else a
+    b_type = getattr(b, 'dtype', b) if hasattr(b, 'dtype') else b
+    
+    # Debug: print type information
+    # print(f"DEBUG: a_type={a_type}, type={type(a_type)}, str={str(a_type)}")
+    # print(f"DEBUG: b_type={b_type}, type={type(b_type)}, str={str(b_type)}")
+    
+    # Better detection for unicode/string types
+    a_is_string = (a_is_scalar_string or
+                   isinstance(a_type, (types.UnicodeType, types.CharSeq)) or 
+                   (hasattr(a_type, '__class__') and 'unicode' in str(a_type.__class__).lower()) or
+                   (hasattr(a_type, 'key') and 'char' in str(a_type.key).lower()) or
+                   'unichar' in str(a_type).lower())
+    
+    b_is_string = (b_is_scalar_string or
+                   isinstance(b_type, (types.UnicodeType, types.CharSeq)) or 
+                   (hasattr(b_type, '__class__') and 'unicode' in str(b_type.__class__).lower()) or
+                   (hasattr(b_type, 'key') and 'char' in str(b_type.key).lower()) or
+                   'unichar' in str(b_type).lower())
+    
+    if a_is_string or b_is_string:
+        # String comparison - only equality makes sense
+        def string_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+            return a == b
+        return string_impl
 
     if (
         rtol not in numba.types.real_domain | numba.types.integer_domain

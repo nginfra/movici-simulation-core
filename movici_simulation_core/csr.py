@@ -276,6 +276,20 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     string and unicode arrays. This converts unicode arrays so that they are of uniform size and
     can be properly used in numba jit-compiled functions
     """
+    # Handle string comparisons at Python level
+    is_a_string = isinstance(a, (str, np.str_)) or (hasattr(a, 'dtype') and a.dtype.kind in ['U', 'S'])
+    is_b_string = isinstance(b, (str, np.str_)) or (hasattr(b, 'dtype') and b.dtype.kind in ['U', 'S'])
+    
+    if is_a_string or is_b_string:
+        # String comparison - use simple equality
+        if dtype := largest_unicode_dtype(a, b):
+            if isinstance(a, np.ndarray):
+                a = np.asarray(a, dtype=dtype)
+            if isinstance(b, np.ndarray):
+                b = np.asarray(b, dtype=dtype)
+        return a == b
+    
+    # Numeric comparison - use numba implementation
     if dtype := largest_unicode_dtype(a, b):
         if isinstance(a, np.ndarray):
             a = np.asarray(a, dtype=dtype)
@@ -286,18 +300,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 # Overload has been imported at top of file
 
-@numba.extending.overload(np.isclose)
-def isclose_overload(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    # Handle string/unicode types
-    if isinstance(a, (types.UnicodeType, types.CharSeq, types.StringLiteral)) or \
-       (hasattr(a, 'dtype') and isinstance(a.dtype, (types.UnicodeCharSeq, types.CharSeq))):
-        def isclose_string_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            return a == b
-        return isclose_string_impl
-    # For numeric types, use the standard implementation
-    return None
-
-@numba.njit(cache=True)
+@register_jitable
 def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    # This will use our overload for strings and built-in for numerics
+    # Use numpy's isclose for numeric types, equality for others
     return np.isclose(a, b, rtol, atol, equal_nan)
