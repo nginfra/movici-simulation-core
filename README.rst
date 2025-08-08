@@ -53,6 +53,13 @@ Features
   - HDF5 support
   - CSV and time-series data processing
 
+📚 **Comprehensive Model Library**
+  - 18 fully documented simulation models
+  - Complete API reference and examples  
+  - Traffic assignment, KPI calculation, spatial analysis
+  - Environmental data integration (NetCDF, CSV)
+  - Custom mathematical functions (UDF)
+
 🔧 **Developer Friendly**
   - Modern pyproject.toml packaging
   - Comprehensive type hints
@@ -101,16 +108,18 @@ Quick Start
 .. code-block:: python
 
    from movici_simulation_core import Simulation
-   from movici_simulation_core.models.common import CSVPlayer
+   from movici_simulation_core.models.csv_player import CSVPlayer
    
    # Create a simulation
    sim = Simulation()
    
-   # Add models
+   # Add models (18 different model types available)
    sim.add_model(CSVPlayer(name="data_player"))
    
    # Run simulation
    sim.run()
+
+**📖 Model Documentation:** Complete documentation for all 18 models available at https://docs.movici.nl/models/
 
 Development Setup
 -----------------
