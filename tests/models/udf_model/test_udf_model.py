@@ -1,6 +1,5 @@
 import itertools
 import json
-import typing as t
 
 import pytest
 
@@ -183,7 +182,7 @@ def test_detects_intermediate_attributes_as_pub():
 
 @pytest.fixture
 def create_model_tester(tmp_path_factory, init_data, global_schema):
-    testers: t.List[ModelTester] = []
+    testers: list[ModelTester] = []
     counter = itertools.count()
 
     def _create(config, **kwargs):
@@ -390,7 +389,6 @@ def test_default_csr_to_csr(create_model_tester):
 
 
 def test_multi_arg_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -416,7 +414,6 @@ def test_multi_arg_min(create_model_tester):
 
 
 def test_csr_uniform_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -443,7 +440,6 @@ def test_csr_uniform_min(create_model_tester):
 
 
 def test_csr_uniform_if(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": ["some_dataset", "some_entities"],
@@ -470,7 +466,6 @@ def test_csr_uniform_if(create_model_tester):
 
 
 def test_csr_uniform_if_2(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": ["some_dataset", "some_entities"],
@@ -497,7 +492,6 @@ def test_csr_uniform_if_2(create_model_tester):
 
 
 def test_csr_scalar_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],

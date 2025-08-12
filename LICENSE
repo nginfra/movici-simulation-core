@@ -1,6 +1,6 @@
 Movici Public License
 
-The following license governs the use of Movici in non-commercial academic environments. 
+The following license governs the use of Movici in non-commercial academic environments.
 Commercial use requires a commercial license (movici@nginfra.nl).
 
 MOVICI PUBLIC LICENSE (NGinfra, v1.0)
@@ -8,26 +8,26 @@ MOVICI PUBLIC LICENSE (NGinfra, v1.0)
 
 Preamble
 
-This license contains the terms and conditions of using Movici in non-commercial settings: at 
-academic institutions for teaching and research use, and at not-for-profit research organizations. 
-You will find that this license provides non-commercial users of Movici with rights that are 
+This license contains the terms and conditions of using Movici in non-commercial settings: at
+academic institutions for teaching and research use, and at not-for-profit research organizations.
+You will find that this license provides non-commercial users of Movici with rights that are
 similar to the well-known GNU General Public License 2.0, yet it retains the possibility for Movici
-authors to financially support the development by selling commercial licenses. In fact, if you 
+authors to financially support the development by selling commercial licenses. In fact, if you
 intend to use Movici in a "for-profit" environment, to use Movici in a commercial service offering,
-when a commercial company uses Movici to participate in a research project (for example 
-government-funded or EU-funded research projects) or where Movici simulations are conducted to 
+when a commercial company uses Movici to participate in a research project (for example
+government-funded or EU-funded research projects) or where Movici simulations are conducted to
 develop or enhance a product (including commercial research at academic institutions), then you
 need to obtain a commercial license for Movici. In that case, please contact movici@nginfra.nl to
 inquire about commercial licenses.
 
 What are the rights given to non-commercial users? Similarly, to GPL 2.0, you have the right to
-use the software, to distribute copies, to receive source code, to change the software and 
+use the software, to distribute copies, to receive source code, to change the software and
 distribute your modifications or the modified software. Also, similarly to the GPL 2.0, if you
 distribute verbatim or modified copies of this software, they must be distributed under this
 license.
 
 By modeling the GPL 2.0, this license guarantees that you’re safe when using Movici in your work,
-for teaching, and research. This license guarantees that Movici will remain available free of 
+for teaching, and research. This license guarantees that Movici will remain available free of
 charge for non-profit use. You can modify Movici to your purposes, and you can also share your
 modifications. Even in the unlikely case of the authors abandoning Movici entirely, this license
 permits anyone to continue developing it from the last release, and to create further releases
@@ -57,12 +57,12 @@ Definitions
 * Each licensee is addressed as "you".
 
 §1. Permission is hereby granted to use the Program free of charge for any non-commercial purpose,
-including teaching and research at universities, colleges and other educational institutions, 
+including teaching and research at universities, colleges and other educational institutions,
 non-commercial research at organizations that are either not-for-profit or reinvest all profits in
 their scientific research, and personal not-for-profit purposes. For using the Program for
 commercial purposes, including but not restricted to commercial research at academic institutions,
 consulting activities, and design of commercial hardware or software products or services, you
-have to contact movici@nginfra.nl for an appropriate license. Permission is also granted to use 
+have to contact movici@nginfra.nl for an appropriate license. Permission is also granted to use
 the Program for a period of time up to 30 days for the purpose of evaluating its usefulness for a
 particular purpose.
 
@@ -73,7 +73,7 @@ of this license to all other recipients of the program.
 
 §3. You may modify your copy or copies of the Program or any portion of it, thus forming a work
 based on the Program, and copy and distribute such modifications or work under the terms of Section
-2 above, provided that you also meet all of these conditions: 
+2 above, provided that you also meet all of these conditions:
 
   a) You must ensure that the changed files are provided with noticeable comments stating the
      author of the change and when this change was made.
@@ -89,7 +89,7 @@ done in accordance with the terms of this license as outlined in §2, independen
 The mere merging of another work that is not based on the Program with the Program (or a work based
 on the Program) does not bring the other work into the scope of this license.
 
-§4. You may copy and distribute the Program (or a work based on it, in accordance with §3, in 
+§4. You may copy and distribute the Program (or a work based on it, in accordance with §3, in
 object code or executable form in accordance with the provisions of above Sections 2 and 3,
 provided that you also add the complete corresponding machine-readable source code. For an
 executable program, complete source code means the entire source code for all modules contained
@@ -101,7 +101,7 @@ specified in this license is void, and will automatically terminate your rights 
 However, parties who have received copies or rights from you under this license will not lose their
 license as long as these parties fully comply with the terms. We have the right, without prejudice
 to our other rights or remedies, to terminate the permission to use the Program with a notification
-period of thirty days. 
+period of thirty days.
 
 §6. You do not have to accept this license because you have not signed it. However, if you want to
 change or distribute the Program (or a work based on the Program), you automatically consent to

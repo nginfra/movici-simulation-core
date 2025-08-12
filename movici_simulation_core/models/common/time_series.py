@@ -3,8 +3,8 @@ import typing as t
 T = t.TypeVar("T")
 
 
-class TimeSeries(list, t.List[t.Tuple[int, T]]):
-    def __init__(self, iterable: t.Iterable[t.Tuple[int, T]] = ()):
+class TimeSeries(list, t.Generic[T]):
+    def __init__(self, iterable: t.Iterable[tuple[int, T]] = ()):
         super().__init__(iterable)
         self.sort()
 
@@ -15,6 +15,6 @@ class TimeSeries(list, t.List[t.Tuple[int, T]]):
     def next_time(self):
         return self[-1][0] if self else None
 
-    def pop_until(self, timestamp: int) -> t.Iterable[t.Tuple[int, T]]:
+    def pop_until(self, timestamp: int) -> t.Iterable[tuple[int, T]]:
         while (next_time := self.next_time) is not None and next_time <= timestamp:
             yield self.pop()

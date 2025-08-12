@@ -202,7 +202,7 @@ Basic Expressions
     "a * b - c"
     "(a + b) / c"
     "a ** 2 + b ** 2"
-    
+
     # Mathematical functions
     "sqrt(a ** 2 + b ** 2)"
     "sin(angle) * radius"
@@ -217,10 +217,10 @@ Conditional Expressions
     # where(condition, true_value, false_value)
     "where(flow > capacity, 1, 0)"
     "where(speed < 30, speed * 0.5, speed)"
-    
+
     # if_else for optional values
     "if_else(optional_factor > 0, value * optional_factor, value)"
-    
+
     # Nested conditions
     "where(a > b, where(a > c, a, c), where(b > c, b, c))"
 
@@ -232,7 +232,7 @@ Array Operations
     # Element-wise operations
     "array1 + array2"
     "array * scalar"
-    
+
     # Aggregations (if supported)
     "sum(array)"
     "mean(array)"
@@ -370,7 +370,7 @@ The compiler optimizes expressions by:
 
     # Original expression
     "sqrt(a*a + b*b) + sqrt(a*a + b*b) * 2"
-    
+
     # Optimized (common subexpression)
     temp = sqrt(a*a + b*b)
     result = temp + temp * 2
@@ -429,10 +429,10 @@ Error Handling
 
     # Safe division
     "where(denominator != 0, numerator / denominator, 0)"
-    
+
     # Bounds checking
     "max(0, min(100, calculated_value))"
-    
+
     # Handle optional inputs
     "if_else(optional > 0, value * optional, value)"
 
@@ -446,12 +446,12 @@ Testing Expressions
         "a": [1, 2, 3],
         "b": [4, 5, 6]
     }
-    
+
     expression = "sqrt(a**2 + b**2)"
     expected = [4.12, 5.39, 6.71]
-    
+
     # Validate results
-    assert all(abs(result - expect) < 0.01 
+    assert all(abs(result - expect) < 0.01
               for result, expect in zip(calculated, expected))
 
 Common Issues and Troubleshooting

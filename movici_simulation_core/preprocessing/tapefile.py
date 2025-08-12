@@ -23,7 +23,6 @@ import dataclasses
 import datetime
 import functools
 import json
-import typing as t
 from pathlib import Path
 
 import pandas as pd
@@ -36,9 +35,9 @@ class InterpolatingTapefile:
     entity_group_name: str
     reference: str
     tapefile_name: str
-    tapefile_display_name: t.Optional[str] = None
+    tapefile_display_name: str | None = None
     metadata: dict = None
-    attributes: t.List[TimeDependentAttribute] = dataclasses.field(default_factory=list)
+    attributes: list[TimeDependentAttribute] = dataclasses.field(default_factory=list)
     init_data: pd.DataFrame = dataclasses.field(init=False)
 
     def __post_init__(self):
@@ -61,7 +60,7 @@ class InterpolatingTapefile:
     def add_attribute(self, attribute: TimeDependentAttribute):
         self.attributes.append(attribute)
 
-    def dump(self, file: t.Union[str, Path]):
+    def dump(self, file: str | Path):
         if not self.attributes:
             return
 
@@ -92,7 +91,7 @@ class InterpolatingTapefile:
             attribute.dataframe, left_on=self.reference, right_on=attribute.key
         )
 
-    def create_content(self, interpolators: t.Dict[str, Interpolator]):
+    def create_content(self, interpolators: dict[str, Interpolator]):
         tapefile = self.get_scaffold()
         if not interpolators:
             return tapefile
@@ -135,7 +134,7 @@ class InterpolatingTapefile:
         """
         return (datetime.datetime(year, 1, 1) - datetime.datetime(reference, 1, 1)).total_seconds()
 
-    def create_update(self, values: t.Dict[str, list]):
+    def create_update(self, values: dict[str, list]):
         """
         example:
 
@@ -157,7 +156,7 @@ class InterpolatingTapefile:
 @dataclasses.dataclass
 class TimeDependentAttribute:
     name: str
-    csv_file: t.Union[Path, str]
+    csv_file: Path | str
     key: str
 
     def __post_init__(self):
@@ -169,7 +168,7 @@ class TimeDependentAttribute:
 
 
 class Interpolator:
-    years: t.List[int]
+    years: list[int]
     min_year: int
     max_year: int
 

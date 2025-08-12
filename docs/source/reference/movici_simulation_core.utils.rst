@@ -1,12 +1,12 @@
 
 
-utils 
+utils
 ======
 
 
 
 
-data\_mask 
+data\_mask
 -----------
 
 .. automodule:: movici_simulation_core.utils.data_mask
@@ -16,7 +16,7 @@ data\_mask
 
 
 
-lifecycle 
+lifecycle
 ----------
 
 .. automodule:: movici_simulation_core.utils.lifecycle
@@ -26,7 +26,7 @@ lifecycle
 
 
 
-logging 
+logging
 --------
 
 .. automodule:: movici_simulation_core.utils.logging
@@ -36,7 +36,7 @@ logging
 
 
 
-path 
+path
 -----
 
 .. automodule:: movici_simulation_core.utils.path
@@ -46,7 +46,7 @@ path
 
 
 
-strategies 
+strategies
 -----------
 
 .. automodule:: movici_simulation_core.utils.strategies
@@ -56,7 +56,7 @@ strategies
 
 
 
-time 
+time
 -----
 
 .. automodule:: movici_simulation_core.utils.time
@@ -66,7 +66,7 @@ time
 
 
 
-unicode 
+unicode
 --------
 
 .. automodule:: movici_simulation_core.utils.unicode

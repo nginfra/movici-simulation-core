@@ -1,12 +1,12 @@
 
 
-init\_data 
+init\_data
 ===========
 
 
 
 
-service 
+service
 --------
 
 .. automodule:: movici_simulation_core.services.init_data.service

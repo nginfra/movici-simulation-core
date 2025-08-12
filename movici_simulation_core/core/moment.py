@@ -1,7 +1,6 @@
 import dataclasses
 import datetime
 import functools
-import typing as t
 
 from ..utils.time import string_to_datetime
 
@@ -42,19 +41,18 @@ class TimelineInfo:
         return timestamp == self.start_time
 
 
-global_timeline_info: t.Optional[TimelineInfo] = None
+global_timeline_info: TimelineInfo | None = None
 
 
-def get_timeline_info() -> t.Optional[TimelineInfo]:
+def get_timeline_info() -> TimelineInfo | None:
     return global_timeline_info
 
 
 def set_timeline_info(
-    info_or_reference: t.Union[float, TimelineInfo, None],
-    time_scale: t.Optional[float] = None,
-    start_time: t.Optional[int] = None,
+    info_or_reference: float | TimelineInfo | None,
+    time_scale: float | None = None,
+    start_time: int | None = None,
 ):
-
     if isinstance(info_or_reference, TimelineInfo):
         info = info_or_reference
     elif info_or_reference is None:
@@ -87,7 +85,7 @@ class _TemporaryTimelineInfo:
 @dataclasses.dataclass
 class Moment:
     timestamp: int
-    timeline_info: t.Optional[TimelineInfo] = None
+    timeline_info: TimelineInfo | None = None
 
     def __post_init__(self):
         self.timestamp = int(self.timestamp)
@@ -119,26 +117,24 @@ class Moment:
         return self.seconds < other
 
     @classmethod
-    def from_seconds(cls, seconds: float, timeline_info: t.Optional[TimelineInfo] = None):
+    def from_seconds(cls, seconds: float, timeline_info: TimelineInfo | None = None):
         timeline_info = cls.assert_timeline_info(timeline_info)
         return cls(timeline_info.seconds_to_timestamp(seconds), timeline_info)
 
     @classmethod
-    def from_string(
-        cls, datetime_str: str, timeline_info: t.Optional[TimelineInfo] = None, **kwargs
-    ):
+    def from_string(cls, datetime_str: str, timeline_info: TimelineInfo | None = None, **kwargs):
         timeline_info = cls.assert_timeline_info(timeline_info)
         return cls.from_datetime(
             string_to_datetime(datetime_str, **{"dayfirst": True, **kwargs}), timeline_info
         )
 
     @classmethod
-    def from_datetime(cls, dt: datetime.datetime, timeline_info: t.Optional[TimelineInfo] = None):
+    def from_datetime(cls, dt: datetime.datetime, timeline_info: TimelineInfo | None = None):
         timeline_info = cls.assert_timeline_info(timeline_info)
         return cls(timeline_info.unix_time_to_timestamp(dt.timestamp()), timeline_info)
 
     @classmethod
-    def assert_timeline_info(cls, timeline_info: t.Optional[TimelineInfo] = None):
+    def assert_timeline_info(cls, timeline_info: TimelineInfo | None = None):
         timeline_info = timeline_info or global_timeline_info
         if timeline_info is None:
             raise ValueError("global TimelineInfo not set. Invoke `set_timeline_info()` first")

@@ -1,12 +1,12 @@
 
 
-traffic\_assignment\_calculation 
+traffic\_assignment\_calculation
 =================================
 
 
 
 
-dataset 
+dataset
 --------
 
 .. automodule:: movici_simulation_core.models.traffic_assignment_calculation.dataset
@@ -16,7 +16,7 @@ dataset
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.traffic_assignment_calculation.model

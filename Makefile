@@ -62,12 +62,12 @@ black-check:
 
 isort:
 	isort .
-	
+
 isort-check:
 	isort -c .
 
 lint: ruff black-check isort-check bandit safety mypy
-	
+
 test-all: coverage lint
 
 level=patch

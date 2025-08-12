@@ -14,7 +14,7 @@ Data Input/Output Models
    data_collector
    tape_player
 
-Analysis and Aggregation Models  
+Analysis and Aggregation Models
 -------------------------------
 
 .. toctree::
@@ -29,7 +29,7 @@ Analysis and Aggregation Models
 Transport and Traffic Models
 ----------------------------
 
-.. toctree::  
+.. toctree::
    :maxdepth: 1
 
    traffic_assignment
@@ -61,7 +61,7 @@ Model Categories
    * :doc:`data_collector` - Saves simulation state data for analysis
 
 **Spatial Analysis Models** perform geospatial computations:
-   * :doc:`area_aggregation` - Aggregates attributes within spatial boundaries  
+   * :doc:`area_aggregation` - Aggregates attributes within spatial boundaries
    * :doc:`operational_status` - Determines infrastructure operational state based on environmental conditions
    * :doc:`overlap_status` - Detects geometric overlaps between infrastructure entities
    * :doc:`opportunities` - Analyzes economic opportunities and costs from overlapping projects

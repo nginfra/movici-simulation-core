@@ -35,30 +35,30 @@ class Network:
     MAX_COST_FACTOR = np.inf
     MIN_COST_FACTOR = 1e-12
 
-    tl_from_node_id: t.Optional[np.ndarray] = None
-    tl_to_node_id: t.Optional[np.ndarray] = None
-    tl_mapping: t.Optional[np.ndarray] = None
+    tl_from_node_id: np.ndarray | None = None
+    tl_to_node_id: np.ndarray | None = None
+    tl_mapping: np.ndarray | None = None
     tl_count = 0
-    vn_ids: t.Optional[np.ndarray] = None
+    vn_ids: np.ndarray | None = None
     vl_count = 0
 
-    vl_from_node_id: t.Optional[np.ndarray] = None
-    vl_to_node_id: t.Optional[np.ndarray] = None
-    vl_directionality: t.Optional[np.ndarray] = None
-    vl_cost_factor: t.Optional[np.ndarray] = None
+    vl_from_node_id: np.ndarray | None = None
+    vl_to_node_id: np.ndarray | None = None
+    vl_directionality: np.ndarray | None = None
+    vl_cost_factor: np.ndarray | None = None
 
-    graph: t.Optional[Graph] = None
+    graph: Graph | None = None
     source_node_idx = None
 
-    _cost_factor: t.Optional[np.ndarray] = None
+    _cost_factor: np.ndarray | None = None
 
     def __init__(
         self,
         transport_nodes: PointEntity,
         transport_links: TransportSegmentEntity,
-        virtual_nodes: t.Optional[PointEntity],
-        virtual_links: t.Optional[LinkEntity],
-        cost_factor: t.Optional[np.ndarray] = None,
+        virtual_nodes: PointEntity | None,
+        virtual_links: LinkEntity | None,
+        cost_factor: np.ndarray | None = None,
     ):
         self.node_index = Index(raise_on_invalid=True)
         self.virtual_node_index = Index(raise_on_invalid=False)
@@ -357,7 +357,7 @@ class Network:
         state: TrackedState,
         dataset_name: str,
         transport_segments_name: str,
-        entities: t.Optional[t.Dict[str, t.Union[EntityGroup, t.Type[EntityGroup]]]] = None,
+        entities: dict[str, EntityGroup | type[EntityGroup]] | None = None,
     ) -> NetworkEntities:
         defaults = {
             "transport_nodes": (PointEntity, "transport_node_entities"),
@@ -402,7 +402,6 @@ def _shortest_path_weighted_average(
         error = False
 
         while curr != source_idx:
-
             # We need to examine the first link from the current node towards the source node
             # ``prev`` is the next node on our path to the source node, so the link to examine
             # is prev->curr
@@ -467,7 +466,6 @@ def _shortest_path_sum(
         curr = target
 
         while curr != source_idx:
-
             # We need to examine the first link from the current node towards the source node
             # ``prev`` is the next node on our path to the source node, so the link to examine
             # is prev->curr

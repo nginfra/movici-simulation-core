@@ -19,7 +19,7 @@ class Plugin:
 
 
 class Service(Plugin):
-    __service_name__: t.ClassVar[t.Optional[str]] = None
+    __service_name__: t.ClassVar[str | None] = None
     logger: logging.Logger
 
     def setup(
@@ -46,12 +46,12 @@ class Service(Plugin):
 
 
 class Model(Plugin):
-    __model_name__: t.ClassVar[t.Optional[str]] = None
+    __model_name__: t.ClassVar[str | None] = None
 
     def __init__(self, model_config: dict):
         self.config = model_config
 
-    def get_adapter(self) -> t.Type[ModelAdapterBase]:
+    def get_adapter(self) -> type[ModelAdapterBase]:
         raise NotImplementedError
 
     @classmethod
@@ -72,11 +72,11 @@ class Extensible:
     def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         pass
 
-    def register_model_type(self, identifier: str, model_type: t.Type[Model]):
+    def register_model_type(self, identifier: str, model_type: type[Model]):
         pass
 
     def register_service(
-        self, identifier: str, service: t.Type[Service], auto_use=False, daemon=True
+        self, identifier: str, service: type[Service], auto_use=False, daemon=True
     ):
         pass
 
@@ -108,7 +108,7 @@ class ModelAdapterBase(abc.ABC):
 
     @abc.abstractmethod
     def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+        self, message: UpdateSeriesMessage, data: t.Iterable[bytes | None]
     ) -> RawResult:
         raise NotImplementedError
 
@@ -121,7 +121,7 @@ class ModelAdapterBase(abc.ABC):
 
 
 class InitDataHandlerBase:
-    def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
+    def get(self, name: str) -> tuple[FileType | None, DatasetPath | None]:
         raise NotImplementedError
 
     def ensure_ftype(self, name: str, ftype: FileType):

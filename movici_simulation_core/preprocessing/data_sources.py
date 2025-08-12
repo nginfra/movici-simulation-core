@@ -33,7 +33,7 @@ class DataSource:
         """
         raise NotImplementedError
 
-    def to_crs(self, crs: t.Union[str, int]) -> None:
+    def to_crs(self, crs: str | int) -> None:
         """Convert the source geometry data the coordinate reference system specified in the
         ``crs`` argument
 
@@ -43,7 +43,7 @@ class DataSource:
         """
         return None
 
-    def get_geometry(self, geometry_type: GeometryType) -> t.Optional[dict]:
+    def get_geometry(self, geometry_type: GeometryType) -> dict | None:
         """Return the geometry of the source features as a dictionary attribute lists. The
         resulting dictionary should have attributes based on the ``geometry_type``:
 
@@ -60,7 +60,7 @@ class DataSource:
         """
         raise ValueError("No geometry available")
 
-    def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         """Return the bounding box that envelops all geospatial features in the source data
 
         :return: A bounding box as a tuple of four values: (min_x, min_y, max_x, max_y) or ``None``
@@ -108,7 +108,7 @@ class GeopandasSource(DataSource):
         gdf = geopandas.read_file(source_info["path"])
         return cls(gdf)
 
-    def to_crs(self, crs: t.Union[str, int]):
+    def to_crs(self, crs: str | int):
         self.gdf = self.gdf.to_crs(crs)
 
     def get_geometry(self, geometry_type: GeometryType):
@@ -201,9 +201,7 @@ class NetCDFGridSource(DataSource):
     points: np.ndarray = None
     cells: np.ndarray = None
 
-    def __init__(
-        self, file: t.Union[Path, str], x_var="gridCellX", y_var="gridCellY", time_var="time"
-    ):
+    def __init__(self, file: Path | str, x_var="gridCellX", y_var="gridCellY", time_var="time"):
         self.file = Path(file)
         self.data = {}
         self.x_var = x_var
@@ -225,7 +223,7 @@ class NetCDFGridSource(DataSource):
             full_data = self._read_netcdf([name])[name]
         return full_data[time_idx].tolist()
 
-    def get_geometry(self, geometry_type: GeometryType) -> t.Optional[dict]:
+    def get_geometry(self, geometry_type: GeometryType) -> dict | None:
         if geometry_type in ("points", "cells"):
             self._ensure_grid()
 
@@ -239,7 +237,7 @@ class NetCDFGridSource(DataSource):
 
         raise ValueError("Unknown geometry type, must be one of 'points' or 'cells'")
 
-    def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
+    def get_bounding_box(self) -> tuple[float, float, float, float] | None:
         self._ensure_grid()
         return [
             self.points[:, 0].min(),
@@ -251,7 +249,7 @@ class NetCDFGridSource(DataSource):
     def get_timestamps(self):
         return self._read_netcdf([self.time_var])[self.time_var].tolist()
 
-    def _read_netcdf(self, attributes: t.Sequence[str]) -> t.Dict[str, np.ndarray]:
+    def _read_netcdf(self, attributes: t.Sequence[str]) -> dict[str, np.ndarray]:
         rv = {}
         with netCDF4.Dataset(self.file, mode="r") as raw_data:
             for attr in attributes:
@@ -265,7 +263,7 @@ class NetCDFGridSource(DataSource):
         data = self._read_netcdf((self.x_var, self.y_var))
         self.points, self.cells = self._create_grid(data[self.x_var], data[self.y_var])
 
-    def _create_grid(self, xs, ys) -> t.Tuple[np.ndarray, np.ndarray]:
+    def _create_grid(self, xs, ys) -> tuple[np.ndarray, np.ndarray]:
         coords = np.stack((xs, ys), axis=-1)
         coords_set = set()
         unique_coords = []
@@ -279,4 +277,4 @@ class NetCDFGridSource(DataSource):
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
 
 
-SourcesDict = t.Dict[str, DataSource]
+SourcesDict = dict[str, DataSource]

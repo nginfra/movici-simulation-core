@@ -17,8 +17,8 @@ from movici_simulation_core.utils.unicode import equal_str_dtypes
 
 
 class TrackedArray(np.ndarray):
-    _curr: t.Optional[np.ndarray] = None
-    _changed: t.Optional[np.ndarray] = None
+    _curr: np.ndarray | None = None
+    _changed: np.ndarray | None = None
     rtol: float
     atol: float
     equal_nan: bool
@@ -77,7 +77,7 @@ class TrackedArray(np.ndarray):
         self._curr = None
         self._changed = None
 
-    def diff(self) -> t.Tuple[np.ndarray, np.ndarray]:
+    def diff(self) -> tuple[np.ndarray, np.ndarray]:
         self._start_tracking()
         return self._curr[self.changed], self[self.changed]
 

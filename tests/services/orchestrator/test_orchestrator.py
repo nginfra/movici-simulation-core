@@ -312,7 +312,7 @@ def run_orchestrator(setup_orchestrator, socket):
     model responses pending after the orchestrator finishes, a ValueError is raised.
     """
 
-    def message_to_bytes(payload: t.Tuple[str, Message]):
+    def message_to_bytes(payload: tuple[str, Message]):
         ident, message = payload
         return [ident.encode(), b"", *dump_message(message)]
 
@@ -321,7 +321,7 @@ def run_orchestrator(setup_orchestrator, socket):
         msg_type, *content = payload
         return ident.decode(), load_message(msg_type, *content)
 
-    def _run_fsm(models: t.Sequence[str], updates: t.Sequence[t.Tuple[str, Message]]):
+    def _run_fsm(models: t.Sequence[str], updates: t.Sequence[tuple[str, Message]]):
         incoming = map(message_to_bytes, updates)
         orchestrator = setup_orchestrator(models)
         socket.recv_multipart.side_effect = incoming
@@ -405,9 +405,7 @@ def test_run_simulation(run_orchestrator):
         # info about model_a
         (
             "model_b",
-            UpdateSeriesMessage(
-                [UpdateMessage(0), UpdateMessage(0, key="a", address="address_a")]
-            ),
+            UpdateSeriesMessage([UpdateMessage(0), UpdateMessage(0, key="a", address="address_a")]),
         ),
         # 4) orchestrator sends update to model_c with info about model_b
         ("model_c", UpdateMessage(0, key="b", address="address_b")),

@@ -43,15 +43,15 @@ class Model(TrackedModel, name="corridor"):
                 },
             )
         super().__init__(model_config)
-        self._corridor_entity: t.Optional[CorridorEntity] = None
-        self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
-        self._transport_nodes: t.Optional[PointEntity] = None
-        self._demand_nodes: t.Optional[DemandNodeEntity] = None
-        self._demand_links: t.Optional[VirtualLinkEntity] = None
-        self._free_flow_times: t.Optional[np.ndarray] = None
-        self._transport_directions: t.Optional[np.ndarray] = None
-        self._project: t.Optional[ProjectWrapper] = None
-        self._logger: t.Optional[Logger] = None
+        self._corridor_entity: CorridorEntity | None = None
+        self._transport_segments: CorridorTransportSegmentEntity | None = None
+        self._transport_nodes: PointEntity | None = None
+        self._demand_nodes: DemandNodeEntity | None = None
+        self._demand_links: VirtualLinkEntity | None = None
+        self._free_flow_times: np.ndarray | None = None
+        self._transport_directions: np.ndarray | None = None
+        self._project: ProjectWrapper | None = None
+        self._logger: Logger | None = None
         self.cargo_pcu = 2.0
         self.publish_corridor_geometry = False
 
@@ -107,7 +107,7 @@ class Model(TrackedModel, name="corridor"):
             : len(self._transport_segments.index.ids)
         ]
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         if self._transport_segments.travel_time.has_changes():
             self._project.update_column(
                 "congested_time", self._transport_segments.travel_time.array
@@ -136,7 +136,7 @@ class Model(TrackedModel, name="corridor"):
 
             for from_id in from_ids:
                 paths = self._project.get_shortest_paths(from_id, to_ids)
-                for to_id, path in zip(to_ids, paths):
+                for to_id, path in zip(to_ids, paths, strict=False):
                     if path is None:
                         self._logger.warning(
                             f"Nodes {from_id}-{to_id} doesnt have a valid path between them."

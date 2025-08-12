@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 
 from .entity_groups import LineEntity, PointEntity, PolygonEntity
@@ -19,7 +17,7 @@ supported_geometry_types = {
 }
 
 
-def get_transport_info(model_config: t.Dict[str, t.Optional[t.List[str]]]) -> t.Tuple[str, str]:
+def get_transport_info(model_config: dict[str, list[str] | None]) -> tuple[str, str]:
     return_dataset_type = ""
     return_dataset = ""
     allowed_legacy_keys = 1

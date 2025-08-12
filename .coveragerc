@@ -6,7 +6,7 @@ source = movici_simulation_core
 branch = true
 parallel = true
 data_file = .coverage
-omit = 
+omit =
     */tests/*
     */test_*
     setup.py

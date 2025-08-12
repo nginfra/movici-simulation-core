@@ -84,7 +84,7 @@ def test_get_datamask(model, logger, settings, sub_mask, expected):
 def run_updates(global_schema):
     def _run(
         model,
-        updates: t.Sequence[t.Tuple[int, UpdateData]],
+        updates: t.Sequence[tuple[int, UpdateData]],
     ):
         tester = ModelTester(model, schema=global_schema)
         tester.initialize()

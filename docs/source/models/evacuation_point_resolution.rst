@@ -41,7 +41,7 @@ Basic Configuration
             "property": "evacuation.point_label"
         },
         "road_segments": {
-            "entity_group": "road_segments", 
+            "entity_group": "road_segments",
             "property": "evacuation.point_id"
         }
     }
@@ -212,7 +212,7 @@ The model performs the following steps:
 1. **Load evacuation point data**: Retrieves road IDs and labels from evacuation points
 2. **Create mapping dictionary**: Builds a mapping from road IDs to evacuation point labels
 3. **Process road segments**: For each road segment:
-   
+
    - Check if segment ID exists in the mapping
    - Assign corresponding evacuation point label if found
    - Assign special value (-9999) if no mapping exists

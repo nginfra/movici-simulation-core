@@ -14,7 +14,7 @@ from movici_simulation_core.core import (
 )
 
 
-def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
+def dataset_data_to_numpy(data: dict | np.ndarray | list):
     if isinstance(data, dict):
         if "data" in data:
             return data
@@ -32,7 +32,7 @@ T = t.TypeVar("T", bound=EntityGroup)
 
 
 def create_entity_group_with_data(
-    entity_type: t.Union[T, t.Type[T]], data: dict, state: t.Optional[TrackedState] = None
+    entity_type: T | type[T], data: dict, state: TrackedState | None = None
 ) -> T:
     DATASET = "dummy"
     state = state or TrackedState()
@@ -70,9 +70,9 @@ def assert_dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
 
 
 def _dataset_dicts_equal_helper(
-    a: t.Union[dict, np.ndarray, list],
-    b: t.Union[dict, np.ndarray, list],
-    current_errors: t.Dict[str, str],
+    a: dict | np.ndarray | list,
+    b: dict | np.ndarray | list,
+    current_errors: dict[str, str],
     current_path="",
     rtol=1e-5,
     atol=1e-8,
@@ -100,13 +100,13 @@ def _dataset_dicts_equal_helper(
     elif isinstance(a, list) and isinstance(b, list):
         if len(a) != len(b):
             current_errors[current_path] = f"lists not of equal length {len(a)} vs {len(b)}"
-        for idx, (i_a, i_b) in enumerate(zip(a, b)):
+        for idx, (i_a, i_b) in enumerate(zip(a, b, strict=False)):
             _dataset_dicts_equal_helper(
                 i_a, i_b, current_errors, current_path + f"[{idx}]", rtol=rtol, atol=atol
             )
 
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
-        if np.issubdtype(getattr(a, "dtype") or getattr(b, "dtype"), float) and not np.allclose(
+        if np.issubdtype(a.dtype or b.dtype, float) and not np.allclose(
             a, b, rtol=rtol, atol=atol, equal_nan=True
         ):
             current_errors[current_path] = f"{a} not equal to {b}"

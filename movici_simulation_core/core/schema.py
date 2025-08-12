@@ -12,8 +12,8 @@ from .utils import configure_global_plugins
 
 
 class AttributeSchema(types.Extensible):
-    def __init__(self, attributes: t.Optional[t.Iterable[AttributeSpec]] = None):
-        self.attributes: t.Dict[str, AttributeSpec] = {}
+    def __init__(self, attributes: t.Iterable[AttributeSpec] | None = None):
+        self.attributes: dict[str, AttributeSpec] = {}
         attributes = attributes or ()
         for attr in attributes:
             self.add_attribute(attr)
@@ -26,8 +26,8 @@ class AttributeSchema(types.Extensible):
 
     def get_spec(
         self,
-        name: t.Union[str, t.Tuple[t.Optional[str], str]],
-        default_data_type: t.Union[DataType, t.Callable[[], DataType], None] = None,
+        name: str | tuple[str | None, str],
+        default_data_type: DataType | t.Callable[[], DataType] | None = None,
         cache=False,
     ):
         if not isinstance(name, str):
@@ -93,7 +93,7 @@ class AttributeSchema(types.Extensible):
     def register_attributes(self, attributes: t.Iterable[AttributeSpec]):
         self.add_attributes(attributes)
 
-    def register_model_type(self, identifier: str, model_type: t.Type[types.Model]):
+    def register_model_type(self, identifier: str, model_type: type[types.Model]):
         self.add_attributes(model_type.get_schema_attributes())
 
     def add_from_namespace(self, ns):
@@ -140,7 +140,7 @@ def get_rowptr(d: dict):
         return None
 
 
-def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
+def infer_data_type_from_array(attr_data: dict | np.ndarray | TrackedCSRArray):
     """given array data, either as an np.ndarray, TrackedCSRArray or a "data"/"row_ptr" dictionary
     infer the `DataType` of that array data
     """
@@ -174,37 +174,37 @@ def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRAr
 
 def infer_data_type_from_list(data: list):
     """Infer data type from a list with comprehensive validation.
-    
+
     Args:
         data: List of values or list of lists (for CSR data)
-        
+
     Returns:
         DataType: Inferred data type with unit shape and CSR flag
-        
+
     Raises:
         TypeError: If data types are inconsistent or unsupported
         ValueError: If data structure is invalid
     """
-    
+
     def infer_pytype(d: list):
         """Infer Python type from a list with validation."""
         if not len(d):
             return float
-            
+
         # Check for None values and get first non-None item
         first_non_none = None
         for item in d:
             if item is not None:
                 first_non_none = item
                 break
-                
+
         if first_non_none is None:
             return float  # All None values, default to float
-            
+
         inferred_type = type(first_non_none)
         if inferred_type not in (int, float, bool, str):
             raise TypeError(f"Unsupported data type: {inferred_type}")
-            
+
         # Check for int/float consistency - promote int to float if mixed
         if inferred_type == int:
             for item in d:
@@ -213,15 +213,17 @@ def infer_data_type_from_list(data: list):
                     break
                 elif item is not None and not isinstance(item, (int, float)):
                     raise TypeError(f"Inconsistent types: expected numeric, got {type(item)}")
-                    
+
         # Validate type consistency for all items
         for item in d:
             if item is not None:
                 if inferred_type == float and not isinstance(item, (int, float)):
                     raise TypeError(f"Inconsistent types: expected numeric, got {type(item)}")
                 elif inferred_type not in (int, float) and not isinstance(item, inferred_type):
-                    raise TypeError(f"Inconsistent types: expected {inferred_type}, got {type(item)}")
-                    
+                    raise TypeError(
+                        f"Inconsistent types: expected {inferred_type}, got {type(item)}"
+                    )
+
         return inferred_type
 
     # Check for empty list
@@ -230,12 +232,12 @@ def infer_data_type_from_list(data: list):
     elif isinstance(data[0], list):
         # CSR case - list of lists
         csr = True
-        
+
         # Validate that all items are lists
         for i, item in enumerate(data):
             if not isinstance(item, list):
                 raise ValueError(f"Inconsistent structure: item {i} is not a list in CSR data")
-                
+
         # Check for unit shape consistency across all sublists
         if data:
             first_sublist = data[0]
@@ -249,12 +251,14 @@ def infer_data_type_from_list(data: list):
                         else:
                             # 1D case
                             current_shape = ()
-                            
+
                         if unit_shape is None:
                             unit_shape = current_shape
                         elif unit_shape != current_shape:
-                            raise ValueError(f"Inconsistent unit shapes in CSR data: {unit_shape} vs {current_shape}")
-                            
+                            raise ValueError(
+                                f"Inconsistent unit shapes in CSR data: {unit_shape} vs {current_shape}"
+                            )
+
         # Infer type from first non-empty sublist
         pytype = float  # default
         for sublist in data:

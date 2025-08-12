@@ -1,12 +1,12 @@
 
 
-preprocessing 
+preprocessing
 ==============
 
 
 
 
-data\_sources 
+data\_sources
 --------------
 
 .. automodule:: movici_simulation_core.preprocessing.data_sources
@@ -16,7 +16,7 @@ data\_sources
 
 
 
-dataset\_creator 
+dataset\_creator
 -----------------
 
 .. automodule:: movici_simulation_core.preprocessing.dataset_creator
@@ -26,7 +26,7 @@ dataset\_creator
 
 
 
-tapefile 
+tapefile
 ---------
 
 .. automodule:: movici_simulation_core.preprocessing.tapefile

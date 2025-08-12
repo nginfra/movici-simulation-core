@@ -5,11 +5,7 @@ import msgpack
 import numpy as np
 import orjson as json
 
-from movici_simulation_core.types import (
-    ExternalSerializationStrategy,
-    FileType,
-    NumpyAttributeData,
-)
+from movici_simulation_core.types import ExternalSerializationStrategy, FileType, NumpyAttributeData
 from movici_simulation_core.utils import lifecycle
 from movici_simulation_core.utils.unicode import get_unicode_dtype
 
@@ -31,7 +27,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
     def __init__(
         self,
-        schema: t.Optional[AttributeSchema] = None,
+        schema: AttributeSchema | None = None,
         non_data_dict_keys: t.Container[str] = ("general",),
         cache_inferred_attributes: bool = False,
     ) -> None:
@@ -43,7 +39,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
         return (FileType.JSON, FileType.MSGPACK)
 
     @lifecycle.deprecated(alternative="EntityInitDataFormat.loads")
-    def load_bytes(self, raw: t.Union[str, bytes], **kwargs):
+    def load_bytes(self, raw: str | bytes, **kwargs):
         return self.loads(raw, FileType.JSON)
 
     def loads(self, raw_data, type: FileType):
@@ -97,9 +93,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
         else:
             raise TypeError("attribute data must be list")
 
-    def dumps(
-        self, dataset: dict, filetype: t.Optional[FileType] = FileType.JSON, **kwargs
-    ) -> str:
+    def dumps(self, dataset: dict, filetype: FileType | None = FileType.JSON, **kwargs) -> str:
         self.supported_file_type_or_raise(filetype)
         list_data = self.dump_dict(dataset)
         if filetype is FileType.JSON:
@@ -120,7 +114,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
 def load_from_json(
     data,
-    schema: t.Optional[AttributeSchema] = None,
+    schema: AttributeSchema | None = None,
     non_data_dict_keys=("general",),
     cache_inferred_attributes=False,
 ):
@@ -138,7 +132,7 @@ def parse_uniform_list(data: list, data_type: DataType) -> NumpyAttributeData:
     return {"data": create_array(data, data_type)}
 
 
-def parse_csr_list(data: t.List[list], data_type: DataType) -> NumpyAttributeData:
+def parse_csr_list(data: list[list], data_type: DataType) -> NumpyAttributeData:
     flattened = []
     row_ptr = [0]
     for item in data:

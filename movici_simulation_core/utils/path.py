@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import functools
-import os
 import pathlib
-import typing as t
 
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 
-def _dataset_path(cls: t.Type[DatasetPath]):
+def _dataset_path(cls: type[DatasetPath]):
     # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
     # initialization method. So instead we use a custom factory function posing as a class
     # constructor, to set additional attributes
@@ -16,8 +14,8 @@ def _dataset_path(cls: t.Type[DatasetPath]):
     @functools.wraps(cls)
     def constructor(
         path,
-        filetype: t.Optional[FileType] = None,
-        strategy: t.Optional[ExternalSerializationStrategy] = None,
+        filetype: FileType | None = None,
+        strategy: ExternalSerializationStrategy | None = None,
     ):
         obj = cls(path)
         obj.filetype = filetype
@@ -36,8 +34,8 @@ class DatasetPath(pathlib.Path):
 
     """
 
-    strategy: t.Optional[ExternalSerializationStrategy] = None
-    filetype: t.Optional[FileType] = None
+    strategy: ExternalSerializationStrategy | None = None
+    filetype: FileType | None = None
 
     def read_dict(self):
         if self.strategy is None:

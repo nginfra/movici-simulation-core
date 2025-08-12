@@ -14,21 +14,21 @@ Linux
   pip install movici-simulation-core
 
 This installs ``movici-simulation-core`` and its core requirements with which you can get started to
-create your own models and setup simulations. Some models that that are included with 
+create your own models and setup simulations. Some models that that are included with
 ``movici-simulation-core`` require extra requirements that can be installed separately:
 
-First install ``mod_spatialite``, an extension to Sqlite for geospatial queries. This shared 
-library is required by one of ``movici-simulation-core``\s dependencies. Install using your 
+First install ``mod_spatialite``, an extension to Sqlite for geospatial queries. This shared
+library is required by one of ``movici-simulation-core``\s dependencies. Install using your
 favorite packages manager. For example, under Debian/Ubuntu:
 
 .. code-block::
-  
+
   sudo apt-get install libsqlite3-mod-spatialite
 
 Then you can install the extra python requirements throug pip:
 
 .. code-block::
-  
+
   pip install movici-simulation-core[models]
 
 The models that require these extra requirements are
@@ -54,12 +54,12 @@ model requirements install ``mod_spatialite`` as following:
 
 * Get latest Windows binaries from `Gaia-SINS <https://www.gaia-gis.it/gaia-sins/>`_
 * Extract using `7-Zip <https://www.7-zip.org/>`_
-* Copy contents to well-known directory such as ``C:\bin\spatialite`` or 
+* Copy contents to well-known directory such as ``C:\bin\spatialite`` or
   ``C:\Program Files\Spatialite``
-* Add the contents to the ``PATH`` environment variable. For instructions, see 
+* Add the contents to the ``PATH`` environment variable. For instructions, see
   `here <https://www.computerhope.com/issues/ch000549.htm>`_
 * Log out from your Windows account and log back in to update your environment
-* Test if the installation was succesful by opening a command prompt and running: 
+* Test if the installation was succesful by opening a command prompt and running:
   ``sqlite3 :memory: ".load mod_spatialite"``. This commands returns without any output, otherwise
   an error message is shown
 
@@ -67,7 +67,7 @@ model requirements install ``mod_spatialite`` as following:
 Then you can install the extra python requirements throug pip:
 
 .. code-block::
-  
+
   pip install movici-simulation-core[models]
 
 Alternative environments
@@ -78,7 +78,7 @@ Alternative environments
 Anaconda
 ^^^^^^^^
 
-While the Movici libraries cannot be installed using conda, many dependencies (such as ``Fiona`` 
+While the Movici libraries cannot be installed using conda, many dependencies (such as ``Fiona``
 and ``spatialite``) can:
 
 .. code-block::
@@ -90,18 +90,18 @@ Windows Substystem for Linux (WSL)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While Windows is a supported platform, you may have a better experience when running Movici in
-a linux environment. The easiest method for running Linux in Windows is by using 
+a linux environment. The easiest method for running Linux in Windows is by using
 :abbr:`WSL (Windows Subsystem for Linux)`. Only WSL 2 is supported, this is default WSL version
 for Windows 10 and higher. When using WSL, it is recommended to use VSCode as your development
-environment. See `Developing in WSL <https://code.visualstudio.com/docs/remote/wsl>`_ for 
+environment. See `Developing in WSL <https://code.visualstudio.com/docs/remote/wsl>`_ for
 installation instructions. After installation of WSL, follow the installation instructuctions for
-:ref:`Linux<installation_linux>` for how to install Movici. 
+:ref:`Linux<installation_linux>` for how to install Movici.
 
 
 MacOS
 ^^^^^
 
-Currently, MacOS is not a support operating system. You may be able to install and run Movici 
-succesfully, but it requires you to compile certain dependencies from source. If you want to 
-install Movici under MacOS, please open an issue on 
-`Github <https://github.com/nginfra/movici-simulation-core/issues>`_ 
+Currently, MacOS is not a support operating system. You may be able to install and run Movici
+succesfully, but it requires you to compile certain dependencies from source. If you want to
+install Movici under MacOS, please open an issue on
+`Github <https://github.com/nginfra/movici-simulation-core/issues>`_

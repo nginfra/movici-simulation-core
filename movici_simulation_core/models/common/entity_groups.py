@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 
 from movici_simulation_core.csr import slice_csr_array
@@ -43,7 +41,6 @@ try:
         PointGeometry,
     )
 except ImportError as e:
-
     ClosedPolygonGeometry = delayed_raise(e)
     Geometry = delayed_raise(e)
     LinestringGeometry = delayed_raise(e)
@@ -54,7 +51,6 @@ try:
     from shapely.geometry import LineString, Point, Polygon
     from shapely.geometry.base import BaseGeometry
 except ImportError as e:
-
     BaseGeometry = delayed_raise(e)
     LineString = delayed_raise(e)
     Point = delayed_raise(e)
@@ -105,7 +101,7 @@ class PointEntity(GeometryEntity):
 class LineEntity(GeometryEntity):
     _linestring2d = field(Geometry_Linestring2d, flags=OPT)
     _linestring3d = field(Geometry_Linestring3d, flags=OPT)
-    _linestring: t.Optional[CSRAttribute] = None
+    _linestring: CSRAttribute | None = None
 
     @property
     def linestring(self) -> CSRAttribute:
@@ -145,7 +141,7 @@ class PolygonEntity(GeometryEntity):
     _polygon_legacy = field(Geometry_Polygon, flags=OPT)
     _polygon2d = field(Geometry_Polygon2d, flags=OPT)
     _polygon3d = field(Geometry_Polygon3d, flags=OPT)
-    _polygon: t.Optional[CSRAttribute] = None
+    _polygon: CSRAttribute | None = None
 
     @property
     def polygon(self) -> CSRAttribute:
@@ -171,8 +167,7 @@ class PolygonEntity(GeometryEntity):
 
     def is_ready(self) -> bool:
         return any(
-            pol.is_initialized()
-            for pol in [self._polygon3d, self._polygon2d, self._polygon_legacy]
+            pol.is_initialized() for pol in [self._polygon3d, self._polygon2d, self._polygon_legacy]
         )
 
     def get_geometry(self, slice=None) -> ClosedPolygonGeometry:
@@ -189,8 +184,8 @@ class PolygonEntity(GeometryEntity):
 
 class GridCellEntity(GeometryEntity):
     grid_points = field(Grid_GridPoints, flags=INIT)
-    points: t.Optional[PointEntity] = None
-    _polygon_data: t.Optional[np.ndarray] = None
+    points: PointEntity | None = None
+    _polygon_data: np.ndarray | None = None
 
     def set_points(self, points: PointEntity):
         self.points = points
@@ -213,9 +208,7 @@ class GridCellEntity(GeometryEntity):
 
     def is_ready(self):
         return (
-            self.points is not None
-            and self.points.is_ready()
-            and self.grid_points.is_initialized()
+            self.points is not None and self.points.is_ready() and self.grid_points.is_initialized()
         )
 
     def _resolve_polygons(self) -> np.ndarray:

@@ -1,5 +1,4 @@
 import dataclasses
-import typing as t
 
 import pytest
 
@@ -13,7 +12,7 @@ from movici_simulation_core.testing.model_tester import ModelTester
 
 @dataclasses.dataclass
 class Aggregation:
-    source_entity_group: t.List[str]
+    source_entity_group: list[str]
     source_attribute: str
     target_attribute: str
     function: str
@@ -233,7 +232,7 @@ class TestAreaAggregation:
 
 class TestMultipleAttributesOneEntity:
     @pytest.fixture
-    def aggregations(self, aggregations: t.List[Aggregation]):
+    def aggregations(self, aggregations: list[Aggregation]):
         agg1, agg2 = aggregations
         return [
             agg1,
@@ -335,7 +334,7 @@ class TestTimeIntegration:
         return 2
 
     @pytest.fixture
-    def aggregations(self, aggregations: t.List[Aggregation]):
+    def aggregations(self, aggregations: list[Aggregation]):
         agg1, agg2 = aggregations
         return [
             dataclasses.replace(
@@ -466,7 +465,7 @@ class TestTimeIntegration:
 @pytest.fixture
 def legacy_model_config(
     model_name,
-    aggregations: t.List[Aggregation],
+    aggregations: list[Aggregation],
     target_entity_group,
     output_interval,
 ):

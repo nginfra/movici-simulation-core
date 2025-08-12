@@ -22,10 +22,10 @@ Movici Simulation Core
 
 Copyright 2020ff NGinfra
 
-Movici is a set of tools and software for performing simulations on geospatial entities. 
+Movici is a set of tools and software for performing simulations on geospatial entities.
 
 Movici Simulation Core is the main package needed to run Movici simulations. It contains:
-  
+
 * Simulation core for running high-performance simulations
 * Pre-processing tools for preparing data to be used in simulations
 * Post-processing tools for performing analyses on simulation results
@@ -55,7 +55,7 @@ Features
 
 📚 **Comprehensive Model Library**
   - 18 fully documented simulation models
-  - Complete API reference and examples  
+  - Complete API reference and examples
   - Traffic assignment, KPI calculation, spatial analysis
   - Environmental data integration (NetCDF, CSV)
   - Custom mathematical functions (UDF)
@@ -109,13 +109,13 @@ Quick Start
 
    from movici_simulation_core import Simulation
    from movici_simulation_core.models.csv_player import CSVPlayer
-   
+
    # Create a simulation
    sim = Simulation()
-   
+
    # Add models (18 different model types available)
    sim.add_model(CSVPlayer(name="data_player"))
-   
+
    # Run simulation
    sim.run()
 
@@ -161,7 +161,7 @@ Performance Benchmarks
 Recent performance improvements in Python 3.12:
 
 * **CSR Operations**: 0.04ms for 100k elements
-* **Spatial Queries**: 0.26ms for 100 queries  
+* **Spatial Queries**: 0.26ms for 100 queries
 * **Simulation Throughput**: 3,909 entities/second
 * **Memory Usage**: 40% reduction with optimized arrays
 

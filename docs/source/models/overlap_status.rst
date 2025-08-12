@@ -364,29 +364,29 @@ Algorithm Details
 The overlap detection process:
 
 1. **Geometry Preparation**:
-   
+
    - Load source and target geometries
    - Create spatial indices for efficient lookup
    - Apply buffer zones if distance threshold specified
 
 2. **Overlap Detection**:
-   
+
    .. code-block:: python
-   
+
        for source_entity in source_entities:
            for target_entity in target_entities:
                if geometries_overlap(source_entity, target_entity, threshold):
                    create_overlap_record(source_entity, target_entity)
 
 3. **Status Evaluation**:
-   
+
    - Check optional status properties
    - Overlap is active if:
      - No status properties defined, OR
      - Both source and target status properties are True
 
 4. **Connection Mapping**:
-   
+
    - Create bidirectional mappings
    - Store relationship metadata
    - Update connection indices

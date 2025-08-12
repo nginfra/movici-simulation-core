@@ -48,7 +48,6 @@ class SimpleModel(TrackedModel):
         )
 
     def initialize(self, state: TrackedState):
-
         state.receive_update(
             {
                 "dataset": {
@@ -60,7 +59,7 @@ class SimpleModel(TrackedModel):
             }
         )
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         if self.attr.flags & PUB:
             self.attr[0] = 1.0
         else:
@@ -90,7 +89,7 @@ class DummyService(Service):
         settings: Settings,
         stream: Stream,
         logger: logging.Logger,
-        socket: MessageRouterSocket
+        socket: MessageRouterSocket,
     ):
         pass
 

@@ -218,7 +218,9 @@ def test_calculate_localized_multiplication_factor():
     np.testing.assert_array_equal(result, np.outer(exp, exp))
 
 
-@pytest.mark.parametrize("node_i, expected", zip(range(5), [1 / 2, 2 / 3, 3 / 4, 1, 1]))
+@pytest.mark.parametrize(
+    "node_i, expected", zip(range(5), [1 / 2, 2 / 3, 3 / 4, 1, 1], strict=False)
+)
 def test_get_ratio_for_node(node_i, expected):
     values = np.array([1, 2, 3, 0, 5])
     old_values = np.array([2, 3, 4, 5, 0])

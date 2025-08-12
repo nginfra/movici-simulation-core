@@ -27,14 +27,14 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
     Calculates traffic attributes on roads
     """
 
-    vdf_alpha: t.Union[float, str]
+    vdf_alpha: float | str
     vdf_beta: float
     cargo_pcu: float
-    project: t.Optional[ProjectWrapper] = None
-    transport_segments: t.Optional[ds.TrafficTransportSegmentEntity] = None
-    transport_nodes: t.Optional[PointEntity] = None
-    demand_nodes: t.Optional[ds.DemandNodeEntity] = None
-    demand_links: t.Optional[VirtualLinkEntity] = None
+    project: ProjectWrapper | None = None
+    transport_segments: ds.TrafficTransportSegmentEntity | None = None
+    transport_nodes: PointEntity | None = None
+    demand_nodes: ds.DemandNodeEntity | None = None
+    demand_links: VirtualLinkEntity | None = None
     modality: ModalityStrategy
 
     def __init__(self, model_config):
@@ -69,7 +69,7 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
         self.modality.initialize_parameters(self)
         self.modality.process_links(self, init=True)
 
-    def update(self, **_) -> t.Optional[Moment]:
+    def update(self, **_) -> Moment | None:
         self.modality.process_links(self)
 
         passenger_demand, cargo_demand = self.modality.get_demands(self)
@@ -99,15 +99,15 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
 @dataclasses.dataclass(frozen=True)
 class PublishAttribute:
     name: str
-    target: t.Optional[str] = None
+    target: str | None = None
     correction_value: float = 0
 
 
 class ModalityStrategy:
     transport_type: str
-    transport_segment_entity: t.Type[
+    transport_segment_entity: type[ds.TrafficTransportSegmentEntity] = (
         ds.TrafficTransportSegmentEntity
-    ] = ds.TrafficTransportSegmentEntity
+    )
     publish_attributes: t.Sequence[PublishAttribute] = (
         PublishAttribute("passenger_flow"),
         PublishAttribute("cargo_flow"),
@@ -124,7 +124,6 @@ class ModalityStrategy:
         model.cargo_pcu = model.config.get("cargo_pcu", default_parameters.cargo_pcu)
 
     def setup_state(self, model: Model, state: TrackedState, dataset_name: str):
-
         model.transport_segments = state.register_entity_group(
             dataset_name,
             self.transport_segment_entity(
@@ -198,7 +197,7 @@ class ModalityStrategy:
             model.project.update_column("capacity_ba", capacities)
         return changed
 
-    def get_demands(self, model: Model) -> t.Tuple[np.ndarray, np.ndarray]:
+    def get_demands(self, model: Model) -> tuple[np.ndarray, np.ndarray]:
         passenger_demand = model.demand_nodes.passenger_demand.csr.as_matrix()
         cargo_demand = model.demand_nodes.cargo_demand.csr.as_matrix()
         return passenger_demand, cargo_demand
@@ -292,7 +291,7 @@ class PassengerTrackModality(TrackModality):
         PublishAttribute("congested_time", target="passenger_average_time", correction_value=1e9),
     )
 
-    def get_demands(self, model: Model) -> t.Tuple[np.ndarray, np.ndarray]:
+    def get_demands(self, model: Model) -> tuple[np.ndarray, np.ndarray]:
         passenger_demand = model.demand_nodes.passenger_demand.csr.as_matrix()
         cargo_demand = np.zeros_like(passenger_demand)
         return passenger_demand, cargo_demand
@@ -307,7 +306,7 @@ class CargoTrackModality(TrackModality):
         PublishAttribute("congested_time", target="cargo_average_time", correction_value=1e9),
     )
 
-    def cargo_allowed(self, model: Model) -> t.Optional[UniformAttribute]:
+    def cargo_allowed(self, model: Model) -> UniformAttribute | None:
         attr = getattr(model.transport_segments, "cargo_allowed", None)
         if isinstance(attr, UniformAttribute) and attr.has_data():
             return attr
@@ -334,19 +333,17 @@ class CargoTrackModality(TrackModality):
             return super().get_capacities(model)
         cargo_allowed = ae_util.get_cargo_allowed_from_attribute(attr)
 
-        capacities = np.full_like(
-            model.transport_segments.capacity, fill_value=np.inf, dtype=float
-        )
+        capacities = np.full_like(model.transport_segments.capacity, fill_value=np.inf, dtype=float)
         capacities[np.nonzero(~cargo_allowed)] = ae_util.eps
         return capacities
 
-    def get_demands(self, model: Model) -> t.Tuple[np.ndarray, np.ndarray]:
+    def get_demands(self, model: Model) -> tuple[np.ndarray, np.ndarray]:
         cargo_demand = model.demand_nodes.cargo_demand.csr.as_matrix()
         passenger_demand = np.zeros_like(cargo_demand)
         return passenger_demand, cargo_demand
 
 
-modalities: t.Dict[str, t.Type[ModalityStrategy]] = {
+modalities: dict[str, type[ModalityStrategy]] = {
     "roads": RoadModality,
     "waterways": WaterwayModality,
     "tracks": TrackModality,

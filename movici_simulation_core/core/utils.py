@@ -12,10 +12,10 @@ def configure_global_plugins(
         eps = entry_points()
         # Handle different versions of importlib.metadata
         plugin_eps = []
-        if hasattr(eps, 'select'):
+        if hasattr(eps, "select"):
             # Python 3.10+ style
             plugin_eps = eps.select(group=key)
-        elif hasattr(eps, 'get'):
+        elif hasattr(eps, "get"):
             # Alternative Python 3.10+ style
             plugin_eps = eps.get(key, [])
         else:
@@ -25,7 +25,7 @@ def configure_global_plugins(
             except:
                 # Fallback for other cases
                 pass
-            
+
         for entry_point in plugin_eps:
             try:
                 plugin: types.Plugin = entry_point.load()

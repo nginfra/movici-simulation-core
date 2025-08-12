@@ -70,8 +70,8 @@ class ModelConnector:
     model: ModelAdapterBase
     updates: UpdateDataClient
     init_data: InitDataHandler
-    data_mask: t.Optional[DataMask] = dataclasses.field(init=False, default=None)
-    name: t.Optional[str] = None
+    data_mask: DataMask | None = dataclasses.field(init=False, default=None)
+    name: str | None = None
 
     def initialize(self) -> RegistrationMessage:
         self.data_mask = self.model.initialize(self.init_data)
@@ -91,20 +91,18 @@ class ModelConnector:
         result_data, next_time = self.model.update_series(update, data=data_series)
         return self._process_result(result_data, next_time)
 
-    def _get_update_data(self, update: UpdateMessage) -> t.Optional[bytes]:
+    def _get_update_data(self, update: UpdateMessage) -> bytes | None:
         if update.has_data:
             return self.updates.get(
                 address=update.address, key=update.key, mask=self.data_mask.get("sub")
             )
         return None
 
-    def _process_result(self, data: bytes, next_time: t.Optional[int]) -> ResultMessage:
+    def _process_result(self, data: bytes, next_time: int | None) -> ResultMessage:
         address, key = self._send_update_data(data)
         return ResultMessage(key=key, address=address, next_time=next_time, origin=self.name)
 
-    def _send_update_data(
-        self, result: t.Optional[bytes]
-    ) -> t.Tuple[t.Optional[str], t.Optional[str]]:
+    def _send_update_data(self, result: bytes | None) -> tuple[str | None, str | None]:
         if result is None:
             return None, None
         return self.updates.put(result)
@@ -123,11 +121,11 @@ class UpdateDataClient(RequestClient):
         self.home_address = home_address
         self.reset_counter()
 
-    def get(self, address: str, key: str, mask: t.Optional[dict]) -> bytes:
+    def get(self, address: str, key: str, mask: dict | None) -> bytes:
         resp = self.request(address, GetDataMessage(key, mask), valid_responses=DataMessage)
         return resp.data
 
-    def put(self, data: bytes) -> t.Tuple[str, str]:
+    def put(self, data: bytes) -> tuple[str, str]:
         key = next(self.counter)
         self.request(
             self.home_address, PutDataMessage(key, data), valid_responses=AcknowledgeMessage

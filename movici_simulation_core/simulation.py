@@ -50,34 +50,34 @@ class ModuleTypeInfo:
 
 @dataclasses.dataclass
 class ServiceTypeInfo(ModuleTypeInfo):
-    cls: t.Type[Service]
+    cls: type[Service]
     auto_use: bool
     daemon: bool = True
 
 
 @dataclasses.dataclass
 class ModelTypeInfo(ModuleTypeInfo):
-    cls: t.Type[Model]
+    cls: type[Model]
 
 
 class ProcessInfo(t.Protocol):
     daemon: bool
-    process: t.Optional[Process]
+    process: Process | None
 
 
 @dataclasses.dataclass
 class ActiveModuleInfo:
     name: str
-    process: t.Optional[Process] = dataclasses.field(init=False, default=None)
+    process: Process | None = dataclasses.field(init=False, default=None)
 
 
 @dataclasses.dataclass
 class ServiceInfo(ActiveModuleInfo):
-    cls: t.Type[Service]
-    address: t.Optional[str] = None
+    cls: type[Service]
+    address: str | None = None
     daemon: bool = True
 
-    def fill_service_discovery(self, svc_discovery: t.Dict[str, str]):
+    def fill_service_discovery(self, svc_discovery: dict[str, str]):
         if self.address is None:
             raise ValueError(f"No address set for service '{self.name}'")
         svc_discovery[self.name] = self.address
@@ -93,8 +93,8 @@ class ModelInfo(ActiveModuleInfo):
 
 @dataclasses.dataclass
 class ModelFromTypeInfo(ModelInfo):
-    cls: t.Type[Model]
-    config: t.Optional[dict] = None
+    cls: type[Model]
+    config: dict | None = None
 
 
 @dataclasses.dataclass
@@ -111,11 +111,11 @@ class Simulation(Extensible):
 
     """
 
-    service_types: t.Dict[str, ServiceTypeInfo]
-    model_types: t.Dict[str, ModelTypeInfo]
-    active_modules: t.Dict[str, ProcessInfo]
+    service_types: dict[str, ServiceTypeInfo]
+    model_types: dict[str, ModelTypeInfo]
+    active_modules: dict[str, ProcessInfo]
     schema: AttributeSchema
-    timeline_info: t.Optional[TimelineInfo] = None
+    timeline_info: TimelineInfo | None = None
     exit_code: int = None
 
     def __init__(self, use_global_plugins=True, debug=False, **settings):
@@ -135,7 +135,7 @@ class Simulation(Extensible):
         if debug:
             self.settings.log_level = "DEBUG"
 
-        self.strategies: t.List[type] = []
+        self.strategies: list[type] = []
         self.set_default_strategies()
 
         if use_global_plugins:
@@ -159,7 +159,7 @@ class Simulation(Extensible):
         """
         self.settings.apply_scenario_config(config)
 
-    def add_model(self, name: str, model: t.Union[Model, t.Type[Model]], config=None):
+    def add_model(self, name: str, model: Model | type[Model], config=None):
         """
         Manually add a model to a Simulation. A model can be added as an instance, or as
         class. When added as a class, instantiation is of the model is done inside its subprocess,
@@ -219,7 +219,7 @@ class Simulation(Extensible):
         self._activate_models()
 
     def _activate_services(self):
-        active_svc_names = set(name for name, svc in self.service_types.items() if svc.auto_use)
+        active_svc_names = {name for name, svc in self.service_types.items() if svc.auto_use}
         for name in self.settings.service_types:
             if name not in self.service_types:
                 raise ValueError(f"Unknown service '{name}'")
@@ -239,7 +239,7 @@ class Simulation(Extensible):
         self.settings.model_names = [module.name for module in self.active_models]
 
     def _start_services(self):
-        svc_discovery: t.Dict[str, str] = {}
+        svc_discovery: dict[str, str] = {}
 
         for module in self.active_services:
             self._start_service(module)
@@ -260,7 +260,7 @@ class Simulation(Extensible):
             model, self.settings, strategies=self.strategies, schema=self.schema
         ).start()
 
-    def use(self, plugin: t.Type[Plugin]):
+    def use(self, plugin: type[Plugin]):
         """Using a plugin allows a model_type or service to register itself for availability. This
         method calls `Plugin.install` with the Simulation as its argument. The plugins can then use
         the methods `Simulation.register_service`, `Simulation.register_model_type` and
@@ -269,7 +269,7 @@ class Simulation(Extensible):
         plugin.install(self)
 
     def register_service(
-        self, identifier: str, service: t.Type[Service], auto_use=False, daemon=True
+        self, identifier: str, service: type[Service], auto_use=False, daemon=True
     ):
         """Register a `Service` for this `Simulation`. After registration, a service can either be
         used automatically or activated (ie. used in this Simulation) through the
@@ -290,7 +290,7 @@ class Simulation(Extensible):
             identifier, cls=service, auto_use=auto_use, daemon=daemon
         )
 
-    def register_model_type(self, identifier: str, model_type: t.Type[Model]):
+    def register_model_type(self, identifier: str, model_type: type[Model]):
         """Register a `Model` type to use in a simulation. Upon registration, this method also
         registers any attributes (ie `AttributeSpec`s) from the models
         `Model.get_schema_attributes` method.
@@ -320,9 +320,7 @@ class Simulation(Extensible):
 class Runner:
     ctx = multiprocessing.get_context()
 
-    def __init__(
-        self, strategies: t.List[type], schema: t.Optional[AttributeSchema] = None
-    ) -> None:
+    def __init__(self, strategies: list[type], schema: AttributeSchema | None = None) -> None:
         self.strategies = strategies
         self.schema = schema
 
@@ -364,8 +362,8 @@ class ServiceRunner(Runner):
         self,
         service: ServiceInfo,
         settings: Settings,
-        strategies: t.List[type] = None,
-        schema: t.Optional[AttributeSchema] = None,
+        strategies: list[type] = None,
+        schema: AttributeSchema | None = None,
     ):
         super().__init__(strategies=strategies, schema=schema)
         self.service = service
@@ -402,7 +400,7 @@ class ServiceRunner(Runner):
             sys.exit(result)
 
     @staticmethod
-    def _get_bound_socket(name, addr=DEFAULT_SERVICE_ADDRESS) -> t.Tuple[zmq.Socket, int]:
+    def _get_bound_socket(name, addr=DEFAULT_SERVICE_ADDRESS) -> tuple[zmq.Socket, int]:
         context = zmq.Context.instance()
         socket: Socket = context.socket(zmq.ROUTER)
         socket.set(zmq.IDENTITY, name.encode())
@@ -428,16 +426,16 @@ class ModelRunner(Runner):
     By creating the process as deamon=False, models can spawn their own subprocesses
     """
 
-    update_handler: t.Optional[UpdateDataClient] = None
-    init_data_handler: t.Optional[ServicedInitDataHandler] = None
-    socket: t.Optional[MessageDealerSocket] = None
+    update_handler: UpdateDataClient | None = None
+    init_data_handler: ServicedInitDataHandler | None = None
+    socket: MessageDealerSocket | None = None
 
     def __init__(
         self,
         model_info: ModelInfo,
         settings: Settings,
-        strategies: t.Optional[t.List[type]] = None,
-        schema: t.Optional[AttributeSchema] = None,
+        strategies: list[type] | None = None,
+        schema: AttributeSchema | None = None,
     ):
         super().__init__(strategies=strategies, schema=schema)
         self.settings = settings

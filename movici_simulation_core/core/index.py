@@ -27,9 +27,9 @@ class IndexParams:
 
 class Index:
     params: IndexParams
-    ids: t.Optional[np.ndarray] = None
+    ids: np.ndarray | None = None
 
-    def __init__(self, ids: t.Optional[npt.ArrayLike] = None, raise_on_invalid=False):
+    def __init__(self, ids: npt.ArrayLike | None = None, raise_on_invalid=False):
         self.raise_on_invalid = raise_on_invalid
         self.add_ids(np.array([], dtype=int) if ids is None or not len(ids) else ids)
 
@@ -61,7 +61,7 @@ class Index:
     def __len__(self) -> int:
         return len(self.ids)
 
-    def __getitem__(self, item: t.Union[int, npt.ArrayLike]) -> t.Union[int, np.ndarray]:
+    def __getitem__(self, item: int | npt.ArrayLike) -> int | np.ndarray:
         if isinstance(item, (t.Sequence, np.ndarray)):
             rv = self.query_indices(item)
         else:

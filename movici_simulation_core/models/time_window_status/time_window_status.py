@@ -1,4 +1,3 @@
-import typing as t
 from collections import deque
 
 import numpy as np
@@ -17,13 +16,13 @@ class TimeWindowStatus:
     def __init__(
         self,
         source_entities: TimeWindowEntity,
-        target_entities: t.List[TimeWindowStatusEntity],
+        target_entities: list[TimeWindowStatusEntity],
         timeline_info: TimelineInfo,
     ):
         self.source_entities = source_entities
         self.target_entities = target_entities
         self.timeline_info = timeline_info
-        self.schedule: t.Optional[TimeSeries[ScheduleEvent]] = None
+        self.schedule: TimeSeries[ScheduleEvent] | None = None
 
     @property
     def self_targets(self):
@@ -80,7 +79,7 @@ class TimeWindowStatus:
             self.schedule = deque()
             return
 
-        unsorted_events: t.List[t.Tuple[int, ScheduleEvent]] = []
+        unsorted_events: list[tuple[int, ScheduleEvent]] = []
         defined = ~(
             self.source_entities.time_window_begin.is_undefined()
             | self.source_entities.time_window_end.is_undefined()
@@ -89,8 +88,8 @@ class TimeWindowStatus:
             np.arange(len(self.source_entities))[defined],
             self.source_entities.time_window_begin.array[defined],
             self.source_entities.time_window_end.array[defined],
+            strict=False,
         ):
-
             begin = self.timeline_info.string_to_timestamp(time_window_begin)
             end = self.timeline_info.string_to_timestamp(time_window_end)
 

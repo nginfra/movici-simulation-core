@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 import pytest
 from movici_geo_query.geo_query import QueryResult
@@ -21,7 +19,7 @@ from movici_simulation_core.models.area_aggregation.aggregators import (
 
 @pytest.fixture
 def int_data():
-    def get(data: t.List[int]):
+    def get(data: list[int]):
         data_type = DataType(int, (), False)
         return UniformAttribute(data=data, data_type=data_type, flags=PUB)
 
@@ -30,7 +28,7 @@ def int_data():
 
 @pytest.fixture
 def float_data():
-    def get(data: t.List[float]):
+    def get(data: list[float]):
         data_type = DataType(float, (), False)
         return UniformAttribute(data=data, data_type=data_type, flags=PUB)
 

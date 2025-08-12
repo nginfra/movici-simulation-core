@@ -56,7 +56,7 @@ from movici_simulation_core.core.numba_extensions import fast_njit
 def my_performance_critical_function(data):
     # This function will be compiled with optimal settings:
     # - cache=True
-    # - fastmath=True  
+    # - fastmath=True
     # - nogil=True
     # - boundscheck=False
     return result

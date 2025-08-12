@@ -1,4 +1,3 @@
-import typing as t
 from dataclasses import dataclass
 
 import numpy as np
@@ -11,13 +10,13 @@ from movici_simulation_core.models.common.csv_tape import CsvTape
 class CoefficientDefinition:
     coefficient_name: str
     share_name: str
-    load_capacity: t.Optional[str] = None
-    effective_load_factor: t.Optional[str] = None
+    load_capacity: str | None = None
+    effective_load_factor: str | None = None
 
 
 class CoefficientsTape(CsvTape):
-    coefficient_names: t.Dict[t.Tuple[str, str], t.List[t.Tuple[str, ...]]]
-    coefficients: t.Dict
+    coefficient_names: dict[tuple[str, str], list[tuple[str, ...]]]
+    coefficients: dict
 
     def __init__(self):
         super().__init__()
@@ -30,10 +29,10 @@ class CoefficientsTape(CsvTape):
             self.coefficient_names[key] = []
         self.coefficient_names[key].append(coeffiencent_names)
 
-    def __getitem__(self, key: t.Tuple[str, str]) -> t.List[np.ndarray]:
+    def __getitem__(self, key: tuple[str, str]) -> list[np.ndarray]:
         return self.get_data(key=key)
 
-    def get_data(self, key: t.Tuple[str, str]) -> t.List[np.ndarray]:
+    def get_data(self, key: tuple[str, str]) -> list[np.ndarray]:
         return [item[self.current_pos] for item in self.coefficients.get(key, [])]
 
     def initialize(self, csv: pd.DataFrame, time_column: str = "seconds"):
@@ -43,7 +42,6 @@ class CoefficientsTape(CsvTape):
             if key not in self.coefficients:
                 self.coefficients[key] = []
             for coeff in coefficients:
-
                 columns = []
                 for item in coeff:
                     self.assert_parameter(item)

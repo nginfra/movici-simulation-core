@@ -144,7 +144,6 @@ def test_multiple_updates(create_model_tester, model_config):
 
 
 def test_emits_special_when_no_evacuation_possible(create_model_tester, model_config):
-
     tester = create_model_tester(
         EvacuatonPointResolution, model_config, raise_on_premature_shutdown=False
     )

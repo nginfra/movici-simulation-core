@@ -1,4 +1,4 @@
-from typing import Dict, Iterable
+from collections.abc import Iterable
 
 import pytest
 
@@ -111,7 +111,7 @@ def get_overlap_update(get_entity_update):
     def _factory(
         ids: Iterable,
         attributes: Iterable,
-    ) -> Dict:
+    ) -> dict:
         return get_entity_update(ids, attributes, key_name="overlap.active")
 
     return _factory
@@ -335,14 +335,13 @@ class TestOverlapStatus:
         get_overlap_update,
         global_schema,
     ):
-
         del water_network["data"]["water_pipe_entities"]["reference"]
         del road_network["data"]["road_segment_entities"]["reference"]
         del mv_network["data"]["electrical_node_entities"]["reference"]
 
-        config["config"]["models"][0][
-            "display_name_template"
-        ] = "{from_dataset_name} {from_id} {to_dataset_name} {to_id}"
+        config["config"]["models"][0]["display_name_template"] = (
+            "{from_dataset_name} {from_id} {to_dataset_name} {to_id}"
+        )
 
         scenario = {
             "updates": [

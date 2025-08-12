@@ -9,7 +9,7 @@ from movici_simulation_core.preprocessing.tapefile import (
 )
 
 
-def write_csv(content: t.List[t.List[t.Any]], path: Path):
+def write_csv(content: list[list[t.Any]], path: Path):
     path.write_text("\n".join(",".join(item for item in row) for row in content))
     return path
 

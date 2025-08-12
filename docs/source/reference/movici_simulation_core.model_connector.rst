@@ -1,12 +1,12 @@
 
 
-model\_connector 
+model\_connector
 =================
 
 
 
 
-connector 
+connector
 ----------
 
 .. automodule:: movici_simulation_core.model_connector.connector
@@ -16,7 +16,7 @@ connector
 
 
 
-init\_data 
+init\_data
 -----------
 
 .. automodule:: movici_simulation_core.model_connector.init_data

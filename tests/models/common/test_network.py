@@ -202,18 +202,14 @@ class TestNetwork1:
         network.set_source_node(6)
         idx = network.node_index[source_node]
         begin, end = network.graph.indptr[idx : idx + 2]
-        np.testing.assert_array_equal(
-            network.graph.cost_factor[begin:end], network.MIN_COST_FACTOR
-        )
+        np.testing.assert_array_equal(network.graph.cost_factor[begin:end], network.MIN_COST_FACTOR)
 
     def test_set_other_source_node_resets_previous_cost_factor(self, network):
         network.set_source_node(6)
         network.set_source_node(8)
         idx = network.node_index[6]
         begin, end = network.graph.indptr[idx : idx + 2]
-        np.testing.assert_array_equal(
-            network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR
-        )
+        np.testing.assert_array_equal(network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR)
 
     def test_shortest_path(self, network):
         dist, prev = network.get_shortest_path(6)

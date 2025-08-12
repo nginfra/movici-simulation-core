@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import functools
 import logging
 import sys
-import typing as t
 import warnings
 
 from movici_simulation_core.settings import Settings
@@ -23,7 +24,7 @@ def get_logger(settings: Settings, name=None, capture_warnings=True):
 # Reimplementation of warning integration from `logging` module with the difference that you can
 # specify which logger to use as an output
 
-_warnings_showwarning: t.Optional[callable] = None
+_warnings_showwarning: callable | None = None
 
 
 def captureWarnings(logger):

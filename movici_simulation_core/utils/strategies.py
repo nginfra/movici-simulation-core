@@ -12,11 +12,11 @@ def reset():
     types = {}
 
 
-def get_type(strat: t.Type[T]) -> t.Type[T]:
+def get_type(strat: type[T]) -> type[T]:
     return types[strat]
 
 
-def get_instance(strat: t.Type[T], **kwargs) -> T:
+def get_instance(strat: type[T], **kwargs) -> T:
     try:
         return instances[strat]
     except KeyError:

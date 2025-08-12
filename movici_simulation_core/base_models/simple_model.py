@@ -56,7 +56,7 @@ class SimpleModelAdapter(ModelAdapterBase):
         return self.process_result(result)
 
     def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+        self, message: UpdateSeriesMessage, data: t.Iterable[bytes | None]
     ) -> RawResult:
         result = self.model.update_series(
             Moment(message.timestamp), map(self.process_input, data), message=message
@@ -68,9 +68,7 @@ class SimpleModelAdapter(ModelAdapterBase):
             return None
         return self.serialization.loads(data)
 
-    def process_result(
-        self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
-    ) -> RawResult:
+    def process_result(self, result: tuple[UpdateData, Moment | Timestamp | None]) -> RawResult:
         data, next_time = result
         if data:
             data = self.serialization.dumps(data)
@@ -97,17 +95,19 @@ class SimpleModel(Model):
 
     def update(
         self, moment: Moment, data: UpdateData, message: UpdateMessage
-    ) -> t.Tuple[UpdateData, t.Optional[Moment]]:
+    ) -> tuple[UpdateData, Moment | None]:
         raise NotImplementedError
 
     def update_series(
-        self, moment: Moment, data: t.Iterable[t.Optional[dict]], message: UpdateSeriesMessage
-    ) -> t.Tuple[UpdateData, t.Optional[Moment]]:
-        output = (self.update(moment, upd, msg) for upd, msg in zip(data, message.updates))
+        self, moment: Moment, data: t.Iterable[dict | None], message: UpdateSeriesMessage
+    ) -> tuple[UpdateData, Moment | None]:
+        output = (
+            self.update(moment, upd, msg) for upd, msg in zip(data, message.updates, strict=False)
+        )
 
         # to go from ((moment, data), (moment, data), ...) to ((moment, moment), (data, data))
         # we use this zip trick to transpose the output
-        results, moments = zip(*output)
+        results, moments = zip(*output, strict=False)
 
         if len(moments) == 0:
             return None, None
@@ -122,5 +122,5 @@ class SimpleModel(Model):
     def close(self, message: QuitMessage):
         pass
 
-    def get_adapter(self) -> t.Type[ModelAdapterBase]:
+    def get_adapter(self) -> type[ModelAdapterBase]:
         return SimpleModelAdapter

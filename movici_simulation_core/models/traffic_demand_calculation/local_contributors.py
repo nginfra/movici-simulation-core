@@ -31,8 +31,8 @@ class LocalParameterInfo:
 
 
 class LocalEffectsContributor(LocalContributor):
-    _indices: t.Optional[np.ndarray] = None
-    old_value: t.Optional[np.ndarray] = None
+    _indices: np.ndarray | None = None
+    old_value: np.ndarray | None = None
 
     def __init__(self, info: LocalParameterInfo):
         self.info = info
@@ -73,7 +73,7 @@ class LocalEffectsContributor(LocalContributor):
 
 
 class NearestValue(LocalEffectsContributor):
-    _target_entity: t.Optional[GeometryEntity] = None
+    _target_entity: GeometryEntity | None = None
 
     def __init__(self, info: LocalParameterInfo):
         super().__init__(info)
@@ -108,9 +108,7 @@ class NearestValue(LocalEffectsContributor):
     def _calculate_values_csr(self):
         matrix = self._attribute.csr.as_matrix()
         if matrix.shape[0] != matrix.shape[1]:
-            raise ValueError(
-                "Only square CSR matrices are supported for nearest value calculation"
-            )
+            raise ValueError("Only square CSR matrices are supported for nearest value calculation")
         return matrix[:, self._indices][self._indices, :]
 
     def calculate_contribution(self, new_values, old_values):
@@ -151,8 +149,8 @@ def get_ratio_for_node(node_i, values, old_values, indices):
 
 
 class ShortestPathMixin:
-    _network: t.Optional[Network] = None
-    _network_entities: t.Optional[NetworkEntities] = None
+    _network: Network | None = None
+    _network_entities: NetworkEntities | None = None
 
     def setup_state(self, state: TrackedState, info: LocalParameterInfo):
         ds_name = info.target_dataset
@@ -239,7 +237,7 @@ class RouteCostFactor(LocalEffectsContributor, ShortestPathMixin):
         ids = self._demand_nodes.index.ids
 
         dists = self._network.all_shortest_paths(ids[unique_indices])
-        for (x, y) in zip(*np.where(dists == np.inf)):
+        for x, y in zip(*np.where(dists == np.inf), strict=False):
             self._logger.debug(
                 f"Nodes {ids[x]}-{ids[y]} " f"do not have a valid path between them."
             )
@@ -256,7 +254,7 @@ class Investment(t.NamedTuple):
 class InvestmentContributor(LocalContributor):
     def __init__(self, investments: t.Sequence[Investment], demand_node_index: Index):
         self.index = demand_node_index
-        self.investments: t.List[Investment] = list(reversed(investments))
+        self.investments: list[Investment] = list(reversed(investments))
 
     def update_demand(self, matrix: np.ndarray, force_update: bool = False, *, moment: Moment):
         while self.investments and self.investments[-1].seconds <= moment.seconds:

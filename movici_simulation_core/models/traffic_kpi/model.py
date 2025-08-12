@@ -38,15 +38,15 @@ class Model(TrackedModel, name="traffic_kpi"):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
-    segments: t.Optional[TransportSegments]
+    segments: TransportSegments | None
     modality: t.Literal["roads", "tracks", "waterways"]
     ec_attr: UniformAttribute
     co2_attr: UniformAttribute
     nox_attr: UniformAttribute
 
-    _cargo_scenario_parameters: t.List[str]
-    _passenger_scenario_parameters: t.List[str]
-    scenario_parameters_tape: t.Optional[CsvTape] = None
+    _cargo_scenario_parameters: list[str]
+    _passenger_scenario_parameters: list[str]
+    scenario_parameters_tape: CsvTape | None = None
     _new_timesteps_first_update: bool = True
 
     def __init__(self, model_config: dict):
@@ -369,7 +369,7 @@ class Model(TrackedModel, name="traffic_kpi"):
         ):
             raise NotReady
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         self._proceed_tapes(moment)
         if not self._coefficient_or_flow_changes():
             return self.next_time()
@@ -393,7 +393,7 @@ class Model(TrackedModel, name="traffic_kpi"):
             or self.segments.cargo_flow.has_changes()
         )
 
-    def next_time(self) -> t.Optional[Moment]:
+    def next_time(self) -> Moment | None:
         tape_list = [self.coefficients_tape]
         if self.scenario_parameters_tape is not None:
             tape_list.append(self.scenario_parameters_tape)

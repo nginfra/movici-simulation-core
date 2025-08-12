@@ -11,7 +11,7 @@ class Nodes:
     y: t.Sequence[float]
 
     @classmethod
-    def create(cls, nodes: t.List[t.Tuple[float, float]], id_offset=0):
+    def create(cls, nodes: list[tuple[float, float]], id_offset=0):
         return Nodes(
             id=list(range(id_offset, len(nodes) + id_offset)),
             x=[node[0] for node in nodes],
@@ -41,7 +41,7 @@ class Links:
     to_idx: t.Sequence[int]
 
     @classmethod
-    def create(cls, links: t.List[t.Tuple[int, int]], id_offset=0, node_idx_offset=0):
+    def create(cls, links: list[tuple[int, int]], id_offset=0, node_idx_offset=0):
         return Links(
             id=list(range(id_offset, len(links) + id_offset)),
             from_idx=[link[0] + node_idx_offset for link in links],
@@ -55,8 +55,8 @@ class Links:
 class RoadNetworkGenerator:
     def __init__(
         self,
-        nodes: t.List[t.Tuple[float, float]],
-        links: t.List[t.Tuple[int, int]],
+        nodes: list[tuple[float, float]],
+        links: list[tuple[int, int]],
         geom_offset=(155000, 463000),
         max_speed=1,
         lanes=1,

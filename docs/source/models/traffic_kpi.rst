@@ -192,13 +192,13 @@ Road Transport
 .. code-block:: python
 
     # Per segment calculation
-    energy = (passenger_flow * passenger_energy_factor + 
+    energy = (passenger_flow * passenger_energy_factor +
               cargo_flow * cargo_energy_factor) * segment_length
-    
-    co2 = (passenger_flow * passenger_co2_factor + 
+
+    co2 = (passenger_flow * passenger_co2_factor +
            cargo_flow * cargo_co2_factor) * segment_length
-    
-    nox = (passenger_flow * passenger_nox_factor + 
+
+    nox = (passenger_flow * passenger_nox_factor +
            cargo_flow * cargo_nox_factor) * segment_length
 
 Rail Transport
@@ -209,7 +209,7 @@ Rail Transport
     # Capacity-based calculation
     train_count = max(passenger_flow / train_capacity,
                      cargo_flow / freight_capacity)
-    
+
     energy = train_count * train_energy_factor * segment_length
     co2 = train_count * train_co2_factor * segment_length
     nox = train_count * train_nox_factor * segment_length
@@ -221,7 +221,7 @@ Waterway Transport
 
     # Tonnage-based calculation
     vessel_count = cargo_flow / vessel_capacity
-    
+
     energy = vessel_count * vessel_energy_factor * segment_length
     co2 = vessel_count * vessel_co2_factor * segment_length
     nox = vessel_count * vessel_nox_factor * segment_length
@@ -258,13 +258,13 @@ Calculating emissions for city traffic:
         "cargo_flow": 100,       # trucks/hour
         "segment_length": 5      # km
     }
-    
+
     # Emission factors from CSV
     factors = {
         "passenger": {"co2": 120, "nox": 0.5},  # g/km
         "cargo": {"co2": 950, "nox": 15.0}      # g/km
     }
-    
+
     # Calculation
     co2_emissions = (1000 * 120 + 100 * 950) * 5 / 1000000  # tons/h
     # = (120000 + 95000) * 5 / 1000000
@@ -352,14 +352,14 @@ Apply policy scenario effects:
 
     # Base emissions
     base_co2 = calculate_base_emissions()
-    
+
     # Apply scenario multipliers
     scenario_multipliers = {
         "technology_improvement": 0.85,  # 15% reduction
         "fleet_electrification": 0.70,   # 30% reduction
         "traffic_management": 0.95       # 5% reduction
     }
-    
+
     adjusted_co2 = base_co2
     for multiplier in scenario_multipliers.values():
         adjusted_co2 *= multiplier
@@ -485,7 +485,7 @@ Time-Varying Emissions
             congestion_factor = 1.2  # 20% higher in congestion
         else:
             congestion_factor = 1.0
-        
+
         return base_emissions * congestion_factor
 
 Temperature Effects
@@ -501,7 +501,7 @@ Temperature Effects
             cold_factor = 1.1
         else:
             cold_factor = 1.0
-        
+
         return base_emissions * cold_factor
 
 Fleet Composition

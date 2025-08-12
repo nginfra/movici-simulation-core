@@ -171,12 +171,12 @@ Analyzing opportunities for road network improvements:
         "geometry.length": [1000, 1500, 800, 2000],  # meters
         "upgrade.implemented": [True, True, False, False]
     }
-    
+
     overlaps = {
         "active": [True, True, False, True],
         "entity_ids": [1, 2, 3, 4]
     }
-    
+
     # Calculations
     # Segment 1: Taken opportunity, active overlap
     #   Cost = 1000 * 2000 = 2,000,000
@@ -227,20 +227,20 @@ Algorithm Details
 The model performs opportunity analysis through:
 
 1. **Overlap Status Check**:
-   
+
    - Identifies active overlaps from overlap dataset
    - Maps overlaps to opportunity entities
 
 2. **Opportunity Classification**:
-   
+
    - **Taken**: opportunity_taken = True AND overlap_active = True
    - **Missed**: opportunity_taken = False AND overlap_active = True
    - **Inactive**: overlap_active = False (no cost impact)
 
 3. **Cost Calculation**:
-   
+
    .. code-block:: python
-   
+
        if overlap_active and opportunity_taken:
            opportunity_cost = entity_length * cost_per_meter
            missed_cost = 0
@@ -252,7 +252,7 @@ The model performs opportunity analysis through:
            missed_cost = 0
 
 4. **Aggregation**:
-   
+
    - Sum costs across all entities
    - Calculate total affected length
    - Generate summary statistics

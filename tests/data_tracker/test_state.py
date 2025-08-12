@@ -34,9 +34,7 @@ from movici_simulation_core.testing.helpers import (
 
 
 class MyEntity(EntityGroup, name="my_entities"):
-    attr = AttributeField(
-        spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB
-    )
+    attr = AttributeField(spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB)
 
 
 class Pub(EntityGroup, name="pub_entities"):

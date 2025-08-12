@@ -28,7 +28,7 @@ def send_silent(coro: t.Generator, value: t.Any):
         pass
 
 
-def fsm_conditional_raise(func=None, attribute: str = None, exc: t.Type[Exception] = None):
+def fsm_conditional_raise(func=None, attribute: str = None, exc: type[Exception] = None):
     if func is None:
         return functools.partial(fsm_conditional_raise, attribute=attribute, exc=exc)
 
@@ -46,7 +46,7 @@ not_done = fsm_conditional_raise(attribute="done", exc=FSMDone)
 
 
 class FSM(t.Generic[T, E]):
-    def __init__(self, initial_state: t.Type[State], context: T = None, raise_on_done=True):
+    def __init__(self, initial_state: type[State], context: T = None, raise_on_done=True):
         self.context = context
         self.state = initial_state(context=self.context)
         self.runner = None
@@ -83,7 +83,7 @@ class FSM(t.Generic[T, E]):
             self.state = new_state(self.context)
 
 
-def next_state(state: State) -> t.Optional[t.Type[State]]:
+def next_state(state: State) -> type[State] | None:
     for cond, new_state in state.transitions():
         if cond(state.context):
             return new_state
@@ -127,4 +127,4 @@ class Always(Condition):
         return True
 
 
-TransitionsT = t.List[t.Tuple[t.Type[Condition], t.Type[State]]]
+TransitionsT = list[tuple[type[Condition], type[State]]]

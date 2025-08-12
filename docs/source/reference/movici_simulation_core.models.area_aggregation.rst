@@ -1,12 +1,12 @@
 
 
-area\_aggregation 
+area\_aggregation
 ==================
 
 
 
 
-aggregators 
+aggregators
 ------------
 
 .. automodule:: movici_simulation_core.models.area_aggregation.aggregators
@@ -16,7 +16,7 @@ aggregators
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.area_aggregation.model

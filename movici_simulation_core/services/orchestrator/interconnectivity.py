@@ -7,7 +7,7 @@ class IPubSubFilter(t.Protocol):
     name: str
     pub: dict
     sub: dict
-    subscribers: t.List[IPubSubFilter]
+    subscribers: list[IPubSubFilter]
 
 
 def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):

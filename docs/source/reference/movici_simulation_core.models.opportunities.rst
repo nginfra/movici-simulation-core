@@ -1,12 +1,12 @@
 
 
-opportunities 
+opportunities
 ==============
 
 
 
 
-dataset 
+dataset
 --------
 
 .. automodule:: movici_simulation_core.models.opportunities.dataset
@@ -16,7 +16,7 @@ dataset
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.opportunities.model

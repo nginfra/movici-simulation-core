@@ -73,9 +73,7 @@ class TestModelTester:
     def test_is_initialized_with_init_data_handler(self, tmp_path, dict_init_data):
         class Model(DummyModel):
             def setup(self, init_data_handler, **__):
-                assert (
-                    json.loads(init_data_handler.get("dataset")[1].read_text()) == dict_init_data
-                )
+                assert json.loads(init_data_handler.get("dataset")[1].read_text()) == dict_init_data
 
         tester = ModelTester(Model({}), tmp_dir=tmp_path)
         tester.add_init_data("dataset", dict_init_data)

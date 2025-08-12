@@ -1,5 +1,4 @@
 import dataclasses
-import typing as t
 
 import msgpack
 import orjson as json
@@ -22,8 +21,7 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class Model(TrackedModel, name="tape_player"):
-
-    timeline: t.Optional[TimeSeries[dict]] = None
+    timeline: TimeSeries[dict] | None = None
 
     def __init__(self, model_config: dict):
         model_config = ensure_valid_config(
@@ -34,7 +32,7 @@ class Model(TrackedModel, name="tape_player"):
             },
         )
         super().__init__(model_config)
-        self.pub_attributes: t.Set[AttributeInfo] = set()
+        self.pub_attributes: set[AttributeInfo] = set()
 
     def setup(
         self, state: TrackedState, schema: AttributeSchema, init_data_handler: InitDataHandler, **_
@@ -67,7 +65,9 @@ class Model(TrackedModel, name="tape_player"):
         data_section = tapefile["data"]
         dataset_name = data_section["tabular_data_name"]
         timeline_info = get_timeline_info()
-        for seconds, json_data in zip(data_section["time_series"], data_section["data_series"]):
+        for seconds, json_data in zip(
+            data_section["time_series"], data_section["data_series"], strict=False
+        ):
             timestamp = timeline_info.seconds_to_timestamp(seconds)
             numpy_data = load_from_json(
                 {dataset_name: json_data}, schema, cache_inferred_attributes=True
@@ -76,7 +76,7 @@ class Model(TrackedModel, name="tape_player"):
             self.timeline.append((timestamp, numpy_data))
             self.pub_attributes.update(iter_attribute_info(numpy_data, exclude=("id",)))
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         for _, upd in self.timeline.pop_until(moment.timestamp):
             state.receive_update(upd)
         return self.timeline.next_time

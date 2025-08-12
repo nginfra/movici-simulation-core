@@ -1,5 +1,3 @@
-import typing as t
-
 import zmq
 
 from movici_simulation_core.exceptions import InvalidMessage
@@ -36,7 +34,7 @@ class RequestClient:
         address,
         msg,
         *,
-        valid_responses: t.Union[t.Type[Message], t.Tuple[t.Type[Message], ...], None] = None,
+        valid_responses: type[Message] | tuple[type[Message], ...] | None = None,
     ):
         socket = self.sockets.get(self.name, address)
         socket.send(msg)
@@ -47,7 +45,7 @@ class RequestClient:
     @staticmethod
     def raise_on_invalid_message(
         message,
-        valid_messages: t.Optional[t.Union[t.Type[Message], t.Tuple[t.Type[Message], ...]]] = None,
+        valid_messages: type[Message] | tuple[type[Message], ...] | None = None,
     ):
         if isinstance(message, ErrorMessage):
             raise ValueError(message.error)

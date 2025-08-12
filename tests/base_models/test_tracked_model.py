@@ -1,5 +1,4 @@
 import json
-import typing as t
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -207,7 +206,7 @@ def test_full_run(model, get_adapter, update, init_data_handler, entity_group):
         def initialize(self, state: TrackedState):
             self.entity_group.pub_attr[:] = -1
 
-        def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        def update(self, state: TrackedState, moment: Moment) -> Moment | None:
             self.entity_group.pub_attr[:] = moment.timestamp
             return Moment(moment.timestamp + 1)
 

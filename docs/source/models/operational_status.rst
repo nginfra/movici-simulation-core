@@ -84,7 +84,7 @@ The ``flooding`` object configures flood impact analysis:
      - **Required**. Grid cells with flood data [dataset_name, entity_group_name]
    * - ``flooding_points``
      - array[string, string]
-     - **Required**. Point measurements [dataset_name, entity_group_name]  
+     - **Required**. Point measurements [dataset_name, entity_group_name]
    * - ``flooding_threshold``
      - number
      - **Optional**. Water depth threshold (meters) for operational impact. Default varies by use case
@@ -170,7 +170,7 @@ Spatial Water Depth Calculation
 The model determines water conditions at infrastructure locations using:
 
 1. **Grid-based interpolation**: For entities overlapping flood grid cells
-2. **Point-based queries**: Spatial queries to nearby flood measurement points  
+2. **Point-based queries**: Spatial queries to nearby flood measurement points
 3. **Elevation adjustment**: Accounts for infrastructure elevation relative to ground
 4. **Maximum depth selection**: Uses worst-case scenario when multiple sources available
 
@@ -221,7 +221,7 @@ Evaluate building operational status:
 
    {
      "name": "building_flood_risk",
-     "type": "operational_status", 
+     "type": "operational_status",
      "entity_group": ["infrastructure", "buildings"],
      "geometry": "polygon",
      "elevation_attribute": "floor_height",

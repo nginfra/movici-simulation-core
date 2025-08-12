@@ -74,8 +74,8 @@ class AttributeField:
         self.atol = atol
 
     def __get__(
-        self, instance: t.Optional[EntityGroup], owner
-    ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
+        self, instance: EntityGroup | None, owner
+    ) -> AttributeField | UniformAttribute | CSRAttribute:
         if instance is None:
             return self
         return instance.get_attribute(self.spec.name)
@@ -99,9 +99,9 @@ T = t.TypeVar("T", bool, int, float, str)
 
 @dc.dataclass
 class AttributeOptions(t.Generic[T]):
-    special: t.Optional[T] = None
-    enum_name: t.Optional[str] = None
-    enum_values: t.Optional[t.List[str]] = None
+    special: T | None = None
+    enum_name: str | None = None
+    enum_values: list[str] | None = None
 
     _enum: t.Any = dc.field(init=False, default=None)
 
@@ -124,8 +124,8 @@ class Attribute(abc.ABC):
         flags: int = 0,
         rtol=1e-5,
         atol=1e-8,
-        options: t.Optional[AttributeOptions] = None,
-        index: t.Optional[Index] = None,
+        options: AttributeOptions | None = None,
+        index: Index | None = None,
     ):
         self._data = data
         self.data_type = data_type
@@ -224,8 +224,8 @@ class UniformAttribute(Attribute):
         flags: int = 0,
         rtol=1e-5,
         atol=1e-8,
-        options: t.Optional[AttributeOptions] = None,
-        index: t.Optional[Index] = None,
+        options: AttributeOptions | None = None,
+        index: Index | None = None,
     ):
         if data is not None:
             data = ensure_uniform_data(data, data_type=data_type)
@@ -256,7 +256,7 @@ class UniformAttribute(Attribute):
 
     def update(
         self,
-        value: t.Union[np.ndarray, UniformAttributeData],
+        value: np.ndarray | UniformAttributeData,
         indices: np.ndarray,
         process_undefined=False,
     ):
@@ -340,8 +340,8 @@ class CSRAttribute(Attribute):
         flags: int = 0,
         rtol=1e-5,
         atol=1e-8,
-        options: t.Optional[AttributeOptions] = None,
-        index: t.Optional[Index] = None,
+        options: AttributeOptions | None = None,
+        index: Index | None = None,
     ):
         if data is not None:
             data = ensure_csr_data(data, data_type=data_type)
@@ -365,7 +365,7 @@ class CSRAttribute(Attribute):
 
     def update(
         self,
-        value: t.Union[CSRAttributeData, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray]],
+        value: CSRAttributeData | TrackedCSRArray | tuple[np.ndarray, np.ndarray],
         indices: np.ndarray,
         process_undefined=False,
     ):
@@ -380,8 +380,7 @@ class CSRAttribute(Attribute):
 
     def strip_undefined(
         self, value: TrackedCSRArray, indices: np.ndarray
-    ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
-
+    ) -> tuple[TrackedCSRArray, np.ndarray]:
         is_undefined = isclose(value.data, self.data_type.undefined, equal_nan=True)
         # Ensure is_undefined is always an array, even for scalar results
         if not isinstance(is_undefined, np.ndarray):
@@ -533,7 +532,7 @@ def create_empty_attribute_for_data(data: NumpyAttributeData, length: int):
 
 
 def ensure_uniform_data(
-    value: t.Union[dict, np.ndarray, list], data_type: t.Optional[DataType] = None
+    value: dict | np.ndarray | list, data_type: DataType | None = None
 ) -> TrackedArray:
     if isinstance(value, TrackedArray):
         return value
@@ -551,10 +550,9 @@ def ensure_uniform_data(
 
 
 def ensure_csr_data(
-    value: t.Union[dict, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray], t.List[list]],
-    data_type: t.Optional[DataType] = None,
+    value: dict | TrackedCSRArray | tuple[np.ndarray, np.ndarray] | list[list],
+    data_type: DataType | None = None,
 ) -> TrackedCSRArray:
-
     if isinstance(value, TrackedCSRArray):
         return value
 
@@ -582,7 +580,7 @@ def ensure_csr_data(
     return TrackedCSRArray(data, row_ptr)
 
 
-def ensure_array(data: t.Union[list, np.ndarray], data_type: t.Optional[DataType] = None):
+def ensure_array(data: list | np.ndarray, data_type: DataType | None = None):
     if isinstance(data, list):
         data = np.array(data)
 
@@ -597,9 +595,7 @@ def ensure_array(data: t.Union[list, np.ndarray], data_type: t.Optional[DataType
     return data
 
 
-def convert_nested_list_to_csr(
-    nested_list: t.List[t.List[object]], data_type: t.Optional[DataType] = None
-):
+def convert_nested_list_to_csr(nested_list: list[list[object]], data_type: DataType | None = None):
     indptr = [0]
     data = []
     for entry in nested_list:
@@ -610,9 +606,7 @@ def convert_nested_list_to_csr(
     return ensure_array(data, data_type), np.array(indptr, dtype="<i4")
 
 
-def get_attribute_aggregate(
-    attr: AttributeObject, func: callable
-) -> t.Union[None, bool, int, float]:
+def get_attribute_aggregate(attr: AttributeObject, func: callable) -> None | bool | int | float:
     data = attr.array if isinstance(attr, UniformAttribute) else attr.csr.data
 
     if data is None or (undefined := get_undefined(data.dtype)) is None:

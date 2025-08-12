@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import typing as t
 
 import numpy as np
 
@@ -63,14 +62,14 @@ class GJTTrackSegmentEntity(TransportSegmentEntity):
 
 
 class GJTModel(TrackedModel, name="generalized_journey_time"):
-    _transport_nodes: t.Optional[PointEntity] = None
-    _transport_segments: t.Optional[TransportSegmentEntity] = None
-    _demand_nodes: t.Optional[TrackDemandNodeEntity] = None
-    _demand_links: t.Optional[VirtualLinkEntity] = None
-    _logger: t.Optional[logging.Logger] = None
+    _transport_nodes: PointEntity | None = None
+    _transport_segments: TransportSegmentEntity | None = None
+    _demand_nodes: TrackDemandNodeEntity | None = None
+    _demand_links: VirtualLinkEntity | None = None
+    _logger: logging.Logger | None = None
     _calculator: GJTCalculator = None
-    _travel_time: t.Optional[UniformAttribute]
-    _passenger_flow: t.Optional[UniformAttribute]
+    _travel_time: UniformAttribute | None
+    _passenger_flow: UniformAttribute | None
     _network_entities: NetworkEntities
 
     def __init__(self, model_config: dict):
@@ -119,13 +118,13 @@ class GJTModel(TrackedModel, name="generalized_journey_time"):
             logger=self._logger,
         )
 
-    def update(self, **_) -> t.Optional[Moment]:
+    def update(self, **_) -> Moment | None:
         self._calculator.update_travel_time()
         gjt = self._calculator.gjt()
         self._network_entities["virtual_nodes"].gjt.csr.update_from_matrix(gjt)
 
     @staticmethod
-    def get_schema_attributes() -> t.List[AttributeSpec]:
+    def get_schema_attributes() -> list[AttributeSpec]:
         return [
             Transport_PassengerFlow,
             Transport_PassengerVehicleFrequency,
@@ -202,12 +201,10 @@ class GJTCalculator:
             values=self.passenger_flow, no_path_found=-1
         )
         if self.logger:
-            for (x, y) in zip(*np.where(avg_passenger_flow == np.inf)):
+            for x, y in zip(*np.where(avg_passenger_flow == np.inf), strict=False):
                 if x == y:
                     pass
-                self.logger.debug(
-                    f"Nodes {ids[x]}-{ids[y]} do not have a valid path between them."
-                )
+                self.logger.debug(f"Nodes {ids[x]}-{ids[y]} do not have a valid path between them.")
 
         return avg_passenger_flow
 

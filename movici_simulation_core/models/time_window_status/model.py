@@ -1,5 +1,3 @@
-import typing as t
-
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import OPT, PUB
 from movici_simulation_core.core.moment import Moment
@@ -21,7 +19,7 @@ class Model(TrackedModel, name="time_window_status"):
 
     time_window_status: TimeWindowStatus
     source_entity_group: TimeWindowEntity
-    target_entity_groups: t.List[TimeWindowStatusEntity]
+    target_entity_groups: list[TimeWindowStatusEntity]
 
     def __init__(self, model_config):
         model_config = ensure_valid_config(
@@ -75,7 +73,7 @@ class Model(TrackedModel, name="time_window_status"):
             raise NotReady()
         self.time_window_status.initialize()
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         return self.time_window_status.update(moment)
 
 

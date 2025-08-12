@@ -192,7 +192,7 @@ Vehicle to Passenger Conversion
 
     # Basic conversion
     passengers = vehicles * passengers_per_vehicle * load_factor
-    
+
     # Example: 100 cars with 1.5 passengers/car at 60% load factor
     # passengers = 100 * 1.5 * 0.6 = 90 passengers
 
@@ -203,7 +203,7 @@ Vehicle to Cargo Conversion
 
     # Cargo conversion
     cargo_tons = vehicles * cargo_per_vehicle * load_factor
-    
+
     # Example: 50 trucks with 15 tons capacity at 80% load factor
     # cargo_tons = 50 * 15 * 0.8 = 600 tons
 
@@ -216,8 +216,8 @@ OD Matrix Conversion
     for origin in origins:
         for destination in destinations:
             od_passengers[origin][destination] = (
-                od_vehicles[origin][destination] * 
-                passengers_per_vehicle * 
+                od_vehicles[origin][destination] *
+                passengers_per_vehicle *
                 load_factor
             )
 
@@ -264,18 +264,18 @@ Converting vehicle counts to passengers and cargo:
         "hourly_vehicles": [500, 800, 1200],  # vehicles/hour
         "vehicle_mix": "mixed_urban"
     }
-    
+
     # Coefficients (weighted average)
     coefficients = {
         "car": {"share": 0.8, "passengers": 1.4, "load_factor": 0.6},
         "bus": {"share": 0.05, "passengers": 40, "load_factor": 0.3},
         "truck": {"share": 0.15, "passengers": 1.2, "load_factor": 1.0}
     }
-    
+
     # Weighted conversion factor
     factor = (0.8 * 1.4 * 0.6 + 0.05 * 40 * 0.3 + 0.15 * 1.2 * 1.0)
     #       = (0.672 + 0.6 + 0.18) = 1.452
-    
+
     # Result
     passengers = [500 * 1.452, 800 * 1.452, 1200 * 1.452]
     #          = [726, 1162, 1742] passengers/hour
@@ -456,7 +456,7 @@ Data Validation
     assert all(passengers >= 0), "Negative passenger counts"
     assert all(cargo >= 0), "Negative cargo values"
     assert max(passengers) < reasonable_upper_bound
-    
+
     # Unit consistency
     if source_unit == "vehicles/hour" and target_unit == "passengers/hour":
         assert conversion_factor > 0.5  # Minimum occupancy
@@ -515,7 +515,7 @@ Integration with Other Models
 The Unit Conversions model integrates with:
 
 - **Traffic Assignment Model**: Standardize demand units
-- **Traffic KPI Model**: Convert for emission calculations  
+- **Traffic KPI Model**: Convert for emission calculations
 - **Traffic Demand Model**: Normalize demand inputs
 - **Data Collector Model**: Store converted values
 
@@ -560,7 +560,7 @@ Seasonal Adjustments
         "autumn": 1.0,
         "winter": 0.8   # Reduced travel
     }
-    
+
     def seasonal_conversion(base_value, season):
         return base_value * seasonal_factors[season]
 
@@ -575,12 +575,12 @@ Validation Methods
     def validate_conversions(input_data, output_data, coefficients):
         # Range checks
         assert all(output >= 0 for output in output_data)
-        
+
         # Ratio checks
         ratios = [out/inp for out, inp in zip(output_data, input_data) if inp > 0]
         assert min(ratios) >= 0.1, "Suspiciously low conversion"
         assert max(ratios) <= 200, "Suspiciously high conversion"
-        
+
         # Coefficient validation
         assert all(coef > 0 for coef in coefficients.values())
 
@@ -591,10 +591,10 @@ Comparison with Benchmarks
 
     # Compare with known benchmarks
     benchmark_occupancy = {"urban": 1.4, "suburban": 1.6, "highway": 1.8}
-    
+
     calculated_occupancy = sum(passengers) / sum(vehicles)
     expected = benchmark_occupancy[area_type]
-    
+
     assert abs(calculated_occupancy - expected) / expected < 0.2  # 20% tolerance
 
 See Also

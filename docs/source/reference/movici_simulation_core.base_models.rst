@@ -1,12 +1,12 @@
 
 
-base\_models 
+base\_models
 =============
 
 
 
 
-common 
+common
 -------
 
 .. automodule:: movici_simulation_core.base_models.common
@@ -16,7 +16,7 @@ common
 
 
 
-simple\_model 
+simple\_model
 --------------
 
 .. automodule:: movici_simulation_core.base_models.simple_model
@@ -26,7 +26,7 @@ simple\_model
 
 
 
-tracked\_model 
+tracked\_model
 ---------------
 
 .. automodule:: movici_simulation_core.base_models.tracked_model

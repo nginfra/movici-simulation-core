@@ -21,8 +21,7 @@ def entity_group():
 
 
 def test_can_set_name_by_type_constructor():
-    class MyEntity(EntityGroup, name="someentity"):
-        ...
+    class MyEntity(EntityGroup, name="someentity"): ...
 
     assert MyEntity().__entity_name__ == "someentity"
 

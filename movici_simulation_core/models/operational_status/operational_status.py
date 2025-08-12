@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing as t
-
 import numpy as np
 from movici_geo_query import GeoQuery, PointGeometry, QueryResult
 from movici_geo_query.geometry import Geometry
@@ -45,7 +43,7 @@ class OperationalStatus(TrackedModel, name="operational_status"):
             },
         )
         super().__init__(model_config)
-        self.modules: t.List[StatusModule] = []
+        self.modules: list[StatusModule] = []
 
     def setup(self, state: TrackedState, **_):
         dataset, entity_group = self.config["entity_group"]
@@ -83,9 +81,9 @@ class StatusModule:
 
 
 class FloodingStatusModule(StatusModule):
-    mapping: t.Optional[QueryResult] = None
-    elevation: t.Union[np.ndarray, TrackedCSRArray, None] = None
-    row_ptr: t.Optional[np.ndarray] = None
+    mapping: QueryResult | None = None
+    elevation: np.ndarray | TrackedCSRArray | None = None
+    row_ptr: np.ndarray | None = None
 
     def __init__(
         self,
@@ -131,7 +129,7 @@ class FloodingStatusModule(StatusModule):
 
         # Read threshold from config
         flooding_threshold = module_config.get("flooding_threshold", 0.0)
-        
+
         return FloodingStatusModule(cells, water_height, target, water_depth, flooding_threshold)
 
     def update(self):
@@ -147,14 +145,14 @@ class FloodingStatusModule(StatusModule):
         # Apply flooding threshold for operational status determination
         # Water depth above threshold indicates operational impact
         affected_depth = np.where(wd > self.flooding_threshold, wd, 0.0)
-        
+
         self.water_depth[:] = affected_depth
 
 
 ALL_MODULES = {"flooding": FloodingStatusModule}
 
 
-def get_elevation(entity_group: t.Union[PointEntity, LineEntity, PolygonEntity]) -> np.ndarray:
+def get_elevation(entity_group: PointEntity | LineEntity | PolygonEntity) -> np.ndarray:
     if entity_group.dimensions() != 3:
         raise ValueError(
             f"Entity group {entity_group.dataset_name}/{entity_group.__entity_name__} "

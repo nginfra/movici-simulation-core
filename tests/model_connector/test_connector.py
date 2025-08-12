@@ -258,9 +258,7 @@ class TestUpdateHandler:
             (QuitMessage(), InvalidMessage),
         ],
     )
-    def test_get_data_raises_on_invalid_response(
-        self, update_handler, socket, message, error_type
-    ):
+    def test_get_data_raises_on_invalid_response(self, update_handler, socket, message, error_type):
         socket.recv.return_value = message
         with pytest.raises(error_type):
             update_handler.get("address", "key", None)

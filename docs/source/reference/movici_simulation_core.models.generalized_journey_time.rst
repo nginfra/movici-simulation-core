@@ -1,12 +1,12 @@
 
 
-generalized\_journey\_time 
+generalized\_journey\_time
 ===========================
 
 
 
 
-crowdedness 
+crowdedness
 ------------
 
 .. automodule:: movici_simulation_core.models.generalized_journey_time.crowdedness
@@ -16,7 +16,7 @@ crowdedness
 
 
 
-gjt\_model 
+gjt\_model
 -----------
 
 .. automodule:: movici_simulation_core.models.generalized_journey_time.gjt_model

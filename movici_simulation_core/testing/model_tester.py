@@ -92,7 +92,7 @@ class NumpyPreProcessor(PreProcessor):
         return data, next_time
 
 
-DEFAULT_PREPROCESSORS: t.Dict[t.Type[ModelAdapterBase], t.Type[PreProcessor]] = {
+DEFAULT_PREPROCESSORS: dict[type[ModelAdapterBase], type[PreProcessor]] = {
     TrackedModelAdapter: NumpyPreProcessor,
     SimpleModelAdapter: NumpyPreProcessor,
 }
@@ -106,7 +106,7 @@ class Plugin(t.Protocol):
 SchemaT = t.Union[AttributeSchema, t.Sequence[AttributeSpec], Plugin]
 
 
-def read_schema(schema: t.Optional[SchemaT]) -> AttributeSchema:
+def read_schema(schema: SchemaT | None) -> AttributeSchema:
     if isinstance(schema, AttributeSchema):
         return schema
     rv = AttributeSchema()
@@ -130,7 +130,7 @@ class ModelTester:
         settings: Settings = None,
         init_data_handler=None,
         tmp_dir=None,
-        schema: t.Optional[SchemaT] = None,
+        schema: SchemaT | None = None,
         raise_on_premature_shutdown=False,
     ):
         """
@@ -163,7 +163,7 @@ class ModelTester:
             raise TypeError(f"Unsupported model adapter {adapter.__name__}")
         return preprocessor(model, settings=self.settings, schema=self.schema)
 
-    def add_init_data(self, name: str, data: t.Union[dict, str, Path]):
+    def add_init_data(self, name: str, data: dict | str | Path):
         if isinstance(data, dict):
             self.tmp_dir.joinpath(f"{name}.json").write_text(json.dumps(data))
             return
@@ -181,9 +181,7 @@ class ModelTester:
         return self.model.update(message, data)
 
     def update_series(self, timestamp: int, data_series: t.Sequence[UpdateData], **msg_kwargs):
-        message = UpdateSeriesMessage(
-            [UpdateMessage(timestamp, **msg_kwargs) for _ in data_series]
-        )
+        message = UpdateSeriesMessage([UpdateMessage(timestamp, **msg_kwargs) for _ in data_series])
         return self.model.update_series(message, data_series)
 
     def new_time(self, timestamp: int):
@@ -200,7 +198,7 @@ class ModelTester:
     @classmethod
     def run_scenario(
         cls,
-        model: t.Type[Model],
+        model: type[Model],
         model_name: str,
         scenario: dict,
         rtol=1e-5,
@@ -233,7 +231,7 @@ class ModelTester:
             tester.initialize()
 
             curr_time = None
-            results: t.List[t.Tuple[int, UpdateData, NextTime]] = []
+            results: list[tuple[int, UpdateData, NextTime]] = []
             for upd in scenario.get("updates"):
                 time, data = upd["time"], upd["data"]
                 if use_new_time and time != curr_time:
@@ -248,12 +246,12 @@ class ModelTester:
             raise AssertionError(format_errors(errors))
 
 
-ErrorList = t.List[t.Tuple[int, t.Dict[str, str]]]
+ErrorList = list[tuple[int, dict[str, str]]]
 
 
 def compare_results(
-    expected: t.Sequence[t.Tuple[int, UpdateData, NextTime]],
-    results: t.Sequence[t.Tuple[int, UpdateData, NextTime]],
+    expected: t.Sequence[tuple[int, UpdateData, NextTime]],
+    results: t.Sequence[tuple[int, UpdateData, NextTime]],
     rtol=1e-5,
     atol=1e-8,
 ) -> ErrorList:
@@ -263,7 +261,7 @@ def compare_results(
         )
     errors = []
     for (t_result, result, nt_result), (t_expected, expected_data, nt_expected) in zip(
-        results, expected
+        results, expected, strict=False
     ):
         if nt_expected not in (NEXT_TIME_MISSING, nt_result):
             errors.append((t_expected, {"next_time": f"Expected {nt_expected}, got: {nt_result}"}))

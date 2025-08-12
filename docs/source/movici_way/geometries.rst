@@ -23,6 +23,3 @@ and ``Polygon``:
 |           |            |                                | ``geometry.polygon`` is implicitly   |
 |           |            |                                | 2d.  Polygons must be closed loops.  |
 +-----------+------------+--------------------------------+--------------------------------------+
-
-
-

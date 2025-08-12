@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 
 from movici_simulation_core.ae_wrapper.collections import LinkCollection, NodeCollection
@@ -23,7 +21,7 @@ def calculate_capacities(capacities: np.ndarray, layouts: np.ndarray) -> np.ndar
 
 def get_capacities_from_attribute(
     capacity_attribute: UniformAttribute,
-    layout_attribute: t.Optional[UniformAttribute] = None,
+    layout_attribute: UniformAttribute | None = None,
 ) -> np.ndarray:
     capacities = capacity_attribute.array.copy()
     capacities[capacity_attribute.is_special() | capacity_attribute.is_undefined()] = float("inf")
@@ -39,9 +37,7 @@ def get_capacities_from_attribute(
 
 def get_max_speeds_from_attribute(max_speed_attribute: UniformAttribute) -> np.ndarray:
     max_speeds = max_speed_attribute.array.copy()
-    max_speeds[max_speed_attribute.is_special() | max_speed_attribute.is_undefined()] = float(
-        "inf"
-    )
+    max_speeds[max_speed_attribute.is_special() | max_speed_attribute.is_undefined()] = float("inf")
 
     return max_speeds
 
@@ -58,9 +54,8 @@ def get_transport_directions(segments: TransportSegmentEntity) -> np.ndarray:
 
 
 def get_nodes(nodes: PointEntity, point_generator: PointGenerator) -> NodeCollection:
-
     geometries = []
-    for node_x, node_y in zip(nodes.x, nodes.y):
+    for node_x, node_y in zip(nodes.x, nodes.y, strict=False):
         geometry = point_generator.generate_and_add([node_x, node_y])
         geometries.append(geometry)
 
@@ -95,7 +90,7 @@ def get_links(segments: TransportSegmentEntity) -> LinkCollection:
 
 def get_demand_nodes(demand_nodes: PointEntity, point_generator: PointGenerator) -> NodeCollection:
     geometries = []
-    for node_x, node_y in zip(demand_nodes.x, demand_nodes.y):
+    for node_x, node_y in zip(demand_nodes.x, demand_nodes.y, strict=False):
         geometry = point_generator.generate_and_add([node_x, node_y])
         geometries.append(geometry)
 

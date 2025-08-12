@@ -8,10 +8,12 @@ from pydantic import DirectoryPath, Field
 
 try:
     from pydantic import BaseSettings
+
     PYDANTIC_V1 = True
 except ImportError:
-    from pydantic_settings import BaseSettings
     from pydantic import ConfigDict
+    from pydantic_settings import BaseSettings
+
     PYDANTIC_V1 = False
 
 from movici_simulation_core.core.moment import TimelineInfo
@@ -22,8 +24,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "[{asctime}] [{levelname:8s}] {name:17s}: {message}"
     name: str = ""
-    storage: t.Union[t.Literal["api"], t.Literal["disk"]] = "disk"
-    storage_dir: t.Optional[Path] = None
+    storage: t.Literal["api"] | t.Literal["disk"] = "disk"
+    storage_dir: Path | None = None
     temp_dir: DirectoryPath = str(tempfile.gettempdir())
 
     reference: float = 0
@@ -31,14 +33,15 @@ class Settings(BaseSettings):
     start_time: int = 0
     duration: int = 0
 
-    datasets: t.List[dict] = Field(default_factory=list)
-    model_names: t.List[str] = Field(default_factory=list)
-    models: t.List[dict] = Field(default_factory=list)
-    service_types: t.List[str] = Field(default_factory=list)
-    scenario_config: t.Optional[dict] = Field(default=None)
-    service_discovery: t.Dict[str, str] = Field(default_factory=dict)
+    datasets: list[dict] = Field(default_factory=list)
+    model_names: list[str] = Field(default_factory=list)
+    models: list[dict] = Field(default_factory=list)
+    service_types: list[str] = Field(default_factory=list)
+    scenario_config: dict | None = Field(default=None)
+    service_discovery: dict[str, str] = Field(default_factory=dict)
 
     if PYDANTIC_V1:
+
         class Config:
             env_prefix = "movici_"
             fields = {
@@ -49,7 +52,7 @@ class Settings(BaseSettings):
         model_config = ConfigDict(
             env_prefix="movici_",
             extra="forbid",
-            protected_namespaces=('settings_',),
+            protected_namespaces=("settings_",),
         )
         # Note: Pydantic V2 doesn't support multiple env names in the same way as V1
         # The functionality to use multiple environment variable names has been removed

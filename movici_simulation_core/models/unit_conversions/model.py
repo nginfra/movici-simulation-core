@@ -26,11 +26,11 @@ class Model(TrackedModel, name="unit_conversions"):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
-    flow_entities: t.List[FlowEntityGroup]
-    flow_types: t.List[str]
-    od_entities: t.List[ODEntityGroup]
-    od_types: t.List[str]
-    coefficients_tape: t.Optional[CsvTape]
+    flow_entities: list[FlowEntityGroup]
+    flow_types: list[str]
+    od_entities: list[ODEntityGroup]
+    od_types: list[str]
+    coefficients_tape: CsvTape | None
 
     def __init__(self, model_config: dict):
         model_config = ensure_valid_config(
@@ -97,7 +97,7 @@ class Model(TrackedModel, name="unit_conversions"):
         return self.coefficients_tape.get_next_timestamp()
 
     def _update_od_values(self):
-        for entity, od_type in zip(self.od_entities, self.od_types):
+        for entity, od_type in zip(self.od_entities, self.od_types, strict=False):
             # cargo to tons
             self._update_cargo_value(
                 entity.outward_cargo_vehicle, entity.outward_cargo, od_type, self.coefficients_tape
@@ -119,7 +119,7 @@ class Model(TrackedModel, name="unit_conversions"):
             )
 
     def _update_flow_values(self):
-        for entity, flow_type in zip(self.flow_entities, self.flow_types):
+        for entity, flow_type in zip(self.flow_entities, self.flow_types, strict=False):
             # cargo to tons
             self._update_cargo_value(
                 entity.cargo_vehicle_flow, entity.cargo_flow, flow_type, self.coefficients_tape
@@ -172,7 +172,6 @@ MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/unit_conversions.
 
 
 def convert_v1_v2(config):
-
     return {
         "parameters_dataset": config["parameters"][0],
         "conversions": [

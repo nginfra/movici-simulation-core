@@ -200,7 +200,7 @@ class TestTrackedArray:
         assert np.array_equal(arr.changed, expected_changes)
 
     def assert_diff_equal(self, arr, expected):
-        for diff, exp in zip(arr.diff(), expected):
+        for diff, exp in zip(arr.diff(), expected, strict=False):
             assert np.array_equal(diff, exp)
 
     def test_tracked_array_tracks_update(self):

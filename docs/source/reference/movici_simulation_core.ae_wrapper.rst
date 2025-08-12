@@ -1,12 +1,12 @@
 
 
-ae\_wrapper 
+ae\_wrapper
 ============
 
 
 
 
-collections 
+collections
 ------------
 
 .. automodule:: movici_simulation_core.ae_wrapper.collections
@@ -16,7 +16,7 @@ collections
 
 
 
-id\_generator 
+id\_generator
 --------------
 
 .. automodule:: movici_simulation_core.ae_wrapper.id_generator
@@ -26,7 +26,7 @@ id\_generator
 
 
 
-patches 
+patches
 --------
 
 .. automodule:: movici_simulation_core.ae_wrapper.patches
@@ -36,7 +36,7 @@ patches
 
 
 
-point\_generator 
+point\_generator
 -----------------
 
 .. automodule:: movici_simulation_core.ae_wrapper.point_generator
@@ -46,7 +46,7 @@ point\_generator
 
 
 
-project 
+project
 --------
 
 .. automodule:: movici_simulation_core.ae_wrapper.project

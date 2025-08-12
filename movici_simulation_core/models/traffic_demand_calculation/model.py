@@ -1,5 +1,4 @@
 import logging
-import typing as t
 
 import numpy as np
 import pandas as pd
@@ -60,14 +59,14 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
     _demand_attribute: CSRAttribute
     _demand_entity: GeometryEntity
 
-    _total_inward_demand_attribute: t.Optional[UniformAttribute] = None
-    _total_outward_demand_attribute: t.Optional[UniformAttribute] = None
+    _total_inward_demand_attribute: UniformAttribute | None = None
+    _total_outward_demand_attribute: UniformAttribute | None = None
 
-    _scenario_parameters_tape: t.Optional[CsvTape] = None
+    _scenario_parameters_tape: CsvTape | None = None
 
     _new_timesteps_first_update: bool = True
 
-    _local_mapping_type_to_calculators_dict: t.Dict[str, t.Type[LocalContributor]] = {
+    _local_mapping_type_to_calculators_dict: dict[str, type[LocalContributor]] = {
         "nearest": NearestValue,
         "route": RouteCostFactor,
     }
@@ -139,7 +138,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def get_global_elasticity_contributors(
         self, data_handler: InitDataHandler
-    ) -> t.List[GlobalContributor]:
+    ) -> list[GlobalContributor]:
         config = self.config
 
         if (parameter_dataset := config.get("parameter_dataset")) is None:
@@ -171,7 +170,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         self,
         state: TrackedState,
         schema: AttributeSchema,
-    ) -> t.List[LocalContributor]:
+    ) -> list[LocalContributor]:
         config = self.config
         rv = []
 
@@ -213,7 +212,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         demand_matrix = self._demand_attribute.csr.as_matrix()
         self._update_demand_sum(demand_matrix)
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         if self.update_count >= self.max_iterations:
             return None
 
@@ -239,7 +238,7 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         if self._scenario_parameters_tape is not None:
             self._scenario_parameters_tape.proceed_to(moment)
 
-    def _get_next_moment_from_tapes(self) -> t.Optional[Moment]:
+    def _get_next_moment_from_tapes(self) -> Moment | None:
         if self._scenario_parameters_tape is None:
             return None
         return self._scenario_parameters_tape.get_next_timestamp()

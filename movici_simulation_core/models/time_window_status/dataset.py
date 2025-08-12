@@ -17,7 +17,7 @@ from movici_simulation_core.core.entity_group import EntityGroup
 
 @dataclass
 class Connection:
-    connected_entities: t.Union[TimeWindowStatusEntity, TimeWindowEntity]
+    connected_entities: TimeWindowStatusEntity | TimeWindowEntity
     connected_indices: t.Sequence[int]
 
 
@@ -48,7 +48,7 @@ class TimeWindowEntity(EntityGroup):
     time_window_begin: attribute.UniformAttribute = None
     time_window_end: attribute.UniformAttribute = None
 
-    connections: t.List[t.List[Connection]] = None
+    connections: list[list[Connection]] = None
 
     def initialize_connections(self):
         if self.index is None:

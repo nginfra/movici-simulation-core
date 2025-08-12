@@ -28,7 +28,7 @@ def get_dataset_creator_schema():
     return _dataset_creator_schema
 
 
-def create_dataset(config: dict, sources: t.Optional[SourcesDict] = None):
+def create_dataset(config: dict, sources: SourcesDict | None = None):
     r"""Shorthand function to create a entity-based Dataset from a dataset creator config
     dictionary. This is the preferred way of creating Datasets from dataset creator config as
     it requires the least amount of boilerplate code. ``DataSource``\s are created from the
@@ -54,8 +54,8 @@ class DatasetCreator:
 
     def __init__(
         self,
-        operations: t.Sequence[t.Type[DatasetOperation]],
-        sources: t.Optional[SourcesDict] = None,
+        operations: t.Sequence[type[DatasetOperation]],
+        sources: SourcesDict | None = None,
         validate_config=True,
     ):
         self.operations = operations
@@ -117,7 +117,7 @@ class SourcesSetup(DatasetOperation):
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
         read_sources = self.config.get("__sources__", {})
-        for (key, source_info) in read_sources.items():
+        for key, source_info in read_sources.items():
             if key not in sources:
                 try:
                     source = self.make_source(source_info)
@@ -182,7 +182,7 @@ class MetadataSetup(DatasetOperation):
     )
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
-        for (key, default) in self.keys:
+        for key, default in self.keys:
             result = self.config.get(key, default)
             if result is self._missing:
                 continue
@@ -304,7 +304,7 @@ class AttributeDataLoading(DatasetOperation):
 
         return rv
 
-    def get_geometry(self, geom_type: GeometryType, source_name) -> t.Optional[dict]:
+    def get_geometry(self, geom_type: GeometryType, source_name) -> dict | None:
         source = self.get_source(source_name)
         try:
             return source.get_geometry(geom_type)
@@ -353,7 +353,7 @@ class EnumConversion(DatasetOperation):
     already integer, then it validates whether the value is matching an enum's value
     """
 
-    enums: t.Dict[str, EnumInfo]
+    enums: dict[str, EnumInfo]
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
         self.get_enums(dataset)
@@ -373,7 +373,7 @@ class EnumConversion(DatasetOperation):
             general = dataset.setdefault("general", {})
             general["enum"] = {k: info.to_list() for k, info in self.enums.items()}
 
-    def iter_enum_attributes(self, dataset) -> t.Tuple[str, list]:
+    def iter_enum_attributes(self, dataset) -> tuple[str, list]:
         for entity_type, entity_dict in self.config["data"].items():
             for attr, attr_conf in entity_dict.items():
                 if attr == "__meta__":
@@ -406,14 +406,14 @@ class EnumConversion(DatasetOperation):
 class EnumInfo:
     def __init__(self, name: str, enum_values: t.Sequence[str]) -> None:
         self.name = name
-        self.items: t.Dict[str, int] = {val: idx for idx, val in enumerate(enum_values)}
+        self.items: dict[str, int] = {val: idx for idx, val in enumerate(enum_values)}
 
     def ensure(self, text: str) -> int:
         if (pos := self.get_pos(text)) is not None:
             return pos
         return self.add(text)
 
-    def get_pos(self, text: str) -> t.Optional[int]:
+    def get_pos(self, text: str) -> int | None:
         return self.items.get(text)
 
     def add(self, text: str) -> int:
@@ -489,7 +489,7 @@ class IDLinking(DatasetOperation):
     """
 
     # keys are (entity_type, property_name)
-    index: t.Dict[(t.Tuple[str, str]), dict]
+    index: dict[(tuple[str, str]), dict]
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
         self.index = {}
@@ -510,7 +510,7 @@ class IDLinking(DatasetOperation):
         self,
         entity_type,
         attribute,
-        link_config: t.Union[list, dict],
+        link_config: list | dict,
         dataset: dict,
         sources: SourcesDict,
     ):
@@ -526,7 +526,7 @@ class IDLinking(DatasetOperation):
         self,
         metadata,
         entity_type,
-        link_config: t.Union[list, dict],
+        link_config: list | dict,
         dataset: dict,
         sources: SourcesDict,
     ):
@@ -552,12 +552,12 @@ class IDLinking(DatasetOperation):
 
     def link_attribute_by_values(
         self,
-        link_config: t.Union[list, dict],
+        link_config: list | dict,
         values: list,
         dataset: dict,
         sources: SourcesDict,
         values_are_indices=False,
-    ) -> t.List[int]:
+    ) -> list[int]:
         if not isinstance(link_config, list):
             link_config = [link_config]
         get_indexes = self.get_indices_link_index if values_are_indices else self.get_link_index
@@ -587,7 +587,7 @@ class IDLinking(DatasetOperation):
         key = (entity_type, prop)
         if key not in self.index:
             self.index[key] = {
-                val: target for (val, target) in zip(source.get_attribute(prop), ids)
+                val: target for (val, target) in zip(source.get_attribute(prop), ids, strict=False)
             }
 
         return self.index[key]
@@ -634,7 +634,7 @@ class ConstantValueAssigning(DatasetOperation):
         return dataset
 
 
-def deep_get(obj, *path: t.Union[str, int], default=None):
+def deep_get(obj, *path: str | int, default=None):
     if not path:
         raise ValueError("No path given")
     nxt, *rest = path

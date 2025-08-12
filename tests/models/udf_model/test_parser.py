@@ -14,7 +14,7 @@ from movici_simulation_core.models.udf_model.compiler import (
 
 
 def get_ast(string):
-    return parse(tokenize((string)))
+    return parse(tokenize(string))
 
 
 @pytest.mark.parametrize(

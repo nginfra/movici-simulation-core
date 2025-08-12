@@ -51,7 +51,7 @@ def init_data_handler(tmp_path_factory):
 def add_init_data(init_data_handler):
     root = init_data_handler.root
 
-    def _add_init_data(name, data: t.Union[dict, str, Path]):
+    def _add_init_data(name, data: dict | str | Path):
         if isinstance(data, dict):
             root.joinpath(f"{name}.json").write_text(json.dumps(data))
             return
@@ -228,7 +228,10 @@ def get_entity_update():
         if not isinstance(ids, t.Iterable):
             ids = [ids]
         entities = {"id": list(ids)}
-        for key, attr, in [
+        for (
+            key,
+            attr,
+        ) in [
             (key_name, attributes),
         ]:
             if attr is not None:
@@ -444,11 +447,11 @@ def railway_network_for_traffic(railway_network_name):
 
 @pytest.fixture
 def create_model_tester(tmp_path_factory, init_data, global_schema):
-    testers: t.List[ModelTester] = []
+    testers: list[ModelTester] = []
     counter = itertools.count()
 
     def _create(
-        model_type: t.Type[Model],
+        model_type: type[Model],
         config,
         tmp_dir: Path = None,
         schema: AttributeSchema = None,

@@ -151,12 +151,11 @@ class MoviciTypeLookup:
 class FromDictLookup(MoviciTypeLookup):
     def __init__(
         self,
-        datasets: t.Optional[t.List[dict]] = None,
-        entity_types: t.Optional[list] = None,
-        attribute_types: t.Optional[list] = None,
+        datasets: list[dict] | None = None,
+        entity_types: list | None = None,
+        attribute_types: list | None = None,
         validate_dataset_types: bool = True,
     ) -> None:
-
         self.datasets = self.entity_types = self.attribute_types = None
         if datasets is not None:
             self.datasets = {
@@ -188,8 +187,8 @@ class FromDictLookup(MoviciTypeLookup):
 class AttributeSchemaLookup(MoviciTypeLookup):
     def __init__(
         self,
-        dataset_names: t.Optional[t.Sequence[str]] = None,
-        schema: t.Optional[schema.AttributeSchema] = None,
+        dataset_names: t.Sequence[str] | None = None,
+        schema: schema.AttributeSchema | None = None,
     ):
         self.dataset_names = set(dataset_names) if dataset_names is not None else None
         self.schema = schema
@@ -203,10 +202,7 @@ class AttributeSchemaLookup(MoviciTypeLookup):
 
 def validate_and_process(
     instance: t.Any, schema: dict, lookup: MoviciTypeLookup = FromDictLookup(), return_errors=False
-) -> t.Union[
-    t.List[MoviciDataRefInfo],
-    t.Tuple[t.List[MoviciDataRefInfo], t.List[exceptions.ValidationError]],
-]:
+) -> list[MoviciDataRefInfo] | tuple[list[MoviciDataRefInfo], list[exceptions.ValidationError]]:
     r"""Extension of ``jsonschema.validators.validate`` that strips out and processes
     ``MoviciTypeReport``\s
     """
@@ -233,7 +229,7 @@ def validate_and_process(
 
 def _extract_reports_from_error(
     error: exceptions.ValidationError,
-) -> t.Tuple[MoviciTypeReport, t.Optional[exceptions.ValidationError]]:
+) -> tuple[MoviciTypeReport, exceptions.ValidationError | None]:
     if isinstance(error, MoviciTypeReport):
         return [error], None
 
@@ -282,7 +278,7 @@ def movici_validator(schema, lookup: MoviciTypeLookup = FromDictLookup()):
 
 @dataclasses.dataclass
 class MoviciDataRefInfo:
-    path: t.Tuple[t.Union[str, int], ...]
+    path: tuple[str | int, ...]
     movici_type: t.Literal["dataset", "entityGroup", "attribute"]
     value: str
 
@@ -320,7 +316,7 @@ class MoviciDataRefInfo:
         return rv
 
     @staticmethod
-    def _parse_json_path(path: str) -> t.Tuple[t.Union[str, int], ...]:
+    def _parse_json_path(path: str) -> tuple[str | int, ...]:
         rv = []
         root = re.compile(r"^(?P<tok>\$)(?P<tail>.*)$")
         prop = re.compile(r"^.(?P<tok>[A-Za-z_][A-Za-z0-9_]*)(?P<tail>.*)$")
@@ -342,13 +338,13 @@ class MoviciDataRefInfo:
 
 class ConfigVersion(t.TypedDict, total=False):
     schema: dict
-    convert_from: t.Dict[str, t.Callable[[dict], dict]]
+    convert_from: dict[str, t.Callable[[dict], dict]]
 
 
 def ensure_valid_config(
     config: dict,
     target_version: str,
-    versions: t.Dict[str, ConfigVersion],
+    versions: dict[str, ConfigVersion],
     add_name_and_type=True,
 ):
     try:
@@ -373,7 +369,7 @@ def ensure_valid_config(
     raise (exceptions.best_match(errors))
 
 
-def ensure_schema(schema_identifier: t.Union[dict, str, Path], add_name_and_type=True):
+def ensure_schema(schema_identifier: dict | str | Path, add_name_and_type=True):
     if isinstance(schema_identifier, dict):
         schema = schema_identifier
     else:

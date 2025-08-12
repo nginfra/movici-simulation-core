@@ -276,5 +276,3 @@ in which a model may postpone their own calculation at a timestamp, but must act
 timestamp has reached) and to clean up other (external) resources. Similarly, Models may hook into
 ``END`` messages, which signify the end of a Simulation upon which they may perform final tasks and
 clean up resources.
-
-

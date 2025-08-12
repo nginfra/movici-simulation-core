@@ -10,7 +10,7 @@ SECONDS_PER_HOUR = SECONDS_PER_MINUTE * 60
 SECONDS_PER_DAY = SECONDS_PER_HOUR * 24
 
 
-functions: t.Dict[str, t.Tuple[t.Callable, bool]] = dict()
+functions: dict[str, tuple[t.Callable, bool]] = dict()
 
 
 def aggregation_function(name: str, time_history: bool = False):

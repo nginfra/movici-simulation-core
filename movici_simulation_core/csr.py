@@ -1,19 +1,12 @@
-import typing as t
-
 import numba
 import numpy as np
-from numba import types
-from numba.core import cgutils
-from numba.core.types import complex_domain, real_domain
-from numba.core.typing import signature
-from numba.np.numpy_support import type_can_asarray
 
 from .core.numba_extensions import register_jitable
 from .utils.unicode import largest_unicode_dtype
 
 # NumPy 2.0 compatibility: use np.bool_ for numba compatibility, but this will work in NumPy 2.0
 try:
-    # Test if np.bool_ exists (NumPy < 2.0) 
+    # Test if np.bool_ exists (NumPy < 2.0)
     BOOL_DTYPE = np.bool_
 except AttributeError:
     # NumPy 2.0+ - np.bool_ is removed, use np.bool_() constructor or just bool
@@ -122,7 +115,6 @@ def row_wise_min(data, row_ptr, empty_row=None):
     return _row_wise_min_impl(data, row_ptr, empty_row)
 
 
-
 def csr_binop(data, row_ptr, operand, operator):
     """Perform binary operation ``operator`` rowwise on a csr array, the operand must be a 1d array
     of length equal to the number of rows in the csr array
@@ -136,8 +128,6 @@ def csr_binop(data, row_ptr, operand, operator):
 
         rv[begin:end] = operator(data[begin:end], val)
     return rv
-
-
 
 
 @numba.njit(cache=True)
@@ -194,8 +184,7 @@ def remove_undefined_csr(
     undefined,
     num_undefined,
     new_data_shape,
-) -> t.Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     new_data = np.empty(new_data_shape, dtype=data.dtype)
     new_row_ptr = np.empty(len(row_ptr) - num_undefined, dtype=row_ptr.dtype)
     new_indices = np.empty(len(indices) - num_undefined, dtype=indices.dtype)
@@ -277,9 +266,13 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     can be properly used in numba jit-compiled functions
     """
     # Handle string comparisons at Python level
-    is_a_string = isinstance(a, (str, np.str_)) or (hasattr(a, 'dtype') and a.dtype.kind in ['U', 'S'])
-    is_b_string = isinstance(b, (str, np.str_)) or (hasattr(b, 'dtype') and b.dtype.kind in ['U', 'S'])
-    
+    is_a_string = isinstance(a, (str, np.str_)) or (
+        hasattr(a, "dtype") and a.dtype.kind in ["U", "S"]
+    )
+    is_b_string = isinstance(b, (str, np.str_)) or (
+        hasattr(b, "dtype") and b.dtype.kind in ["U", "S"]
+    )
+
     if is_a_string or is_b_string:
         # String comparison - use simple equality
         if dtype := largest_unicode_dtype(a, b):
@@ -288,7 +281,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             if isinstance(b, np.ndarray):
                 b = np.asarray(b, dtype=dtype)
         return a == b
-    
+
     # Numeric comparison - use numba implementation
     if dtype := largest_unicode_dtype(a, b):
         if isinstance(a, np.ndarray):
@@ -299,6 +292,7 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
 
 # Overload has been imported at top of file
+
 
 @register_jitable
 def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):

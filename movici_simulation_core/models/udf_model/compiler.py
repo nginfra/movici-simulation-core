@@ -38,9 +38,9 @@ def compile(string):
     return compile_func(parse(tokenize(string)))
 
 
-def tokenize(string: str, patterns: t.Optional[dict] = None) -> t.Iterator[Token]:
+def tokenize(string: str, patterns: dict | None = None) -> t.Iterator[Token]:
     patterns = patterns or TOKENS
-    matchers: t.Dict[str, re.Pattern] = {
+    matchers: dict[str, re.Pattern] = {
         k: re.compile(rf"^(?P<tok>{tok})(?P<tail>.*)$") for k, tok in patterns.items()
     }
     while string:
@@ -109,8 +109,8 @@ class Var(Node):
 
 @dataclasses.dataclass
 class BinOp(Node):
-    left: t.Optional[Node] = None
-    right: t.Optional[Node] = None
+    left: Node | None = None
+    right: Node | None = None
 
     def accept_children(self, visitor):
         if self.left:
@@ -121,7 +121,7 @@ class BinOp(Node):
 
 @dataclasses.dataclass
 class Func(Node):
-    args: t.Tuple[Node, ...] = ()
+    args: tuple[Node, ...] = ()
 
     def accept_children(self, visitor):
         for arg in self.args:
@@ -273,7 +273,6 @@ class UDFCompiler(NodeVisitor):
 
     @visit.register
     def _(self, node: BinOp):
-
         if node.left is None or node.right is None:
             raise ValueError("Invalid tree")
         op = {

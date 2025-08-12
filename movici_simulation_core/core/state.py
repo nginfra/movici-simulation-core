@@ -24,20 +24,20 @@ from .attribute_spec import AttributeSpec
 from .data_format import extract_dataset_data
 from .schema import AttributeSchema
 
-AttributeDict = t.Dict[str, AttributeObject]
+AttributeDict = dict[str, AttributeObject]
 
 NO_TRACK_UNKNOWN = 0
 
 
 class TrackedState:
-    attributes: t.Dict[str, t.Dict[str, AttributeDict]]
-    index: t.Dict[str, t.Dict[str, index_.Index]]
+    attributes: dict[str, dict[str, AttributeDict]]
+    index: dict[str, dict[str, index_.Index]]
     track_unknown: int
 
     def __init__(
         self,
-        schema: t.Optional[AttributeSchema] = None,
-        logger: t.Optional[logging.Logger] = None,
+        schema: AttributeSchema | None = None,
+        logger: logging.Logger | None = None,
         track_unknown=NO_TRACK_UNKNOWN,
     ):
         """
@@ -63,14 +63,14 @@ class TrackedState:
     def register_dataset(
         self,
         dataset_name: str,
-        entities: t.Sequence[t.Union[t.Type[eg.EntityGroup], eg.EntityGroup]],
-    ) -> t.List[eg.EntityGroup]:
+        entities: t.Sequence[type[eg.EntityGroup] | eg.EntityGroup],
+    ) -> list[eg.EntityGroup]:
         if dataset_name in self.attributes:
             raise ValueError(f"dataset '{dataset_name}' already exists")
         return [self.register_entity_group(dataset_name, entity) for entity in entities]
 
     def register_entity_group(
-        self, dataset_name, entity: t.Union[t.Type[eg.EntityGroupT], eg.EntityGroupT]
+        self, dataset_name, entity: type[eg.EntityGroupT] | eg.EntityGroupT
     ) -> eg.EntityGroupT:
         """
 
@@ -119,7 +119,7 @@ class TrackedState:
 
         return attr
 
-    def _get_entity_group(self, dataset_name, entity_type: str) -> t.Optional[AttributeDict]:
+    def _get_entity_group(self, dataset_name, entity_type: str) -> AttributeDict | None:
         try:
             return self.attributes[dataset_name][entity_type]
         except KeyError:
@@ -135,23 +135,21 @@ class TrackedState:
 
     def iter_attributes(
         self,
-    ) -> t.Iterable[t.Tuple[str, str, str, AttributeObject]]:
-        for (datasetname, entity_type, attributes) in self.iter_entities():
-            yield from (
-                (datasetname, entity_type, name, attr) for name, attr in attributes.items()
-            )
+    ) -> t.Iterable[tuple[str, str, str, AttributeObject]]:
+        for datasetname, entity_type, attributes in self.iter_entities():
+            yield from ((datasetname, entity_type, name, attr) for name, attr in attributes.items())
 
     def all_attributes(self):
         return [attr for _, _, _, attr in self.iter_attributes()]
 
-    def iter_entities(self) -> t.Iterable[t.Tuple[str, str, AttributeDict]]:
+    def iter_entities(self) -> t.Iterable[tuple[str, str, AttributeDict]]:
         yield from (
             (dataset_name, entity_type, attributes)
             for dataset_name, entity in self.attributes.items()
             for entity_type, attributes in entity.items()
         )
 
-    def iter_datasets(self) -> t.Iterable[t.Tuple[str, t.Dict[str, AttributeDict]]]:
+    def iter_datasets(self) -> t.Iterable[tuple[str, dict[str, AttributeDict]]]:
         yield from self.attributes.items()
 
     def reset_tracked_changes(self, flags):
@@ -186,7 +184,7 @@ class TrackedState:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
-    def receive_update(self, update: t.Dict, is_initial=False, process_undefined=False):
+    def receive_update(self, update: dict, is_initial=False, process_undefined=False):
         general_section = update.pop("general", None) or {}  # {"general": None} should yield {}
 
         for dataset_name, dataset_data in extract_dataset_data(update):
@@ -255,9 +253,8 @@ class TrackedState:
 
 def parse_special_values(
     general_section: dict, special_keys: t.Iterable = ("special", "no_data")
-) -> t.Dict[str, t.Dict[str, ValueType]]:
-
-    special_section: t.Dict[str, t.Any] = {}
+) -> dict[str, dict[str, ValueType]]:
+    special_section: dict[str, t.Any] = {}
     for key in special_keys:
         if special_section := general_section.get(key, special_section):
             break
@@ -275,7 +272,7 @@ class EntityDataHandler:
         self,
         attributes: AttributeDict,
         index: index_.Index,
-        track_unknown: t.Union[int, bool] = 0,
+        track_unknown: int | bool = 0,
         process_undefined=False,
     ):
         self.attributes = attributes
@@ -331,7 +328,7 @@ class EntityDataHandler:
         return attr
 
     def generate_update(self, flags=PUBLISH):
-        rv: t.Dict[str, dict] = defaultdict(dict)
+        rv: dict[str, dict] = defaultdict(dict)
         all_changes = self._get_all_changed_mask(flags)
 
         if not np.any(all_changes):
@@ -372,7 +369,7 @@ def filter_attrs(attributes: FilterAttrT, flags: int = 0) -> FilterAttrT:
     return [attr for attr in attributes if attr.flags & flags]
 
 
-def reset_tracked_changes(attributes: t.Iterable[AttributeObject], flags: t.Optional[int] = None):
+def reset_tracked_changes(attributes: t.Iterable[AttributeObject], flags: int | None = None):
     attrs = filter_attrs(attributes, flags) if flags is not None else attributes
     for attr in attrs:
         if attr.has_data():

@@ -1,7 +1,4 @@
-import typing as t
-
-
-def validate_mask(data_mask: t.Optional[dict]):
+def validate_mask(data_mask: dict | None):
     """determines whether the dataset filter has the correct shape, it must be lists inside
     dictionaries inside a dictionary. eg.:
     `{"some_dataset": {"some_entity_group": ["attribute1", "attribute2"]}}`
@@ -18,7 +15,7 @@ def validate_mask(data_mask: t.Optional[dict]):
 
     shape = (dict, dict, list)
 
-    def validator_helper(df: t.Union[None, dict, list], depth=0):
+    def validator_helper(df: None | dict | list, depth=0):
         if df is None:
             return True
 
@@ -32,8 +29,8 @@ def validate_mask(data_mask: t.Optional[dict]):
     return validator_helper(data_mask)
 
 
-def filter_data(data: dict, mask: t.Optional[dict]):
-    def filter_helper(data_: dict, mask_: t.Union[dict, list, None]):
+def filter_data(data: dict, mask: dict | None):
+    def filter_helper(data_: dict, mask_: dict | list | None):
         if mask_ is None:
             return data_
 
@@ -49,19 +46,19 @@ def filter_data(data: dict, mask: t.Optional[dict]):
     return filter_helper(data, mask)
 
 
-def ensure_id(mask: t.List[str]):
+def ensure_id(mask: list[str]):
     if "id" not in mask:
         mask.append("id")
 
 
-def masks_overlap(pub: t.Optional[dict], sub: t.Optional[dict]):
+def masks_overlap(pub: dict | None, sub: dict | None):
     """calculates whether there is overlap between the pub and sub filters of two models. This
     function assumes that the two filters have been validated using `validate_filter`
     """
     if pub == {} or sub == {}:
         return False
 
-    def helper(pub: t.Union[None, list, dict], sub: t.Union[None, list, dict]):
+    def helper(pub: None | list | dict, sub: None | list | dict):
         if pub is None or sub is None:
             return True
         if isinstance(pub, list):

@@ -66,7 +66,6 @@ def model_config(netcdf_tape_name, dataset_name):
 
 @pytest.fixture
 def init_data(netcdf_tape_name, netcdf_tape, dataset_name, some_dataset):
-
     return [(netcdf_tape_name, netcdf_tape), (dataset_name, some_dataset)]
 
 

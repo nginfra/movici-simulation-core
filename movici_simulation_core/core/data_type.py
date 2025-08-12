@@ -8,8 +8,8 @@ T = t.TypeVar("T", bool, int, float, str)
 
 @dataclasses.dataclass(frozen=True)
 class DataType(t.Generic[T]):
-    py_type: t.Type[T]
-    unit_shape: t.Tuple[int, ...] = ()
+    py_type: type[T]
+    unit_shape: tuple[int, ...] = ()
     csr: bool = False
 
     @property

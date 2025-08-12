@@ -90,10 +90,10 @@ class TimelineController:
     def set_model_to_start(self, model: ConnectedModel):
         model.next_time = self.start
 
-    def set_next_time(self, model: ConnectedModel, next_time: t.Optional[int] = None):
+    def set_next_time(self, model: ConnectedModel, next_time: int | None = None):
         model.next_time = self._get_validated_next_time(next_time)
 
-    def _get_validated_next_time(self, next_time: t.Optional[int]):
+    def _get_validated_next_time(self, next_time: int | None):
         current_time = self.current_time if self.current_time is not None else self.start
         if (
             next_time is None
@@ -134,27 +134,25 @@ class ConnectedModel:
     send: t.Callable[[Message], None]
 
     logger: logging.Logger = field(default_factory=logging.getLogger)
-    publishes_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
-    subscribed_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
+    publishes_to: list[ConnectedModel] | None = field(default_factory=list)
+    subscribed_to: list[ConnectedModel] | None = field(default_factory=list)
     timer: Stopwatch = field(default=None)
-    pub: t.Optional[dict] = field(default_factory=dict)
-    sub: t.Optional[dict] = field(default_factory=dict)
+    pub: dict | None = field(default_factory=dict)
+    sub: dict | None = field(default_factory=dict)
 
     busy: bool = field(default=False, init=False)
-    next_time: t.Optional[int] = field(default=None, init=False)
+    next_time: int | None = field(default=None, init=False)
     failed: bool = field(default=False, init=False)
     ack: bool = field(default=False, init=False)
 
-    quit: t.Optional[QuitMessage] = field(default=None, init=False)
-    pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
+    quit: QuitMessage | None = field(default=None, init=False)
+    pending_updates: list[UpdateMessage] = field(default_factory=list, init=False)
 
     fsm: FSM[ConnectedModel] = field(init=False)
 
     def __post_init__(self):
         self.timer = self.timer or ReportingStopwatch(
-            on_stop=lambda s: self.logger.info(
-                f"Model '{self.name}' returned in {s:.1f} seconds "
-            ),
+            on_stop=lambda s: self.logger.info(f"Model '{self.name}' returned in {s:.1f} seconds "),
             on_reset=lambda s: self.logger.info(
                 f"Total time spent in in model '{self.name}': {s:.1f} seconds "
             ),
@@ -172,7 +170,7 @@ class ConnectedModel:
         self.timer.start()
         self.busy = True
 
-    def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
+    def log_invalid(self, message, valid_messages: t.Iterable[type[Message]]):
         self.logger.error(
             f"Received invalid message {message} from model '{self.name}'. Expected one of "
             + ", ".join(m.__name__ for m in valid_messages)
@@ -180,9 +178,9 @@ class ConnectedModel:
 
 
 class BaseModelState(State[ConnectedModel], ABC):
-    valid_commands: t.Tuple[t.Type[Command], ...] = ()
-    valid_responses: t.Tuple[t.Type[Response], ...] = ()
-    next_state: t.Type[BaseModelState] = None
+    valid_commands: tuple[type[Command], ...] = ()
+    valid_responses: tuple[type[Response], ...] = ()
+    next_state: type[BaseModelState] = None
 
     def transitions(self) -> TransitionsT:
         if self.next_state is not None:
@@ -283,7 +281,7 @@ class WaitingForMessage(BaseModelState):
         self.context.quit = None
         self.context.pending_updates = []
 
-    def handle_invalid(self, msg: Message, valid_messages: t.Iterable[t.Type[Message]]):
+    def handle_invalid(self, msg: Message, valid_messages: t.Iterable[type[Message]]):
         self.context.log_invalid(msg, valid_messages)
         self.context.failed = True
         if not self.context.quit:
@@ -291,7 +289,7 @@ class WaitingForMessage(BaseModelState):
             self.context.pending_updates = []
             self.next_state = ProcessPendingQuit
 
-    def notify_subscribers(self, command: t.Optional[Command] = None):
+    def notify_subscribers(self, command: Command | None = None):
         command = command or NoUpdateMessage()
         for model in self.context.publishes_to:
             model.recv_event(command)
@@ -450,7 +448,7 @@ class Done(BaseModelState):
         yield
 
 
-class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
+class ModelCollection(dict):
     @property
     def busy(self):
         return any(model.busy for model in self.values())

@@ -391,9 +391,7 @@ def test_generate_csr_update_with_null_changes_float_with_0s():
     entity.csr_float_attr.update(
         (np.zeros(2000, dtype=np.float64), np.arange(0, 2001, 2)), np.arange(0, 1000)
     )
-    entity.csr_float_attr.update(
-        (np.full(1000, undefined), np.arange(0, 1001)), np.arange(0, 1000)
-    )
+    entity.csr_float_attr.update((np.full(1000, undefined), np.arange(0, 1001)), np.arange(0, 1000))
     update = entity.csr_float_attr.generate_update(np.ones(1000))
 
     assert np.array_equal(update["data"], np.zeros(2000, dtype=np.float64))

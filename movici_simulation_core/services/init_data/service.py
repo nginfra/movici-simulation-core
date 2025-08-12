@@ -46,9 +46,7 @@ class InitDataService(Service):
         if msg.mask is not None:
             self.logger.warning("Ignoring data mask")
         try:
-            path = next(
-                file for file in self.root.glob(msg.key + ".*") if file.is_file()
-            ).resolve()
+            path = next(file for file in self.root.glob(msg.key + ".*") if file.is_file()).resolve()
         except StopIteration:
             path = None
 

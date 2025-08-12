@@ -35,7 +35,7 @@ from movici_simulation_core.preprocessing.dataset_creator import (
 
 
 class Feature:
-    attributes: t.Dict[str, t.Any]
+    attributes: dict[str, t.Any]
 
     def as_feature(self):
         return {
@@ -55,8 +55,8 @@ class Feature:
 class Point(Feature):
     x: float
     y: float
-    z: t.Optional[float] = None
-    attributes: t.Dict[str, t.Any] = field(default_factory=dict)
+    z: float | None = None
+    attributes: dict[str, t.Any] = field(default_factory=dict)
 
     def feature_type(self):
         return "Point"
@@ -67,8 +67,8 @@ class Point(Feature):
 
 @dataclass
 class LineString(Feature):
-    geometry: t.List[t.Union[t.Tuple[float, float], t.Tuple[float, float, float]]]
-    attributes: t.Dict[str, t.Any] = field(default_factory=dict)
+    geometry: list[tuple[float, float] | tuple[float, float, float]]
+    attributes: dict[str, t.Any] = field(default_factory=dict)
 
     def feature_type(self):
         return "LineString"
@@ -79,8 +79,8 @@ class LineString(Feature):
 
 @dataclass
 class Polygon(LineString):
-    geometry: t.List[t.Union[t.Tuple[float, float], t.Tuple[float, float, float]]]
-    attributes: t.Dict[str, t.Any] = field(default_factory=dict)
+    geometry: list[tuple[float, float] | tuple[float, float, float]]
+    attributes: dict[str, t.Any] = field(default_factory=dict)
 
     def feature_type(self):
         return "Polygon"
@@ -93,7 +93,7 @@ class Polygon(LineString):
         return [coords]
 
 
-def create_feature_collection(features: t.List[Feature]):
+def create_feature_collection(features: list[Feature]):
     return {
         "type": "FeatureCollection",
         "features": [f.as_feature() for f in features],
@@ -104,7 +104,7 @@ def create_feature_collection(features: t.List[Feature]):
 def create_geojson(tmp_path: Path):
     ctr = itertools.count()
 
-    def _inner(features: t.List[Feature]):
+    def _inner(features: list[Feature]):
         path = tmp_path / f"features_{next(ctr)}.geojson"
         path.write_text(json.dumps(create_feature_collection(features)))
         return path
@@ -114,7 +114,7 @@ def create_geojson(tmp_path: Path):
 
 @pytest.fixture
 def create_gdf(create_geojson):
-    def _inner(features: t.List[Feature]):
+    def _inner(features: list[Feature]):
         # we first convert the features to a geojson file, and then read that file
         # into a GeoDataFrame since geopandas.read_file is the most flexible/powerful way to
         # create a gdf, since it uses Fiona under the hood
@@ -126,7 +126,7 @@ def create_gdf(create_geojson):
 
 @pytest.fixture
 def create_data_sources(create_gdf):
-    def inner(features: t.Dict[str, t.Sequence[Feature]]):
+    def inner(features: dict[str, t.Sequence[Feature]]):
         return {key: GeopandasSource(create_gdf(feats)) for key, feats in features.items()}
 
     return inner
@@ -204,9 +204,7 @@ class TestGeopandasDataSource:
         return create_gdf(
             [
                 Polygon([(0, 0), (1, 0), (1, 1), (0, 1), (0, 0)], {"attr": 10}),
-                Polygon(
-                    [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9), (0.1, 0.1)], {"attr": 11}
-                ),
+                Polygon([(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9), (0.1, 0.1)], {"attr": 11}),
             ]
         )
 
@@ -344,7 +342,7 @@ class TestGeopandasDataSource:
         result = source.get_attribute("attr")
         # Compare values, treating None and NaN as equivalent for undefined values
         assert len(result) == len(expected)
-        for r, e in zip(result, expected):
+        for r, e in zip(result, expected, strict=False):
             if e is None:
                 assert r is None or (isinstance(r, float) and np.isnan(r))
             elif isinstance(e, float) and np.isnan(e):
@@ -1088,7 +1086,6 @@ class TestIDLinking:
     @pytest.fixture
     def prepare_dataset(self, sources):
         def _prepare_dataset(config):
-
             return DatasetCreator(
                 [
                     AttributeDataLoading,
@@ -1146,7 +1143,7 @@ class TestIDLinking:
         result = op(dataset, sources=sources)
         node_refs = result["data"]["multi_ref"]["node_refs"]
         for i, (items, exp_len) in enumerate(
-            zip(result["data"]["multi_ref"]["node_ids"], [0, 1, 2])
+            zip(result["data"]["multi_ref"]["node_ids"], [0, 1, 2], strict=False)
         ):
             assert len(items) == exp_len
             for j, node_id in enumerate(items):

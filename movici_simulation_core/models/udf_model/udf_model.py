@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import typing as t
 
 import numpy as np
 
@@ -22,8 +21,8 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class UDFModel(TrackedModel, name="udf"):
-    inputs: t.Dict[str, AttributeObject]
-    udfs: t.List[UDF]
+    inputs: dict[str, AttributeObject]
+    udfs: list[UDF]
 
     def __init__(self, model_config: dict):
         model_config = ensure_valid_config(
@@ -78,7 +77,7 @@ class UDF:
         self.func = func
         self.output = output_attr
 
-    def run(self, inputs: t.Dict[str, AttributeObject]):
+    def run(self, inputs: dict[str, AttributeObject]):
         result = self.func(
             {k: (v.array if isinstance(v, UniformAttribute) else v.csr) for k, v in inputs.items()}
         )
@@ -102,7 +101,7 @@ def get_input_attributes(config: dict, schema: AttributeSchema, state: TrackedSt
     }
 
 
-def prepare_optional_attributes(config, inputs: t.Dict[str, AttributeObject]):
+def prepare_optional_attributes(config, inputs: dict[str, AttributeObject]):
     for attr in config.get("optional", []):
         inputs[attr].flags &= ~REQUIRED  # unset the REQUIRED bit
 

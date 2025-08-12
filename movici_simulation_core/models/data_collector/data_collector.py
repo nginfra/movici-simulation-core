@@ -4,7 +4,6 @@ import dataclasses
 import itertools
 import logging
 import shutil
-import typing as t
 from pathlib import Path
 
 from movici_simulation_core.base_models.simple_model import SimpleModel
@@ -34,17 +33,17 @@ class UpdateInfo:
     timestamp: int
     iteration: int
     data: dict
-    origin: t.Optional[str] = None
+    origin: str | None = None
 
     def full_data(self):
         return {self.name: self.data}
 
 
 class DataCollector(SimpleModel, name="data_collector"):
-    state: t.Optional[TrackedState] = None
+    state: TrackedState | None = None
     aggregate: bool = False
     strategy: StorageStrategy
-    strategies: t.Dict[str, t.Type[StorageStrategy]] = {}
+    strategies: dict[str, type[StorageStrategy]] = {}
 
     def __init__(self, model_config: dict):
         model_config = ensure_valid_config(
@@ -75,7 +74,7 @@ class DataCollector(SimpleModel, name="data_collector"):
 
     def update(
         self, moment: Moment, data: UpdateData, message: UpdateMessage
-    ) -> t.Tuple[UpdateData, t.Optional[Moment]]:
+    ) -> tuple[UpdateData, Moment | None]:
         if data is None:
             return None, None
         self.state.receive_update(data)
@@ -98,7 +97,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         if trigger:
             self.flush(moment, origin)
 
-    def flush(self, moment: Moment, origin: t.Optional[str]):
+    def flush(self, moment: Moment, origin: str | None):
         for ds, data in self.state.generate_update(SUBSCRIBE).items():
             info = UpdateInfo(
                 name=ds,
@@ -122,7 +121,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         return strategy_cls.choose(model_config=self.config, settings=settings, logger=logger)
 
     @classmethod
-    def add_storage_strategy(cls, name, strategy: t.Type[StorageStrategy]):
+    def add_storage_strategy(cls, name, strategy: type[StorageStrategy]):
         cls.strategies[name] = strategy
 
 

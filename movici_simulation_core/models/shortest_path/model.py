@@ -26,8 +26,8 @@ from movici_simulation_core.validate import ensure_valid_config
 class ShortestPathModel(TrackedModel, name="shortest_path"):
     cost_factor: UniformAttribute
     entity_groups: NetworkEntities
-    network: t.Optional[Network] = None
-    calculators: t.List[NetworkCalculator]
+    network: Network | None = None
+    calculators: list[NetworkCalculator]
     no_update_shortest_path: bool = False
 
     def __init__(self, model_config):
@@ -91,8 +91,7 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
         for calculator in self.calculators:
             calculator.initialize(self.network)
 
-    def update(self, **_) -> t.Optional[Moment]:
-
+    def update(self, **_) -> Moment | None:
         if self.no_update_shortest_path:
             weights = self.cost_factor.array
         else:
@@ -102,9 +101,7 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
         for calculator in self.calculators:
             calculator.update(weights)
 
-    def single_source_entity_resolver(
-        self, entity_id: t.Optional[int], entity_ref: t.Optional[str]
-    ):
+    def single_source_entity_resolver(self, entity_id: int | None, entity_ref: str | None):
         if entity_id is None and entity_ref is None:
             return None
 
@@ -138,11 +135,11 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
 @dataclasses.dataclass
 class NetworkCalculator:
     input_attribute: UniformAttribute
-    output_attribute: t.Union[CSRAttribute, UniformAttribute]
-    single_source_entity_resolver: t.Optional[t.Callable[[], int]] = None
-    network: t.Optional[Network] = None
-    source_entity: t.Optional[int] = dataclasses.field(init=False, default=None)
-    no_path_found: t.Optional[int] = dataclasses.field(init=False, default=None)
+    output_attribute: CSRAttribute | UniformAttribute
+    single_source_entity_resolver: t.Callable[[], int] | None = None
+    network: Network | None = None
+    source_entity: int | None = dataclasses.field(init=False, default=None)
+    no_path_found: int | None = dataclasses.field(init=False, default=None)
 
     def initialize(self, network: Network):
         self.network = network
@@ -197,7 +194,7 @@ class WeightedAverageCalculator(NetworkCalculator):
         self.output_attribute.csr.update_from_matrix(result)
 
 
-CALCULATORS: t.Dict[str, t.Type[NetworkCalculator]] = {
+CALCULATORS: dict[str, type[NetworkCalculator]] = {
     "sum": SumCalculator,
     "weighted_average": WeightedAverageCalculator,
 }

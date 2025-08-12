@@ -10,7 +10,7 @@ The NetCDF Player is essential for integrating:
 
 - Weather and climate data (temperature, precipitation, wind)
 - Environmental conditions (air quality, noise levels)
-- Oceanographic data (sea levels, wave heights, currents) 
+- Oceanographic data (sea levels, wave heights, currents)
 - Atmospheric data (pressure, humidity, visibility)
 - Gridded model outputs from external simulations
 - Satellite observation datasets
@@ -41,16 +41,16 @@ The NetCDF file must adhere to the following specification:
     dimensions:
         time = N_TIMESTAMPS ;
         entity = N_ENTITIES ;
-    
+
     variables:
         float time(time) ;
             time:units = "seconds since simulation start" ;
             time:long_name = "time" ;
-        
+
         float variable1(time, entity) ;
             variable1:units = "appropriate_units" ;
             variable1:long_name = "descriptive name" ;
-        
+
         float variable2(time, entity) ;
             variable2:units = "appropriate_units" ;
 
@@ -58,21 +58,21 @@ Required Components
 ^^^^^^^^^^^^^^^^^^^
 
 1. **Time Variable**:
-   
+
    - Must be named ``time``
    - Contains timestamps as seconds since simulation start (t=0)
    - Must be strictly monotonically increasing
    - Supports both integer and floating-point values
 
 2. **Data Variables**:
-   
+
    - First dimension must match the length of ``time``
    - Second dimension must match the number of target entities
    - Must be 32-bit or 64-bit floating-point data
    - Variable names correspond to ``source`` in configuration
 
 3. **Data Types**:
-   
+
    - Supported: ``float32``, ``float64``
    - Integer types are converted to float during processing
    - Missing values handled via NetCDF ``_FillValue`` or ``missing_value``
@@ -118,7 +118,7 @@ Advanced Configuration
                 "target": "climate.temperature_celsius"
             },
             {
-                "source": "relative_humidity", 
+                "source": "relative_humidity",
                 "target": "climate.humidity_percent"
             },
             {
@@ -201,7 +201,7 @@ The model uses **index-based mapping** rather than ID-based mapping:
 
     # NetCDF data structure
     netcdf_data[variable][time_index, entity_index] -> entity_attribute[entity_index]
-    
+
     # Example: 100 weather stations, 48 hourly timestamps
     # NetCDF shape: temperature(48, 100)
     # Maps to: entity_group with 100 entities
@@ -223,7 +223,7 @@ Reading meteorological data for traffic impact analysis:
 
     {
         "name": "weather_stations",
-        "type": "netcdf_player", 
+        "type": "netcdf_player",
         "netcdf_tape": "hourly_weather_2024",
         "entity_group": ["meteorology", "weather_stations"],
         "attributes": [
@@ -285,7 +285,7 @@ Environmental data for health impact assessment:
                 "target": "air_quality.no2_ugm3"
             },
             {
-                "source": "pm25_concentration", 
+                "source": "pm25_concentration",
                 "target": "air_quality.pm25_ugm3"
             },
             {
@@ -344,7 +344,7 @@ The NetCDF Player uses temporal interpolation to provide data at any simulation 
     def get_interpolated_data(self, current_time):
         # Find nearest time indices
         time_index = np.searchsorted(self.time_values, current_time)
-        
+
         if time_index == 0:
             # Before first timestamp: use first value
             return self.data[:, 0]
@@ -355,7 +355,7 @@ The NetCDF Player uses temporal interpolation to provide data at any simulation 
             # Linear interpolation between adjacent timestamps
             t0, t1 = self.time_values[time_index-1:time_index+1]
             v0, v1 = self.data[:, time_index-1:time_index+1]
-            
+
             weight = (current_time - t0) / (t1 - t0)
             return v0 + weight * (v1 - v0)
 
@@ -396,7 +396,7 @@ Memory Management
 
     # Memory estimation
     memory_mb = (n_timestamps * n_entities * n_variables * 8) / (1024 * 1024)
-    
+
     # Example: 8760 hours, 1000 entities, 5 variables
     # Memory ≈ (8760 * 1000 * 5 * 8) / 1024²  ≈ 334 MB
 
@@ -429,19 +429,19 @@ File Optimization
 
     import netCDF4 as nc
     import numpy as np
-    
+
     # Create optimized NetCDF file
     with nc.Dataset('optimized_data.nc', 'w') as f:
         # Create dimensions
         f.createDimension('time', n_times)
         f.createDimension('entity', n_entities)
-        
+
         # Create time variable
         time_var = f.createVariable('time', 'f8', ('time',))
         time_var[:] = time_values
-        
+
         # Create data variable with chunking
-        data_var = f.createVariable('temperature', 'f4', 
+        data_var = f.createVariable('temperature', 'f4',
                                   ('time', 'entity'),
                                   chunksizes=(24, min(1000, n_entities)),
                                   compression='zlib', complevel=4)
@@ -475,12 +475,12 @@ Data Validation
             # Check required dimensions
             assert 'time' in f.dimensions
             assert len(f.dimensions) >= 2
-            
+
             # Validate time variable
             assert 'time' in f.variables
             time_data = f.variables['time'][:]
             assert np.all(np.diff(time_data) > 0), "Time must be monotonic"
-            
+
             # Check entity dimension size
             entity_dim = [d for d in f.dimensions if d != 'time'][0]
             assert f.dimensions[entity_dim].size == expected_entities
@@ -583,7 +583,7 @@ Multi-File Support
         files = sorted(glob.glob(file_pattern))
         combined_data = []
         combined_time = []
-        
+
         for file in files:
             with nc.Dataset(file) as f:
                 file_time = f.variables['time'][:]
@@ -592,7 +592,7 @@ Multi-File Support
                 if np.any(mask):
                     combined_time.extend(file_time[mask])
                     combined_data.append(f.variables['data'][mask, :])
-        
+
         return np.concatenate(combined_data, axis=0), np.array(combined_time)
 
 Quality Control
@@ -607,11 +607,11 @@ Quality Control
             valid_range = (-50, 60)  # Celsius
         elif variable_name == 'precipitation':
             valid_range = (0, 500)   # mm/h
-        
+
         mask = (data >= valid_range[0]) & (data <= valid_range[1])
         if not np.all(mask):
             warnings.warn(f"Data outside valid range for {variable_name}")
-            
+
         # Missing value detection
         if np.any(np.isnan(data)):
             print(f"Found {np.sum(np.isnan(data))} missing values")

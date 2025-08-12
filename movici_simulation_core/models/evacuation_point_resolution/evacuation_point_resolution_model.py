@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing as t
-
 import numpy as np
 
 from movici_simulation_core import (
@@ -38,7 +36,7 @@ class RoadSegments(EntityGroup):
 class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution"):
     evac_points: EvacuationPoints
     roads: RoadSegments
-    label_mapping: t.Dict[int, int]
+    label_mapping: dict[int, int]
 
     def __init__(self, model_config: dict):
         validate_and_process(model_config, schema=ensure_schema(MODEL_CONFIG_SCHEMA_PATH))
@@ -73,7 +71,7 @@ class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution")
         state: TrackedState,
         schema: AttributeSchema,
         dataset: str,
-        entity_cls: t.Type[EntityGroup],
+        entity_cls: type[EntityGroup],
         config: dict,
         flag: int,
     ):
@@ -109,11 +107,9 @@ class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution")
             target[is_valid] = mapping_func(last_ids[is_valid])
         target[is_special] = target.options.special
 
-    def create_label_mapping(
-        self, road_ids: TrackedCSRArray, labels: np.ndarray
-    ) -> t.Dict[int, int]:
+    def create_label_mapping(self, road_ids: TrackedCSRArray, labels: np.ndarray) -> dict[int, int]:
         self.label_mapping = {}
-        for (idx, label) in enumerate(labels):
+        for idx, label in enumerate(labels):
             roads = road_ids.get_row(idx)
             for road in roads:
                 self.label_mapping[road] = label

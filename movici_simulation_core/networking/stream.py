@@ -21,7 +21,7 @@ class BaseSocket(t.Generic[T]):
         raise NotImplementedError
 
 
-def get_message_socket(socket_type: int, context=None, ident: t.Optional[bytes] = None, **kwargs):
+def get_message_socket(socket_type: int, context=None, ident: bytes | None = None, **kwargs):
     try:
         adapter: t.Callable[[zmq.Socket], MessageSocket] = {
             zmq.REQ: MessageReqSocket,
@@ -123,7 +123,7 @@ class Stream(t.Generic[T]):
     def set_handler(self, handler: t.Callable[[T], None]) -> None:
         self.handler = handler
 
-    def _log(self, level: t.Union[int, str], msg, **kwargs):
+    def _log(self, level: int | str, msg, **kwargs):
         if self.logger is not None:
             if isinstance(level, int):
                 self.logger.log(level, msg, **kwargs)

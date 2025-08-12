@@ -4,7 +4,6 @@ import glob
 import itertools
 import json
 import traceback
-import typing as t
 from pathlib import Path
 
 import click
@@ -15,12 +14,12 @@ from movici_simulation_core.core.utils import configure_global_plugins
 
 class ScenarioConverter(Extensible):
     def __init__(self) -> None:
-        self.model_types: t.Dict[str, t.Type[Model]] = {}
+        self.model_types: dict[str, type[Model]] = {}
 
-    def use(self, plugin: t.Type[Plugin]):
+    def use(self, plugin: type[Plugin]):
         plugin.install(self)
 
-    def register_model_type(self, identifier: str, model_type: t.Type[Model]):
+    def register_model_type(self, identifier: str, model_type: type[Model]):
         self.model_types[identifier] = model_type
 
     def convert(self, scenario: dict, debug=False):
@@ -51,9 +50,7 @@ class ScenarioConverter(Extensible):
         return scenario
 
 
-def convert_scenario_in_place(
-    scenario_file: t.Union[str, Path], converter: ScenarioConverter, debug=False
-):
+def convert_scenario_in_place(scenario_file: str | Path, converter: ScenarioConverter, debug=False):
     click.echo(f"converting scenario {str(scenario_file)}")
     scenario_file = Path(scenario_file)
     scenario = json.loads(scenario_file.read_text())

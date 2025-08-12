@@ -27,7 +27,7 @@ def generated_jit(func=None, **kwargs):
         # we'll create a wrapper that mimics this behavior
         if func is None:
             return lambda f: generated_jit(f, **kwargs)
-        
+
         @functools.wraps(func)
         def wrapper(*args, **kw):
             # Get the types of the arguments
@@ -39,7 +39,7 @@ def generated_jit(func=None, **kwargs):
             jitted_impl = numba.jit(**kwargs)(impl_func)
             # Call the jitted implementation
             return jitted_impl(*args, **kw)
-        
+
         return wrapper
 
 
@@ -60,70 +60,72 @@ def disable_jit():
 
 def configure_numba_performance():
     """Configure Numba for optimal performance.
-    
+
     Call this function early in your application to set optimal Numba configuration
     for the movici-simulation-core workload.
     """
     # Enable parallel execution for supported operations
     os.environ.setdefault("NUMBA_ENABLE_THREADING_LAYER", "1")
-    
+
     # Use optimal cache directory location
     cache_dir = os.environ.get("NUMBA_CACHE_DIR")
     if cache_dir is None:
         # Use a more persistent cache location if available
         import tempfile
+
         cache_dir = os.path.join(tempfile.gettempdir(), "numba_cache", "movici")
         os.environ["NUMBA_CACHE_DIR"] = cache_dir
-    
+
     # Enable debugging info in development
     debug_mode = os.environ.get("MOVICI_DEBUG", "").lower() in ("1", "true", "yes")
     if debug_mode:
         os.environ.setdefault("NUMBA_DEBUG", "1")
         os.environ.setdefault("NUMBA_DEVELOPER_MODE", "1")
-    
+
     # Optimize for scientific computing workloads
     os.environ.setdefault("NUMBA_BOUNDSCHECK", "0")  # Disable bounds checking for performance
-    os.environ.setdefault("NUMBA_FASTMATH", "1")     # Enable fast math optimizations
-    
+    os.environ.setdefault("NUMBA_FASTMATH", "1")  # Enable fast math optimizations
+
     reload_config()
 
 
 # Performance-optimized decorator for hot paths
 def fast_njit(func=None, **kwargs):
     """Numba JIT decorator optimized for performance-critical code paths.
-    
+
     This decorator applies optimal settings for scientific computing workloads
     in movici-simulation-core.
-    
+
     Usage:
         @fast_njit
         def my_function(data):
             return result
-            
+
         # Or with custom options:
         @fast_njit(parallel=True)
         def parallel_function(data):
             return result
     """
     default_kwargs = {
-        'cache': True,           # Always cache compiled functions
-        'fastmath': True,        # Enable fast math optimizations
-        'nogil': True,          # Release GIL for better parallelization
-        'boundscheck': False,   # Disable bounds checking for speed
+        "cache": True,  # Always cache compiled functions
+        "fastmath": True,  # Enable fast math optimizations
+        "nogil": True,  # Release GIL for better parallelization
+        "boundscheck": False,  # Disable bounds checking for speed
     }
-    
+
     # Handle caching gracefully for inline/testing code
     if func is not None:
         try:
             # Check if we can cache this function
             import inspect
+
             filename = inspect.getfile(func)
-            if filename == '<string>' or '<stdin>' in filename:
-                default_kwargs['cache'] = False
+            if filename == "<string>" or "<stdin>" in filename:
+                default_kwargs["cache"] = False
         except (OSError, TypeError):
-            default_kwargs['cache'] = False
+            default_kwargs["cache"] = False
     default_kwargs.update(kwargs)
-    
+
     if func is None:
         # Called with arguments: @fast_njit(parallel=True)
         return lambda f: numba.njit(**default_kwargs)(f)
@@ -141,35 +143,42 @@ def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     # Allow scalar strings to pass through
     a_is_scalar_string = isinstance(a, (types.UnicodeType, types.CharSeq))
     b_is_scalar_string = isinstance(b, (types.UnicodeType, types.CharSeq))
-    
-    if not (type_can_asarray(a) or a_is_scalar_string) or not (type_can_asarray(b) or b_is_scalar_string):
+
+    if not (type_can_asarray(a) or a_is_scalar_string) or not (
+        type_can_asarray(b) or b_is_scalar_string
+    ):
         raise numba.TypingError("Inputs a and b must be array-like.")
 
-    # Check if inputs are string/unicode types  
-    a_type = getattr(a, 'dtype', a) if hasattr(a, 'dtype') else a
-    b_type = getattr(b, 'dtype', b) if hasattr(b, 'dtype') else b
-    
+    # Check if inputs are string/unicode types
+    a_type = getattr(a, "dtype", a) if hasattr(a, "dtype") else a
+    b_type = getattr(b, "dtype", b) if hasattr(b, "dtype") else b
+
     # Debug: print type information
     # print(f"DEBUG: a_type={a_type}, type={type(a_type)}, str={str(a_type)}")
     # print(f"DEBUG: b_type={b_type}, type={type(b_type)}, str={str(b_type)}")
-    
+
     # Better detection for unicode/string types
-    a_is_string = (a_is_scalar_string or
-                   isinstance(a_type, (types.UnicodeType, types.CharSeq)) or 
-                   (hasattr(a_type, '__class__') and 'unicode' in str(a_type.__class__).lower()) or
-                   (hasattr(a_type, 'key') and 'char' in str(a_type.key).lower()) or
-                   'unichar' in str(a_type).lower())
-    
-    b_is_string = (b_is_scalar_string or
-                   isinstance(b_type, (types.UnicodeType, types.CharSeq)) or 
-                   (hasattr(b_type, '__class__') and 'unicode' in str(b_type.__class__).lower()) or
-                   (hasattr(b_type, 'key') and 'char' in str(b_type.key).lower()) or
-                   'unichar' in str(b_type).lower())
-    
+    a_is_string = (
+        a_is_scalar_string
+        or isinstance(a_type, (types.UnicodeType, types.CharSeq))
+        or (hasattr(a_type, "__class__") and "unicode" in str(a_type.__class__).lower())
+        or (hasattr(a_type, "key") and "char" in str(a_type.key).lower())
+        or "unichar" in str(a_type).lower()
+    )
+
+    b_is_string = (
+        b_is_scalar_string
+        or isinstance(b_type, (types.UnicodeType, types.CharSeq))
+        or (hasattr(b_type, "__class__") and "unicode" in str(b_type.__class__).lower())
+        or (hasattr(b_type, "key") and "char" in str(b_type.key).lower())
+        or "unichar" in str(b_type).lower()
+    )
+
     if a_is_string or b_is_string:
         # String comparison - only equality makes sense
         def string_impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
             return a == b
+
         return string_impl
 
     if (

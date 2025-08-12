@@ -61,8 +61,8 @@ class Stopwatch:
 class ReportingStopwatch(Stopwatch):
     def __init__(
         self,
-        on_stop: t.Optional[t.Callable[[float], None]] = None,
-        on_reset: t.Optional[t.Callable[[float], None]] = None,
+        on_stop: t.Callable[[float], None] | None = None,
+        on_reset: t.Callable[[float], None] | None = None,
         now_func: t.Callable[[], float] = time.monotonic,
         ignore_errors=False,
     ):

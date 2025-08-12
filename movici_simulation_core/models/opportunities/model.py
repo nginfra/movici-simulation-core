@@ -22,11 +22,11 @@ class Model(TrackedModel, name="opportunity"):
     If only the overlap was active, the opportunity was missed.
     """
 
-    overlap_entity: t.Optional[OverlapEntity]
-    opportunity_entity: t.Optional[LineEntity]
-    opportunity_taken_attribute: t.Optional[UniformAttribute]
-    total_length_attribute: t.Optional[UniformAttribute]
-    cost_per_meter: t.Optional[float]
+    overlap_entity: OverlapEntity | None
+    opportunity_entity: LineEntity | None
+    opportunity_taken_attribute: UniformAttribute | None
+    total_length_attribute: UniformAttribute | None
+    cost_per_meter: float | None
 
     def __init__(self, model_config: dict):
         super().__init__(model_config)

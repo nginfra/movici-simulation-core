@@ -1,4 +1,3 @@
-import typing as t
 from unittest.mock import MagicMock, Mock, call
 
 import pytest
@@ -31,7 +30,7 @@ def model():
 
 @pytest.fixture
 def set_messages(model, socket, serialize_message):
-    def _create(messages: t.List[Message]):
+    def _create(messages: list[Message]):
         serialized = [serialize_message(message) for message in messages]
         socket.set_messages(*serialized)
 

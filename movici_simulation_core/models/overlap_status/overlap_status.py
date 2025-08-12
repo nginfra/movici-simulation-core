@@ -29,11 +29,11 @@ class OverlapStatus:
         self,
         from_entity: GeometryEntity,
         from_check_attribute: Attribute,
-        to_entities: t.List[GeometryEntity],
-        to_check_attributes: t.List[Attribute],
+        to_entities: list[GeometryEntity],
+        to_check_attributes: list[Attribute],
         overlap_entity: OverlapEntity,
         distance_threshold: float,
-        display_name_template: t.Optional[str],
+        display_name_template: str | None,
     ) -> None:
         self._from_entity = from_entity
         self._from_check_attribute = from_check_attribute
@@ -46,7 +46,7 @@ class OverlapStatus:
         else:
             self.display_name_template = self.default_display_name_template
 
-        self._connections: t.Optional[t.List[Connections]] = None
+        self._connections: list[Connections] | None = None
         self._next_overlap_index: int = 0
 
     def is_ready(self) -> bool:
@@ -100,7 +100,6 @@ class OverlapStatus:
         overlap_active: np.ndarray,
         overlap_entity: OverlapEntity,
     ) -> None:
-
         new_overlaps = np.where(overlap_active)[0]
         if new_overlaps.size == 0:
             return
@@ -136,9 +135,7 @@ class OverlapStatus:
         overlap_entity.display_name[new_overlap_indices] = display_name
         overlap_entity.connection_from_reference[new_overlap_indices] = from_reference
         overlap_entity.connection_to_reference[new_overlap_indices] = to_reference
-        overlap_entity.connection_from_dataset[
-            new_overlap_indices
-        ] = from_entity.state.dataset_name
+        overlap_entity.connection_from_dataset[new_overlap_indices] = from_entity.state.dataset_name
         overlap_entity.connection_to_dataset[new_overlap_indices] = to_entity.state.dataset_name
 
         overlap_entity.connection_from_id[new_overlap_indices] = from_ids
@@ -162,7 +159,9 @@ class OverlapStatus:
         overlap_indices: np.ndarray,
         overlap_entity: OverlapEntity,
     ):
-        for from_index, to_index, overlap_index in zip(from_indices, to_indices, overlap_indices):
+        for from_index, to_index, overlap_index in zip(
+            from_indices, to_indices, overlap_indices, strict=False
+        ):
             x, y = self._calculate_overlap_point(
                 from_entity,
                 from_index,
@@ -179,8 +178,7 @@ class OverlapStatus:
         from_index: int,
         to_entity: GeometryEntity,
         to_index: int,
-    ) -> t.Tuple[float, float]:
-
+    ) -> tuple[float, float]:
         from_geometry = from_entity.get_single_geometry(from_index)
         to_geometry = to_entity.get_single_geometry(to_index)
 
@@ -189,7 +187,7 @@ class OverlapStatus:
 
     def _publish_active_overlaps(self):
         for to_attr, to_entity, connections in zip(
-            self._to_check_attribute, self._to_entities, self._connections
+            self._to_check_attribute, self._to_entities, self._connections, strict=False
         ):
             self._publish_active_overlaps_for_connection(
                 from_entity=self._from_entity,
@@ -203,13 +201,12 @@ class OverlapStatus:
     def _publish_active_overlaps_for_connection(
         self,
         from_entity: GeometryEntity,
-        from_check_attribute: t.Optional[Attribute],
+        from_check_attribute: Attribute | None,
         to_entity: GeometryEntity,
-        to_check_attribute: t.Optional[Attribute],
+        to_check_attribute: Attribute | None,
         connections: Connections,
         overlap_entity: OverlapEntity,
     ) -> None:
-
         overlap_undefined_value = overlap_entity.overlap_active.data_type.undefined
 
         overlap_active = self._calculate_active_overlaps(
@@ -240,9 +237,9 @@ class OverlapStatus:
 
     @staticmethod
     def _calculate_active_overlaps(
-        from_active_status: t.Optional[UniformAttribute],
+        from_active_status: UniformAttribute | None,
         connection_from_indices: np.ndarray,
-        to_active_status: t.Optional[UniformAttribute],
+        to_active_status: UniformAttribute | None,
         connection_to_indices: np.ndarray,
         undefined_value: int,
     ) -> np.ndarray:
@@ -290,7 +287,9 @@ class OverlapStatus:
                     to_reference=tr,
                     to_id=ti,
                 )
-                for fr, tr, fi, ti in zip(from_reference, to_reference, from_id, to_id)
+                for fr, tr, fi, ti in zip(
+                    from_reference, to_reference, from_id, to_id, strict=False
+                )
             ],
             dtype=str,
         )

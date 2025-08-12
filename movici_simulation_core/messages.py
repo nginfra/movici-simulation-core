@@ -23,14 +23,14 @@ class Message:
 
 @dataclasses.dataclass
 class RegistrationMessage(Message):
-    pub: t.Optional[dict]
-    sub: t.Optional[dict]
+    pub: dict | None
+    sub: dict | None
 
 
 class BaseUpdateMessage:
-    key: t.Optional[str]
-    address: t.Optional[str]
-    origin: t.Optional[str]
+    key: str | None
+    address: str | None
+    origin: str | None
 
     def __post_init__(self):
         if (self.key is None) ^ (self.address is None):
@@ -44,14 +44,14 @@ class BaseUpdateMessage:
 @dataclasses.dataclass
 class UpdateMessage(Message, BaseUpdateMessage):
     timestamp: int
-    key: t.Optional[str] = None
-    address: t.Optional[str] = None
-    origin: t.Optional[str] = None
+    key: str | None = None
+    address: str | None = None
+    origin: str | None = None
 
 
 @dataclasses.dataclass
 class UpdateSeriesMessage(Message):
-    updates: t.List[UpdateMessage]
+    updates: list[UpdateMessage]
 
     @property
     def timestamp(self):
@@ -76,7 +76,7 @@ class UpdateSeriesMessage(Message):
 
 @dataclasses.dataclass
 class PathMessage(Message):
-    path: t.Optional[Path]
+    path: Path | None
 
     @classmethod
     def from_bytes(cls, raw_message: MultipartMessage) -> Message:
@@ -96,10 +96,10 @@ class PathMessage(Message):
 class ResultMessage(Message, BaseUpdateMessage):
     """Response to an UpdateMessage"""
 
-    key: t.Optional[str] = None
-    address: t.Optional[str] = None
-    next_time: t.Optional[int] = None
-    origin: t.Optional[str] = None
+    key: str | None = None
+    address: str | None = None
+    next_time: int | None = None
+    origin: str | None = None
 
 
 @dataclasses.dataclass
@@ -122,7 +122,7 @@ class QuitMessage(Message):
 @dataclasses.dataclass
 class GetDataMessage(Message):
     key: str
-    mask: t.Optional[dict] = None
+    mask: dict | None = None
 
 
 @dataclasses.dataclass
@@ -166,7 +166,7 @@ class DataMessage(Message):
 
 @dataclasses.dataclass
 class ErrorMessage(Message):
-    error: t.Optional[str] = None
+    error: str | None = None
 
 
 MESSAGE_TYPES = {
@@ -198,4 +198,4 @@ def dump_message(message: Message) -> TypedMultipartMessage:
 
 
 TypedMultipartMessage = MultipartMessage = t.Sequence[bytes]
-ModelMessage = t.Tuple[str, Message]
+ModelMessage = tuple[str, Message]

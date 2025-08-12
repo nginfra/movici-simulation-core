@@ -38,9 +38,7 @@ Transport_PassengerCarUnit = AttributeSpec(
 Transport_PassengerDemand = AttributeSpec(
     "transport.passenger_demand", data_type=DataType(float, csr=True)
 )
-Transport_CargoDemand = AttributeSpec(
-    "transport.cargo_demand", data_type=DataType(float, csr=True)
-)
+Transport_CargoDemand = AttributeSpec("transport.cargo_demand", data_type=DataType(float, csr=True))
 Transport_CargoAllowed = AttributeSpec("transport.cargo_allowed", data_type=bool)
 Transport_AdditionalTime = AttributeSpec("transport.additional_time", data_type=DataType(float))
 Transport_PassengerVehicleFrequency = AttributeSpec(

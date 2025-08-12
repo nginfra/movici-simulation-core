@@ -1,12 +1,12 @@
 
 
-core 
+core
 =====
 
 
 
 
-arrays 
+arrays
 -------
 
 .. automodule:: movici_simulation_core.core.arrays
@@ -16,7 +16,7 @@ arrays
 
 
 
-attribute 
+attribute
 ----------
 
 .. automodule:: movici_simulation_core.core.attribute
@@ -26,7 +26,7 @@ attribute
 
 
 
-attribute\_spec 
+attribute\_spec
 ----------------
 
 .. automodule:: movici_simulation_core.core.attribute_spec
@@ -36,7 +36,7 @@ attribute\_spec
 
 
 
-data\_format 
+data\_format
 -------------
 
 .. automodule:: movici_simulation_core.core.data_format
@@ -46,7 +46,7 @@ data\_format
 
 
 
-data\_type 
+data\_type
 -----------
 
 .. automodule:: movici_simulation_core.core.data_type
@@ -56,7 +56,7 @@ data\_type
 
 
 
-entity\_group 
+entity\_group
 --------------
 
 .. automodule:: movici_simulation_core.core.entity_group
@@ -66,7 +66,7 @@ entity\_group
 
 
 
-index 
+index
 ------
 
 .. automodule:: movici_simulation_core.core.index
@@ -76,7 +76,7 @@ index
 
 
 
-moment 
+moment
 -------
 
 .. automodule:: movici_simulation_core.core.moment
@@ -86,7 +86,7 @@ moment
 
 
 
-numba\_extensions 
+numba\_extensions
 ------------------
 
 .. automodule:: movici_simulation_core.core.numba_extensions
@@ -96,7 +96,7 @@ numba\_extensions
 
 
 
-schema 
+schema
 -------
 
 .. automodule:: movici_simulation_core.core.schema
@@ -106,7 +106,7 @@ schema
 
 
 
-serialization 
+serialization
 --------------
 
 .. automodule:: movici_simulation_core.core.serialization
@@ -116,7 +116,7 @@ serialization
 
 
 
-state 
+state
 ------
 
 .. automodule:: movici_simulation_core.core.state
@@ -126,7 +126,7 @@ state
 
 
 
-types 
+types
 ------
 
 .. automodule:: movici_simulation_core.core.types
@@ -136,7 +136,7 @@ types
 
 
 
-utils 
+utils
 ------
 
 .. automodule:: movici_simulation_core.core.utils

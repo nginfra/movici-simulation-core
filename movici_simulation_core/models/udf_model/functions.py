@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 
 from movici_simulation_core.core.arrays import TrackedCSRArray
@@ -104,9 +102,7 @@ def _extreme_func(arrays_or_values, row_wise_csr, row_wise_uniform, reduce_func)
     return result
 
 
-def _extreme_func_csr(
-    csr_array: TrackedCSRArray, other: t.Union[np.ndarray, float, int], extreme_func
-):
+def _extreme_func_csr(csr_array: TrackedCSRArray, other: np.ndarray | float | int, extreme_func):
     if isinstance(other, np.ndarray):
         data = csr_binop(csr_array.data, csr_array.row_ptr, other, extreme_func)
     else:
@@ -115,15 +111,15 @@ def _extreme_func_csr(
 
 
 def _extreme_func_uniform(
-    array: np.ndarray, other: t.Union[np.ndarray, TrackedCSRArray, float, int], extreme_func
+    array: np.ndarray, other: np.ndarray | TrackedCSRArray | float | int, extreme_func
 ):
     return extreme_func(array, other)
 
 
 @func("default")
 def default_func(
-    arr: t.Union[TrackedCSRArray, np.ndarray],
-    default_val: t.Union[float, TrackedCSRArray, np.ndarray],
+    arr: TrackedCSRArray | np.ndarray,
+    default_val: float | TrackedCSRArray | np.ndarray,
 ):
     if isinstance(arr, np.ndarray):
         if isinstance(default_val, TrackedCSRArray):

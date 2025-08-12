@@ -162,6 +162,7 @@ def test_valid_movici_types(do_validate_and_process, entry):
             [MoviciDataRefInfo("$.component_attribute[1]", "attribute", "some_attribute")],
             [MoviciDataRefInfo("$.anyof_field", "attribute", "some_attribute")],
         ],
+        strict=False,
     ),
 )
 def test_movici_type_path(do_validate_and_process, entry, expected):
@@ -203,6 +204,7 @@ json_paths = [
             (0,),
             ("some", 1, "complex", "path", 0),
         ],
+        strict=False,
     ),
 )
 def test_parse_json_path(jsonpath, path):

@@ -24,7 +24,7 @@ from .aggregators import AttributeAggregator, functions
 
 
 class AggregatorConfig(t.TypedDict):
-    source_entity_group: t.Tuple[str, str]
+    source_entity_group: tuple[str, str]
     source_attribute: str
     target_attribute: str
     function: str
@@ -34,11 +34,11 @@ class AggregatorConfig(t.TypedDict):
 class Model(TrackedModel, name="area_aggregation"):
     """Implementation of the area aggregation model"""
 
-    output_interval: t.Optional[int]
-    aggregators: t.List[AttributeAggregator]
-    target_entity: t.Optional[t.Union[PolygonEntity, EntityGroup]]
-    src_entities: t.List[t.Union[GeometryEntity, EntityGroup]]
-    previous_timestamp: t.Optional[Moment]
+    output_interval: int | None
+    aggregators: list[AttributeAggregator]
+    target_entity: PolygonEntity | EntityGroup | None
+    src_entities: list[GeometryEntity | EntityGroup]
+    previous_timestamp: Moment | None
 
     def __init__(self, config):
         config = ensure_valid_config(
@@ -60,7 +60,7 @@ class Model(TrackedModel, name="area_aggregation"):
         config = self.config
         self.parse_config(state, config, schema)
 
-    def parse_config(self, state: TrackedState, config: t.Dict, schema: AttributeSchema):
+    def parse_config(self, state: TrackedState, config: dict, schema: AttributeSchema):
         self.output_interval = config.get("output_interval")
         self.add_aggregators(
             state=state,
@@ -73,7 +73,7 @@ class Model(TrackedModel, name="area_aggregation"):
         self,
         state: TrackedState,
         target_entity,
-        aggregators: t.List[AggregatorConfig],
+        aggregators: list[AggregatorConfig],
         schema: AttributeSchema,
     ):
         target_ds_name, target_entity_name = target_entity
@@ -149,7 +149,7 @@ class Model(TrackedModel, name="area_aggregation"):
 
             weights[src_entity] = self.calculate_weights(mapping, len(src_entity))
 
-        for aggregator, src_entity in zip(self.aggregators, self.src_entities):
+        for aggregator, src_entity in zip(self.aggregators, self.src_entities, strict=False):
             aggregator.add_mapping(mappings[src_entity])
             aggregator.set_weights(weights[src_entity])
 
@@ -160,7 +160,7 @@ class Model(TrackedModel, name="area_aggregation"):
         rv[indices] = 1.0 / counts
         return rv
 
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         dt = 0
         if self.previous_timestamp:
             dt = moment.seconds - self.previous_timestamp.seconds

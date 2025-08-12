@@ -328,7 +328,7 @@ Modeling congestion charge impacts:
     # Base demand: 1000 trips
     # Congestion charge: $10 (50% increase)
     # Elasticity: -0.5
-    
+
     # Calculation:
     # Demand change = 1 + (-0.5 * 0.5) = 0.75
     # New demand = 1000 * 0.75 = 750 trips
@@ -389,49 +389,49 @@ Algorithm Details
 The demand calculation process:
 
 1. **Parameter Loading**:
-   
+
    .. code-block:: python
-   
+
        # Load scenario parameters from CSV
        parameters = load_csv_parameters(parameter_dataset)
-       
+
        # Calculate parameter changes
        for param_name, base_value in parameters.items():
            change_factor = (new_value - base_value) / base_value
 
 2. **Global Effect Calculation**:
-   
+
    .. code-block:: python
-   
+
        global_multiplier = 1.0
        for param, elasticity in global_parameters.items():
            change = get_parameter_change(param)
            global_multiplier *= (1 + elasticity * change)
 
 3. **Local Effect Mapping**:
-   
+
    .. code-block:: python
-   
+
        # For each OD pair
        for origin, destination in od_pairs:
            local_multiplier = 1.0
-           
+
            # Nearest geometry mapping
            if geometry_type == "nearest":
                affected_zone = find_nearest(origin, local_geometries)
                local_effect = get_local_effect(affected_zone)
-           
+
            # Route-based mapping
            elif geometry_type == "route":
                route = get_route(origin, destination)
                local_effect = aggregate_route_effects(route)
-           
+
            local_multiplier *= (1 + elasticity * local_effect)
 
 4. **Demand Update**:
-   
+
    .. code-block:: python
-   
+
        new_demand = base_demand * global_multiplier * local_multiplier * investment_multiplier
 
 Performance Considerations
@@ -568,7 +568,7 @@ Cross-Elasticity Effects
         ("car", "bike"): 0.1,
         ("transit", "bike"): 0.2
     }
-    
+
     def apply_cross_elasticity(demands, price_changes):
         for mode_from, mode_to in cross_elasticity_matrix:
             elasticity = cross_elasticity_matrix[(mode_from, mode_to)]

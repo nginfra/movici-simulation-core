@@ -6,9 +6,9 @@ import numpy as np
 Timestamp = int
 NextTime = t.Optional[int]
 RawUpdateData = t.Optional[bytes]
-RawResult = t.Tuple[RawUpdateData, NextTime]
+RawResult = tuple[RawUpdateData, NextTime]
 UpdateData = t.Optional[dict]
-Result = t.Tuple[UpdateData, NextTime]
+Result = tuple[UpdateData, NextTime]
 
 
 class UniformAttributeData(t.TypedDict):
@@ -17,21 +17,21 @@ class UniformAttributeData(t.TypedDict):
 
 class CSRAttributeData(t.TypedDict, total=False):
     data: np.ndarray
-    ind_ptr: t.Optional[np.ndarray]
-    indptr: t.Optional[np.ndarray]
-    row_ptr: t.Optional[np.ndarray]
+    ind_ptr: np.ndarray | None
+    indptr: np.ndarray | None
+    row_ptr: np.ndarray | None
 
 
 NumpyAttributeData = t.Union[UniformAttributeData, CSRAttributeData]
-EntityData = t.Dict[str, NumpyAttributeData]
-DatasetData = t.Dict[str, EntityData]
+EntityData = dict[str, NumpyAttributeData]
+DatasetData = dict[str, EntityData]
 
 ValueType = t.Union[int, float, bool, str]
 
 
 class DataMask(t.TypedDict):
-    pub: t.Optional[dict]
-    sub: t.Optional[dict]
+    pub: dict | None
+    sub: dict | None
 
 
 class FileType(enum.Enum):

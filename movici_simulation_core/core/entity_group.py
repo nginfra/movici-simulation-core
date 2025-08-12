@@ -13,8 +13,8 @@ from .index import Index
 
 class EntityGroup:
     state: state_.StateProxy = None
-    attributes: t.Dict[str, attribute.AttributeField] = {}
-    __entity_name__: t.Optional[str] = None
+    attributes: dict[str, attribute.AttributeField] = {}
+    __entity_name__: str | None = None
 
     def __init__(self, name: str = None):
         if name is not None:
@@ -67,7 +67,7 @@ class EntityGroup:
         return self.state.register_attribute(spec, flags, rtol, atol)
 
     @classmethod
-    def all_attributes(cls) -> t.Dict[str, attribute.AttributeField]:
+    def all_attributes(cls) -> dict[str, attribute.AttributeField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
         return dict(itertools.chain.from_iterable(b.attributes.items() for b in reversed(bases)))
 

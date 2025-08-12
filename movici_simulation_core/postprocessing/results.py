@@ -43,7 +43,7 @@ class SimulationResults:
         init_data_dir: Path,
         updates_dir: Path,
         update_pattern=r"t(?P<timestamp>\d+)_(?P<iteration>\d+)_(?P<dataset>\w+)\.json",
-        attributes: t.Union[AttributeSchema, t.Sequence[AttributeSpec]] = (),
+        attributes: AttributeSchema | t.Sequence[AttributeSpec] = (),
         timeline_info: TimelineInfo = None,
     ):
         self.update_pattern = update_pattern
@@ -53,8 +53,8 @@ class SimulationResults:
             attributes if isinstance(attributes, AttributeSchema) else AttributeSchema(attributes)
         )
         self.data_reader = EntityInitDataFormat(self.schema)
-        self.datasets: t.Dict[str, Path] = self._build_init_data_index()
-        self.updates: t.Dict[str, t.List[UpdateFile]] = self._build_updates_index()
+        self.datasets: dict[str, Path] = self._build_init_data_index()
+        self.updates: dict[str, list[UpdateFile]] = self._build_updates_index()
         self.timeline_info = timeline_info
 
     def get_dataset(self, name):
@@ -96,8 +96,8 @@ class ResultDataset:
     def __init__(
         self,
         init_data: dict,
-        updates: t.Iterable[t.Dict],
-        timeline_info: t.Optional[TimelineInfo] = None,
+        updates: t.Iterable[dict],
+        timeline_info: TimelineInfo | None = None,
     ):
         self.name = (
             init_data.get("name", None)
@@ -118,8 +118,8 @@ class ResultDataset:
     def slice(
         self,
         entity_group,
-        timestamp: t.Union[int, str, datetime.datetime, None] = None,
-        attribute: t.Optional[str] = None,
+        timestamp: int | str | datetime.datetime | None = None,
+        attribute: str | None = None,
         entity_selector=None,
         key="id",  # attribute to check `entity_id` for, for example 'id' or 'reference'
     ):
@@ -140,7 +140,7 @@ class ResultDataset:
 
     @staticmethod
     def get_slicing_strategy(**kwargs):
-        strategies: t.Dict[t.Type[SlicingStrategy], t.Tuple[str]] = {
+        strategies: dict[type[SlicingStrategy], tuple[str]] = {
             SingleTimestampSlicingStrategy: ("timestamp",),
             SingleEntitySlicingStrategy: ("entity_selector", "key"),
             SingleAttributeSlicingStrategy: ("attribute",),
@@ -160,14 +160,14 @@ class ResultDataset:
 class TimeProgressingState(TrackedState):
     def __init__(self, logger=None):
         super().__init__(logger, track_unknown=OPT)
-        self.streams: t.Dict[(str, str), UpdateStream] = {}
+        self.streams: dict[(str, str), UpdateStream] = {}
         self.last_timestamp = None
 
-    def add_init_data(self, init_data: t.Dict):
+    def add_init_data(self, init_data: dict):
         self.receive_update(init_data)
         self.last_timestamp = -1
 
-    def add_updates_to_timeline(self, updates: t.Iterable[t.Dict]):
+    def add_updates_to_timeline(self, updates: t.Iterable[dict]):
         sorted_updates = sorted(updates, key=lambda u: (u.get("timestamp"), u.get("iteration")))
         merged_updates = self._merge_updates_at_equal_timestamp(sorted_updates)
         for update in merged_updates:
@@ -177,7 +177,7 @@ class TimeProgressingState(TrackedState):
         for stream in self.streams.values():
             self._move_updates_to(stream, timestamp)
 
-    def get_timestamps(self, dataset, entity_group=None) -> t.List[int]:
+    def get_timestamps(self, dataset, entity_group=None) -> list[int]:
         if entity_group is None:
             timestamps = set()
             for (ds, _), stream in self.streams.items():
@@ -192,7 +192,7 @@ class TimeProgressingState(TrackedState):
         return [upd.timestamp for upd in stream]
 
     @staticmethod
-    def _merge_updates_at_equal_timestamp(updates: t.Sequence[t.Dict]):
+    def _merge_updates_at_equal_timestamp(updates: t.Sequence[dict]):
         if not len(updates):
             return []
         rv = [updates[0]]
@@ -206,7 +206,7 @@ class TimeProgressingState(TrackedState):
                 rv.append(upd)
         return rv
 
-    def _add_update_to_timeline(self, update: t.Dict):
+    def _add_update_to_timeline(self, update: dict):
         timestamp = update["timestamp"]
         iteration = update["iteration"]
         if self.last_timestamp is not None and timestamp <= self.last_timestamp:
@@ -285,7 +285,7 @@ class ReversibleUpdate:
     entity_group: str
     indices: np.ndarray
     update: EntityData
-    reverse_update: t.Optional[EntityData] = None
+    reverse_update: EntityData | None = None
     next: ReversibleUpdate = None
     prev: ReversibleUpdate = None
 
@@ -330,8 +330,8 @@ class EndOfStream(ValueError):
 
 
 class UpdateStream:
-    def __init__(self, updates: t.Optional[t.Sequence[ReversibleUpdate]] = None):
-        self.current: t.Optional[ReversibleUpdate] = ReversibleUpdate(
+    def __init__(self, updates: t.Sequence[ReversibleUpdate] | None = None):
+        self.current: ReversibleUpdate | None = ReversibleUpdate(
             -1, -1, "dummy", "dummy", None, None
         )
         self.first = self.current
@@ -387,8 +387,8 @@ class SlicingStrategy:
     @abc.abstractmethod
     def slice(
         self,
-        timestamp: t.Union[int, str, datetime.datetime, None] = None,
-        attribute: t.Optional[str] = None,
+        timestamp: int | str | datetime.datetime | None = None,
+        attribute: str | None = None,
         entity_selector=None,
         key="id",
         **_,
@@ -397,12 +397,12 @@ class SlicingStrategy:
 
 
 class SingleTimestampSlicingStrategy(SlicingStrategy):
-    def slice(self, timestamp: t.Union[int, str, datetime.datetime, None] = None, **_):
+    def slice(self, timestamp: int | str | datetime.datetime | None = None, **_):
         timestamp = self._ensure_discrete_timestamp(timestamp)
         self.state.move_to(timestamp)
         return self.state.to_dict().get(self.dataset, {}).get(self.entity_group)
 
-    def _ensure_discrete_timestamp(self, timestamp: t.Union[int, str, datetime.datetime]):
+    def _ensure_discrete_timestamp(self, timestamp: int | str | datetime.datetime):
         if isinstance(timestamp, int):
             return timestamp
         elif isinstance(timestamp, str):
@@ -417,7 +417,7 @@ class SingleTimestampSlicingStrategy(SlicingStrategy):
 class SingleAttributeSlicingStrategy(SlicingStrategy):
     def slice(
         self,
-        attribute: t.Optional[str] = None,
+        attribute: str | None = None,
         **_,
     ):
         timestamps = []

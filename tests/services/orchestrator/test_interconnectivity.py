@@ -1,10 +1,8 @@
-import typing as t
-
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
 from movici_simulation_core.services.orchestrator.interconnectivity import format_matrix
 
 
-def create_subscribed_models(subscriptions: t.Dict[str, t.List[str]]):
+def create_subscribed_models(subscriptions: dict[str, list[str]]):
     models = ModelCollection(
         {
             model: ConnectedModel(

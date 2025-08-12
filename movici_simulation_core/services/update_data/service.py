@@ -1,5 +1,4 @@
 import logging
-import typing as t
 from functools import singledispatchmethod
 
 from movici_simulation_core.core.types import Service
@@ -25,7 +24,7 @@ class UpdateDataService(Service):
     logger: logging.Logger
 
     def __init__(self):
-        self.store: t.Dict[str, dict] = {}
+        self.store: dict[str, dict] = {}
         self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     @classmethod

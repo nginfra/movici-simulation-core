@@ -51,7 +51,7 @@ The following are excluded from coverage:
 
 ```bash
 make coverage          # Run tests with coverage and summary
-make coverage-report   # Generate reports from existing .coverage file  
+make coverage-report   # Generate reports from existing .coverage file
 make coverage-clean    # Clean coverage files
 make clean            # Clean all build artifacts including coverage
 ```
@@ -85,7 +85,7 @@ open htmlcov/index.html
 
 ### 2. Common Uncovered Code Patterns
 - **Error handling**: Exception paths rarely executed
-- **Edge cases**: Boundary conditions and rare scenarios  
+- **Edge cases**: Boundary conditions and rare scenarios
 - **Abstract methods**: Base class methods meant to be overridden
 - **Configuration code**: Settings and initialization
 - **Integration points**: External service interactions
@@ -122,7 +122,7 @@ def debug_function():  # pragma: no cover
 - Lists missing line numbers
 - Provides branch coverage statistics
 
-### HTML Report  
+### HTML Report
 - Interactive web interface
 - Click on files to see line-by-line coverage
 - Color coding: green (covered), red (missed), yellow (partial)

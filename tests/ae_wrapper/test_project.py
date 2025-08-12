@@ -395,13 +395,10 @@ class TestTrafficAssignment:
     def test_assign_traffic_with_different_parameters(
         self, project: ProjectWrapper, od_passenger, od_cargo, parameters
     ):
-
         results = project.assign_traffic(od_passenger, od_cargo, parameters)
 
         assert np.array_equal(results.ids, [1, 102, 103, 104])
-        assert np.allclose(
-            results.delay_factor, [1.72969568, 1.22497946, 101.50623908, 1.72969523]
-        )
+        assert np.allclose(results.delay_factor, [1.72969568, 1.22497946, 101.50623908, 1.72969523])
 
     def test_assign_traffic_with_links_excluded(self, project: ProjectWrapper):
         od_passenger = np.array([[0, 0, 0], [1, 0, 0], [0, 0, 0]], dtype=float)

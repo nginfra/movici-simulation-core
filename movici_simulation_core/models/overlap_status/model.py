@@ -20,7 +20,7 @@ class Model(TrackedModel, name="overlap_status"):
     Implementation of the overlap status model
     """
 
-    overlap_status: t.Union[OverlapStatus, None] = None
+    overlap_status: OverlapStatus | None = None
 
     def __init__(self, model_config):
         model_config = ensure_valid_config(

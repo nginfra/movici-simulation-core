@@ -104,7 +104,7 @@ class LocalContributor(Contributor):
 class LocalMapper:
     def __init__(self, demand_geometry: Geometry):
         self.geometry = demand_geometry
-        self.mappings: t.Dict[EntityGroup, QueryResult] = ArgDefaultDict(
+        self.mappings: dict[EntityGroup, QueryResult] = ArgDefaultDict(
             lambda e: GeoQuery(e.get_geometry()).nearest_to(demand_geometry)
         )
 

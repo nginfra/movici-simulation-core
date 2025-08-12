@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import typing as t
-
 import netCDF4
 import numpy as np
 
@@ -17,7 +15,7 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class NetCDFPlayer(TrackedModel, name="netcdf_player"):
-    publishers: t.List[Publisher]
+    publishers: list[Publisher]
     netcdf_tape: NetCDFTape
 
     def __init__(self, model_config: dict):
@@ -50,7 +48,7 @@ class NetCDFPlayer(TrackedModel, name="netcdf_player"):
             for param in self.config["attributes"]
         ]
 
-    def update(self, moment: Moment, **_) -> t.Optional[Moment]:
+    def update(self, moment: Moment, **_) -> Moment | None:
         self.netcdf_tape.proceed_to(moment)
         self.publish()
         return self.netcdf_tape.get_next_timestamp()
@@ -89,7 +87,7 @@ def get_netcdf_tape(data_handler: InitDataHandler, name: str) -> NetCDFTape:
 
 
 def get_publish_attribute(
-    attr: str, target_entity_group: t.Tuple[str, str], schema: AttributeSchema, state: TrackedState
+    attr: str, target_entity_group: tuple[str, str], schema: AttributeSchema, state: TrackedState
 ):
     dataset, entity_group = target_entity_group
     return state.register_attribute(
@@ -103,10 +101,10 @@ def get_publish_attribute(
 class NetCDFTape(BaseTapefile):
     time_var = "time"
 
-    def __init__(self, timeline_info: t.Optional[TimelineInfo] = None) -> None:
+    def __init__(self, timeline_info: TimelineInfo | None = None) -> None:
         super().__init__(timeline_info)
-        self.netcdf: t.Optional[netCDF4.Dataset] = None
-        self.data: t.Dict[str, np.ndarray] = {}
+        self.netcdf: netCDF4.Dataset | None = None
+        self.data: dict[str, np.ndarray] = {}
 
     def initialize(self, netcdf: netCDF4.Dataset):
         timeline = np.asarray(netcdf.variables[self.time_var])

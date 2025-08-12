@@ -33,7 +33,7 @@ def convert_data_to_numpy(global_schema):
     return _convert
 
 
-def _get_entity(dataset_name: str, entity_name: str, cls: t.Type[T], state: TrackedState) -> T:
+def _get_entity(dataset_name: str, entity_name: str, cls: type[T], state: TrackedState) -> T:
     return state.register_entity_group(dataset_name, cls(entity_name))
 
 
@@ -228,7 +228,7 @@ def test_resolve_multiple_foreign_connections(
     tws = TimeWindowStatus(source_entity, [target_entity, target_2], timeline_info)
     tws.initialize()
     connected_entity_groups = [
-        set(c.connected_entities for c in source_entity.get_connections(i))
+        {c.connected_entities for c in source_entity.get_connections(i)}
         for i in range(len(source_entity))
     ]
     assert connected_entity_groups == [{target_entity}, {target_2}]
@@ -252,7 +252,7 @@ def test_resolve_self_and_foreign_connection(
     create_target_data({"reference": ["2"]})
     tws = TimeWindowStatus(source_entity, [self_target, target_entity], timeline_info)
     tws.initialize()
-    connected_entity_groups = set(c.connected_entities for c in source_entity.get_connections(0))
+    connected_entity_groups = {c.connected_entities for c in source_entity.get_connections(0)}
     assert connected_entity_groups == {self_target, target_entity}
 
 

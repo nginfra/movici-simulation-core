@@ -309,7 +309,6 @@ class TestRoadLinksChanges:
         road_network_for_traffic,
         road_network_name,
     ):
-
         return [
             {"name": road_network_name, "data": road_network_for_traffic},
         ]
@@ -474,7 +473,6 @@ class TestRoadLinksChanges:
 class BaseTestTrafficAssignmentRailways:
     @pytest.fixture()
     def init_data(self, railway_network_name, railway_network_for_traffic):
-
         return [
             {"name": railway_network_name, "data": railway_network_for_traffic},
         ]

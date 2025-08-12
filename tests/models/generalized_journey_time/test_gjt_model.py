@@ -12,10 +12,7 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.common.network import Network
 from movici_simulation_core.models.generalized_journey_time import MODEL_CONFIG_SCHEMA_PATH
 from movici_simulation_core.models.generalized_journey_time.crowdedness import crowdedness
-from movici_simulation_core.models.generalized_journey_time.gjt_model import (
-    GJTCalculator,
-    GJTModel,
-)
+from movici_simulation_core.models.generalized_journey_time.gjt_model import GJTCalculator, GJTModel
 from movici_simulation_core.testing.model_tester import ModelTester
 from movici_simulation_core.validate import validate_and_process
 

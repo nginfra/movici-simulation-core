@@ -1,12 +1,12 @@
 
 
-shortest\_path 
+shortest\_path
 ===============
 
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.shortest_path.model

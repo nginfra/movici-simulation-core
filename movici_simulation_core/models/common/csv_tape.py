@@ -1,5 +1,3 @@
-import typing as t
-
 import numpy as np
 import pandas as pd
 
@@ -7,7 +5,7 @@ from movici_simulation_core.core.moment import Moment, TimelineInfo, get_timelin
 
 
 class BaseTapefile:
-    def __init__(self, timeline_info: t.Optional[TimelineInfo] = None):
+    def __init__(self, timeline_info: TimelineInfo | None = None):
         self.timeline_info = timeline_info or get_timeline_info()
         self.timeline: np.ndarray = np.empty(0)  # integer timeline
         self.current_time: int = 0
@@ -36,7 +34,7 @@ class BaseTapefile:
     def has_update(self):
         return self.last_pos != self.current_pos
 
-    def get_next_timestamp(self) -> t.Optional[Moment]:
+    def get_next_timestamp(self) -> Moment | None:
         next_pos = self.current_pos + 1
 
         if next_pos >= len(self.timeline):
@@ -49,9 +47,9 @@ class BaseTapefile:
 
 
 class CsvTape(BaseTapefile):
-    def __init__(self, timeline_info: t.Optional[TimelineInfo] = None):
+    def __init__(self, timeline_info: TimelineInfo | None = None):
         super().__init__(timeline_info)
-        self.csv: t.Optional[pd.DataFrame] = None
+        self.csv: pd.DataFrame | None = None
 
     def initialize(self, csv: pd.DataFrame, time_column: str = "seconds"):
         self.csv = csv

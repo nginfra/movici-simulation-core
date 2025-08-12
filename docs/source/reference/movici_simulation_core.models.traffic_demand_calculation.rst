@@ -1,12 +1,12 @@
 
 
-traffic\_demand\_calculation 
+traffic\_demand\_calculation
 =============================
 
 
 
 
-common 
+common
 -------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.common
@@ -16,7 +16,7 @@ common
 
 
 
-global\_contributors 
+global\_contributors
 ---------------------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.global_contributors
@@ -26,7 +26,7 @@ global\_contributors
 
 
 
-local\_contributors 
+local\_contributors
 --------------------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.local_contributors
@@ -36,7 +36,7 @@ local\_contributors
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.model

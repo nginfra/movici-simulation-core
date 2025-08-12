@@ -1,12 +1,12 @@
 
 
-unit\_conversions 
+unit\_conversions
 ==================
 
 
 
 
-attributes 
+attributes
 -----------
 
 .. automodule:: movici_simulation_core.models.unit_conversions.attributes
@@ -16,7 +16,7 @@ attributes
 
 
 
-entities 
+entities
 ---------
 
 .. automodule:: movici_simulation_core.models.unit_conversions.entities
@@ -26,7 +26,7 @@ entities
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.unit_conversions.model

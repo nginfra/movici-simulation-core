@@ -40,7 +40,7 @@ body:
         - "3.8"
         - "3.9"
         - "3.10"
-        - "3.11" 
+        - "3.11"
         - "3.12"
         - Other (please specify in description)
     validations:
@@ -67,7 +67,7 @@ body:
       description: |
         Please provide relevant environment information:
         - movici-simulation-core version
-        - NumPy version  
+        - NumPy version
         - Key dependency versions
         - Any relevant configuration
       placeholder: |
