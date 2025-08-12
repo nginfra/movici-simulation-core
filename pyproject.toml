@@ -21,7 +21,7 @@ maintainers = [
 requires-python = ">=3.10,<3.15"
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research", 
+    "Intended Audience :: Science/Research",
     "Intended Audience :: Developers",
     "License :: Free for non-commercial use",
     "License :: Other/Proprietary License",
@@ -47,29 +47,29 @@ dependencies = [
     "click>=8.0.0",
     "PyYAML>=6.0",
     "typing-extensions>=4.0.0",
-    
+
     # Scientific computing
     "numpy>=1.26.0,<2.0.0",
     "numba>=0.58.0",
     "scipy>=1.9.0",
     "pandas>=1.5.0",
-    
+
     # Geospatial libraries
     "geopandas",
     "pyproj>=3.0.1",
     # Fiona with platform-specific versions for optimal compatibility
     "Fiona>=1.9; sys_platform == 'win32'",
-    "Fiona>=1.8.22; sys_platform == 'linux'", 
+    "Fiona>=1.8.22; sys_platform == 'linux'",
     "Fiona>=1.8.22; sys_platform == 'darwin'",
     "Shapely>=2.0.0",
-    
+
     # Database and serialization
     "h5py>=3.0.0",
     "sqlite-utils>=3.0.0",
-    
+
     # Network analysis
     "networkx>=2.8.0",
-    
+
     # Utilities
     "tqdm>=4.60.0",
     "more-itertools>=9.0.0",
@@ -80,7 +80,7 @@ dependencies = [
 models = [
     # Traffic assignment models
     "aequilibrae>=1.4.0",
-    
+
     # Additional model dependencies
     "netCDF4>=1.6.0",
     "xarray>=2022.0.0",
@@ -91,14 +91,14 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
     "pytest-xdist>=3.6.0",
-    
+
     # Code quality
     "black>=24.8.0",
-    "isort>=5.13.0", 
+    "isort>=5.13.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
     "bandit>=1.7.10",
-    
+
     # Development tools
     "pre-commit>=4.0.0",
     "tox>=4.23.0",
@@ -117,28 +117,28 @@ docs = [
 all = [
     # Traffic assignment models
     "aequilibrae>=1.4.0",
-    
+
     # Additional model dependencies
     "netCDF4>=1.6.0",
     "xarray>=2022.0.0",
-    
+
     # Testing
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.0.0",
-    
+
     # Code quality
     "black>=23.0.0",
     "isort>=5.12.0",
     "ruff>=0.8.0",
     "mypy>=1.0.0",
     "bandit>=1.7.0",
-    
+
     # Development tools
     "pre-commit>=3.0.0",
     "tox>=4.0.0",
     "wheel>=0.40.0",
-    
+
     # Documentation
     "sphinx>=6.0.0",
     "sphinx-rtd-theme>=1.3.0",
@@ -199,29 +199,9 @@ exclude = ["tests*", "docs*", "scripts*", "examples*"]
 [tool.setuptools.dynamic]
 # Can be used for dynamic versioning if needed in future
 
-[tool.black]
-line-length = 100
-target-version = ['py310', 'py311', 'py312', 'py313', 'py314']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-)/
-'''
+# Black configuration removed - using ruff-format instead
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 100
-known_first_party = ["movici_simulation_core"]
+# isort configuration removed - using ruff-format instead
 
 [tool.pytest.ini_options]
 minversion = "8.0"
@@ -254,7 +234,7 @@ error_summary = true
 [[tool.mypy.overrides]]
 module = [
     "geopandas.*",
-    "pyproj.*", 
+    "pyproj.*",
     "fiona.*",
     "shapely.*",
     "aequilibrae.*",
@@ -341,22 +321,22 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-    "UP", # pyupgrade
-    "S",  # bandit
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "S",   # flake8-bandit
 ]
 ignore = [
-    "E501",  # line too long, handled by black
+    "E501",  # line too long, handled by ruff format
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
     "S101",  # use of assert detected
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "S106", "S107", "S108"]
 "__init__.py" = ["F401"]
+"tests/*" = ["S101", "S106", "S107", "S108"]

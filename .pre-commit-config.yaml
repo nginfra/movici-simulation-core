@@ -16,21 +16,7 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
 
-  # Python code formatting
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
-    hooks:
-      - id: black
-        args: [--line-length=100]
-        language_version: python3
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: ['--profile', 'black', '--line-length', '100']
-
-  # Python linting (ruff replaces flake8)
+  # Python linting and formatting (ruff replaces black, flake8, and isort)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.0
     hooks:
