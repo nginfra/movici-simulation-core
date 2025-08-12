@@ -2,7 +2,7 @@ import typing as t
 
 import numpy as np
 
-PointLike = t.Union[t.Tuple[float, float], t.List[float], np.ndarray]
+PointLike = tuple[float, float] | list[float] | np.ndarray
 
 
 class PointGenerator:
@@ -13,7 +13,7 @@ class PointGenerator:
 
     def __init__(self, increment: float = 0.001) -> None:
         self._increment = increment
-        self._points: t.Set[t.Tuple[float, float]] = set()
+        self._points: set[tuple[float, float]] = set()
 
     def add_point(self, point: PointLike) -> None:
         if isinstance(point, np.ndarray):
@@ -23,7 +23,7 @@ class PointGenerator:
 
         self._points.add(point)
 
-    def add_points(self, points: t.Union[t.List[PointLike], np.ndarray]) -> None:
+    def add_points(self, points: list[PointLike] | np.ndarray) -> None:
         if isinstance(points, np.ndarray):
             points = points.tolist()
 

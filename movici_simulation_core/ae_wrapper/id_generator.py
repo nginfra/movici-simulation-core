@@ -28,5 +28,5 @@ class IdGenerator:
             new_ids = np.array(new_ids)
         try:
             return self.index.ids[new_ids - 1]
-        except IndexError:
-            raise ValueError(f"New ids {new_ids} non-existent in index")
+        except IndexError as e:
+            raise ValueError(f"New ids {new_ids} non-existent in index") from e

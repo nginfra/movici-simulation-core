@@ -8,13 +8,11 @@ from aequilibrae import PathResults
 from movici_simulation_core.core import TrackedCSRArray
 from movici_simulation_core.core.attribute import ensure_csr_data
 
-PointCollection = t.Union[t.List[t.List[float]], t.List[np.ndarray], np.ndarray]
-LinestringCollection = t.List[t.List[t.List[float]]]
+PointCollection = list[list[float]] | list[np.ndarray] | np.ndarray
+LinestringCollection = list[list[list[float]]]
 
 
-def _get_numpy_array(
-    sequence: t.Optional[npt.ArrayLike], fill_len: int = 0, fill_value=0
-) -> np.ndarray:
+def _get_numpy_array(sequence: npt.ArrayLike | None, fill_len: int = 0, fill_value=0) -> np.ndarray:
     if sequence is None:
         return np.full(fill_len, fill_value)
     if not isinstance(sequence, np.ndarray):
@@ -26,13 +24,13 @@ def _get_numpy_array(
 class NodeCollection:
     ids: np.ndarray
     is_centroids: np.ndarray
-    geometries: t.Optional[PointCollection]
+    geometries: PointCollection | None
 
     def __init__(
         self,
-        ids: t.Optional[npt.ArrayLike] = None,
-        is_centroids: t.Optional[npt.ArrayLike] = None,
-        geometries: t.Optional[PointCollection] = None,
+        ids: npt.ArrayLike | None = None,
+        is_centroids: npt.ArrayLike | None = None,
+        geometries: PointCollection | None = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.is_centroids = _get_numpy_array(is_centroids, len(self.ids), fill_value=False)
@@ -47,17 +45,17 @@ class LinkCollection:
     directions: np.ndarray
     max_speeds: np.ndarray
     capacities: np.ndarray
-    geometries: t.Optional[TrackedCSRArray]
+    geometries: TrackedCSRArray | None
 
     def __init__(
         self,
-        ids: t.Optional[npt.ArrayLike] = None,
-        from_nodes: t.Optional[npt.ArrayLike] = None,
-        to_nodes: t.Optional[npt.ArrayLike] = None,
-        directions: t.Optional[npt.ArrayLike] = None,
-        max_speeds: t.Optional[npt.ArrayLike] = None,
-        capacities: t.Optional[npt.ArrayLike] = None,
-        geometries: t.Optional[TrackedCSRArray] = None,
+        ids: npt.ArrayLike | None = None,
+        from_nodes: npt.ArrayLike | None = None,
+        to_nodes: npt.ArrayLike | None = None,
+        directions: npt.ArrayLike | None = None,
+        max_speeds: npt.ArrayLike | None = None,
+        capacities: npt.ArrayLike | None = None,
+        geometries: TrackedCSRArray | None = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.from_nodes = _get_numpy_array(from_nodes, len(self.ids))
@@ -80,13 +78,13 @@ class AssignmentResultCollection:
 
     def __init__(
         self,
-        ids: t.Optional[npt.ArrayLike] = None,
-        passenger_flow: t.Optional[npt.ArrayLike] = None,
-        cargo_flow: t.Optional[npt.ArrayLike] = None,
-        congested_time: t.Optional[npt.ArrayLike] = None,
-        delay_factor: t.Optional[npt.ArrayLike] = None,
-        volume_to_capacity: t.Optional[npt.ArrayLike] = None,
-        passenger_car_unit: t.Optional[npt.ArrayLike] = None,
+        ids: npt.ArrayLike | None = None,
+        passenger_flow: npt.ArrayLike | None = None,
+        cargo_flow: npt.ArrayLike | None = None,
+        congested_time: npt.ArrayLike | None = None,
+        delay_factor: npt.ArrayLike | None = None,
+        volume_to_capacity: npt.ArrayLike | None = None,
+        passenger_car_unit: npt.ArrayLike | None = None,
     ):
         self.ids = _get_numpy_array(ids)
         self.passenger_flow = _get_numpy_array(passenger_flow, len(self.ids))

@@ -219,7 +219,7 @@ def test_signal_strength_calculation():
 def test_all():
     test_intialize()
     test_update()
-    test_signal_strength_calculation
+    test_signal_strength_calculation()
 
 
 if __name__ == "__main__":

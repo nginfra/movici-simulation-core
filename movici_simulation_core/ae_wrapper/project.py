@@ -29,7 +29,7 @@ GEOM_ACC = 9
 def _check_spatialite_availability():
     """
     Check if mod_spatialite is available for SQLite.
-    
+
     Raises:
         RuntimeError: If mod_spatialite cannot be loaded with helpful installation instructions
     """
@@ -43,7 +43,7 @@ def _check_spatialite_availability():
                 # Try alternative names for spatialite on different systems
                 try:
                     conn.load_extension("spatialite")
-                except sqlite3.OperationalError:
+                except sqlite3.OperationalError as e:
                     raise RuntimeError(
                         "mod_spatialite extension is not available. "
                         "This is required for traffic assignment calculations.\n\n"
@@ -51,11 +51,11 @@ def _check_spatialite_availability():
                         "- Linux: sudo apt-get install libsqlite3-mod-spatialite\n"
                         "- macOS: brew install spatialite-tools\n"
                         "- Windows: Download spatialite binaries and place in Python DLLs folder\n\n"
-                        "Test installation with: sqlite3 :memory: \".load mod_spatialite\"\n"
+                        'Test installation with: sqlite3 :memory: ".load mod_spatialite"\n'
                         "For more details, see: https://github.com/AequilibraE/aequilibrae/wiki/Installation"
-                    )
+                    ) from e
     except Exception as e:
-        raise RuntimeError(f"Failed to check spatialite availability: {e}")
+        raise RuntimeError(f"Failed to check spatialite availability: {e}") from e
 
 
 class TransportMode:
@@ -84,11 +84,10 @@ class ProjectWrapper:
 
     def __init__(
         self,
-        project_path: t.Union[str, Path, None] = None,
-        project_name: t.Optional[str] = None,
+        project_path: str | Path | None = None,
+        project_name: str | None = None,
         delete_on_close: bool = True,
     ) -> None:
-
         self._delete_on_close = delete_on_close
 
         if project_path is None:
@@ -122,7 +121,7 @@ class ProjectWrapper:
                 # Try alternative name
                 self._db.load_extension("spatialite")
 
-            self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
+            self._node_id_to_point: dict[int, tuple[float, float]] = {}
 
             # Aequilibrae makes assumptions on how ids should look.
             # We don't have these assumptions in model_engine,
@@ -137,13 +136,13 @@ class ProjectWrapper:
     def __enter__(self) -> "ProjectWrapper":
         return self
 
-    def __exit__(self, exc_type: t.Type, exc_val: Exception, exc_tb: TracebackType) -> None:
+    def __exit__(self, exc_type: type, exc_val: Exception, exc_tb: TracebackType) -> None:
         self.close()
 
     def close(self) -> None:
         try:
             # Close our own database connection first
-            if hasattr(self, '_db') and self._db is not None:
+            if hasattr(self, "_db") and self._db is not None:
                 self._db.close()
                 self._db = None
             if self._project is not None:
@@ -154,7 +153,7 @@ class ProjectWrapper:
                 self._project = None
             if self._delete_on_close and self.project_dir.exists():
                 shutil.rmtree(self.project_dir)
-        except IOError:
+        except OSError:
             pass
 
     def add_nodes(self, nodes: NodeCollection) -> None:
@@ -164,7 +163,7 @@ class ProjectWrapper:
         lats, lons = self.transformer.transform(nodes.geometries[:, 0], nodes.geometries[:, 1])
         lats = np.round(lats, decimals=GEOM_ACC)
         lons = np.round(lons, decimals=GEOM_ACC)
-        for node_id, xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
+        for node_id, _xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons, strict=False):
             point_strs.append(f"POINT({lon:.{GEOM_ACC}f} {lat:.{GEOM_ACC}f})")
             self._node_id_to_point[node_id] = (lat, lon)
 
@@ -177,7 +176,7 @@ class ProjectWrapper:
         with closing(self._db.cursor()) as cursor:
             cursor.executemany(
                 sql,
-                zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
+                zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs, strict=False),
             )
 
             self._db.commit()
@@ -188,7 +187,7 @@ class ProjectWrapper:
             results = cursor.fetchall()
         if not results:
             return NodeCollection()
-        node_id, is_centroids = zip(*results)
+        node_id, is_centroids = zip(*results, strict=False)
         node_id = self._node_id_generator.query_original_ids(node_id)
         return NodeCollection(ids=node_id, is_centroids=is_centroids)
 
@@ -206,14 +205,14 @@ class ProjectWrapper:
         linestring_strs = []
         geometries = np.round(
             np.column_stack(
-                self.transformer.transform(
-                    links.geometries.data[:, 0], links.geometries.data[:, 1]
-                )
+                self.transformer.transform(links.geometries.data[:, 0], links.geometries.data[:, 1])
             ),
             decimals=GEOM_ACC,
         )
 
-        for row_idx, (from_node, to_node) in enumerate(zip(new_from_nodes, new_to_nodes)):
+        for row_idx, (from_node, to_node) in enumerate(
+            zip(new_from_nodes, new_to_nodes, strict=False)
+        ):
             row = get_row(geometries, links.geometries.row_ptr, row_idx)
             linestring_strs.append(
                 self._get_linestring_string(row, from_node, to_node, raise_on_geometry_mismatch)
@@ -244,6 +243,7 @@ class ProjectWrapper:
                     capacities,
                     capacities,
                     linestring_strs,
+                    strict=False,
                 ),
             )
 
@@ -255,14 +255,12 @@ class ProjectWrapper:
             results = cursor.fetchall()
         if not results:
             return LinkCollection()
-        link_id, a_node, b_node, direction = zip(*results)
+        link_id, a_node, b_node, direction = zip(*results, strict=False)
         direction = np.array(direction)
         link_id = self._link_id_generator.query_original_ids(link_id)
         a_node = self._node_id_generator.query_original_ids(a_node)
         b_node = self._node_id_generator.query_original_ids(b_node)
-        return LinkCollection(
-            ids=link_id, from_nodes=a_node, to_nodes=b_node, directions=direction
-        )
+        return LinkCollection(ids=link_id, from_nodes=a_node, to_nodes=b_node, directions=direction)
 
     def _get_linestring_string(
         self,
@@ -312,7 +310,7 @@ class ProjectWrapper:
 
         return np.array(free_flow_times)
 
-    def add_column(self, column_name: str, values: t.Optional[t.Sequence] = None) -> None:
+    def add_column(self, column_name: str, values: t.Sequence | None = None) -> None:
         with closing(self._db.cursor()) as cursor:
             cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
 
@@ -328,7 +326,8 @@ class ProjectWrapper:
                 values = values.tolist()
 
             cursor.executemany(
-                f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
+                f"UPDATE links SET {column_name}=? WHERE link_id=?",
+                zip(values, ids, strict=False),  # nosec
             )
 
             self._db.commit()
@@ -384,7 +383,7 @@ class ProjectWrapper:
         self,
         od_matrix_passenger: np.ndarray,
         od_matrix_cargo: np.ndarray,
-        parameters: t.Optional[AssignmentParameters] = None,
+        parameters: AssignmentParameters | None = None,
     ) -> AssignmentResultCollection:
         if parameters is None:
             parameters = AssignmentParameters()
@@ -434,8 +433,8 @@ class ProjectWrapper:
             od_matrix_passenger.close()
 
     def get_shortest_path(
-        self, from_node: int, to_node: int, path_results: t.Optional[PathResults] = None
-    ) -> t.Optional[GraphPath]:
+        self, from_node: int, to_node: int, path_results: PathResults | None = None
+    ) -> GraphPath | None:
         ae_from_node, ae_to_node = self._node_id_generator.query_new_ids(
             [from_node, to_node]
         ).tolist()
@@ -461,12 +460,10 @@ class ProjectWrapper:
 
         return GraphPath(path_nodes, path_links, path_results)
 
-    def get_shortest_paths(
-        self, from_node: int, to_nodes: t.List[int]
-    ) -> t.List[t.Optional[GraphPath]]:
-        results: t.List[t.Optional[GraphPath]] = []
-        path_results: t.Optional[PathResults] = None
-        for i, to_node in enumerate(to_nodes):
+    def get_shortest_paths(self, from_node: int, to_nodes: list[int]) -> list[GraphPath | None]:
+        results: list[GraphPath | None] = []
+        path_results: PathResults | None = None
+        for _i, to_node in enumerate(to_nodes):
             if not path_results:
                 result = self.get_shortest_path(from_node, to_node)
                 if result:

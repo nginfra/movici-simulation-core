@@ -38,8 +38,8 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.state = TrackedState(logger=self.logger)
         self.model_initialized: bool = False
         self.model_ready_for_update: bool = False
-        self.schema: t.Optional[AttributeSchema] = None
-        self.next_time: t.Optional[int] = None
+        self.schema: AttributeSchema | None = None
+        self.next_time: int | None = None
         self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     def set_schema(self, schema: AttributeSchema):
@@ -76,9 +76,9 @@ class TrackedModelAdapter(ModelAdapterBase):
         return self.process_result(result)
 
     def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
+        self, message: UpdateSeriesMessage, data: t.Iterable[bytes | None]
     ) -> RawResult:
-        should_calculate = any([self.process_input(item) for item in data])
+        should_calculate = any(self.process_input(item) for item in data)
         result = self.try_calculate(message.timestamp, should_calculate)
         return self.process_result(result)
 
@@ -127,7 +127,7 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def try_calculate(
         self, timestamp: Timestamp, should_calculate=True
-    ) -> t.Tuple[t.Optional[dict], t.Union[Moment, Timestamp, None]]:
+    ) -> tuple[dict | None, Moment | Timestamp | None]:
         if not should_calculate:
             return None, self.next_time
         self.try_initialize()
@@ -154,9 +154,7 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.next_time = next_time
         return update, next_time
 
-    def process_result(
-        self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
-    ) -> RawResult:
+    def process_result(self, result: tuple[UpdateData, Moment | Timestamp | None]) -> RawResult:
         data, next_time = result
         if data:
             data = self.serialization.dumps(data)
@@ -247,7 +245,7 @@ class TrackedModel(Model):
         """
 
     @abstractmethod
-    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+    def update(self, state: TrackedState, moment: Moment) -> Moment | None:
         """The `update` method is called for every update coming from the model engine. However
         it is only called the first time once all PUB attributes have their arrays filled with
         data. When the simulation progresses to `t>0` before the model's SUB attributes have been
@@ -272,5 +270,5 @@ class TrackedModel(Model):
         This method may be called before the `initialize` and `update` methods have been called
         the first time"""
 
-    def get_adapter(self) -> t.Type[ModelAdapterBase]:
+    def get_adapter(self) -> type[ModelAdapterBase]:
         return TrackedModelAdapter
