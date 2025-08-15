@@ -23,46 +23,58 @@ Key Features
 ------------
 
 - **Expression compiler**: Converts formulas to optimized code
-- **Math functions**: Comprehensive mathematical operations
+- **Basic operations**: Arithmetic and comparison operators
+- **Aggregation functions**: Sum, min, max operations
 - **Array support**: Both uniform and CSR array handling
 - **Type flexibility**: Automatic type inference and conversion
 - **Multiple outputs**: Calculate multiple attributes in one pass
-- **Optional inputs**: Handle missing or optional data gracefully
+- **Optional inputs**: Handle missing data with default values
 
 Supported Operations
 --------------------
 
-Mathematical Functions
-^^^^^^^^^^^^^^^^^^^^^^
+Mathematical Operations
+^^^^^^^^^^^^^^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
    :widths: 20 30 50
 
    * - Category
-     - Functions
+     - Operations
      - Description
-   * - Basic
-     - ``+, -, *, /, **, %``
-     - Arithmetic operations
+   * - Basic Arithmetic
+     - ``+, -, *, /``
+     - Standard arithmetic operations
    * - Comparison
      - ``<, <=, >, >=, ==, !=``
      - Logical comparisons
-   * - Trigonometric
-     - ``sin, cos, tan, asin, acos, atan``
-     - Trigonometric functions
-   * - Exponential
-     - ``exp, log, log10, sqrt, pow``
-     - Exponential and logarithmic
-   * - Rounding
-     - ``floor, ceil, round, abs``
-     - Rounding and absolute value
-   * - Statistical
-     - ``min, max, mean, sum``
-     - Array aggregation functions
-   * - Conditional
-     - ``where, if_else``
-     - Conditional operations
+
+Built-in Functions
+^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 50
+
+   * - Function
+     - Syntax
+     - Description
+   * - ``sum``
+     - ``sum(array)``
+     - Row-wise sum for CSR arrays, reduces all dimensions except first for uniform arrays
+   * - ``min``
+     - ``min(a, b, ...)``
+     - Element-wise minimum across multiple inputs
+   * - ``max``
+     - ``max(a, b, ...)``
+     - Element-wise maximum across multiple inputs
+   * - ``default``
+     - ``default(array, default_value)``
+     - Replace undefined/missing values with default
+   * - ``if``
+     - ``if(condition, true_value, false_value)``
+     - Conditional selection based on boolean condition
 
 Configuration
 -------------
@@ -75,10 +87,7 @@ Basic Configuration
     {
         "name": "calculate_metrics",
         "type": "udf_model",
-        "entity_group": {
-            "dataset": "infrastructure",
-            "entity": "road_segments"
-        },
+        "entity_group": ["infrastructure", "road_segments"],
         "inputs": {
             "length": "geometry.length",
             "width": "geometry.width",
@@ -104,34 +113,30 @@ Advanced Configuration
     {
         "name": "complex_calculations",
         "type": "udf_model",
-        "entity_group": {
-            "dataset": "network",
-            "entity": "links"
-        },
+        "entity_group": ["network", "links"],
         "inputs": {
             "capacity": "link.capacity",
             "flow": "link.flow",
             "length": "link.length",
-            "speed": "link.free_speed"
-        },
-        "optional": {
+            "speed": "link.free_speed",
             "incidents": "link.incident_factor"
         },
+        "optional": ["incidents"],
         "functions": [
             {
                 "expression": "flow / capacity",
                 "output": "performance.volume_capacity_ratio"
             },
             {
-                "expression": "where(flow > capacity * 0.9, speed * 0.5, speed)",
+                "expression": "if(flow > capacity * 0.9, speed * 0.5, speed)",
                 "output": "performance.congested_speed"
             },
             {
-                "expression": "length / where(flow > 0, flow / capacity * speed, speed)",
+                "expression": "length / if(flow > 0, flow / capacity * speed, speed)",
                 "output": "performance.travel_time"
             },
             {
-                "expression": "if_else(incidents > 0, capacity * incidents, capacity)",
+                "expression": "capacity * default(incidents, 1)",
                 "output": "performance.effective_capacity"
             }
         ]
@@ -149,17 +154,9 @@ Configuration Schema
      - Required
      - Description
    * - ``entity_group``
-     - object
+     - array
      - Yes
-     - Target entity group specification
-   * - ``entity_group.dataset``
-     - string
-     - Yes
-     - Dataset containing entities
-   * - ``entity_group.entity``
-     - string
-     - Yes
-     - Entity group name
+     - Array of [dataset_name, entity_group_name]
    * - ``inputs``
      - object
      - Yes
@@ -169,13 +166,9 @@ Configuration Schema
      - Yes
      - Maps variable name to attribute
    * - ``optional``
-     - object
+     - array
      - No
-     - Optional input mappings
-   * - ``optional.<name>``
-     - string
-     - No
-     - Optional attribute (defaults to 0 if missing)
+     - List of optional input names from inputs dict
    * - ``functions``
      - array
      - Yes
@@ -201,28 +194,27 @@ Basic Expressions
     "a + b"
     "a * b - c"
     "(a + b) / c"
-    "a ** 2 + b ** 2"
 
-    # Mathematical functions
-    "sqrt(a ** 2 + b ** 2)"
-    "sin(angle) * radius"
-    "log(value) / log(10)"
-    "exp(-distance / decay_factor)"
+    # Using built-in functions
+    "sum(values)"
+    "max(a, b, c)"
+    "min(a, b)"
+    "default(optional_value, 0)"
 
 Conditional Expressions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: python
 
-    # where(condition, true_value, false_value)
-    "where(flow > capacity, 1, 0)"
-    "where(speed < 30, speed * 0.5, speed)"
-
-    # if_else for optional values
-    "if_else(optional_factor > 0, value * optional_factor, value)"
+    # if(condition, true_value, false_value)
+    "if(flow > capacity, 1, 0)"
+    "if(speed < 30, speed * 0.5, speed)"
 
     # Nested conditions
-    "where(a > b, where(a > c, a, c), where(b > c, b, c))"
+    "if(a > b, if(a > c, a, c), if(b > c, b, c))"
+    
+    # Using default for optional values
+    "default(optional_factor, 1) * value"
 
 Array Operations
 ^^^^^^^^^^^^^^^^
@@ -232,11 +224,11 @@ Array Operations
     # Element-wise operations
     "array1 + array2"
     "array * scalar"
-
-    # Aggregations (if supported)
-    "sum(array)"
-    "mean(array)"
-    "max(array1, array2)"
+    
+    # Aggregations
+    "sum(array)"  # Row-wise sum
+    "max(array1, array2)"  # Element-wise maximum
+    "min(array1, array2)"  # Element-wise minimum
 
 Examples
 --------
@@ -251,10 +243,7 @@ Calculating traffic performance indicators:
     {
         "name": "traffic_metrics",
         "type": "udf_model",
-        "entity_group": {
-            "dataset": "road_network",
-            "entity": "segments"
-        },
+        "entity_group": ["road_network", "segments"],
         "inputs": {
             "volume": "traffic.hourly_volume",
             "capacity": "road.capacity",
@@ -275,7 +264,7 @@ Calculating traffic performance indicators:
                 "output": "performance.vkt"
             },
             {
-                "expression": "where(volume/capacity > 0.8, 1, 0)",
+                "expression": "if(volume/capacity > 0.8, 1, 0)",
                 "output": "performance.congested"
             }
         ]
@@ -291,10 +280,7 @@ Computing environmental impact metrics:
     {
         "name": "environmental_impact",
         "type": "udf_model",
-        "entity_group": {
-            "dataset": "infrastructure",
-            "entity": "assets"
-        },
+        "entity_group": ["infrastructure", "assets"],
         "inputs": {
             "elevation": "terrain.elevation",
             "flood_level": "hazard.flood_depth",
@@ -307,48 +293,45 @@ Computing environmental impact metrics:
                 "output": "hazard.inundation_depth"
             },
             {
-                "expression": "where(flood_level > elevation, 1, 0)",
+                "expression": "if(flood_level > elevation, 1, 0)",
                 "output": "hazard.is_flooded"
             },
             {
-                "expression": "where(flood_level > elevation, value * vulnerability * (flood_level - elevation) / 2, 0)",
+                "expression": "if(flood_level > elevation, value * vulnerability * (flood_level - elevation) / 2, 0)",
                 "output": "risk.damage_cost"
             }
         ]
     }
 
-Economic Indicators
-^^^^^^^^^^^^^^^^^^^
+Simple Metrics Example
+^^^^^^^^^^^^^^^^^^^^^^
 
-Financial and economic calculations:
+Computing derived metrics:
 
 .. code-block:: json
 
     {
-        "name": "economic_indicators",
+        "name": "simple_metrics",
         "type": "udf_model",
-        "entity_group": {
-            "dataset": "projects",
-            "entity": "investments"
-        },
+        "entity_group": ["projects", "assets"],
         "inputs": {
-            "cost": "project.capital_cost",
-            "benefit": "project.annual_benefit",
-            "lifetime": "project.years",
-            "rate": "economics.discount_rate"
+            "length": "geometry.length",
+            "width": "geometry.width",
+            "cost_per_sqm": "economics.unit_cost",
+            "maintenance_factor": "economics.maintenance_factor"
         },
         "functions": [
             {
-                "expression": "benefit / cost",
-                "output": "economics.benefit_cost_ratio"
+                "expression": "length * width",
+                "output": "geometry.area"
             },
             {
-                "expression": "benefit * ((1 - (1 + rate) ** (-lifetime)) / rate)",
-                "output": "economics.present_value"
+                "expression": "length * width * cost_per_sqm",
+                "output": "economics.total_cost"
             },
             {
-                "expression": "benefit * ((1 - (1 + rate) ** (-lifetime)) / rate) - cost",
-                "output": "economics.net_present_value"
+                "expression": "length * width * cost_per_sqm * maintenance_factor",
+                "output": "economics.maintenance_cost"
             }
         ]
     }
@@ -369,11 +352,11 @@ The compiler optimizes expressions by:
 .. code-block:: python
 
     # Original expression
-    "sqrt(a*a + b*b) + sqrt(a*a + b*b) * 2"
+    "(a + b) * c + (a + b) * d"
 
     # Optimized (common subexpression)
-    temp = sqrt(a*a + b*b)
-    result = temp + temp * 2
+    temp = a + b
+    result = temp * c + temp * d
 
 Memory Management
 ^^^^^^^^^^^^^^^^^
@@ -396,15 +379,12 @@ Computational Efficiency
    * - Basic arithmetic
      - Low
      - Vectorize, avoid loops
-   * - Trigonometric
-     - Medium
-     - Pre-compute if possible
-   * - Conditional
+   * - Conditional (if)
      - Medium
      - Minimize branches
    * - Array aggregation
      - High
-     - Cache results
+     - Cache results when possible
 
 Best Practices
 --------------
@@ -428,13 +408,13 @@ Error Handling
 .. code-block:: python
 
     # Safe division
-    "where(denominator != 0, numerator / denominator, 0)"
+    "if(denominator != 0, numerator / denominator, 0)"
 
     # Bounds checking
     "max(0, min(100, calculated_value))"
 
-    # Handle optional inputs
-    "if_else(optional > 0, value * optional, value)"
+    # Handle optional inputs with default
+    "default(optional_value, 1) * base_value"
 
 Testing Expressions
 ^^^^^^^^^^^^^^^^^^^
@@ -447,12 +427,12 @@ Testing Expressions
         "b": [4, 5, 6]
     }
 
-    expression = "sqrt(a**2 + b**2)"
-    expected = [4.12, 5.39, 6.71]
+    expression = "a + b"
+    expected = [5, 7, 9]
 
-    # Validate results
-    assert all(abs(result - expect) < 0.01
-              for result, expect in zip(calculated, expected))
+    # Another example with functions
+    expression2 = "max(a, b)"  
+    expected2 = [4, 5, 6]
 
 Common Issues and Troubleshooting
 ----------------------------------
@@ -489,7 +469,7 @@ Division by Zero
 **Solutions**:
 
 - Add conditional checks
-- Use where() for safe division
+- Use if() for safe division
 - Provide default values
 - Validate input ranges
 
@@ -518,22 +498,20 @@ The UDF model integrates with:
 Advanced Usage
 --------------
 
-Custom Function Library
-^^^^^^^^^^^^^^^^^^^^^^^
+Custom Function Implementation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Extend with domain-specific functions:
+To extend the UDF model with additional functions, you can add them to the functions dictionary:
 
 .. code-block:: python
 
-    # Register custom functions
-    def haversine_distance(lat1, lon1, lat2, lon2):
-        """Calculate great circle distance"""
-        R = 6371  # Earth radius in km
-        dlat = radians(lat2 - lat1)
-        dlon = radians(lon2 - lon1)
-        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
-        c = 2 * atan2(sqrt(a), sqrt(1-a))
-        return R * c
+    from movici_simulation_core.models.udf_model.functions import func
+    
+    @func("custom_function")
+    def my_custom_function(arr):
+        """Custom function implementation"""
+        # Your implementation here
+        return result
 
 Multi-Step Calculations
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -553,7 +531,7 @@ Chain calculations for complex workflows:
                 "output": "step2.adjusted"
             },
             {
-                "expression": "where(step2.adjusted > threshold, step2.adjusted * penalty, step2.adjusted)",
+                "expression": "if(step2.adjusted > threshold, step2.adjusted * penalty, step2.adjusted)",
                 "output": "final.result"
             }
         ]
@@ -569,11 +547,11 @@ Implement data quality checks:
     {
         "functions": [
             {
-                "expression": "where(value >= min_valid and value <= max_valid, 1, 0)",
+                "expression": "if(value >= min_valid, if(value <= max_valid, 1, 0), 0)",
                 "output": "quality.is_valid"
             },
             {
-                "expression": "where(quality.is_valid, value, default_value)",
+                "expression": "if(quality.is_valid, value, default_value)",
                 "output": "quality.cleaned_value"
             }
         ]

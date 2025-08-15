@@ -38,10 +38,7 @@ Basic Configuration
     {
         "name": "network_shortest_paths",
         "type": "shortest_path",
-        "transport_segments": {
-            "dataset": "road_network",
-            "entity_group": "road_segments"
-        },
+        "transport_segments": ["road_network", "road_segments"],
         "cost_factor": "travel_time",
         "calculations": [
             {
@@ -61,10 +58,7 @@ Advanced Configuration
     {
         "name": "multimodal_routing",
         "type": "shortest_path",
-        "transport_segments": {
-            "dataset": "transport_network",
-            "entity_group": "network_links"
-        },
+        "transport_segments": ["transport_network", "network_links"],
         "cost_factor": "generalized_cost",
         "no_update_shortest_path": false,
         "calculations": [
@@ -98,17 +92,9 @@ Configuration Schema
      - Required
      - Description
    * - ``transport_segments``
-     - object
+     - array
      - Yes
-     - Network dataset configuration
-   * - ``transport_segments.dataset``
-     - string
-     - Yes
-     - Dataset containing network segments
-   * - ``transport_segments.entity_group``
-     - string
-     - Yes
-     - Entity group with network links
+     - [dataset_name, entity_group_name] for network segments
    * - ``cost_factor``
      - string
      - Yes
@@ -357,15 +343,11 @@ The model uses graph algorithms for shortest path computation:
 
 1. **Network Graph Construction**:
 
-   .. code-block:: python
-
-       # Build directed graph from segments
-       for segment in segments:
-           graph.add_edge(
-               from_node=segment.from_node_id,
-               to_node=segment.to_node_id,
-               weight=segment.cost_factor
-           )
+   The model builds a directed graph from transport segments using their
+   ``from_node_id`` and ``to_node_id`` attributes. The graph is internally
+   represented in compressed sparse row (CSR) format for efficient 
+   shortest path computations. Edge weights are determined by the 
+   configured ``cost_factor`` attribute.
 
 2. **Shortest Path Computation**:
 
