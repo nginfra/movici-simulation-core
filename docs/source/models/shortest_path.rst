@@ -356,9 +356,9 @@ Algorithm Details
 The model uses graph algorithms for shortest path computation:
 
 1. **Network Graph Construction**:
-   
+
    .. code-block:: python
-   
+
        # Build directed graph from segments
        for segment in segments:
            graph.add_edge(
@@ -368,19 +368,19 @@ The model uses graph algorithms for shortest path computation:
            )
 
 2. **Shortest Path Computation**:
-   
+
    - **Single-source**: Dijkstra's algorithm
    - **All-pairs**: Floyd-Warshall or repeated Dijkstra
    - Optimizations for sparse networks
 
 3. **Path Value Calculation**:
-   
+
    - Trace paths through predecessor tree
    - Accumulate values based on calculation type
    - Store results in specified format
 
 4. **Output Format**:
-   
+
    - **Uniform**: Dense array for all nodes
    - **CSR**: Compressed sparse row for efficiency
 

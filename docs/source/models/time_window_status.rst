@@ -167,7 +167,7 @@ Input Data
     # Absolute timestamps (seconds since epoch)
     time_window_begin = [1609459200, 1609545600, 1609632000]
     time_window_end = [1609466400, 1609552800, 1609639200]
-    
+
     # ISO 8601 format
     time_window_begin = [
         "2021-01-01T00:00:00Z",
@@ -179,7 +179,7 @@ Input Data
         "2021-01-02T02:00:00Z",
         "2021-01-03T02:00:00Z"
     ]
-    
+
     # Relative times (seconds from simulation start)
     time_window_begin = ["0", "3600", "7200"]
     time_window_end = ["1800", "5400", "9000"]
@@ -305,9 +305,9 @@ Algorithm Details
 The model processes time windows through:
 
 1. **Time Window Parsing**:
-   
+
    .. code-block:: python
-   
+
        def parse_time_window(begin_str, end_str):
            # Convert various formats to timestamps
            if is_iso_format(begin_str):
@@ -316,14 +316,14 @@ The model processes time windows through:
                begin = float(begin_str)
            else:
                begin = parse_time_expression(begin_str)
-           
+
            # Similar for end time
            return begin, end
 
 2. **Status Evaluation**:
-   
+
    .. code-block:: python
-   
+
        def evaluate_status(current_time, windows):
            for window in windows:
                if window.begin <= current_time < window.end:
@@ -331,13 +331,13 @@ The model processes time windows through:
            return False
 
 3. **Target Updates**:
-   
+
    - Map source entities to targets
    - Apply status based on time window
    - Propagate changes to dependent systems
 
 4. **Timeline Management**:
-   
+
    - Track upcoming window changes
    - Schedule status updates
    - Handle overlapping windows

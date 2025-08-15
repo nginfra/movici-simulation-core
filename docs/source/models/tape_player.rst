@@ -114,7 +114,7 @@ Binary format with same structure as JSON but more efficient:
 .. code-block:: python
 
     import msgpack
-    
+
     data = {
         "timestamps": [0, 3600, 7200, 10800],
         "entities": {
@@ -125,7 +125,7 @@ Binary format with same structure as JSON but more efficient:
             }
         }
     }
-    
+
     # Save as MessagePack
     with open("recording.msgpack", "wb") as f:
         msgpack.pack(data, f)
@@ -263,21 +263,21 @@ From Simulation Results
 
     import json
     from movici_simulation_core import Simulation
-    
+
     # Run simulation and collect results
     results = simulation.run()
-    
+
     # Format as tape file
     tape_data = {
         "timestamps": results.timestamps,
         "entities": {}
     }
-    
+
     for entity_group, attributes in results.entities.items():
         tape_data["entities"][entity_group] = {}
         for attr_name, time_series in attributes.items():
             tape_data["entities"][entity_group][attr_name] = time_series
-    
+
     # Save as JSON
     with open("simulation_tape.json", "w") as f:
         json.dump(tape_data, f)
@@ -289,10 +289,10 @@ From External Data Sources
 
     import pandas as pd
     import msgpack
-    
+
     # Load external data
     df = pd.read_csv("sensor_data.csv")
-    
+
     # Convert to tape format
     tape_data = {
         "timestamps": df["timestamp"].unique().tolist(),
@@ -300,7 +300,7 @@ From External Data Sources
             "sensors": {}
         }
     }
-    
+
     # Pivot data for each attribute
     for column in df.columns:
         if column != "timestamp" and column != "sensor_id":
@@ -310,7 +310,7 @@ From External Data Sources
                 values=column
             )
             tape_data["entities"]["sensors"][column] = pivoted.values.tolist()
-    
+
     # Save as MessagePack for efficiency
     with open("sensor_tape.msgpack", "wb") as f:
         msgpack.pack(tape_data, f)
@@ -454,7 +454,7 @@ Tape Manipulation
             "entities": {**tape1["entities"], **tape2["entities"]}
         }
         return merged
-    
+
     # Filter tape by time range
     def filter_tape(tape, start_time, end_time):
         indices = [i for i, t in enumerate(tape["timestamps"])
@@ -475,11 +475,11 @@ Tape Validation
         # Check required fields
         assert "timestamps" in tape_data
         assert "entities" in tape_data
-        
+
         # Verify timestamp ordering
         assert all(tape_data["timestamps"][i] <= tape_data["timestamps"][i+1]
                   for i in range(len(tape_data["timestamps"])-1))
-        
+
         # Check data consistency
         n_times = len(tape_data["timestamps"])
         for entity_group, attributes in tape_data["entities"].items():

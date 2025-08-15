@@ -51,7 +51,7 @@ For ``roads`` modality, the model supports:
 Where:
 
 - ``t`` = Congested travel time
-- ``t₀`` = Free-flow travel time  
+- ``t₀`` = Free-flow travel time
 - ``α`` = VDF alpha parameter (default: 4.0)
 - ``β`` = VDF beta parameter (default: 0.64)
 - ``v`` = Volume (passenger vehicles + cargo vehicles × cargo_pcu)
@@ -83,7 +83,7 @@ Railway Networks
 - Station capacity constraints
 
 **Cargo Tracks** (``cargo_tracks``):
-- Freight-only rail assignment  
+- Freight-only rail assignment
 - ``cargo_allowed`` attribute filtering
 - Loading/unloading time considerations
 
@@ -102,14 +102,14 @@ Basic Configuration
         "modality": "roads"
     }
 
-Advanced Configuration  
+Advanced Configuration
 ^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: json
 
     {
         "name": "highway_assignment_with_trucks",
-        "type": "traffic_assignment", 
+        "type": "traffic_assignment",
         "dataset": "regional_highway_network",
         "modality": "roads",
         "vdf_alpha": 0.64,
@@ -127,7 +127,7 @@ Multi-Modal Configuration
     {
         "name": "intermodal_freight_assignment",
         "type": "traffic_assignment",
-        "dataset": "freight_network", 
+        "dataset": "freight_network",
         "modality": "waterways",
         "vdf_alpha": 1.2,
         "vdf_beta": 4.9
@@ -322,11 +322,11 @@ City-wide traffic assignment with mixed passenger and freight traffic:
         "transport.passenger_demand": csr_matrix,  # 50x50 OD matrix
         "transport.cargo_demand": csr_matrix       # 50x50 OD matrix
     }
-    
+
     # Road segments with capacity constraints
     road_segments = {
         "transport.capacity": [1800, 3600, 1200],      # veh/hour
-        "transport.max_speed": [50, 80, 30],           # km/hour  
+        "transport.max_speed": [50, 80, 30],           # km/hour
         "geometry.length": [1.2, 2.5, 0.8],           # km
         "transport.layout": [[1,1,0,0], [2,2,0,0], [1,0,0,0]]
     }
@@ -339,7 +339,7 @@ Interstate highway assignment with truck-specific parameters:
 .. code-block:: json
 
     {
-        "name": "highway_freight_assignment", 
+        "name": "highway_freight_assignment",
         "type": "traffic_assignment",
         "dataset": "interstate_highway_system",
         "modality": "roads",
@@ -386,7 +386,7 @@ Dedicated freight rail assignment:
 
     {
         "name": "freight_rail_assignment",
-        "type": "traffic_assignment", 
+        "type": "traffic_assignment",
         "dataset": "national_rail_network",
         "modality": "cargo_tracks",
         "vdf_alpha": 0.0,
@@ -402,7 +402,7 @@ AequilibraE Integration
 The model uses AequilibraE's sophisticated assignment engine:
 
 1. **Project Setup**: Creates SpatiaLite database with network topology
-2. **Graph Building**: Constructs routing graph with node-link relationships  
+2. **Graph Building**: Constructs routing graph with node-link relationships
 3. **Assignment Execution**: Runs equilibrium assignment with convergence monitoring
 4. **Results Processing**: Extracts flows and performance measures
 
@@ -425,7 +425,7 @@ Convergence Monitoring
 
 Where:
 - ``vₐ`` = Flow on link a
-- ``tₐ`` = Current travel time on link a  
+- ``tₐ`` = Current travel time on link a
 - ``tₐᴬᴼᴺ`` = All-or-nothing travel time on link a
 
 **Convergence Criteria**:
@@ -449,7 +449,7 @@ Network Size Guidelines
    * - < 1,000 links
      - Standard parameters
      - Fast convergence, < 1 minute
-   * - 1,000-10,000 links  
+   * - 1,000-10,000 links
      - Relaxed gap: 0.005
      - Moderate time, 1-10 minutes
    * - 10,000-100,000 links
@@ -468,15 +468,15 @@ Memory Requirements
     def estimate_memory_mb(n_nodes, n_links, n_od_pairs):
         # Network storage
         network_mb = (n_nodes * 0.001) + (n_links * 0.002)
-        
+
         # OD matrices (sparse)
         od_mb = n_od_pairs * 0.00002  # Sparse matrix efficiency
-        
+
         # Assignment matrices
         assignment_mb = n_links * 0.001
-        
+
         return network_mb + od_mb + assignment_mb
-    
+
     # Example: 10,000 links, 2,000 nodes, 1M OD pairs
     # ≈ 35 MB total memory requirement
 
@@ -511,7 +511,7 @@ Network Preparation
 
 1. **Topology Validation**:
    - Ensure network connectivity
-   - Verify node-link consistency  
+   - Verify node-link consistency
    - Check for isolated components
    - Validate coordinate systems
 
@@ -533,12 +533,12 @@ Network Preparation
         """Validate OD matrix properties"""
         # Check for negative values
         assert (od_matrix >= 0).all(), "Negative demand values found"
-        
+
         # Check matrix balance
         row_sums = od_matrix.sum(axis=1)
         col_sums = od_matrix.sum(axis=0)
         balance_diff = abs(row_sums.sum() - col_sums.sum())
-        
+
         if balance_diff > 0.01 * row_sums.sum():
             warnings.warn("OD matrix significantly unbalanced")
 
@@ -574,7 +574,7 @@ Convergence Tuning
     # Progressive convergence strategy
     convergence_phases = [
         {"max_iter": 200, "gap": 0.05},    # Rough convergence
-        {"max_iter": 500, "gap": 0.01},    # Medium convergence  
+        {"max_iter": 500, "gap": 0.01},    # Medium convergence
         {"max_iter": 1000, "gap": 0.001}   # Fine convergence
     ]
 
@@ -676,7 +676,7 @@ Time-of-Day Assignment
     # Multiple time periods
     time_periods = {
         "am_peak": {"duration": 3, "demand_factor": 1.2},
-        "midday": {"duration": 6, "demand_factor": 0.8}, 
+        "midday": {"duration": 6, "demand_factor": 0.8},
         "pm_peak": {"duration": 3, "demand_factor": 1.1},
         "evening": {"duration": 12, "demand_factor": 0.6}
     }
@@ -722,10 +722,10 @@ Flow Analysis
         """Analyze assignment results"""
         # Volume-to-capacity ratios
         vc_ratios = flows / capacities
-        
+
         # Congested links identification
         congested_links = np.where(vc_ratios > 0.9)[0]
-        
+
         # Level of service calculation
         los_categories = {
             "A": vc_ratios < 0.3,
@@ -735,7 +735,7 @@ Flow Analysis
             "E": (vc_ratios >= 0.9) & (vc_ratios < 1.0),
             "F": vc_ratios >= 1.0
         }
-        
+
         return {
             "congested_links": congested_links,
             "los_distribution": {k: v.sum() for k, v in los_categories.items()}
@@ -750,10 +750,10 @@ Route Analysis
         """Extract paths used between specific OD pairs"""
         # Get path trees from assignment
         path_tree = assignment_results.get_path_tree(origin)
-        
+
         # Trace path to destination
         path_links = path_tree.trace_path_to(destination)
-        
+
         return {
             "links": path_links,
             "total_time": sum(link.travel_time for link in path_links),

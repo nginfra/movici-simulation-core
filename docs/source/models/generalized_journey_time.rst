@@ -245,24 +245,24 @@ Algorithm Details
 The GJT calculation follows these steps:
 
 1. **Load Factor Calculation**:
-   
+
    .. code-block:: python
-   
+
        load_factor = passenger_flow / (train_frequency * train_capacity)
 
 2. **Crowdedness Weight Determination**:
-   
+
    - Uses piecewise linear function based on research data
    - Three regimes: comfortable (LF ≤ 0.4), moderate (0.4 < LF ≤ 1.0), overcrowded (LF > 1.0)
 
 3. **Journey Time Calculation**:
-   
+
    - Apply crowdedness weight to base travel time
    - Add average waiting time component
    - Store results in CSR matrix format for efficient path finding
 
 4. **Network Integration**:
-   
+
    - Build graph from segment connectivity
    - Calculate shortest paths using GJT weights
    - Support both single-source and all-pairs calculations

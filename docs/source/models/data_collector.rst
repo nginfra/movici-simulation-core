@@ -33,7 +33,7 @@ Configuration Schema
 
    {
      "name": "my_data_collector",
-     "type": "data_collector", 
+     "type": "data_collector",
      "gather_filter": {
        "dataset_name": {
          "entity_group": ["attribute1", "attribute2"]
@@ -177,7 +177,7 @@ Collect sensor and pollution data:
 .. code-block:: json
 
    {
-     "name": "env_collector", 
+     "name": "env_collector",
      "type": "data_collector",
      "gather_filter": {
        "sensors": {
@@ -202,7 +202,7 @@ Capture everything for debugging:
 
    {
      "name": "debug_collector",
-     "type": "data_collector", 
+     "type": "data_collector",
      "gather_filter": "*",
      "storage_dir": "./debug/full_state"
    }
@@ -293,25 +293,25 @@ Post-Simulation Analysis
    import json
    import pandas as pd
    from pathlib import Path
-   
+
    def load_time_series(data_dir, dataset, entity_group, attribute):
        """Load time series from collected data files"""
        results = []
        for file_path in sorted(Path(data_dir).glob("*.json")):
            with open(file_path) as f:
                data = json.load(f)
-           
+
            # Extract timestamp from filename
            timestamp = int(file_path.stem.split('_')[0][1:])
-           
+
            # Get attribute values
            values = data.get(dataset, {}).get(entity_group, {}).get(attribute, [])
-           
+
            results.append({
                'timestamp': timestamp,
                'values': values
            })
-       
+
        return pd.DataFrame(results)
 
 Integration with Analysis Tools
@@ -331,19 +331,19 @@ Custom Storage Strategies
 .. code-block:: python
 
    from movici_simulation_core.models.data_collector import StorageStrategy, DataCollector
-   
+
    class DatabaseStorageStrategy(StorageStrategy):
        def __init__(self, connection_string):
            self.connection = connect(connection_string)
-       
+
        @classmethod
        def choose(cls, model_config, settings, **_):
            return cls(model_config['database_url'])
-       
+
        def store(self, info):
            # Store to database instead of files
            pass
-   
+
    # Register the custom strategy
    DataCollector.add_storage_strategy("database", DatabaseStorageStrategy)
 

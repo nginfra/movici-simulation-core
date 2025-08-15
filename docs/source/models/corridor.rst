@@ -112,7 +112,7 @@ Required network attributes:
    * - Road nodes: ``geometry``
      - Node coordinates for routing
 
-Demand Data  
+Demand Data
 ~~~~~~~~~~~
 
 Required demand node attributes:
@@ -144,7 +144,7 @@ The model publishes corridor-level metrics:
    * - ``total_passenger_demand``
      - Sum of passenger demands in corridor
    * - ``total_cargo_demand``
-     - Sum of cargo demands in corridor  
+     - Sum of cargo demands in corridor
    * - ``total_pcu_demand``
      - Total demand in Passenger Car Units (PCU)
    * - ``total_distance``
@@ -187,7 +187,7 @@ Monitor rail corridor efficiency:
 
    {
      "name": "rail_corridor_monitor",
-     "type": "corridor", 
+     "type": "corridor",
      "corridors": "rail_corridors",
      "modality": "tracks",
      "dataset": "railway_network",
@@ -204,7 +204,7 @@ Analyze cargo flows along waterway corridors:
    {
      "name": "waterway_freight",
      "type": "corridor",
-     "corridors": "shipping_routes", 
+     "corridors": "shipping_routes",
      "modality": "waterways",
      "dataset": "waterway_network",
      "cargo_pcu": 10.0,

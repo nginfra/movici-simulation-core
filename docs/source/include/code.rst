@@ -13,4 +13,3 @@
 .. |code_CSVPlayer| replace:: :class:`~movici_simulation_core.models.csv_player.csv_player.CSVPlayer`
 .. |code_Moment| replace:: :class:`~movici_simulation_core.utils.moment.Moment`
 .. |code_ModelTester| replace:: :class:`~movici_simulation_core.testing.model_tester.ModelTester`
-
