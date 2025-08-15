@@ -9,7 +9,7 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   movici_simulation_core.ae_wrapper
+   movici_simulation_core.integrations
    movici_simulation_core.base_models
    movici_simulation_core.core
    movici_simulation_core.json_schemas

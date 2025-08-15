@@ -1,6 +1,6 @@
 import numpy as np
 
-from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
+from movici_simulation_core.integrations.ae.point_generator import PointGenerator
 
 
 def test_can_add_points():

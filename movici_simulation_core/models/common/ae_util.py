@@ -2,9 +2,9 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.ae_wrapper.collections import LinkCollection, NodeCollection
-from movici_simulation_core.ae_wrapper.point_generator import PointGenerator
-from movici_simulation_core.ae_wrapper.project import ProjectWrapper
+from movici_simulation_core.integrations.ae.collections import LinkCollection, NodeCollection
+from movici_simulation_core.integrations.ae.point_generator import PointGenerator
+from movici_simulation_core.integrations.ae.project import ProjectWrapper
 from movici_simulation_core.core import UniformAttribute
 from movici_simulation_core.models.common.entity_groups import (
     PointEntity,
