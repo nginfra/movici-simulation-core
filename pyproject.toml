@@ -1,6 +1,145 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "wheel", "setuptools_scm"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "movici-simulation-core"
+version = "2.10.6"
+description = "Core package for running Movici geospatial temporal simulations"
+readme = "README.rst"
+requires-python = ">=3.8,<3.11"
+license = {text = "Movici Public License"}
+authors = [
+    {name = "NGinfra Movici", email = "movici@nginfra.nl"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: Free for non-commercial use",
+    "License :: Other/Proprietary License",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+
+dependencies = [
+    "numpy>=1.19.1,<1.25",
+    "numba>=0.55, <0.58",
+    "python-dateutil>=2.8.0",
+    "pandas>=1.2.0",
+    "pydantic>=1.8.2,<=2.0.2",
+    "pydantic_settings==2.0.3",
+    "orjson>=3",
+    "pyzmq",
+    "msgpack",
+    "click",
+    "geopandas==0.14.1",
+    "jsonschema",
+    "pyproj",
+    "netCDF4",
+    'Fiona>=1.9,<1.9.5; sys_platform == "win32"',
+    'Fiona>=1.8, <1.9.5; sys_platform != "win32"',
+]
+
+[project.optional-dependencies]
+models = [
+    "shapely>=1.7.1",
+    "aequilibrae>0.7.4,<=0.9.2",
+    "pyproj>=3.0.1",
+    "movici-geo-query>=1.1.1",
+]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "bandit",
+    "safety>=3.0.0",
+    "pylint",
+    "mypy",
+    "flake8",
+    "black>=24.3.0",
+    "bump2version",
+    "isort",
+]
+docs = [
+    "sphinx",
+    "furo",
+    "sphinxcontrib-mermaid",
+    "sphinxcontrib-plantuml",
+]
+all = [
+    "shapely>=1.7.1",
+    "aequilibrae>0.7.4,<=0.9.2",
+    "pyproj>=3.0.1",
+    "movici-geo-query>=1.1.1",
+    "pytest",
+    "pytest-cov",
+    "bandit",
+    "safety==2.3.5",
+    "pylint",
+    "mypy",
+    "flake8",
+    "black==22.12.0",
+    "bump2version",
+    "isort",
+    "sphinx",
+    "furo",
+    "sphinxcontrib-mermaid",
+    "sphinxcontrib-plantuml",
+]
+
+[project.scripts]
+movici-simulation = "movici_simulation_core.cli:main"
+
+[project.entry-points."movici.plugins"]
+orchestrator = "movici_simulation_core.services.orchestrator.service:Orchestrator"
+update_data_service = "movici_simulation_core.services.update_data.service:UpdateDataService"
+init_data_service = "movici_simulation_core.services.init_data.service:InitDataService"
+global_attributes = "movici_simulation_core.attributes:GlobalAttributes"
+common_attributes = "movici_simulation_core.models.common.attributes:CommonAttributes"
+area_aggregation = "movici_simulation_core.models.area_aggregation.model:Model"
+corridor = "movici_simulation_core.models.corridor.model:Model"
+csv_player = "movici_simulation_core.models.csv_player.csv_player:CSVPlayer"
+data_collector = "movici_simulation_core.models.data_collector.data_collector:DataCollector"
+evacuation_point_resolution = "movici_simulation_core.models.evacuation_point_resolution:EvacuatonPointResolution"
+generalized_journey_time = "movici_simulation_core.models.generalized_journey_time.gjt_model:GJTModel"
+netcdf_player = "movici_simulation_core.models.netcdf_player.netcdf_player:NetCDFPlayer"
+operational_status = "movici_simulation_core.models:OperationalStatusModel"
+opportunities = "movici_simulation_core.models.opportunities.model:Model"
+overlap_status = "movici_simulation_core.models.overlap_status.model:Model"
+shortest_path = "movici_simulation_core.models.shortest_path.model:ShortestPathModel"
+tape_player = "movici_simulation_core.models.tape_player.model:Model"
+time_window_status = "movici_simulation_core.models.time_window_status.model:Model"
+traffic_assignment_calculation = "movici_simulation_core.models.traffic_assignment_calculation.model:Model"
+traffic_demand_calculation = "movici_simulation_core.models.traffic_demand_calculation.model:TrafficDemandCalculation"
+traffic_kpi = "movici_simulation_core.models.traffic_kpi.model:Model"
+udf = "movici_simulation_core.models.udf_model.udf_model:UDFModel"
+unit_conversions = "movici_simulation_core.models.unit_conversions.model:Model"
+
+[project.urls]
+Homepage = "https://github.com/nginfra/movici-simulation-core"
+Documentation = "https://docs.movici.nl/en/latest/index.html"
+Repository = "https://github.com/nginfra/movici-simulation-core"
+Issues = "https://github.com/nginfra/movici-simulation-core/issues"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+script-files = [
+    "bin/rename_attributes.py",
+]
+
+[tool.setuptools.packages.find]
+include = ["movici_simulation_core*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json"]
+
 
 [tool.black]
 line-length = 99
@@ -32,6 +171,9 @@ known_first_party = ["movici_simulation_core"]
 minversion = "6.0"
 addopts = "--tb=short"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore:.*ABCs from 'collections'.*:DeprecationWarning",
+]
 
 [tool.mypy]
 disallow_untyped_calls = true
