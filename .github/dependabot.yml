@@ -1,0 +1,54 @@
+version: 2
+updates:
+  # Enable version updates for Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "movici-team"
+    assignees:
+      - "movici-team"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      development:
+        patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "isort*"
+          - "mypy*"
+          - "pre-commit*"
+          - "coverage*"
+      documentation:
+        patterns:
+          - "sphinx*"
+          - "furo*"
+          - "sphinxcontrib*"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "movici-team"
+    assignees:
+      - "movici-team"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
