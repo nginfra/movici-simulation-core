@@ -128,7 +128,6 @@ Repository = "https://github.com/nginfra/movici-simulation-core"
 Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.setuptools]
-zip-safe = false
 include-package-data = true
 script-files = [
     "bin/rename_attributes.py",
