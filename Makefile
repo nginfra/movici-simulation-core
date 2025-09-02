@@ -14,7 +14,8 @@ bandit:
 	bandit -f json -o bandit-report.json --recursive $(MODULE_NAME) bin
 
 safety:
-	safety check -r requirements.txt --full-report
+	@echo "Safety check: Scanning installed packages for vulnerabilities"
+	pip freeze | safety check --stdin --full-report
 
 pylint:
 	pylint $(MODULE_NAME) --exit-zero -r n | tee pylint.txt
