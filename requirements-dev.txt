@@ -1,7 +1,7 @@
 pytest
 pytest-cov
 bandit
-safety
+safety==2.3.5
 pylint
 mypy
 flake8
