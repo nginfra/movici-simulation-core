@@ -3,8 +3,6 @@ from logging import Logger
 
 import numpy as np
 
-from movici_simulation_core.ae_wrapper.collections import GraphPath
-from movici_simulation_core.ae_wrapper.project import ProjectWrapper
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core import (
     AttributeSpec,
@@ -14,6 +12,8 @@ from movici_simulation_core.core import (
     TrackedState,
     attributes_from_dict,
 )
+from movici_simulation_core.integrations.ae.collections import GraphPath
+from movici_simulation_core.integrations.ae.project import ProjectWrapper
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import ae_util, model_util
 from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity

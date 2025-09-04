@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from movici_simulation_core.ae_wrapper.id_generator import IdGenerator
+from movici_simulation_core.integrations.ae.id_generator import IdGenerator
 
 
 @pytest.fixture
