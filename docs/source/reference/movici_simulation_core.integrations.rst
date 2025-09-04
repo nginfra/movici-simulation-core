@@ -1,6 +1,6 @@
 
 
-ae\_wrapper 
+integrations 
 ============
 
 
@@ -9,7 +9,7 @@ ae\_wrapper
 collections 
 ------------
 
-.. automodule:: movici_simulation_core.ae_wrapper.collections
+.. automodule:: movici_simulation_core.integrations.ae.collections
    :members:
    :undoc-members:
    :show-inheritance:
@@ -19,7 +19,7 @@ collections
 id\_generator 
 --------------
 
-.. automodule:: movici_simulation_core.ae_wrapper.id_generator
+.. automodule:: movici_simulation_core.integrations.ae.id_generator
    :members:
    :undoc-members:
    :show-inheritance:
@@ -29,7 +29,7 @@ id\_generator
 patches 
 --------
 
-.. automodule:: movici_simulation_core.ae_wrapper.patches
+.. automodule:: movici_simulation_core.integrations.ae.patches
    :members:
    :undoc-members:
    :show-inheritance:
@@ -39,7 +39,7 @@ patches
 point\_generator 
 -----------------
 
-.. automodule:: movici_simulation_core.ae_wrapper.point_generator
+.. automodule:: movici_simulation_core.integrations.ae.point_generator
    :members:
    :undoc-members:
    :show-inheritance:
@@ -49,7 +49,7 @@ point\_generator
 project 
 --------
 
-.. automodule:: movici_simulation_core.ae_wrapper.project
+.. automodule:: movici_simulation_core.integrations.ae.project
    :members:
    :undoc-members:
    :show-inheritance:
@@ -57,7 +57,7 @@ project
 Module contents
 ---------------
 
-.. automodule:: movici_simulation_core.ae_wrapper
+.. automodule:: movici_simulation_core.integrations.ae
    :members:
    :undoc-members:
    :show-inheritance:

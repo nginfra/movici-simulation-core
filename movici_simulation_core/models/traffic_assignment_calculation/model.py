@@ -5,14 +5,14 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.ae_wrapper.collections import AssignmentResultCollection
-from movici_simulation_core.ae_wrapper.project import AssignmentParameters, ProjectWrapper
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.attribute import UniformAttribute
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.integrations.ae.collections import AssignmentResultCollection
+from movici_simulation_core.integrations.ae.project import AssignmentParameters, ProjectWrapper
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import ae_util, model_util
 from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity
