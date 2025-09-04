@@ -1,10 +1,10 @@
 pytest
 pytest-cov
 bandit
-safety
+safety==2.3.5
 pylint
 mypy
 flake8
-black
+black==22.12.0
 bump2version
 isort
