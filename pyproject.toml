@@ -12,6 +12,9 @@ license = {text = "Movici Public License"}
 authors = [
     {name = "NGinfra Movici", email = "movici@nginfra.nl"}
 ]
+maintainers = [
+    {name = "NGinfra - Movici", email = "movici@nginfra.nl"}
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -167,8 +170,12 @@ line_length = 99
 known_first_party = ["movici_simulation_core"]
 
 [tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "--tb=short"
+minversion = "7.0"
+addopts = [
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+]
 testpaths = ["tests"]
 filterwarnings = [
     "ignore:.*ABCs from 'collections'.*:DeprecationWarning",
