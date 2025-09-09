@@ -105,9 +105,9 @@ class PublishAttribute:
 
 class ModalityStrategy:
     transport_type: str
-    transport_segment_entity: t.Type[
+    transport_segment_entity: t.Type[ds.TrafficTransportSegmentEntity] = (
         ds.TrafficTransportSegmentEntity
-    ] = ds.TrafficTransportSegmentEntity
+    )
     publish_attributes: t.Sequence[PublishAttribute] = (
         PublishAttribute("passenger_flow"),
         PublishAttribute("cargo_flow"),

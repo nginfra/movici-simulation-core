@@ -136,9 +136,9 @@ class OverlapStatus:
         overlap_entity.display_name[new_overlap_indices] = display_name
         overlap_entity.connection_from_reference[new_overlap_indices] = from_reference
         overlap_entity.connection_to_reference[new_overlap_indices] = to_reference
-        overlap_entity.connection_from_dataset[
-            new_overlap_indices
-        ] = from_entity.state.dataset_name
+        overlap_entity.connection_from_dataset[new_overlap_indices] = (
+            from_entity.state.dataset_name
+        )
         overlap_entity.connection_to_dataset[new_overlap_indices] = to_entity.state.dataset_name
 
         overlap_entity.connection_from_id[new_overlap_indices] = from_ids
