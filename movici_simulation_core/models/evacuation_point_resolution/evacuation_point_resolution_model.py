@@ -113,7 +113,7 @@ class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution")
         self, road_ids: TrackedCSRArray, labels: np.ndarray
     ) -> t.Dict[int, int]:
         self.label_mapping = {}
-        for (idx, label) in enumerate(labels):
+        for idx, label in enumerate(labels):
             roads = road_ids.get_row(idx)
             for road in roads:
                 self.label_mapping[road] = label

@@ -202,7 +202,7 @@ class GJTCalculator:
             values=self.passenger_flow, no_path_found=-1
         )
         if self.logger:
-            for (x, y) in zip(*np.where(avg_passenger_flow == np.inf)):
+            for x, y in zip(*np.where(avg_passenger_flow == np.inf)):
                 if x == y:
                     pass
                 self.logger.debug(
