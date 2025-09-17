@@ -7,7 +7,7 @@ name = "movici-simulation-core"
 version = "2.10.6"
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
-requires-python = ">=3.8,<3.12"
+requires-python = ">=3.10,<3.14"
 license = {text = "Movici Public License"}
 authors = [
     {name = "NGinfra Movici", email = "movici@nginfra.nl"}
@@ -24,10 +24,10 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: GIS",
 ]
