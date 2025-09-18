@@ -1,4 +1,0 @@
-sphinx
-furo
-sphinxcontrib-mermaid
-sphinxcontrib-plantuml
