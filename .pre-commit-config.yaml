@@ -26,8 +26,8 @@ repos:
     entry: bandit
     language: python
   - id: python-safety-dependencies-check
-    entry: safety
+    entry: bash
     name: Safety
-    args: [check, -r, requirements.txt, --full-report]
+    args: [-c, "pip freeze | safety check --stdin --full-report"]
     language: system
     pass_filenames: false

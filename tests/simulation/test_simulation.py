@@ -90,7 +90,7 @@ class DummyService(Service):
         settings: Settings,
         stream: Stream,
         logger: logging.Logger,
-        socket: MessageRouterSocket
+        socket: MessageRouterSocket,
     ):
         pass
 

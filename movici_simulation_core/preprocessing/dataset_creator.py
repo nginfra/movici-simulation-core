@@ -117,7 +117,7 @@ class SourcesSetup(DatasetOperation):
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
         read_sources = self.config.get("__sources__", {})
-        for (key, source_info) in read_sources.items():
+        for key, source_info in read_sources.items():
             if key not in sources:
                 try:
                     source = self.make_source(source_info)
@@ -182,7 +182,7 @@ class MetadataSetup(DatasetOperation):
     )
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
-        for (key, default) in self.keys:
+        for key, default in self.keys:
             result = self.config.get(key, default)
             if result is self._missing:
                 continue

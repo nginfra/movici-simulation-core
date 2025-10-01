@@ -136,7 +136,7 @@ class TrackedState:
     def iter_attributes(
         self,
     ) -> t.Iterable[t.Tuple[str, str, str, AttributeObject]]:
-        for (datasetname, entity_type, attributes) in self.iter_entities():
+        for datasetname, entity_type, attributes in self.iter_entities():
             yield from (
                 (datasetname, entity_type, name, attr) for name, attr in attributes.items()
             )

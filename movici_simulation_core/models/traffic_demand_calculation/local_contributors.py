@@ -239,7 +239,7 @@ class RouteCostFactor(LocalEffectsContributor, ShortestPathMixin):
         ids = self._demand_nodes.index.ids
 
         dists = self._network.all_shortest_paths(ids[unique_indices])
-        for (x, y) in zip(*np.where(dists == np.inf)):
+        for x, y in zip(*np.where(dists == np.inf)):
             self._logger.debug(
                 f"Nodes {ids[x]}-{ids[y]} " f"do not have a valid path between them."
             )

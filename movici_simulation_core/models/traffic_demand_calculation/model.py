@@ -280,9 +280,11 @@ def convert_v1_v2(config):
                 ],
                 "geometry": config["local_geometries"][i],
                 "elasticity": config["local_elasticities"][i],
-                "mapping_type": config["local_mapping_type"][i]
-                if "local_mapping_type" in config
-                else "nearest",
+                "mapping_type": (
+                    config["local_mapping_type"][i]
+                    if "local_mapping_type" in config
+                    else "nearest"
+                ),
             }
             for i in range(len(config.get("local_entity_groups", [])))
         ],

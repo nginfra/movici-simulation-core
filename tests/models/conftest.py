@@ -228,7 +228,7 @@ def get_entity_update():
         if not isinstance(ids, t.Iterable):
             ids = [ids]
         entities = {"id": list(ids)}
-        for key, attr, in [
+        for key, attr in [
             (key_name, attributes),
         ]:
             if attr is not None:
