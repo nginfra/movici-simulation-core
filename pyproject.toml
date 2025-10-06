@@ -68,7 +68,7 @@ dev = [
     "pylint",
     "mypy",
     "flake8",
-    "black==24.3.0",
+    "black==25.9.0",
     "bump2version",
     "isort",
 ]
@@ -92,7 +92,7 @@ all = [
     "pylint",
     "mypy",
     "flake8",
-    "black==24.3.0",
+    "black==25.9.0",
     "bump2version",
     "isort",
     "sphinx",
