@@ -177,4 +177,13 @@ class LocalStorageStrategy(StorageStrategy):
 
 DataCollector.add_storage_strategy("disk", LocalStorageStrategy)
 
+# Register SQLite storage strategy (requires sqlalchemy)
+try:
+    from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
+
+    DataCollector.add_storage_strategy("sqlite", SQLiteStorageStrategy)
+except ImportError:
+    # SQLite storage not available (sqlalchemy not installed)
+    pass
+
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"

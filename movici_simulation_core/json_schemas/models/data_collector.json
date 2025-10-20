@@ -20,7 +20,12 @@
       "type": "boolean"
     },
     "storage_dir": {
-      "type": "string"
+      "type": "string",
+      "description": "Directory for file-based storage (disk backend) or fallback for SQLite database path"
+    },
+    "database_path": {
+      "type": "string",
+      "description": "Path to SQLite database file (for sqlite backend). If not specified, uses storage_dir/simulation_results.db"
     }
   }
 }

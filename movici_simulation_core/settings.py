@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "[{asctime}] [{levelname:8s}] {name:17s}: {message}"
     name: str = ""
-    storage: t.Union[t.Literal["api"], t.Literal["disk"]] = "disk"
+    storage: t.Union[t.Literal["api"], t.Literal["disk"], t.Literal["sqlite"]] = "disk"
     storage_dir: t.Optional[Path] = None
     temp_dir: DirectoryPath = str(tempfile.gettempdir())
 
