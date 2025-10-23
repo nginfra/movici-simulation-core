@@ -33,28 +33,28 @@ classifiers = [
 ]
 
 dependencies = [
-    "numpy>=1.19.1,<1.25",
-    "numba>=0.55, <0.58",
+    "numpy>=1.19.1,<2.1",
+    "numba>=0.55, <0.61",
     "python-dateutil>=2.8.0",
     "pandas>=1.2.0",
-    "pydantic>=1.8.2,<=2.0.2",
-    "pydantic_settings==2.0.3",
+    "pydantic>=1.8.2,<=2.12.0",
+    "pydantic_settings==2.11.0",
     "orjson>=3",
     "pyzmq",
     "msgpack",
     "click",
-    "geopandas==0.14.1",
+    "geopandas==1.0.1",
     "jsonschema",
     "pyproj",
     "netCDF4",
     'Fiona>=1.9,<1.9.5; sys_platform == "win32"',
-    'Fiona>=1.8, <1.9.5; sys_platform != "win32"',
+    'Fiona>=1.8, <1.10.2; sys_platform != "win32"',
 ]
 
 [project.optional-dependencies]
 models = [
     "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
+    "aequilibrae>0.7.4,<=1.5.0",
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
 ]
@@ -63,8 +63,8 @@ dev = [
     "pytest-cov",
     "bandit",
     "safety>=3.0.0",
-    "typer<0.12.0",
-    "marshmallow<3.22.0",
+    "typer<0.20.0",
+    "marshmallow<4.1.0",
     "pylint",
     "mypy",
     "flake8",
@@ -80,15 +80,15 @@ docs = [
 ]
 all = [
     "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
+    "aequilibrae>0.7.4,<=1.5.0",
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
     "pytest",
     "pytest-cov",
     "bandit",
     "safety>=3.0.0",
-    "typer<0.12.0",
-    "marshmallow<3.22.0",
+    "typer<0.20.0",
+    "marshmallow<4.1.0",
     "pylint",
     "mypy",
     "flake8",
