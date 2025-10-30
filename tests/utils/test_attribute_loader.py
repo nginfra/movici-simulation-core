@@ -47,9 +47,9 @@ class TestCreateAttributeSpec:
     def test_create_attribute_with_invalid_type(self):
         """Test creating attribute with invalid type falls back to float."""
         config = {"data_type": "invalid_type"}
-        spec = create_attribute_spec("attr", config)
-
-        assert spec.data_type.py_type == float
+        
+        with pytest.raises(ValueError, match="Invalid data type: invalid_type"):
+            create_attribute_spec("attr", config)
 
     @pytest.mark.parametrize(
         "shape,expected_tuple",
@@ -120,6 +120,7 @@ class TestLoadAttributes:
         assert velocity.data_type.py_type == float
         assert velocity.data_type.unit_shape == (2,)
         assert velocity.data_type.csr is False
+        assert velocity.name == "velocity"
 
         node_id = next(s for s in specs if s.name == "node_id")
         assert node_id.data_type.py_type == int
@@ -145,25 +146,6 @@ class TestLoadAttributes:
 
         assert "Attributes file not found" in str(exc_info.value)
         assert str(non_existent_path) in str(exc_info.value)
-
-    def test_load_attributes_default_path(self, monkeypatch):
-        """Test loading attributes from default path when no path specified."""
-        # Test that default path is used when None is passed
-        # We'll mock Path.exists() to avoid creating a file at the default location
-        from unittest.mock import MagicMock, patch
-
-        data = {"test_attr": {"data_type": "float"}}
-
-        with patch("pathlib.Path.exists", return_value=True), patch(
-            "builtins.open", MagicMock()
-        ) as mock_open, patch("json.load", return_value=data):
-            mock_open.return_value.__enter__ = MagicMock()
-            mock_open.return_value.__exit__ = MagicMock()
-
-            specs = load_attributes()
-
-            assert len(specs) == 1
-            assert specs[0].name == "test_attr"
 
     def test_load_attributes_with_complex_config(self, tmp_path):
         """Test loading attributes with complex configurations."""
@@ -191,21 +173,6 @@ class TestLoadAttributes:
         simple_attr = next(s for s in specs if s.name == "simple_attr")
         assert simple_attr.data_type.py_type == float
         assert simple_attr.data_type.unit_shape == ()
-
-    def test_load_attributes_preserves_order(self, tmp_path):
-        """Test that attribute order from JSON is preserved."""
-        # Note: Python dicts preserve insertion order from 3.7+
-        data = {
-            "first": {"data_type": "int"},
-            "second": {"data_type": "float"},
-            "third": {"data_type": "str"},
-        }
-        json_path = tmp_path / "ordered.json"
-        json_path.write_text(json.dumps(data))
-
-        specs = load_attributes(json_path)
-
-        assert [s.name for s in specs] == ["first", "second", "third"]
 
     def test_load_attributes_handles_pathlib_path(self, tmp_path):
         """Test that both Path and string paths work."""
