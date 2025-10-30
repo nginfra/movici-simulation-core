@@ -101,7 +101,25 @@ installation instructions. After installation of WSL, follow the installation in
 MacOS
 ^^^^^
 
-Currently, MacOS is not a support operating system. You may be able to install and run Movici 
-succesfully, but it requires you to compile certain dependencies from source. If you want to 
-install Movici under MacOS, please open an issue on 
-`Github <https://github.com/nginfra/movici-simulation-core/issues>`_ 
+``movici-simulation-core`` can be installed on macOS (including Apple Silicon) using pip:
+
+.. code-block::
+
+  pip install movici-simulation-core
+
+For the extra model requirements that depend on geospatial libraries, first install
+``libspatialite`` using Homebrew:
+
+.. code-block::
+
+  brew install libspatialite
+
+Then you can install the extra python requirements through pip:
+
+.. code-block::
+
+  pip install movici-simulation-core[models]
+
+.. note::
+  On Apple Silicon (M1/M2/M3) Macs, you may need to ensure Homebrew is properly configured
+  in your PATH. Homebrew typically installs to ``/opt/homebrew`` on Apple Silicon.
