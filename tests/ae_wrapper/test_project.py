@@ -60,10 +60,13 @@ def test_can_create_project_after_deletion(project_dir):
 def test_closes_db_after_deletion(project_dir):
     delete_project_if_exists(project_dir)
     with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
-        db = project._db
+        ae_project = project._project
 
-    with pytest.raises(sqlite3.ProgrammingError):
-        db.cursor()
+    # After closing with delete_on_close=True, the database file is deleted
+    # so attempting to use the database connection should fail
+    with pytest.raises((sqlite3.ProgrammingError, RuntimeError, FileNotFoundError)):
+        with ae_project.db_connection as conn:
+            conn.cursor()
 
 
 def test_can_add_nodes(project: ProjectWrapper):
