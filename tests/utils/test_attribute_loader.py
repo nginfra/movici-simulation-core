@@ -5,11 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from movici_simulation_core import AttributeSpec, DataType
-from movici_simulation_core.utils.attribute_loader import (
-    create_attribute_spec,
-    load_attributes,
-)
+from movici_simulation_core import AttributeSpec
+from movici_simulation_core.utils.attribute_loader import create_attribute_spec, load_attributes
 
 
 class TestCreateAttributeSpec:
@@ -47,7 +44,7 @@ class TestCreateAttributeSpec:
     def test_create_attribute_with_invalid_type(self):
         """Test creating attribute with invalid type falls back to float."""
         config = {"data_type": "invalid_type"}
-        
+
         with pytest.raises(ValueError, match="Invalid data type: invalid_type"):
             create_attribute_spec("attr", config)
 
