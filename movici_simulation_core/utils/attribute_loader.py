@@ -66,7 +66,10 @@ def create_attribute_spec(name: str, config: Dict[str, Any]) -> AttributeSpec:
         "object": object,
     }
 
-    py_type = type_map.get(data_type_str, float)
+    if data_type_str not in type_map:
+        raise ValueError(f"Invalid data type: {data_type_str}")
+
+    py_type = type_map[data_type_str]
 
     # Create DataType
     data_type = DataType(py_type=py_type, unit_shape=unit_shape, csr=csr)
