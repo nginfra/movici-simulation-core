@@ -53,9 +53,7 @@ class NumpyArray(Base):
         :param arr: NumPy array to store
         :return: NumpyArray instance
         """
-        return cls(
-            dtype=arr.dtype.str, shape=json.dumps(list(arr.shape)), data=arr.tobytes()
-        )
+        return cls(dtype=arr.dtype.str, shape=json.dumps(list(arr.shape)), data=arr.tobytes())
 
     def to_array(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.

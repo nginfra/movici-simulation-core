@@ -53,9 +53,7 @@ class SQLiteStorageStrategy:
             # Fall back to storage_dir with .db extension
             storage_dir = model_config.get("storage_dir") or settings.storage_dir
             if storage_dir is None:
-                raise ValueError(
-                    "No database_path or storage_dir configured for SQLite storage"
-                )
+                raise ValueError("No database_path or storage_dir configured for SQLite storage")
             database_path = Path(storage_dir) / "simulation_results.db"
 
         logger.info(f"Using SQLite database at: {database_path}")

@@ -5,9 +5,13 @@ This example shows how to configure and use SQLite storage instead of
 individual JSON files for storing simulation intermediate data.
 """
 
+import time
 from pathlib import Path
-from movici_simulation_core.simulation import Simulation
+
+from movici_simulation_core.postprocessing.results import SimulationResults
 from movici_simulation_core.settings import Settings
+from movici_simulation_core.simulation import Simulation
+from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
 
 
 def example_sqlite_storage():
@@ -54,8 +58,6 @@ def example_querying_results():
     """
     Example: Querying results from SQLite database
     """
-    from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
-
     # Open the database
     db = SimulationDatabase("./simulation_results/simulation.db")
 
@@ -94,11 +96,14 @@ def example_comparison_json_vs_sqlite():
         "storage_dir": "./results_json/updates",
     }
 
-    # Result: Creates many JSON files:
-    #   results_json/updates/t0_0_dataset.json
-    #   results_json/updates/t0_1_other_dataset.json
-    #   results_json/updates/t1_0_dataset.json
-    #   ... (one file per update)
+    print("JSON Storage Configuration:")
+    print(f"  Settings: {settings_json}")
+    print(f"  Model Config: {model_config_json}")
+    print("  Result: Creates many JSON files:")
+    print("    results_json/updates/t0_0_dataset.json")
+    print("    results_json/updates/t0_1_other_dataset.json")
+    print("    results_json/updates/t1_0_dataset.json")
+    print("    ... (one file per update)")
 
     # === SQLite Storage (New) ===
     settings_sqlite = Settings(storage="sqlite", storage_dir="./results_sqlite")
@@ -108,18 +113,18 @@ def example_comparison_json_vs_sqlite():
         "database_path": "./results_sqlite/simulation.db",
     }
 
-    # Result: Creates ONE database file:
-    #   results_sqlite/simulation.db
-    #   (contains all updates in structured tables)
+    print("\nSQLite Storage Configuration:")
+    print(f"  Settings: {settings_sqlite}")
+    print(f"  Model Config: {model_config_sqlite}")
+    print("  Result: Creates ONE database file:")
+    print("    results_sqlite/simulation.db")
+    print("    (contains all updates in structured tables)")
 
 
 def example_migration_json_to_sqlite():
     """
     Example: Migrating existing JSON results to SQLite
     """
-    from movici_simulation_core.postprocessing.results import SimulationResults
-    from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
-
     # Load existing JSON results
     json_dir = Path("./results_json")
     json_results = SimulationResults(
@@ -136,9 +141,7 @@ def example_migration_json_to_sqlite():
         # Store each update
         for update in dataset.updates:
             # Extract entity data (exclude timestamp/iteration)
-            entity_data = {
-                k: v for k, v in update.items() if k not in ["timestamp", "iteration"]
-            }
+            entity_data = {k: v for k, v in update.items() if k not in ["timestamp", "iteration"]}
 
             db.store_update(
                 timestamp=update["timestamp"],
@@ -154,9 +157,6 @@ def example_performance_comparison():
     """
     Example: Demonstrating performance benefits
     """
-    import time
-    from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
-
     # === SQLite Performance ===
     db = SimulationDatabase(":memory:")  # In-memory for speed
 
@@ -182,7 +182,7 @@ def example_performance_comparison():
     start = time.time()
     timestamps = db.get_timestamps("dataset")
     query_time = time.time() - start
-    print(f"SQLite: Queried timestamps in {query_time:.3f}s")
+    print(f"SQLite: Queried {len(timestamps)} timestamps in {query_time:.3f}s")
 
     # JSON would require:
     # - Write: 1000 individual file writes (slower)

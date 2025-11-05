@@ -1,25 +1,20 @@
 """Tests for SQLite storage strategy."""
 
-import pytest
-import numpy as np
-from pathlib import Path
 from unittest.mock import Mock
+
+import numpy as np
+import pytest
 
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
-from movici_simulation_core.models.data_collector.data_collector import (
-    DataCollector,
-    UpdateInfo,
-)
+from movici_simulation_core.models.data_collector.data_collector import DataCollector, UpdateInfo
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.testing.model_tester import ModelTester
-from movici_simulation_core.types import UpdateData
-
-# Try to import SQLite components - skip tests if not available
-pytest.importorskip("sqlalchemy")
-
-from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
 from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
+from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
+from movici_simulation_core.testing.model_tester import ModelTester
+
+# Skip tests if sqlalchemy not available
+pytest.importorskip("sqlalchemy")
 
 
 @pytest.fixture

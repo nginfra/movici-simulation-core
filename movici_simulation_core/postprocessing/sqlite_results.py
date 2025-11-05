@@ -78,8 +78,10 @@ class SQLiteSimulationResults:
         updates_from_db = self.db.get_dataset_updates(name)
 
         # Format updates for ResultDataset
-        # SQLite returns: [{"timestamp": int, "iteration": int, "entity_group": {"attr": {...}}}, ...]
-        # ResultDataset expects: [{"timestamp": int, "iteration": int, "dataset": {"entity_group": {...}}}, ...]
+        # SQLite returns:
+        #   [{"timestamp": int, "iteration": int, "entity_group": {"attr": {...}}}, ...]
+        # ResultDataset expects:
+        #   [{"timestamp": int, "iteration": int, "dataset": {"entity_group": {...}}}, ...]
         formatted_updates = []
         for update in updates_from_db:
             timestamp = update["timestamp"]

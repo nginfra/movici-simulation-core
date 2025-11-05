@@ -1,20 +1,17 @@
 """Tests for SQLite simulation results reader."""
 
-import pytest
 import numpy as np
-from pathlib import Path
+import pytest
 
-from movici_simulation_core.core.data_format import EntityInitDataFormat
-from movici_simulation_core.core.schema import AttributeSpec, DataType
-
-pytest.importorskip("sqlalchemy")
-
-from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
 from movici_simulation_core.postprocessing.sqlite_results import (
     SQLiteSimulationResults,
     detect_results_format,
     get_simulation_results,
 )
+from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
+
+# Skip tests if sqlalchemy not available
+pytest.importorskip("sqlalchemy")
 
 
 @pytest.fixture
@@ -83,9 +80,7 @@ def db_with_updates(tmp_path, global_schema):
 
 def test_sqlite_results_init(db_with_updates, init_data_dir):
     """Test SQLiteSimulationResults initialization"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     assert results.db_path == db_with_updates
     assert results.init_data_dir == init_data_dir
@@ -94,9 +89,7 @@ def test_sqlite_results_init(db_with_updates, init_data_dir):
 
 def test_sqlite_results_get_dataset(db_with_updates, init_data_dir):
     """Test getting a dataset from SQLite results"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     dataset = results.get_dataset("transport_network")
 
@@ -109,9 +102,7 @@ def test_sqlite_results_get_dataset(db_with_updates, init_data_dir):
 
 def test_sqlite_results_get_dataset_not_found(db_with_updates, init_data_dir):
     """Test error when dataset not found"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     with pytest.raises(ValueError, match="Dataset nonexistent not found"):
         results.get_dataset("nonexistent")
@@ -119,9 +110,7 @@ def test_sqlite_results_get_dataset_not_found(db_with_updates, init_data_dir):
 
 def test_sqlite_results_get_datasets(db_with_updates, init_data_dir):
     """Test getting list of datasets"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     datasets = results.get_datasets()
     assert "transport_network" in datasets
@@ -129,9 +118,7 @@ def test_sqlite_results_get_datasets(db_with_updates, init_data_dir):
 
 def test_sqlite_results_get_timestamps(db_with_updates, init_data_dir):
     """Test getting timestamps for a dataset"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     timestamps = results.get_timestamps("transport_network")
     assert timestamps == [0, 10]
@@ -148,9 +135,7 @@ def test_sqlite_results_context_manager(db_with_updates, init_data_dir):
 
 def test_sqlite_results_updates_applied(db_with_updates, init_data_dir):
     """Test that updates are properly applied to dataset state"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     dataset = results.get_dataset("transport_network")
 
@@ -316,8 +301,6 @@ def test_sqlite_results_multiple_datasets(tmp_path, init_data_dir):
 
 def test_sqlite_results_backwards_compatible_interface(db_with_updates, init_data_dir):
     """Test that SQLiteSimulationResults has same interface as SimulationResults"""
-    from movici_simulation_core.postprocessing.results import SimulationResults
-
     sqlite_results = SQLiteSimulationResults(
         database_path=db_with_updates, init_data_dir=init_data_dir
     )
@@ -335,9 +318,7 @@ def test_sqlite_results_backwards_compatible_interface(db_with_updates, init_dat
 
 def test_sqlite_results_timeline_progression(db_with_updates, init_data_dir):
     """Test that timeline progression works correctly"""
-    results = SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
 
     dataset = results.get_dataset("transport_network")
     timestamps = dataset.state.get_timestamps("transport_network")
