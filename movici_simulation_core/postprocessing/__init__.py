@@ -26,11 +26,10 @@ try:
 
     __all__.extend(
         [
-            "SQLiteSimulationResults",
-            "detect_results_format",
-            "get_simulation_results",
+            SQLiteSimulationResults.__name__,
+            detect_results_format.__name__,
+            get_simulation_results.__name__,
         ]
     )
 except ImportError:
-    # SQLite support not available (sqlalchemy not installed)
     pass

@@ -261,7 +261,9 @@ class SimulationDatabase:
                         session.add(attr_data_record)
 
                         # Link to update using relationship
-                        update_attr = UpdateAttribute(update=update, attribute_data=attr_data_record)
+                        update_attr = UpdateAttribute(
+                            update=update, attribute_data=attr_data_record
+                        )
                         session.add(update_attr)
 
                 session.commit()
@@ -381,8 +383,7 @@ class SimulationDatabase:
         with self.Session() as session:
             initial_datasets = session.query(InitialDataset).all()
             return {
-                dataset.dataset_name: orjson.loads(dataset.data)
-                for dataset in initial_datasets
+                dataset.dataset_name: orjson.loads(dataset.data) for dataset in initial_datasets
             }
 
     def has_initial_datasets(self) -> bool:
