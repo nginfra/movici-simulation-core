@@ -16,6 +16,7 @@ from pathlib import Path
 from threading import Lock
 
 import numpy as np
+import orjson
 from sqlalchemy import (
     Column,
     Float,
@@ -142,6 +143,25 @@ class UpdateAttribute(Base):
         Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
     )
 
+    # Relationships
+    update = relationship("Update", overlaps="attributes,updates")
+    attribute_data = relationship("AttributeData", overlaps="attributes,updates")
+
+
+class InitialDataset(Base):
+    """Stores initial dataset snapshots for self-contained database archives.
+
+    This allows the database to be a complete simulation record without
+    requiring separate init_data directory.
+    """
+
+    __tablename__ = "initial_dataset"
+    __table_args__ = (Index("idx_initial_dataset_name", "dataset_name"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dataset_name = Column(String, unique=True, nullable=False)
+    data = Column(LargeBinary, nullable=False)  # Serialized JSON data
+
 
 class SimulationDatabase:
     """High-level interface for storing and retrieving simulation data.
@@ -214,7 +234,6 @@ class SimulationDatabase:
                     origin=origin,
                 )
                 session.add(update)
-                session.flush()  # Get update.id
 
                 # Process each entity group
                 for entity_group, attributes in entity_data.items():
@@ -223,32 +242,26 @@ class SimulationDatabase:
                         data_array = np.asarray(attr_data["data"])
                         numpy_data = NumpyArray.from_array(data_array)
                         session.add(numpy_data)
-                        session.flush()
 
                         # Store indptr if CSR
-                        indptr_id = None
+                        numpy_indptr = None
                         if "row_ptr" in attr_data or "indptr" in attr_data:
                             indptr_key = "row_ptr" if "row_ptr" in attr_data else "indptr"
                             indptr_array = np.asarray(attr_data[indptr_key])
                             numpy_indptr = NumpyArray.from_array(indptr_array)
                             session.add(numpy_indptr)
-                            session.flush()
-                            indptr_id = numpy_indptr.id
 
-                        # Create attribute data record
+                        # Create attribute data record using relationships
                         attr_data_record = AttributeData(
                             entity_group=entity_group,
                             attribute_name=attr_name,
-                            data_id=numpy_data.id,
-                            indptr_id=indptr_id,
+                            data=numpy_data,  # Use relationship, not data_id
+                            indptr=numpy_indptr,  # Use relationship, not indptr_id
                         )
                         session.add(attr_data_record)
-                        session.flush()
 
-                        # Link to update
-                        update_attr = UpdateAttribute(
-                            update_id=update.id, attribute_data_id=attr_data_record.id
-                        )
+                        # Link to update using relationship
+                        update_attr = UpdateAttribute(update=update, attribute_data=attr_data_record)
                         session.add(update_attr)
 
                 session.commit()
@@ -323,6 +336,62 @@ class SimulationDatabase:
             if dataset_name:
                 query = query.filter(Update.dataset_name == dataset_name)
             return query.count()
+
+    def store_initial_dataset(self, dataset_name: str, dataset_data: dict) -> int:
+        """Store initial dataset snapshot in database.
+
+        This allows the database to be self-contained without requiring
+        separate init_data directory.
+
+        :param dataset_name: Name of the dataset
+        :param dataset_data: Dataset data dictionary (will be JSON-serialized)
+        :return: Initial dataset ID
+        """
+        with self._write_lock:
+            with self.Session() as session:
+                initial_dataset = InitialDataset(
+                    dataset_name=dataset_name,
+                    data=orjson.dumps(dataset_data),
+                )
+                session.add(initial_dataset)
+                session.commit()
+                return initial_dataset.id
+
+    def get_initial_dataset(self, dataset_name: str) -> t.Optional[dict]:
+        """Retrieve initial dataset from database.
+
+        :param dataset_name: Name of the dataset
+        :return: Dataset data dictionary, or None if not found
+        """
+        with self.Session() as session:
+            initial_dataset = (
+                session.query(InitialDataset)
+                .filter(InitialDataset.dataset_name == dataset_name)
+                .first()
+            )
+            if initial_dataset:
+                return orjson.loads(initial_dataset.data)
+            return None
+
+    def get_all_initial_datasets(self) -> t.Dict[str, dict]:
+        """Retrieve all initial datasets from database.
+
+        :return: Dictionary mapping dataset names to their data
+        """
+        with self.Session() as session:
+            initial_datasets = session.query(InitialDataset).all()
+            return {
+                dataset.dataset_name: orjson.loads(dataset.data)
+                for dataset in initial_datasets
+            }
+
+    def has_initial_datasets(self) -> bool:
+        """Check if database contains any initial datasets.
+
+        :return: True if initial datasets are stored, False otherwise
+        """
+        with self.Session() as session:
+            return session.query(InitialDataset).count() > 0
 
     def close(self):
         """Close database connections."""

@@ -1,6 +1,7 @@
 """Tests for SQLite simulation results reader."""
 
 import numpy as np
+import orjson
 import pytest
 
 from movici_simulation_core.postprocessing.sqlite_results import (
@@ -9,9 +10,6 @@ from movici_simulation_core.postprocessing.sqlite_results import (
     get_simulation_results,
 )
 from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
-
-# Skip tests if sqlalchemy not available
-pytest.importorskip("sqlalchemy")
 
 
 @pytest.fixture
@@ -31,9 +29,7 @@ def init_data_dir(tmp_path):
     }
 
     init_file = init_dir / "transport_network.json"
-    import orjson as json
-
-    init_file.write_bytes(json.dumps(init_data))
+    init_file.write_bytes(orjson.dumps(init_data))
 
     return init_dir
 
@@ -264,9 +260,8 @@ def test_sqlite_results_multiple_datasets(tmp_path, init_data_dir):
 
     # Add init data for second dataset
     init_data_2 = {"water_network": {"pipes": {"id": [10, 20], "diameter": [0.5, 0.8]}}}
-    import orjson as json
 
-    (init_data_dir / "water_network.json").write_bytes(json.dumps(init_data_2))
+    (init_data_dir / "water_network.json").write_bytes(orjson.dumps(init_data_2))
 
     # Add updates for both datasets
     db.store_update(

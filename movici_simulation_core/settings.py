@@ -16,6 +16,7 @@ from movici_simulation_core.core.moment import TimelineInfo
 
 class Settings(BaseSettings):
     data_dir: DirectoryPath = "."
+    init_data_dir: t.Optional[Path] = None
     log_level: str = "INFO"
     log_format: str = "[{asctime}] [{levelname:8s}] {name:17s}: {message}"
     name: str = ""

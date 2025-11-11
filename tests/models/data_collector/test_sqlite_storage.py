@@ -13,9 +13,6 @@ from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
 from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
 from movici_simulation_core.testing.model_tester import ModelTester
 
-# Skip tests if sqlalchemy not available
-pytest.importorskip("sqlalchemy")
-
 
 @pytest.fixture
 def storage_dir(tmp_path_factory):
@@ -100,7 +97,10 @@ def test_sqlite_strategy_choose_with_storage_dir(tmp_path, logger):
     strategy = SQLiteStorageStrategy.choose(model_config, settings, logger)
 
     assert isinstance(strategy, SQLiteStorageStrategy)
-    assert strategy.database_path == tmp_path / "simulation_results.db"
+    # Check that database is in the correct directory with timestamped name
+    assert strategy.database_path.parent == tmp_path
+    assert strategy.database_path.name.startswith("simulation_results_")
+    assert strategy.database_path.suffix == ".db"
 
 
 def test_sqlite_strategy_choose_raises_without_paths(logger):
@@ -418,3 +418,49 @@ def test_nonexistent_dataset(db_path):
 
     assert db.get_dataset_updates("dataset_b") == []
     assert db.get_timestamps("dataset_b") == []
+
+
+def test_initial_datasets_stored_automatically(tmp_path, logger):
+    """Test that initial datasets are automatically stored during DataCollector initialization"""
+    import orjson
+
+    # Create init_data directory with test datasets
+    init_data_dir = tmp_path / "init_data"
+    init_data_dir.mkdir()
+
+    # Create two init datasets
+    dataset1 = {"transport_network": {"road_segments": {"id": [1, 2, 3]}}}
+    dataset2 = {"water_network": {"pipes": {"id": [10, 20]}}}
+
+    (init_data_dir / "transport_network.json").write_bytes(orjson.dumps(dataset1))
+    (init_data_dir / "water_network.json").write_bytes(orjson.dumps(dataset2))
+
+    # Create DataCollector with SQLite storage
+    db_path = tmp_path / "simulation.db"
+    model_config = {
+        "gather_filter": None,
+        "database_path": str(db_path),
+    }
+    settings = Settings(storage="sqlite", init_data_dir=init_data_dir)
+
+    model = DataCollector(model_config)
+    model.initialize(settings, logger)
+
+    # Verify initial datasets were stored in database
+    db = SimulationDatabase(db_path)
+    assert db.has_initial_datasets() is True
+
+    # Verify both datasets are present
+    all_datasets = db.get_all_initial_datasets()
+    assert "transport_network" in all_datasets
+    assert "water_network" in all_datasets
+
+    # Verify content matches
+    assert all_datasets["transport_network"] == dataset1
+    assert all_datasets["water_network"] == dataset2
+
+    # Verify individual retrieval
+    transport_data = db.get_initial_dataset("transport_network")
+    assert transport_data == dataset1
+
+    model.close()

@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import itertools
 import logging
+from datetime import datetime
 from pathlib import Path
+
+import orjson
 
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
@@ -50,11 +53,17 @@ class SQLiteStorageStrategy:
         database_path = model_config.get("database_path")
 
         if database_path is None:
-            # Fall back to storage_dir with .db extension
+            # Auto-generate timestamped database path to ensure fresh database for each run
             storage_dir = model_config.get("storage_dir") or settings.storage_dir
             if storage_dir is None:
                 raise ValueError("No database_path or storage_dir configured for SQLite storage")
-            database_path = Path(storage_dir) / "simulation_results.db"
+
+            # Add timestamp to prevent accidental overwrites from multiple runs
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            database_path = Path(storage_dir) / f"simulation_results_{timestamp}.db"
+        else:
+            # User explicitly specified path - use as-is
+            database_path = Path(database_path)
 
         logger.info(f"Using SQLite database at: {database_path}")
         return cls(database_path)
@@ -62,8 +71,8 @@ class SQLiteStorageStrategy:
     def initialize(self):
         """Initialize the database.
 
-        Creates the database file and schema if it doesn't exist.
-        If the database already exists, it will be reused (not cleared).
+        Creates the database file and schema. When using auto-generated paths,
+        each simulation run gets a timestamped database to prevent overwrites.
         """
         # Ensure parent directory exists
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
@@ -102,6 +111,25 @@ class SQLiteStorageStrategy:
         :param model: DataCollector instance
         """
         model.iteration = itertools.count()
+
+    def store_initial_datasets(self, init_data_dir: Path):
+        """Store initial datasets in database for complete snapshot.
+
+        This makes the database self-contained without requiring separate
+        init_data directory. Call this after initialize() and before
+        simulation starts.
+
+        :param init_data_dir: Path to directory containing initial dataset JSON files
+        """
+        init_data_dir = Path(init_data_dir)
+        if not init_data_dir.exists():
+            return
+
+        # Store each JSON file as an initial dataset
+        for json_file in init_data_dir.glob("*.json"):
+            dataset_name = json_file.stem
+            dataset_data = orjson.loads(json_file.read_bytes())
+            self.db.store_initial_dataset(dataset_name, dataset_data)
 
     def finalize(self):
         """Clean up database connections.

@@ -24,12 +24,6 @@ try:
         get_simulation_results,
     )
 
-    # Make imports explicitly available
-    _sqlite_exports = [
-        SQLiteSimulationResults,
-        detect_results_format,
-        get_simulation_results,
-    ]
     __all__.extend(
         [
             "SQLiteSimulationResults",
