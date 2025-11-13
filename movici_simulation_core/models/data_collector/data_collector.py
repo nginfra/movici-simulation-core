@@ -70,10 +70,6 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.strategy = self.get_storage_strategy(settings, logger)
         self.strategy.initialize()
 
-        # Store initial datasets in database for self-contained archives (SQLite only)
-        if hasattr(self.strategy, "store_initial_datasets") and settings.init_data_dir:
-            self.strategy.store_initial_datasets(settings.init_data_dir)
-
         self.state = TrackedState(track_unknown=SUB)
         self.aggregate = self.config.get("aggregate_updates", self.aggregate)
         return self._get_mask()

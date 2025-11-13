@@ -119,7 +119,8 @@ def test_sqlite_strategy_choose_raises_without_paths(logger):
 
 def test_sqlite_storage_creates_database(db_path, global_schema):
     """Test that SQLite storage creates database file"""
-    strategy = SQLiteStorageStrategy(db_path)
+    settings = Settings(storage="sqlite")
+    strategy = SQLiteStorageStrategy(db_path, settings)
     strategy.initialize()
 
     assert db_path.exists()
@@ -128,7 +129,8 @@ def test_sqlite_storage_creates_database(db_path, global_schema):
 
 def test_sqlite_storage_stores_update(db_path, global_schema):
     """Test storing a single update in SQLite"""
-    strategy = SQLiteStorageStrategy(db_path)
+    settings = Settings(storage="sqlite")
+    strategy = SQLiteStorageStrategy(db_path, settings)
     strategy.initialize()
 
     upd = {"dataset": {"entity_group": {"id": [1, 2, 3], "attr": [10, 20, 30]}}}
@@ -151,7 +153,8 @@ def test_sqlite_storage_stores_update(db_path, global_schema):
 
 def test_sqlite_storage_stores_sparse_array(db_path, global_schema):
     """Test storing CSR sparse arrays"""
-    strategy = SQLiteStorageStrategy(db_path)
+    settings = Settings(storage="sqlite")
+    strategy = SQLiteStorageStrategy(db_path, settings)
     strategy.initialize()
 
     # Create update with CSR sparse array

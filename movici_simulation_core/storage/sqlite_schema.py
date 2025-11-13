@@ -10,6 +10,7 @@ This schema provides efficient storage for simulation updates with:
 
 from __future__ import annotations
 
+import enum
 import json
 import typing as t
 from pathlib import Path
@@ -19,6 +20,7 @@ import numpy as np
 import orjson
 from sqlalchemy import (
     Column,
+    Enum,
     Float,
     ForeignKey,
     Index,
@@ -32,6 +34,21 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 Base = declarative_base()
+
+
+class DatasetFormat(str, enum.Enum):
+    """Format types for dataset storage.
+
+    Matches the ``format`` field used in the platform:
+
+    * ``ENTITY_BASED``: Entity-oriented JSON data, destructured into numpy arrays
+    * ``UNSTRUCTURED``: Unstructured JSON data, stored as blob but JSON-loadable
+    * ``BINARY``: Binary data, stored as blob and passed transparently
+    """
+
+    ENTITY_BASED = "entity_based"
+    UNSTRUCTURED = "unstructured"
+    BINARY = "binary"
 
 
 class NumpyArray(Base):
@@ -112,6 +129,9 @@ class AttributeData(Base):
     data = relationship("NumpyArray", foreign_keys=[data_id])
     indptr = relationship("NumpyArray", foreign_keys=[indptr_id])
     updates = relationship("Update", secondary="update_attribute", back_populates="attributes")
+    initial_datasets = relationship(
+        "InitialDataset", secondary="initial_dataset_attribute", back_populates="attributes"
+    )
 
     @property
     def is_sparse(self) -> bool:
@@ -148,11 +168,39 @@ class UpdateAttribute(Base):
     attribute_data = relationship("AttributeData", overlaps="attributes,updates")
 
 
+class InitialDatasetAttribute(Base):
+    """Junction table linking initial datasets (entity_based format) to their attribute data."""
+
+    __tablename__ = "initial_dataset_attribute"
+    __table_args__ = (
+        UniqueConstraint(
+            "initial_dataset_id", "attribute_data_id", name="uq_initial_dataset_attr"
+        ),
+    )
+
+    initial_dataset_id = Column(
+        Integer, ForeignKey("initial_dataset.id", ondelete="CASCADE"), primary_key=True
+    )
+    attribute_data_id = Column(
+        Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    # Relationships
+    initial_dataset = relationship("InitialDataset", overlaps="attributes,initial_datasets")
+    attribute_data = relationship("AttributeData", overlaps="attributes,initial_datasets")
+
+
 class InitialDataset(Base):
     """Stores initial dataset snapshots for self-contained database archives.
 
     This allows the database to be a complete simulation record without
     requiring separate init_data directory.
+
+    Supports three storage formats:
+
+    * ``ENTITY_BASED``: Destructured into entity groups and attributes (references AttributeData)
+    * ``UNSTRUCTURED``: JSON blob, loadable but not queryable by attribute
+    * ``BINARY``: Raw binary blob, passed transparently to consumers
     """
 
     __tablename__ = "initial_dataset"
@@ -160,7 +208,13 @@ class InitialDataset(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     dataset_name = Column(String, unique=True, nullable=False)
-    data = Column(LargeBinary, nullable=False)  # Serialized JSON data
+    format = Column(Enum(DatasetFormat), nullable=False, default=DatasetFormat.UNSTRUCTURED)
+    data = Column(LargeBinary)  # For UNSTRUCTURED and BINARY formats
+
+    # Relationships for ENTITY_BASED format
+    attributes = relationship(
+        "AttributeData", secondary="initial_dataset_attribute", back_populates="initial_datasets"
+    )
 
 
 class SimulationDatabase:
@@ -339,31 +393,80 @@ class SimulationDatabase:
                 query = query.filter(Update.dataset_name == dataset_name)
             return query.count()
 
-    def store_initial_dataset(self, dataset_name: str, dataset_data: dict) -> int:
+    def store_initial_dataset(
+        self,
+        dataset_name: str,
+        dataset_data: t.Union[dict, bytes],
+        format: DatasetFormat = DatasetFormat.UNSTRUCTURED,
+    ) -> int:
         """Store initial dataset snapshot in database.
 
         This allows the database to be self-contained without requiring
         separate init_data directory.
 
         :param dataset_name: Name of the dataset
-        :param dataset_data: Dataset data dictionary (will be JSON-serialized)
+        :param dataset_data: Dataset data - ``dict`` for JSON formats, ``bytes`` for binary
+        :param format: Storage format (``entity_based``, ``unstructured``, or ``binary``)
         :return: Initial dataset ID
         """
         with self._write_lock:
             with self.Session() as session:
-                initial_dataset = InitialDataset(
-                    dataset_name=dataset_name,
-                    data=orjson.dumps(dataset_data),
-                )
+                initial_dataset = InitialDataset(dataset_name=dataset_name, format=format)
                 session.add(initial_dataset)
+
+                if format == DatasetFormat.ENTITY_BASED:
+                    # Destructure entity-based data into AttributeData
+                    for entity_group, attributes in dataset_data.items():
+                        if not isinstance(attributes, dict):
+                            continue
+                        for attr_name, attr_data in attributes.items():
+                            # Store main data array
+                            data_array = np.asarray(attr_data["data"])
+                            numpy_data = NumpyArray.from_array(data_array)
+                            session.add(numpy_data)
+
+                            # Store indptr if CSR
+                            numpy_indptr = None
+                            if "row_ptr" in attr_data or "indptr" in attr_data:
+                                indptr_key = "row_ptr" if "row_ptr" in attr_data else "indptr"
+                                indptr_array = np.asarray(attr_data[indptr_key])
+                                numpy_indptr = NumpyArray.from_array(indptr_array)
+                                session.add(numpy_indptr)
+
+                            # Create attribute data record
+                            attr_data_record = AttributeData(
+                                entity_group=entity_group,
+                                attribute_name=attr_name,
+                                data=numpy_data,
+                                indptr=numpy_indptr,
+                            )
+                            session.add(attr_data_record)
+
+                            # Link to initial dataset
+                            initial_dataset_attr = InitialDatasetAttribute(
+                                initial_dataset=initial_dataset, attribute_data=attr_data_record
+                            )
+                            session.add(initial_dataset_attr)
+
+                elif format == DatasetFormat.UNSTRUCTURED:
+                    # Store as JSON blob
+                    initial_dataset.data = orjson.dumps(dataset_data)
+
+                elif format == DatasetFormat.BINARY:
+                    # Store as raw binary blob
+                    if not isinstance(dataset_data, bytes):
+                        raise TypeError("Binary format requires bytes data")
+                    initial_dataset.data = dataset_data
+
                 session.commit()
                 return initial_dataset.id
 
-    def get_initial_dataset(self, dataset_name: str) -> t.Optional[dict]:
+    def get_initial_dataset(self, dataset_name: str) -> t.Optional[t.Union[dict, bytes]]:
         """Retrieve initial dataset from database.
 
         :param dataset_name: Name of the dataset
-        :return: Dataset data dictionary, or None if not found
+        :return: Dataset data (``dict`` for JSON formats, ``bytes`` for binary), or ``None`` if
+            not found
         """
         with self.Session() as session:
             initial_dataset = (
@@ -371,20 +474,39 @@ class SimulationDatabase:
                 .filter(InitialDataset.dataset_name == dataset_name)
                 .first()
             )
-            if initial_dataset:
+            if not initial_dataset:
+                return None
+
+            if initial_dataset.format == DatasetFormat.ENTITY_BASED:
+                # Reconstruct entity-based data from AttributeData
+                data = {}
+                for attr in initial_dataset.attributes:
+                    if attr.entity_group not in data:
+                        data[attr.entity_group] = {}
+                    data[attr.entity_group][attr.attribute_name] = attr.get_data()
+                return data
+
+            elif initial_dataset.format == DatasetFormat.UNSTRUCTURED:
+                # Return deserialized JSON
                 return orjson.loads(initial_dataset.data)
+
+            elif initial_dataset.format == DatasetFormat.BINARY:
+                # Return raw binary data
+                return initial_dataset.data
+
             return None
 
-    def get_all_initial_datasets(self) -> t.Dict[str, dict]:
+    def get_all_initial_datasets(self) -> t.Dict[str, t.Union[dict, bytes]]:
         """Retrieve all initial datasets from database.
 
         :return: Dictionary mapping dataset names to their data
         """
         with self.Session() as session:
             initial_datasets = session.query(InitialDataset).all()
-            return {
-                dataset.dataset_name: orjson.loads(dataset.data) for dataset in initial_datasets
-            }
+            result = {}
+            for dataset in initial_datasets:
+                result[dataset.dataset_name] = self.get_initial_dataset(dataset.dataset_name)
+            return result
 
     def has_initial_datasets(self) -> bool:
         """Check if database contains any initial datasets.

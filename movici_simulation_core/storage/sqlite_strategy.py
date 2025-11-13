@@ -14,7 +14,7 @@ from pathlib import Path
 import orjson
 
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
+from movici_simulation_core.storage.sqlite_schema import DatasetFormat, SimulationDatabase
 
 
 class SQLiteStorageStrategy:
@@ -29,12 +29,14 @@ class SQLiteStorageStrategy:
     * Fast indexed queries by timestamp, iteration, dataset
     """
 
-    def __init__(self, database_path: Path):
+    def __init__(self, database_path: Path, settings: Settings):
         """Initialize SQLite storage strategy.
 
         :param database_path: Path to SQLite database file
+        :param settings: Global simulation settings (for init_data_dir and scenario_config)
         """
         self.database_path = Path(database_path)
+        self.settings = settings
         self.db = None
 
     @classmethod
@@ -66,19 +68,25 @@ class SQLiteStorageStrategy:
             database_path = Path(database_path)
 
         logger.info(f"Using SQLite database at: {database_path}")
-        return cls(database_path)
+        return cls(database_path, settings)
 
     def initialize(self):
         """Initialize the database.
 
         Creates the database file and schema. When using auto-generated paths,
         each simulation run gets a timestamped database to prevent overwrites.
+
+        Also stores initial datasets from init_data_dir for self-contained archives.
         """
         # Ensure parent directory exists
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Initialize database connection
         self.db = SimulationDatabase(self.database_path)
+
+        # Store initial datasets in database for self-contained archives
+        if self.settings.init_data_dir:
+            self._store_initial_datasets()
 
     def store(self, info):
         """Store a simulation update in the database.
@@ -112,24 +120,109 @@ class SQLiteStorageStrategy:
         """
         model.iteration = itertools.count()
 
-    def store_initial_datasets(self, init_data_dir: Path):
+    def _store_initial_datasets(self):
         """Store initial datasets in database for complete snapshot.
 
         This makes the database self-contained without requiring separate
-        init_data directory. Call this after initialize() and before
-        simulation starts.
+        init_data directory.
 
-        :param init_data_dir: Path to directory containing initial dataset JSON files
+        Reads dataset list from scenario config and handles different file formats:
+
+        * ``.json`` files: Auto-detect entity_based vs unstructured
+        * Other suffixes: Treat as binary data
+
+        :raises FileNotFoundError: If init_data_dir does not exist
+        :raises NotADirectoryError: If init_data_dir is not a directory
         """
-        init_data_dir = Path(init_data_dir)
+        init_data_dir = Path(self.settings.init_data_dir)
+
+        # Error if init_data_dir doesn't exist
         if not init_data_dir.exists():
+            raise FileNotFoundError(
+                f"init_data_dir does not exist: {init_data_dir}. " "Cannot store initial datasets."
+            )
+
+        if not init_data_dir.is_dir():
+            raise NotADirectoryError(f"init_data_dir is not a directory: {init_data_dir}")
+
+        # Get dataset list from scenario config
+        datasets = self.settings.datasets if self.settings.datasets else []
+
+        # If no datasets in config, fall back to all files in init_data_dir
+        if not datasets:
+            # Store all JSON files found
+            for json_file in init_data_dir.glob("*.json"):
+                dataset_name = json_file.stem
+                dataset_data = orjson.loads(json_file.read_bytes())
+                # Auto-detect format (default to unstructured for backward compatibility)
+                format_type = self._detect_format(dataset_data)
+                self.db.store_initial_dataset(dataset_name, dataset_data, format=format_type)
             return
 
-        # Store each JSON file as an initial dataset
-        for json_file in init_data_dir.glob("*.json"):
-            dataset_name = json_file.stem
-            dataset_data = orjson.loads(json_file.read_bytes())
-            self.db.store_initial_dataset(dataset_name, dataset_data)
+        # Process datasets from scenario config
+        for dataset_config in datasets:
+            dataset_name = dataset_config.get("name")
+            if not dataset_name:
+                continue
+
+            # Try to find the file - check for .json first, then any extension
+            dataset_path = init_data_dir / f"{dataset_name}.json"
+
+            if not dataset_path.exists():
+                # Try without .json extension (could be binary file)
+                dataset_path = init_data_dir / dataset_name
+
+            if not dataset_path.exists():
+                # Try finding any file that starts with dataset_name
+                matching_files = list(init_data_dir.glob(f"{dataset_name}.*"))
+                if matching_files:
+                    dataset_path = matching_files[0]
+                else:
+                    continue  # Skip if file not found
+
+            # Determine format based on file extension
+            if dataset_path.suffix == ".json":
+                # JSON file - load and auto-detect format
+                dataset_data = orjson.loads(dataset_path.read_bytes())
+                format_type = self._detect_format(dataset_data)
+                self.db.store_initial_dataset(dataset_name, dataset_data, format=format_type)
+            else:
+                # Non-JSON file - treat as binary
+                dataset_data = dataset_path.read_bytes()
+                self.db.store_initial_dataset(
+                    dataset_name, dataset_data, format=DatasetFormat.BINARY
+                )
+
+    def _detect_format(self, data: dict) -> DatasetFormat:
+        """Auto-detect if JSON data is entity_based or unstructured.
+
+        Entity-based format has structure::
+
+            {
+                "entity_group": {
+                    "attribute_name": {"data": [...], ...}
+                }
+            }
+
+        :param data: Parsed JSON data
+        :return: Detected format (``ENTITY_BASED`` or ``UNSTRUCTURED``)
+        """
+        # Check if data looks like entity-based format
+        if not isinstance(data, dict):
+            return DatasetFormat.UNSTRUCTURED
+
+        # Check if all values are dicts containing attributes with "data" key
+        for entity_group, attributes in data.items():
+            if not isinstance(attributes, dict):
+                return DatasetFormat.UNSTRUCTURED
+
+            # Check if at least one attribute has "data" key
+            for attr_name, attr_data in attributes.items():
+                if isinstance(attr_data, dict) and "data" in attr_data:
+                    # Looks like entity-based format
+                    return DatasetFormat.ENTITY_BASED
+
+        return DatasetFormat.UNSTRUCTURED
 
     def finalize(self):
         """Clean up database connections.
