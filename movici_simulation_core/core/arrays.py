@@ -112,7 +112,6 @@ class TrackedCSRArray:
     def get_comparator(self, to_scalar=False, equal_nan=None):
         if self.data.dtype == np.float64:
             equal_nan = equal_nan if equal_nan is not None else self.equal_nan
-            print("float compare", self.rtol, self.atol, equal_nan)
             return float_compare(self.rtol, self.atol, equal_nan)
         if to_scalar:
             return compare_scalar
@@ -173,7 +172,6 @@ class TrackedCSRArray:
     def rows_contain(self, val, equal_nan=None):
         """return a boolean array where the rows of `csr` contain the `val` argument"""
         comparator = self.get_comparator(to_scalar=not np.iterable(val), equal_nan=equal_nan)
-        print(self.data, self.row_ptr, val, np.iterable(val))
         return rows_contain(
             self.data,
             self.row_ptr,
