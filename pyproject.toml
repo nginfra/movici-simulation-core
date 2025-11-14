@@ -43,7 +43,7 @@ dependencies = [
     "pyzmq",
     "msgpack",
     "click",
-    "geopandas==0.14.1",
+    "geopandas",
     "jsonschema",
     "pyproj",
     "netCDF4",
