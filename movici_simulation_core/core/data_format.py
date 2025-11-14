@@ -248,7 +248,7 @@ def is_undefined_uniform(data, data_type):
 
 
 def is_undefined_csr(csr_array, data_type):
-    return csr_array.rows_contain(np.array([data_type.undefined]))
+    return csr_array.rows_contain(np.array([data_type.undefined]), equal_nan=True)
 
 
 def data_keys(update_or_init_data, ignore_keys=("general",)):

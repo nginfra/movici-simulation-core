@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Enable version updates for Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      development:
+        patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "isort*"
+          - "mypy*"
+          - "pre-commit*"
+          - "coverage*"
+      documentation:
+        patterns:
+          - "sphinx*"
+          - "furo*"
+          - "sphinxcontrib*"
+      production:
+        exclude-patterns:
+          - "pytest*"
+          - "black*"
+          - "flake8*"
+          - "isort*"
+          - "mypy*"
+          - "pre-commit*"
+          - "coverage*"
+          - "sphinx*"
+          - "furo*"
+          - "sphinxcontrib*"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore"
+      include: "scope"

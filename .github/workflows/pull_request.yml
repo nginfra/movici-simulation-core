@@ -10,10 +10,10 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ env.python-version }}
 
@@ -25,6 +25,34 @@ jobs:
       run: |
         make lint
 
+  test-numba:
+    if: contains( github.event.pull_request.labels.*.name, 'numba')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python ${{ env.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ env.python-version }}
+
+    - name: Install Spatialite
+      uses: ./.github/actions/install-spatialite
+      with:
+        os: ${{ matrix.os }}
+
+    - name: Install dependencies
+      run: |
+        pip install -e .[models,dev]
+
+    - name: Run tests with Numba JIT enabled
+      run: |
+        make test-numba
+
   coverage:
     strategy:
       fail-fast: false
@@ -32,10 +60,10 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ env.python-version }}
 
@@ -55,10 +83,10 @@ jobs:
   test-docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: ${{ env.python-version }}
 
