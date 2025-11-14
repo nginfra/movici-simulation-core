@@ -36,3 +36,33 @@ The traffic assignment model uses ``aequilibrae`` to perform it's traffic assign
 requires the ``mod_spatialite`` sqlite extension. On Debian based Linux (eg. Ubuntu) this can
 be done using ``apt-get install libsqlite3-mod-spatialite``. On Windows, please follow the 
 `official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
+
+
+Development
+-----------
+
+Install this package in editable mode and include all depenencies:
+
+.. code-block::
+
+  pip install -e .[dev,models]
+
+pre-commit
+##########
+
+To install the pre-commit hooks, please first install pre-commit using your favorite installer, eg: `pipx` or `uv tool`.
+
+then install the precommit hooks by running 
+
+.. code-block::
+
+  pre-commit install
+
+In order to get the `safety` pre-commit hook working, you must first create an account on 
+`safety-cli.com <https://platform.safetycli.com/>`_. Then, login using the safety cli:
+
+.. code-block::
+
+  safety auth login
+
+You have now succesfully setup the pre-commit hooks
