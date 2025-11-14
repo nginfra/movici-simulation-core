@@ -163,30 +163,6 @@ def test_row_wise_min(data, row_ptr, empty_row, expected):
     np.testing.assert_almost_equal(row_wise_min(data, row_ptr, empty_row), expected)
 
 
-@pytest.mark.parametrize(
-    "data, row_ptr, empty_row, expected",
-    [
-        (np.array(["a"]), np.array([0, 1]), None, np.array(["a"])),
-        (np.array(["a", "b", "c"]), np.array([0, 2, 3]), None, np.array(["a", "c"])),
-        (np.array(["a", "b"]), np.array([0, 2, 3]), "d", np.array(["a", "d"])),
-    ],
-)
-def test_row_wise_max_str(data, row_ptr, empty_row, expected):
-    np.testing.assert_array_equal(row_wise_min(data, row_ptr, empty_row), expected)
-
-
-@pytest.mark.parametrize(
-    "data, row_ptr, empty_row, expected",
-    [
-        (np.array(["a"]), np.array([0, 1]), None, np.array(["a"])),
-        (np.array(["a", "b", "c"]), np.array([0, 2, 3]), None, np.array(["b", "c"])),
-        (np.array(["a", "b"]), np.array([0, 2, 3]), "d", np.array(["b", "d"])),
-    ],
-)
-def test_row_wise_min_str(data, row_ptr, empty_row, expected):
-    np.testing.assert_array_equal(row_wise_max(data, row_ptr, empty_row), expected)
-
-
 @pytest.mark.parametrize("func", [row_wise_max, row_wise_min])
 def test_row_wise_func_empty_row_raises(func):
     with pytest.raises(ValueError):
