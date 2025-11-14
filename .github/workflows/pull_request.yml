@@ -25,7 +25,6 @@ jobs:
       run: |
         make lint
 
-jobs:
   test-all-platforms:
     if: contains( github.event.pull_request.labels.*.name, 'all-versions')
     strategy:
