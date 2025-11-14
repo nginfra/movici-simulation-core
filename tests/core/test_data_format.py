@@ -3,7 +3,7 @@ import json
 import numpy as np
 import pytest
 
-from movici_simulation_core.core import DataType, data_type
+from movici_simulation_core.core import DataType
 from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.data_format import (
     EntityInitDataFormat,

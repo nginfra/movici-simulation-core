@@ -3,12 +3,10 @@ import typing as t
 
 import numba
 import numpy as np
-from numba.core.types import complex_domain, number_domain, real_domain
-from numba.extending import overload
-from numba.np.numpy_support import type_can_asarray
+from numba.core.types import number_domain
 
-from .core import numba_extensions  # required for proper np.isclose support in numpy
-from .utils.unicode import largest_unicode_dtype
+# required for proper np.isclose support in numpy
+from .core import numba_extensions  # noqa F401
 
 
 @functools.lru_cache(None)
@@ -274,62 +272,3 @@ def generate_update(data, row_ptr, mask, changed, undefined):
         set_row(upd_data, upd_row_ptr, upd_idx, val)
 
     return upd_data, upd_row_ptr
-
-
-def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Versatile function to determine whether two arrays, or an array and a value are close.
-    Uses `np.isclose` for numeric values and arrays, and custom implementations for
-    string and unicode arrays. This converts unicode arrays so that they are of uniform size and
-    can be properly used in numba jit-compiled functions
-    """
-    if dtype := largest_unicode_dtype(a, b):
-        if isinstance(a, np.ndarray):
-            a = np.asarray(a, dtype=dtype)
-        if isinstance(b, np.ndarray):
-            b = np.asarray(b, dtype=dtype)
-    return isclose_numba(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
-
-
-@numba.njit(cache=True)
-def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    return _isclose(a, b, rtol, atol, equal_nan)
-
-
-def _isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    pass
-
-
-@overload(_isclose)
-def _isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    inexact_domain = real_domain | complex_domain
-    if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
-        getattr(b, "dtype", None) in inexact_domain or b in inexact_domain
-    ):
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            return np.isclose(a, b, rtol, atol, equal_nan)
-
-    elif type_can_asarray(a) and not type_can_asarray(b):
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            a = np.asarray(a)
-            rv = np.zeros_like(a, dtype=np.bool_)
-            for i in range(a.size):
-                rv.flat[i] = a.flat[i] == b
-            return rv
-
-    elif type_can_asarray(b) and not type_can_asarray(a):
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            b = np.asarray(b)
-            rv = np.zeros_like(b, dtype=np.bool_)
-            for i in range(b.size):
-                rv.flat[i] = b.flat[i] == a
-            return rv
-
-    else:
-
-        def impl(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-            return a == b
-
-    return impl

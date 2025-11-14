@@ -14,8 +14,10 @@ def disable_jit():
 
 @overload(np.isclose, jit_options=dict(cache=True))
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Numba only has rudimentary np.isclose support. We provide a custom implementation of `np.isclose`
-    until numba has better support. See also: https://github.com/numba/numba/issues/5977
+    """Numba only has rudimentary np.isclose support. We provide a custom implementation of
+    `np.isclose` until numba has better support.
+
+    See also: https://github.com/numba/numba/issues/5977
     """
 
     if not type_can_asarray(a) or not type_can_asarray(b):

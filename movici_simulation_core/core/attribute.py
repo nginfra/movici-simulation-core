@@ -8,7 +8,7 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.csr import generate_update, isclose, remove_undefined_csr
+from movici_simulation_core.csr import generate_update, remove_undefined_csr
 from movici_simulation_core.types import CSRAttributeData, NumpyAttributeData, UniformAttributeData
 from movici_simulation_core.utils.unicode import determine_new_unicode_dtype
 
