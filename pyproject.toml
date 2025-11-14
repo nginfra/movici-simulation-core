@@ -47,8 +47,8 @@ dependencies = [
     "jsonschema",
     "pyproj",
     "netCDF4",
-    'Fiona>=1.9,<1.9.5; sys_platform == "win32"',
-    'Fiona>=1.8, <1.9.5; sys_platform != "win32"',
+    'Fiona>=1.9',
+    'Fiona>=1.8',
 ]
 
 [project.optional-dependencies]
