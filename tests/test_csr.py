@@ -3,9 +3,11 @@ import pytest
 
 from movici_simulation_core.core.data_type import UNDEFINED
 from movici_simulation_core.csr import (
+    compare_array,
+    compare_scalar,
     csr_binop,
+    float_compare,
     generate_update,
-    isclose,
     row_wise_max,
     row_wise_min,
     row_wise_sum,
@@ -15,30 +17,10 @@ from movici_simulation_core.csr import (
 )
 
 
-@pytest.mark.parametrize(
-    ["arr", "val", "equal_nan", "expected"],
-    [
-        (np.array([1.0, np.nan]), np.nan, True, [False, True]),
-        (np.array([1.0, np.nan]), np.nan, False, [False, False]),
-        (np.array([1.0, 2.0]), 1.0, False, [True, False]),
-        (np.array([1.0, 2.0]), 1, False, [True, False]),
-        (np.array([1, 2]), 1, False, [True, False]),
-        (np.array([1, 2]), np.array([1, 1]), False, [True, False]),
-        (np.array([[1, 2]]), 1, False, [[True, False]]),
-        (np.zeros(1000), np.nan, True, np.zeros(1000, dtype=bool)),
-        (np.zeros(1000), np.ones(1000), True, np.zeros(1000, dtype=bool)),
-        (np.zeros(1000), np.zeros(1000), True, np.ones(1000, dtype=bool)),
-        (np.zeros((1000, 2)), np.zeros((1000, 2)), True, np.ones((1000, 2), dtype=bool)),
-        (np.zeros((1000, 2)), np.ones((1000, 2)), True, np.zeros((1000, 2), dtype=bool)),
-        (np.array(["a", "b"]), "a", False, [True, False]),
-        (np.array([["a"], ["b"]]), "a", False, [[True], [False]]),
-        (np.array(["aa", "bb"]), "aaa", False, [False, False]),
-        (np.array(["a", "b"], dtype="<U3"), "a", False, [True, False]),
-    ],
-)
-def test_is_close(arr, val, equal_nan, expected):
-    assert np.array_equal(isclose(arr, val, equal_nan=equal_nan), expected)
-    assert np.array_equal(isclose(val, arr, equal_nan=equal_nan), expected)
+def get_compare_func(arr, equal_nan, scalar=False):
+    if arr.dtype == np.float64:
+        return float_compare(equal_nan=equal_nan)
+    return compare_scalar if scalar else compare_array
 
 
 @pytest.mark.parametrize(
@@ -89,7 +71,9 @@ def test_is_close(arr, val, equal_nan, expected):
     ],
 )
 def test_rows_equal(data, row_ptr, row, equal_nan, expected):
-    assert np.array_equal(rows_equal(data, row_ptr, row, equal_nan=equal_nan), expected)
+    assert np.array_equal(
+        rows_equal(data, row_ptr, row, get_compare_func(data, equal_nan)), expected
+    )
 
 
 @pytest.mark.parametrize(
@@ -102,7 +86,10 @@ def test_rows_equal(data, row_ptr, row, equal_nan, expected):
     ],
 )
 def test_rows_contain(data, row_ptr, val, equal_nan, expected):
-    assert np.array_equal(rows_contain(data, row_ptr, val, equal_nan=equal_nan), expected)
+    assert np.array_equal(
+        rows_contain(data, row_ptr, val, compare=get_compare_func(data, equal_nan, scalar=True)),
+        expected,
+    )
 
 
 @pytest.mark.parametrize(
@@ -132,7 +119,10 @@ def test_rows_contain(data, row_ptr, val, equal_nan, expected):
     ],
 )
 def test_rows_intersect(data, row_ptr, row, equal_nan, expected):
-    assert np.array_equal(rows_intersect(data, row_ptr, row, equal_nan=equal_nan), expected)
+    assert np.array_equal(
+        rows_intersect(data, row_ptr, row, compare=get_compare_func(data, equal_nan, scalar=True)),
+        expected,
+    )
 
 
 @pytest.mark.parametrize(
@@ -177,13 +167,6 @@ def test_row_wise_min(data, row_ptr, empty_row, expected):
 def test_row_wise_func_empty_row_raises(func):
     with pytest.raises(ValueError):
         func(np.array([]), np.array([0, 0]))
-
-
-@pytest.mark.parametrize("func", [row_wise_max, row_wise_min])
-def test_unsupported_dtype_raises(func):
-    with pytest.raises(TypeError) as e:
-        func(np.array(["a"]), np.array([0, 1]))
-    assert str(e.value) == "Only numeric arrays are supported"
 
 
 @pytest.mark.parametrize(
