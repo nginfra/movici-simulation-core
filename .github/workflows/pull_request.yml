@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  python-version: "3.11"
+  python-version: "3.13"
 
 jobs:
   linting:
