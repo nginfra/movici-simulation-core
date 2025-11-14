@@ -34,7 +34,7 @@ dependencies = [
     "numpy>=1.19.1,<2",
     "numba>=0.55, <=0.62.1",
     "python-dateutil>=2.8.0",
-    "pandas>=1.2.0",
+    "pandas>=2.1.0,<3.0.0",
     "pydantic>=1.8.2,<=2.0.2",
     "pydantic_settings==2.0.3",
     "orjson>=3",
@@ -52,7 +52,7 @@ dependencies = [
 [project.optional-dependencies]
 models = [
     "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
+    "aequilibrae==1.5.0",
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
     "scipy<1.16",
@@ -79,7 +79,7 @@ docs = [
 ]
 all = [
     "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
+    "aequilibrae==1.5.0",
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
     "scipy<1.16",

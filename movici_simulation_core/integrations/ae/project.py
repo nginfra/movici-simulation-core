@@ -73,7 +73,6 @@ class ProjectWrapper:
         try:
             self._project = Project()
             self._project.new(str(self.project_dir))
-            self._db = self._project.conn
 
             self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
 
@@ -123,18 +122,20 @@ class ProjectWrapper:
             f"(?, ?, '{TransportMode.CAR}', 'y', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
-                sql,
-                zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
-            )
+        with self._project.db_connection_spatial as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.executemany(
+                    sql,
+                    zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
+                )
 
-            self._db.commit()
+                conn.commit()
 
     def get_nodes(self) -> NodeCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT node_id, is_centroid FROM nodes")
-            results = cursor.fetchall()
+        with self._project.db_connection as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("SELECT node_id, is_centroid FROM nodes")
+                results = cursor.fetchall()
         if not results:
             return NodeCollection()
         node_id, is_centroids = zip(*results)
@@ -180,28 +181,30 @@ class ProjectWrapper:
             f"(?, ?, ?, ?, ?, ?, ?, ?, '{TransportMode.CAR}', 'default', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
-                sql,
-                zip(
-                    new_link_ids.tolist(),
-                    new_from_nodes.tolist(),
-                    new_to_nodes.tolist(),
-                    directions,
-                    max_speeds,
-                    max_speeds,
-                    capacities,
-                    capacities,
-                    linestring_strs,
-                ),
-            )
+        with self._project.db_connection_spatial as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.executemany(
+                    sql,
+                    zip(
+                        new_link_ids.tolist(),
+                        new_from_nodes.tolist(),
+                        new_to_nodes.tolist(),
+                        directions,
+                        max_speeds,
+                        max_speeds,
+                        capacities,
+                        capacities,
+                        linestring_strs,
+                    ),
+                )
 
-            self._db.commit()
+                conn.commit()
 
     def get_links(self) -> LinkCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, a_node, b_node, direction FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("SELECT link_id, a_node, b_node, direction FROM links")
+                results = cursor.fetchall()
         if not results:
             return LinkCollection()
         link_id, a_node, b_node, direction = zip(*results)
@@ -249,9 +252,10 @@ class ProjectWrapper:
         Aequilibrae calculates distances automatically but does not compute free flow time, so we
         have to calculate them manually
         """
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, distance, speed_ab FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("SELECT link_id, distance, speed_ab FROM links")
+                results = cursor.fetchall()
         free_flow_times = []
         ids = []
         for link_id, distance, speed in results:
@@ -262,25 +266,27 @@ class ProjectWrapper:
         return np.array(free_flow_times)
 
     def add_column(self, column_name: str, values: t.Optional[t.Sequence] = None) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
+        with self._project.db_connection as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
 
         if values is not None:
             self.update_column(column_name, values)
 
     def update_column(self, column_name: str, values: t.Sequence) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id FROM links")
-            ids = (row[0] for row in cursor.fetchall())
+        with self._project.db_connection as conn:
+            with closing(conn.cursor()) as cursor:
+                cursor.execute("SELECT link_id FROM links")
+                ids = (row[0] for row in cursor.fetchall())
 
-            if isinstance(values, np.ndarray):
-                values = values.tolist()
+                if isinstance(values, np.ndarray):
+                    values = values.tolist()
 
-            cursor.executemany(
-                f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
-            )
+                cursor.executemany(
+                    f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
+                )
 
-            self._db.commit()
+                conn.commit()
 
     @property
     def _graph(self) -> Graph:
