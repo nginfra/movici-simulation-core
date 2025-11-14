@@ -332,7 +332,7 @@ def test_doesnt_overwrite_uniform_attribute_undefined_string_array(key, value):
 
 def test_doesnt_overwrite_csr_attribute_with_undefined():
     attr = create_empty_attribute(data_type=DataType(int, (), True), length=1)
-    attr.csr = TrackedCSRArray(np.array([1]), np.array([0, 1]))
+    attr.csr = TrackedCSRArray(np.array([1], dtype=int), np.array([0, 1]))
     attr.update(TrackedCSRArray([int_undefined], [0, 1]), [0])
     assert not any(attr.is_undefined())
 

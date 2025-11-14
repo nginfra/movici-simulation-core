@@ -1,93 +1,118 @@
+import functools
 import typing as t
 
 import numba
 import numpy as np
 from numba.core.types import complex_domain, number_domain, real_domain
+from numba.extending import overload
 from numba.np.numpy_support import type_can_asarray
 
-from .core.numba_extensions import generated_jit
+from .core import numba_extensions  # required for proper np.isclose support in numpy
 from .utils.unicode import largest_unicode_dtype
 
 
+@functools.lru_cache(None)
+def float_compare(rtol=1e-5, atol=1e-8, equal_nan=True):
+    """factory function for creating a float compare function"""
+
+    @numba.njit(cache=True)
+    def impl(a, b):
+        return np.isclose(a, b, rtol, atol, equal_nan)
+
+    return impl
+
+
 @numba.njit(cache=True)
-def rows_equal(data, row_ptr, row, rtol=1e-05, atol=1e-08, equal_nan=False):
+def compare_scalar(a, b):
+    """compare function for comparing an array against a scalar
+    :param a: a numpy array
+    :param b: a scalar
+    """
+    a = np.asarray(a)
+    rv = np.zeros_like(a, dtype=np.bool_)
+    for i in range(a.size):
+        rv.flat[i] = a.flat[i] == b
+    return rv
+
+
+@numba.njit(cache=True)
+def compare_array(a, b):
+    """compare function when both a and b are numpy arrays (and not float arrays)"""
+    return a == b
+
+
+@numba.njit(cache=True)
+def rows_equal(data, row_ptr, row, compare):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
-        rv[i] = (data_row.shape == row.shape) and np.all(
-            isclose_numba(data_row, row, rtol=rtol, atol=atol, equal_nan=equal_nan)
-        )
+        rv[i] = (data_row.shape == row.shape) and np.all(compare(data_row, row))
     return rv
 
 
 @numba.njit(cache=True)
-def rows_contain(data, row_ptr, val, rtol=1e-05, atol=1e-08, equal_nan=False):
+def rows_contain(data, row_ptr, val, compare):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
-        rv[i] = np.any(isclose_numba(get_row(data, row_ptr, i), val, rtol, atol, equal_nan))
+        rv[i] = np.any(compare(get_row(data, row_ptr, i), val))
     return rv
 
 
 @numba.njit(cache=True)
-def rows_intersect(data, row_ptr, vals, rtol=1e-05, atol=1e-08, equal_nan=False):
+def rows_intersect(data, row_ptr, vals, compare):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=np.bool_)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
         for item in vals:
-            if np.any(isclose_numba(data_row, item, rtol=rtol, atol=atol, equal_nan=equal_nan)):
+            if np.any(compare(data_row, item)):
                 rv[i] = True
                 break
     return rv
 
 
-@generated_jit
+@numba.njit(cache=True)
 def row_wise_sum(data, row_ptr):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr):
-        return reduce_rows(data, row_ptr, np.sum)
-
-    return impl
-
-
-@generated_jit
-def row_wise_max(data, row_ptr, empty_row=None):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr, empty_row=None):
-
-        if empty_row is None:
-            return reduce_rows(data, row_ptr, np.max)
-
-        return reduce_rows(data, row_ptr, _substituted_max, empty_row)
-
-    return impl
-
-
-@generated_jit
-def row_wise_min(data, row_ptr, empty_row=None):
-    assert_numeric_array(data)
-
-    def impl(data, row_ptr, empty_row=None):
-
-        if empty_row is None:
-            return reduce_rows(data, row_ptr, np.min)
-
-        return reduce_rows(data, row_ptr, _substituted_min, empty_row)
-
-    return impl
+    return reduce_rows(data, row_ptr, np.sum)
 
 
 @numba.njit(cache=True)
-def reduce_rows(data, row_ptr, func, *args):
+def row_wise_max(data, row_ptr, empty_row=None):
+    if empty_row is None:
+        return reduce_rows(data, row_ptr, np.max)
+
+    return reduce_rows_with_substitute(data, row_ptr, _substituted_max, empty_row)
+
+
+@numba.njit(cache=True)
+def row_wise_min(data, row_ptr, empty_row=None):
+    if empty_row is None:
+        return reduce_rows(data, row_ptr, np.min)
+
+    return reduce_rows_with_substitute(data, row_ptr, _substituted_min, empty_row)
+
+
+# cannot cache this function because numba complains about not being able to pickle a closure
+@numba.njit()
+def reduce_rows_with_substitute(data, row_ptr, func, substitute):
     n_rows = row_ptr.size - 1
     rv = np.zeros((n_rows,), dtype=data.dtype)
     for i in range(n_rows):
         data_row = get_row(data, row_ptr, i)
-        rv[i] = func(data_row, *args)
+        rv[i] = func(data_row, substitute)
+    return rv
+
+
+# cannot cache this function because numba complains about not being able to pickle a closure
+@numba.njit()
+def reduce_rows(data, row_ptr, func):
+    n_rows = row_ptr.size - 1
+    rv = np.zeros((n_rows,), dtype=data.dtype)
+    for i in range(n_rows):
+        data_row = get_row(data, row_ptr, i)
+        rv[i] = func(data_row)
     return rv
 
 
@@ -132,10 +157,8 @@ def update_csr_array(
     upd_data,
     upd_row_ptr,
     upd_indices,
+    compare,
     changes=None,
-    rtol=1e-05,
-    atol=1e-08,
-    equal_nan=False,
 ):
     """Update a csr array (`data` and `row_ptr`) in place with an update csr array (`upd_data`
     and `upd_row_ptr` at the locations `upd_indices`. `data` and `upd_data` must be of the same
@@ -163,9 +186,7 @@ def update_csr_array(
         new_row = get_row(upd_data, upd_row_ptr, upd_idx)
 
         if changes is not None:
-            is_equal = (old_row.shape == new_row.shape) and np.all(
-                isclose_numba(old_row, new_row, rtol, atol, equal_nan)
-            )
+            is_equal = (old_row.shape == new_row.shape) and np.all(compare(old_row, new_row))
             changes[pos] = not is_equal
         set_row(new_data, new_row_ptr, pos, new_row)
     return new_data, new_row_ptr
@@ -179,8 +200,8 @@ def remove_undefined_csr(
     undefined,
     num_undefined,
     new_data_shape,
+    compare,
 ) -> t.Tuple[np.ndarray, np.ndarray, np.ndarray]:
-
     new_data = np.empty(new_data_shape, dtype=data.dtype)
     new_row_ptr = np.empty(len(row_ptr) - num_undefined, dtype=row_ptr.dtype)
     new_indices = np.empty(len(indices) - num_undefined, dtype=indices.dtype)
@@ -192,7 +213,7 @@ def remove_undefined_csr(
         idx = row_ptr[i]
         idx2 = row_ptr[i + 1]
         data_field = data[idx:idx2]
-        if len(data_field) == 1 and np.all(isclose_numba(data_field, undefined, equal_nan=True)):
+        if len(data_field) == 1 and np.all(compare(data_field, undefined)):
             continue
         new_row_ptr[current_index + 1] = new_row_ptr[current_index] + len(data_field)
         new_data[new_row_ptr[current_index] : new_row_ptr[current_index + 1]] = data_field
@@ -269,8 +290,17 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     return isclose_numba(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
 
 
-@generated_jit(cache=True, nopython=True)
+@numba.njit(cache=True)
 def isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    return _isclose(a, b, rtol, atol, equal_nan)
+
+
+def _isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
+    pass
+
+
+@overload(_isclose)
+def _isclose_numba(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     inexact_domain = real_domain | complex_domain
     if (getattr(a, "dtype", None) in inexact_domain or a in inexact_domain) and (
         getattr(b, "dtype", None) in inexact_domain or b in inexact_domain
