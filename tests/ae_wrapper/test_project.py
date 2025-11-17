@@ -1,5 +1,4 @@
 import shutil
-import sqlite3
 import sys
 from pathlib import Path
 
@@ -60,10 +59,11 @@ def test_can_create_project_after_deletion(project_dir):
 def test_closes_db_after_deletion(project_dir):
     delete_project_if_exists(project_dir)
     with ProjectWrapper(project_dir, "ae_project_dir", delete_on_close=True) as project:
-        db = project._db
+        ae_project = project._project
 
-    with pytest.raises(sqlite3.ProgrammingError):
-        db.cursor()
+    with pytest.raises(FileNotFoundError):
+        with ae_project.db_connection:
+            pass
 
 
 def test_can_add_nodes(project: ProjectWrapper):
