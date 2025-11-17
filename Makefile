@@ -38,13 +38,16 @@ test-numba:
 black-check:
 	black --check .
 
+taplo-check:
+	taplo format --check .
+
 isort:
 	isort .
 	
 isort-check:
 	isort -c .
 
-lint: flake8 black-check isort-check bandit safety mypy
+lint: flake8 black-check taplo-check isort-check bandit safety mypy
 	
 test-all: coverage lint
 
