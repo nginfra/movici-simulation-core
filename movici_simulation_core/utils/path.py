@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import os
 import pathlib
 import typing as t
 
@@ -9,11 +8,6 @@ from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 
 def _dataset_path(cls: t.Type[DatasetPath]):
-    # It is not possible to override __init__ of a subclass of pathlib.Path because it has custom
-    # initialization method. So instead we use a custom factory function posing as a class
-    # constructor, to set additional attributes
-    cls._flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
-
     @functools.wraps(cls)
     def constructor(
         path,
@@ -29,7 +23,7 @@ def _dataset_path(cls: t.Type[DatasetPath]):
 
 
 @_dataset_path
-class DatasetPath(pathlib.Path):
+class DatasetPath(type(pathlib.Path())):
     """JsonPath is a subclass of `pathlib.Path` that points to a Movici format dataset file. It has
     one additional method `read_dict` that returns a dictionary of the dataset
 
