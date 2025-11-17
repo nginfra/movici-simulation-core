@@ -28,6 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
+  # numpy dependency based Aequilibrae dependency
   "numpy<1.99; python_version<='3.10'",
   "numpy>=2; python_version>='3.11'",
   "numba>=0.55, <=0.62.1",
@@ -49,7 +50,7 @@ dependencies = [
 [project.optional-dependencies]
 models = [
   "shapely>=1.7.1",
-  "aequilibrae>0.7.4,<=0.9.2",
+  "aequilibrae>1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy<1.16",
@@ -71,7 +72,7 @@ dev = [
 docs = ["sphinx", "furo", "sphinxcontrib-mermaid", "sphinxcontrib-plantuml"]
 all = [
   "shapely>=1.7.1",
-  "aequilibrae>0.7.4,<=0.9.2",
+  "aequilibrae>1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy<1.16",
