@@ -83,44 +83,6 @@ def example_querying_results():
             print(f"Entity groups: {list(first_update.keys())}")
 
 
-def example_comparison_json_vs_sqlite():
-    """
-    Example: Comparing JSON and SQLite storage configuration
-    """
-
-    # === JSON Storage (Original) ===
-    settings_json = Settings(storage="disk", storage_dir="./results_json")
-
-    model_config_json = {
-        "gather_filter": "*",
-        "storage_dir": "./results_json/updates",
-    }
-
-    print("JSON Storage Configuration:")
-    print(f"  Settings: {settings_json}")
-    print(f"  Model Config: {model_config_json}")
-    print("  Result: Creates many JSON files:")
-    print("    results_json/updates/t0_0_dataset.json")
-    print("    results_json/updates/t0_1_other_dataset.json")
-    print("    results_json/updates/t1_0_dataset.json")
-    print("    ... (one file per update)")
-
-    # === SQLite Storage (New) ===
-    settings_sqlite = Settings(storage="sqlite", storage_dir="./results_sqlite")
-
-    model_config_sqlite = {
-        "gather_filter": "*",
-        "database_path": "./results_sqlite/simulation.db",
-    }
-
-    print("\nSQLite Storage Configuration:")
-    print(f"  Settings: {settings_sqlite}")
-    print(f"  Model Config: {model_config_sqlite}")
-    print("  Result: Creates ONE database file:")
-    print("    results_sqlite/simulation.db")
-    print("    (contains all updates in structured tables)")
-
-
 def example_migration_json_to_sqlite():
     """
     Example: Migrating existing JSON results to SQLite
