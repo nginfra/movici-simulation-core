@@ -46,8 +46,7 @@ dependencies = [
     "jsonschema",
     "pyproj",
     "netCDF4",
-    'Fiona>=1.9',
-    'Fiona>=1.8',
+    "Fiona>=1.9",
 ]
 
 [project.optional-dependencies]
@@ -87,7 +86,6 @@ all = [
     "pytest-cov",
     "bandit",
     "safety>=3.7.0",
-    "typer",
     "marshmallow<3.22.0",
     "pylint",
     "mypy",
