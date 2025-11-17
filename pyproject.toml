@@ -7,7 +7,7 @@ name = "movici-simulation-core"
 version = "2.10.6"
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
-requires-python = ">=3.8,<3.12"
+requires-python = ">=3.10,<3.13"
 license = {text = "Movici Public License"}
 authors = [
     {name = "NGinfra Movici", email = "movici@nginfra.nl"}
@@ -24,31 +24,29 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: GIS",
 ]
 
 dependencies = [
-    "numpy>=1.19.1,<1.25",
-    "numba>=0.55, <0.58",
+    "numpy>=1.19.1,<2",
+    "numba>=0.55, <=0.62.1",
     "python-dateutil>=2.8.0",
     "pandas>=1.2.0",
-    "pydantic>=1.8.2,<=2.0.2",
-    "pydantic_settings==2.0.3",
+    "pydantic>=1.8.2",
+    "pydantic_settings",
     "orjson>=3",
     "pyzmq",
     "msgpack",
     "click",
-    "geopandas==0.14.1",
+    "geopandas",
     "jsonschema",
     "pyproj",
     "netCDF4",
-    'Fiona>=1.9,<1.9.5; sys_platform == "win32"',
-    'Fiona>=1.8, <1.9.5; sys_platform != "win32"',
+    "Fiona>=1.9",
 ]
 
 [project.optional-dependencies]
@@ -57,6 +55,7 @@ models = [
     "aequilibrae>0.7.4,<=0.9.2",
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
+    "scipy<1.16",
 ]
 sqlite = [
     "sqlalchemy>=1.4,<3.0",
@@ -65,8 +64,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "bandit",
-    "safety>=3.0.0",
-    "typer<0.12.0",
+    "safety>=3.7.0",
     "marshmallow<3.22.0",
     "pylint",
     "mypy",
@@ -88,11 +86,11 @@ all = [
     "pyproj>=3.0.1",
     "movici-geo-query>=1.1.1",
     "sqlalchemy>=1.4,<3.0",
+    "scipy<1.16",
     "pytest",
     "pytest-cov",
     "bandit",
-    "safety>=3.0.0",
-    "typer<0.12.0",
+    "safety>=3.7.0",
     "marshmallow<3.22.0",
     "pylint",
     "mypy",

@@ -1,4 +1,3 @@
-import functools
 import os
 
 import numba
@@ -8,27 +7,6 @@ from numba.core.extending import overload, register_jitable
 from numba.np.numpy_support import type_can_asarray
 
 
-def generated_jit(func=None, **kwargs):
-    """Custom decorator that replaces `numba.generated_jit` and works also when the jit compiler
-    is disabled
-    """
-    if numba.config.DISABLE_JIT:
-        if func is None:
-            return generated_jit
-        return _fake_generated_jit(func)
-    return numba.generated_jit(func, **kwargs)
-
-
-def _fake_generated_jit(func):
-    @functools.wraps(func)
-    def run_generated_jit_func(*args, **kwargs):
-        arg_types = (numba.typeof(arg) for arg in args)
-        kwargs_types = {k: numba.typeof(v) for k, v in kwargs.items()}
-        return func(*arg_types, **kwargs_types)(*args, **kwargs)
-
-    return run_generated_jit_func
-
-
 def disable_jit():
     os.environ["NUMBA_DISABLE_JIT"] = "1"
     reload_config()
@@ -36,8 +14,10 @@ def disable_jit():
 
 @overload(np.isclose, jit_options=dict(cache=True))
 def np_isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
-    """Custom implementation of `np.isclose` until numba has native support. See also:
-    https://github.com/numba/numba/issues/5977
+    """Numba only has rudimentary np.isclose support. We provide a custom implementation of
+    `np.isclose` until numba has better support.
+
+    See also: https://github.com/numba/numba/issues/5977
     """
 
     if not type_can_asarray(a) or not type_can_asarray(b):

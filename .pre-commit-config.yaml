@@ -1,18 +1,16 @@
 repos:
 - repo: https://github.com/ambv/black
-  rev: 22.1.0
+  rev: 25.11.0
   hooks:
   - id: black
-    language_version: python3.8
-
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.8.3
+    language_version: python3.10
+- repo: https://github.com/PyCQA/flake8
+  rev: 7.3.0
   hooks:
   - id: flake8
-    language_version: python3.8
-
+    language_version: python3.10
 - repo: https://github.com/pycqa/isort
-  rev: 5.10.1
+  rev: 7.0.0
   hooks:
     - id: isort
       name: isort (python)
@@ -28,6 +26,6 @@ repos:
   - id: python-safety-dependencies-check
     entry: bash
     name: Safety
-    args: [-c, "pip freeze | safety check --stdin --full-report"]
+    args: [-c, "pip freeze | safety scan --stdin --full-report"]
     language: system
     pass_filenames: false

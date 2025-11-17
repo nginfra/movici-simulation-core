@@ -4,7 +4,7 @@ on:
   pull_request:
 
 env:
-  python-version: "3.11"
+  python-version: "3.12"
 
 jobs:
   linting:
@@ -24,6 +24,64 @@ jobs:
     - name: Run linters
       run: |
         make lint
+
+  test-all-platforms:
+    if: contains( github.event.pull_request.labels.*.name, 'all-versions')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.10", "3.11", "3.12"]
+
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Spatialite
+      uses: ./.github/actions/install-spatialite
+      with:
+        os: ${{ matrix.os }}
+
+    - name: Install
+      run: |
+        pip install .[models,dev]
+
+    - name: Run tests
+      run: |
+        make test-numba
+
+  test-numba:
+    if: contains( github.event.pull_request.labels.*.name, 'numba')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python ${{ env.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ env.python-version }}
+
+    - name: Install Spatialite
+      uses: ./.github/actions/install-spatialite
+      with:
+        os: ${{ matrix.os }}
+
+    - name: Install dependencies
+      run: |
+        pip install -e .[models,dev]
+
+    - name: Run tests with Numba JIT enabled
+      run: |
+        make test-numba
 
   coverage:
     strategy:

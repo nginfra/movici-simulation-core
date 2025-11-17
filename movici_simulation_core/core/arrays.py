@@ -5,7 +5,10 @@ import typing as t
 import numpy as np
 
 from movici_simulation_core.csr import (
+    compare_array,
+    compare_scalar,
     csr_binop,
+    float_compare,
     get_row,
     rows_contain,
     rows_equal,
@@ -106,6 +109,14 @@ class TrackedCSRArray:
         self.equal_nan = equal_nan
         self.reset()
 
+    def get_comparator(self, to_scalar=False, equal_nan=None):
+        if self.data.dtype == np.float64:
+            equal_nan = equal_nan if equal_nan is not None else self.equal_nan
+            return float_compare(self.rtol, self.atol, equal_nan)
+        if to_scalar:
+            return compare_scalar
+        return compare_array
+
     def update(self, updates: TrackedCSRArray, indices: np.ndarray):
         """Update the CSRArray in place"""
 
@@ -122,9 +133,7 @@ class TrackedCSRArray:
             upd_row_ptr=updates.row_ptr,
             upd_indices=np.asarray(indices),
             changes=changes,
-            rtol=self.rtol,
-            atol=self.atol,
-            equal_nan=self.equal_nan,
+            compare=self.get_comparator(),
         )
 
         self.changed += changes
@@ -149,33 +158,31 @@ class TrackedCSRArray:
         rv.changed = self.changed
         return rv
 
-    def rows_equal(self, row):
-        """return a boolean array where the rows of `csr` equal the `row` argument"""
+    def rows_equal(self, row, equal_nan=None):
+        """return a boolean array where the rows of `csr` equal the `row` argument
+        :param row: a numpy.array
+        """
         return rows_equal(
             self.data,
             self.row_ptr,
             row.astype(self.data.dtype),
-            rtol=self.rtol,
-            atol=self.atol,
-            equal_nan=self.equal_nan,
+            compare=self.get_comparator(equal_nan=equal_nan),
         )
 
-    def rows_contain(self, val):
+    def rows_contain(self, val, equal_nan=None):
         """return a boolean array where the rows of `csr` contain the `val` argument"""
-
+        comparator = self.get_comparator(to_scalar=not np.iterable(val), equal_nan=equal_nan)
         return rows_contain(
             self.data,
             self.row_ptr,
-            np.array(val, dtype=self.data.dtype),
-            rtol=self.rtol,
-            atol=self.atol,
-            equal_nan=self.equal_nan,
+            np.asarray(val, dtype=self.data.dtype),
+            comparator,
         )
 
-    def rows_intersect(self, vals):
+    def rows_intersect(self, vals, equal_nan=None):
         """return a boolean array where the rows of `csr` contain any of the `vals` arguments"""
         return rows_intersect(
-            self.data, self.row_ptr, vals, rtol=self.rtol, atol=self.atol, equal_nan=self.equal_nan
+            self.data, self.row_ptr, vals, self.get_comparator(to_scalar=True, equal_nan=equal_nan)
         )
 
     def reset(self):
