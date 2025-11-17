@@ -17,9 +17,6 @@ safety:
 	@echo "Safety check: Skipping safety scan (requires authentication in CI)"
 	@echo "To run locally: pip freeze | safety scan --stdin --output screen"
 
-pylint:
-	pylint $(MODULE_NAME) --exit-zero -r n | tee pylint.txt
-
 mypy:
 	- mypy $(MODULE_NAME)
 

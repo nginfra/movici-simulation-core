@@ -27,9 +27,6 @@ __pycache__/
 .coverage
 coverage.xml
 
-# pylint
-pylint.txt
-
 # bandit
 bandit-report.json
 
