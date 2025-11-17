@@ -17,9 +17,6 @@ safety:
 	@echo "Safety check: Skipping safety scan (requires authentication in CI)"
 	@echo "To run locally: pip freeze | safety scan --stdin --output screen"
 
-pylint:
-	pylint $(MODULE_NAME) --exit-zero -r n | tee pylint.txt
-
 mypy:
 	- mypy $(MODULE_NAME)
 
@@ -38,13 +35,16 @@ test-numba:
 black-check:
 	black --check .
 
+taplo-check:
+	taplo format --check .
+
 isort:
 	isort .
 	
 isort-check:
 	isort -c .
 
-lint: flake8 black-check isort-check bandit safety mypy
+lint: flake8 black-check taplo-check isort-check bandit safety mypy
 	
 test-all: coverage lint
 

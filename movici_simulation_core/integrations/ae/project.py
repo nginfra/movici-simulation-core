@@ -2,7 +2,6 @@ import shutil
 import tempfile
 import typing as t
 import uuid
-from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -73,7 +72,6 @@ class ProjectWrapper:
         try:
             self._project = Project()
             self._project.new(str(self.project_dir))
-            self._db = self._project.conn
 
             self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
 
@@ -123,18 +121,15 @@ class ProjectWrapper:
             f"(?, ?, '{TransportMode.CAR}', 'y', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
+        with self._project.db_connection_spatial as conn:
+            conn.executemany(
                 sql,
                 zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
             )
 
-            self._db.commit()
-
     def get_nodes(self) -> NodeCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT node_id, is_centroid FROM nodes")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute("SELECT node_id, is_centroid FROM nodes").fetchall()
         if not results:
             return NodeCollection()
         node_id, is_centroids = zip(*results)
@@ -180,8 +175,8 @@ class ProjectWrapper:
             f"(?, ?, ?, ?, ?, ?, ?, ?, '{TransportMode.CAR}', 'default', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
+        with self._project.db_connection_spatial as conn:
+            conn.executemany(
                 sql,
                 zip(
                     new_link_ids.tolist(),
@@ -196,12 +191,11 @@ class ProjectWrapper:
                 ),
             )
 
-            self._db.commit()
-
     def get_links(self) -> LinkCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, a_node, b_node, direction FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute(
+                "SELECT link_id, a_node, b_node, direction FROM links"
+            ).fetchall()
         if not results:
             return LinkCollection()
         link_id, a_node, b_node, direction = zip(*results)
@@ -249,9 +243,8 @@ class ProjectWrapper:
         Aequilibrae calculates distances automatically but does not compute free flow time, so we
         have to calculate them manually
         """
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, distance, speed_ab FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute("SELECT link_id, distance, speed_ab FROM links").fetchall()
         free_flow_times = []
         ids = []
         for link_id, distance, speed in results:
@@ -262,25 +255,23 @@ class ProjectWrapper:
         return np.array(free_flow_times)
 
     def add_column(self, column_name: str, values: t.Optional[t.Sequence] = None) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
+        with self._project.db_connection_spatial as conn:
+            conn.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
 
         if values is not None:
             self.update_column(column_name, values)
 
     def update_column(self, column_name: str, values: t.Sequence) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id FROM links")
-            ids = (row[0] for row in cursor.fetchall())
+        with self._project.db_connection_spatial as conn:
+            result = conn.execute("SELECT link_id FROM links").fetchall()
+            ids = (row[0] for row in result)
 
             if isinstance(values, np.ndarray):
                 values = values.tolist()
 
-            cursor.executemany(
+            conn.executemany(
                 f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
             )
-
-            self._db.commit()
 
     @property
     def _graph(self) -> Graph:
