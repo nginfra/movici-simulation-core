@@ -8,95 +8,88 @@ version = "2.10.6"
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
 requires-python = ">=3.10,<3.13"
-license = {text = "Movici Public License"}
-authors = [
-    {name = "NGinfra Movici", email = "movici@nginfra.nl"}
-]
-maintainers = [
-    {name = "NGinfra - Movici", email = "movici@nginfra.nl"}
-]
+license = { text = "Movici Public License" }
+authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research",
-    "Intended Audience :: Developers",
-    "License :: Free for non-commercial use",
-    "License :: Other/Proprietary License",
-    "Operating System :: Microsoft :: Windows",
-    "Operating System :: POSIX :: Linux",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering",
-    "Topic :: Scientific/Engineering :: GIS",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: Free for non-commercial use",
+  "License :: Other/Proprietary License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: GIS",
 ]
 
 dependencies = [
-    "numpy>=1.19.1,<2",
-    "numba>=0.55, <=0.62.1",
-    "python-dateutil>=2.8.0",
-    "pandas>=1.2.0",
-    "pydantic>=1.8.2",
-    "pydantic_settings",
-    "orjson>=3",
-    "pyzmq",
-    "msgpack",
-    "click",
-    "geopandas",
-    "jsonschema",
-    "pyproj",
-    "netCDF4",
-    "Fiona>=1.9",
+  "numpy>=1.19.1,<2",
+  "numba>=0.55, <=0.62.1",
+  "python-dateutil>=2.8.0",
+  "pandas>=1.2.0",
+  "pydantic>=1.8.2",
+  "pydantic_settings",
+  "orjson>=3",
+  "pyzmq",
+  "msgpack",
+  "click",
+  "geopandas",
+  "jsonschema",
+  "pyproj",
+  "netCDF4",
+  "Fiona>=1.9",
 ]
 
 [project.optional-dependencies]
 models = [
-    "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
-    "pyproj>=3.0.1",
-    "movici-geo-query>=1.1.1",
-    "scipy<1.16",
+  "shapely>=1.7.1",
+  "aequilibrae>0.7.4,<=0.9.2",
+  "pyproj>=3.0.1",
+  "movici-geo-query>=1.1.1",
+  "scipy<1.16",
 ]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "bandit",
-    "safety>=3.7.0",
-    "marshmallow<3.22.0",
-    "pylint",
-    "mypy",
-    "flake8",
-    "black==25.9.0",
-    "bump2version",
-    "isort",
+  "pytest",
+  "pytest-cov",
+  "bandit",
+  "safety>=3.7.0",
+  "marshmallow<3.22.0",
+  "pylint",
+  "mypy",
+  "flake8",
+  "black==25.9.0",
+  "bump2version",
+  "isort",
+  "taplo",
 ]
-docs = [
-    "sphinx",
-    "furo",
-    "sphinxcontrib-mermaid",
-    "sphinxcontrib-plantuml",
-]
+docs = ["sphinx", "furo", "sphinxcontrib-mermaid", "sphinxcontrib-plantuml"]
 all = [
-    "shapely>=1.7.1",
-    "aequilibrae>0.7.4,<=0.9.2",
-    "pyproj>=3.0.1",
-    "movici-geo-query>=1.1.1",
-    "scipy<1.16",
-    "pytest",
-    "pytest-cov",
-    "bandit",
-    "safety>=3.7.0",
-    "marshmallow<3.22.0",
-    "pylint",
-    "mypy",
-    "flake8",
-    "black==25.9.0",
-    "bump2version",
-    "isort",
-    "sphinx",
-    "furo",
-    "sphinxcontrib-mermaid",
-    "sphinxcontrib-plantuml",
+  "shapely>=1.7.1",
+  "aequilibrae>0.7.4,<=0.9.2",
+  "pyproj>=3.0.1",
+  "movici-geo-query>=1.1.1",
+  "scipy<1.16",
+  "pytest",
+  "pytest-cov",
+  "bandit",
+  "safety>=3.7.0",
+  "marshmallow<3.22.0",
+  "pylint",
+  "mypy",
+  "flake8",
+  "black==25.9.0",
+  "bump2version",
+  "isort",
+  "taplo",
+  "sphinx",
+  "furo",
+  "sphinxcontrib-mermaid",
+  "sphinxcontrib-plantuml",
 ]
 
 [project.scripts]
@@ -135,9 +128,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.setuptools]
 include-package-data = true
-script-files = [
-    "bin/rename_attributes.py",
-]
+script-files = ["bin/rename_attributes.py"]
 
 [tool.setuptools.packages.find]
 include = ["movici_simulation_core*"]
@@ -174,15 +165,9 @@ known_first_party = ["movici_simulation_core"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = [
-    "--tb=short",
-    "--strict-markers",
-    "--strict-config",
-]
+addopts = ["--tb=short", "--strict-markers", "--strict-config"]
 testpaths = ["tests"]
-filterwarnings = [
-    "ignore:.*ABCs from 'collections'.*:DeprecationWarning",
-]
+filterwarnings = ["ignore:.*ABCs from 'collections'.*:DeprecationWarning"]
 
 [tool.mypy]
 disallow_untyped_calls = true
@@ -195,8 +180,5 @@ warn_unused_configs = true
 show_error_context = true
 
 [[tool.mypy.overrides]]
-module = [
-  'numpy.*',
-  'numba.*',
-]
+module = ['numpy.*', 'numba.*']
 ignore_missing_imports = true
