@@ -151,7 +151,7 @@ def test_update():
     )
 
     # the Model is a steady state model, so we expect no next_time
-    assert next_time is None  # nosec assert_used
+    assert next_time is None
 
     # do a deep equality check on the update data
     assert_dataset_dicts_equal(
