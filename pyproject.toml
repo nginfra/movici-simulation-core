@@ -143,11 +143,9 @@ select = [
   "F", # pyflakes rules
   # "FA", # check for correct usage of from __future__ import annotations
   "FURB", # refactor opportunities
-
-  "I", # isort
-  # "LOG", # check for logging best practices and bugs
+  "I",    # isort
+  "LOG",  # check for logging best practices and bugs
   # "N", # pep8 naming
-
   "NPY", # numpy checks
   "PD",  # pandas checks
   "PLE", # pylint errors
