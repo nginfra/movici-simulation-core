@@ -43,7 +43,6 @@ try:
         PointGeometry,
     )
 except ImportError as e:
-
     ClosedPolygonGeometry = delayed_raise(e)
     Geometry = delayed_raise(e)
     LinestringGeometry = delayed_raise(e)
@@ -54,7 +53,6 @@ try:
     from shapely.geometry import LineString, Point, Polygon
     from shapely.geometry.base import BaseGeometry
 except ImportError as e:
-
     BaseGeometry = delayed_raise(e)
     LineString = delayed_raise(e)
     Point = delayed_raise(e)

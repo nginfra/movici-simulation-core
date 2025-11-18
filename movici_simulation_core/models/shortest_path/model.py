@@ -92,7 +92,6 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
             calculator.initialize(self.network)
 
     def update(self, **_) -> t.Optional[Moment]:
-
         if self.no_update_shortest_path:
             weights = self.cost_factor.array
         else:

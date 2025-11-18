@@ -31,7 +31,6 @@ class DummyModel(TrackedModel):
         )
 
     def initialize(self, state: TrackedState):
-
         state.receive_update(
             {
                 "dataset": {

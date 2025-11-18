@@ -1078,7 +1078,6 @@ class TestIDLinking:
     @pytest.fixture
     def prepare_dataset(self, sources):
         def _prepare_dataset(config):
-
             return DatasetCreator(
                 [
                     AttributeDataLoading,

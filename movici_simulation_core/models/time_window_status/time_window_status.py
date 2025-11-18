@@ -90,7 +90,6 @@ class TimeWindowStatus:
             self.source_entities.time_window_begin.array[defined],
             self.source_entities.time_window_end.array[defined],
         ):
-
             begin = self.timeline_info.string_to_timestamp(time_window_begin)
             end = self.timeline_info.string_to_timestamp(time_window_end)
 
