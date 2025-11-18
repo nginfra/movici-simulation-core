@@ -86,8 +86,8 @@ class NumpyDataSource(DataSource):
     def get_attribute(self, name: str):
         try:
             return self.data[name].tolist()
-        except KeyError:
-            raise ValueError(f"'{name}' was not found as a property")
+        except KeyError as e:
+            raise ValueError(f"'{name}' was not found as a property") from e
 
     def __len__(self):
         # this ensures compatibility with both a dictionary of numpy arrays an pandas.DataFrame
