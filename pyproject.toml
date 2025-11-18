@@ -149,7 +149,7 @@ select = [
   # "N", # pep8 naming
 
   "NPY", # numpy checks
-  # "PD", # pandas checsk
+  "PD",  # pandas checks
   "PLE", # pylint errors
   # "PLR", # pylint refactor opportunities
   # "PLW", # pyling warnings
