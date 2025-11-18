@@ -137,7 +137,7 @@ target-version = "py310"
 
 select = [
   # "ARG", # check for unused arguments -- there are too many false positives with overriding methods -> maybe typing.override will help?
-  # "B", # (bugbear) catches certain common programming bugs
+  "B", # (bugbear) catches certain common programming bugs
   # "C4", # comprehension linting
   "E", # common codestyle errors
   "F", # pyflakes rules
@@ -161,6 +161,11 @@ select = [
   "T20", # check for print statements
   "W",   # common codestyle warnings
   "YTT", # check sys.version errors (not used extensively but nice to have)
+]
+ignore = [
+  "B027", # empty method in abstract base class
+  "B028", # warnings explicit `stack_level` kwarg
+  "B905", # zip explicit `strict` kwarg
 ]
 
 [tool.ruff.lint.per-file-ignores]

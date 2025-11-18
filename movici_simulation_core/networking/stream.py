@@ -52,7 +52,7 @@ class MessageSocket(BaseSocket[T]):
             msg_type, *content = payload
             message = load_message(msg_type, *content)
         except (KeyError, AttributeError, TypeError, ValueError):
-            raise InvalidMessage(f"Invalid message '{payload}'")
+            raise InvalidMessage(f"Invalid message '{payload}'") from None
         return message
 
     def _serialize(self, payload: T) -> MultipartMessage:

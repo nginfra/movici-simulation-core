@@ -122,7 +122,7 @@ class SourcesSetup(DatasetOperation):
                 try:
                     source = self.make_source(source_info)
                 except ValueError as e:
-                    raise ValueError(f"Error for source '{key}': {str(e)}")
+                    raise ValueError(f"Error for source '{key}': {str(e)}") from None
                 sources[key] = source
         return dataset
 
@@ -309,7 +309,7 @@ class AttributeDataLoading(DatasetOperation):
         try:
             return source.get_geometry(geom_type)
         except ValueError as e:
-            raise ValueError(f"Error for source '{source_name}': {str(e)}")
+            raise ValueError(f"Error for source '{source_name}': {str(e)}") from None
 
     def get_attribute_data(self, attr_config: dict, primary_source_name: str):
         source = self.get_source(primary_source_name)
@@ -330,7 +330,7 @@ class AttributeDataLoading(DatasetOperation):
         try:
             return self.sources[source_name]
         except KeyError:
-            raise ValueError(f"Source '{source_name}' not available")
+            raise ValueError(f"Source '{source_name}' not available") from None
 
     def get_loaders(self, attr_config):
         def skip_none(loader):
@@ -582,7 +582,7 @@ class IDLinking(DatasetOperation):
         try:
             ids = dataset["data"][entity_type]["id"]
         except KeyError:
-            raise ValueError(f"ids not found for '{entity_type}'")
+            raise ValueError(f"ids not found for '{entity_type}'") from None
 
         key = (entity_type, prop)
         if key not in self.index:
@@ -597,7 +597,7 @@ class IDLinking(DatasetOperation):
         try:
             return dataset["data"][entity_type]["id"]
         except KeyError:
-            raise ValueError(f"ids not found for '{entity_type}'")
+            raise ValueError(f"ids not found for '{entity_type}'") from None
 
     @classmethod
     def get_indexed_values_or_raise(cls, values, indexers):

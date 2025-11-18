@@ -110,7 +110,7 @@ class ProjectWrapper:
         lats, lons = self.transformer.transform(nodes.geometries[:, 0], nodes.geometries[:, 1])
         lats = np.round(lats, decimals=GEOM_ACC)
         lons = np.round(lons, decimals=GEOM_ACC)
-        for node_id, xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
+        for node_id, _, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
             point_strs.append(f"POINT({lon:.{GEOM_ACC}f} {lat:.{GEOM_ACC}f})")
             self._node_id_to_point[node_id] = (lat, lon)
 
@@ -138,13 +138,13 @@ class ProjectWrapper:
     def add_links(self, links: LinkCollection, raise_on_geometry_mismatch: bool = True) -> None:
         try:
             new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
-        except ValueError:
-            raise ValueError(f"From nodes {links.from_nodes} does not exist in node ids")
+        except ValueError as e:
+            raise ValueError(f"From nodes {links.from_nodes} does not exist in node ids") from e
 
         try:
             new_to_nodes = self._node_id_generator.query_new_ids(links.to_nodes)
-        except ValueError:
-            raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids")
+        except ValueError as e:
+            raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids") from e
 
         linestring_strs = []
         geometries = np.round(
@@ -406,7 +406,7 @@ class ProjectWrapper:
     ) -> t.List[t.Optional[GraphPath]]:
         results: t.List[t.Optional[GraphPath]] = []
         path_results: t.Optional[PathResults] = None
-        for i, to_node in enumerate(to_nodes):
+        for to_node in to_nodes:
             if not path_results:
                 result = self.get_shortest_path(from_node, to_node)
                 if result:
