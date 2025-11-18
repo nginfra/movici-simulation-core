@@ -115,7 +115,7 @@ class ProjectWrapper:
             self._node_id_to_point[node_id] = (lat, lon)
 
         sql = (
-            "INSERT INTO nodes "  # nosec
+            "INSERT INTO nodes "  # noqa: S608
             "(node_id, is_centroid, modes, link_types, geometry)  VALUES "
             f"(?, ?, '{TransportMode.CAR}', 'y', GeomFromText(?, 4326))"
         )
@@ -168,7 +168,7 @@ class ProjectWrapper:
         capacities = links.capacities.tolist()
 
         sql = (
-            "INSERT INTO links "  # nosec
+            "INSERT INTO links "  # noqa: S608
             "(link_id, a_node, b_node, direction, speed_ab, speed_ba, "
             "capacity_ab, capacity_ba, modes, link_type, geometry)  VALUES "
             f"(?, ?, ?, ?, ?, ?, ?, ?, '{TransportMode.CAR}', 'default', GeomFromText(?, 4326))"
@@ -269,8 +269,8 @@ class ProjectWrapper:
                 values = values.tolist()
 
             conn.executemany(
-                f"UPDATE links SET {column_name}=? WHERE link_id=?",
-                zip(values, ids),  # nosec
+                f"UPDATE links SET {column_name}=? WHERE link_id=?",  # noqa: S608
+                zip(values, ids),
             )
 
     @property

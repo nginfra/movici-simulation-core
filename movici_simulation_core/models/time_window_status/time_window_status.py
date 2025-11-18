@@ -68,7 +68,7 @@ class TimeWindowStatus:
         for idx, dataset in enumerate(self.source_entities.connection_to_dataset.array):
             to_references = self.source_entities.connection_to_references.csr.slice([idx]).data
             for target in self.foreign_targets:
-                connected_indices = np.flatnonzero(np.in1d(target.reference.array, to_references))
+                connected_indices = np.flatnonzero(np.isin(target.reference.array, to_references))
                 if len(connected_indices) > 0:
                     self.source_entities.add_connection(idx, Connection(target, connected_indices))
 

@@ -136,4 +136,4 @@ def data_mask_compare(data_mask):
 
 
 def assert_equivalent_data_mask(a, b):
-    assert data_mask_compare(a) == data_mask_compare(b)  # nosec
+    assert data_mask_compare(a) == data_mask_compare(b)  # noqa: S101
