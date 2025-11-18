@@ -4,7 +4,6 @@ import logging
 import typing as t
 from collections import defaultdict
 from dataclasses import dataclass
-from logging import WARN
 
 import numpy as np
 
@@ -211,7 +210,7 @@ class TrackedState:
             if (special_value := specials.get(entity_name, {}).get(name)) is not None:
                 if attr.options.special not in (None, special_value):
                     self.log(
-                        WARN,
+                        logging.WARNING,
                         f"Special value already set for {dataset_name}/{entity_name}/{name}",
                     )
                 else:
@@ -220,7 +219,7 @@ class TrackedState:
             if (enum := enums.get(attr.options.enum_name)) is not None:
                 if attr.options.enum_values not in (None, enum):
                     self.log(
-                        WARN,
+                        logging.WARNING,
                         f"Enum already set for {dataset_name}/{entity_name}/{name}",
                     )
                 attr.options.enum_values = enum

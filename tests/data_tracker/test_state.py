@@ -1,4 +1,4 @@
-from logging import WARN
+from logging import WARNING
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -475,11 +475,11 @@ def test_logs_on_double_general_section_assignment_conflict(state, entity, datas
 
     assert state.logger.log.call_args_list == [
         call(
-            WARN,
+            WARNING,
             f"Special value already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
         call(
-            WARN,
+            WARNING,
             f"Enum already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
     ]
