@@ -54,7 +54,6 @@ class ProjectWrapper:
         project_name: t.Optional[str] = None,
         delete_on_close: bool = True,
     ) -> None:
-
         self._delete_on_close = delete_on_close
 
         if project_path is None:
@@ -270,7 +269,8 @@ class ProjectWrapper:
                 values = values.tolist()
 
             conn.executemany(
-                f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
+                f"UPDATE links SET {column_name}=? WHERE link_id=?",
+                zip(values, ids),  # nosec
             )
 
     @property

@@ -273,7 +273,6 @@ class UDFCompiler(NodeVisitor):
 
     @visit.register
     def _(self, node: BinOp):
-
         if node.left is None or node.right is None:
             raise ValueError("Invalid tree")
         op = {

@@ -13,7 +13,6 @@ from movici_simulation_core.validate import validate_and_process
 @pytest.fixture
 def get_model_config(road_network_name):
     def _get_model_config(calculation: dict, cost_factor="transport.average_time", **kwargs):
-
         return {
             "transport_segments": [road_network_name, "road_segment_entities"],
             "cost_factor": cost_factor,
@@ -215,9 +214,9 @@ class TestShortestPathModel:
         # should be taken to calculate the weights though
 
         average_time = [2, 3, 4, 0.3]
-        update_data[road_network_name]["road_segment_entities"][
-            "transport.average_time"
-        ] = average_time
+        update_data[road_network_name]["road_segment_entities"]["transport.average_time"] = (
+            average_time
+        )
         result, _ = tester.update(1, update_data)
         lengths = extract_length(result)
         np.testing.assert_allclose(
@@ -268,9 +267,9 @@ class TestShortestPathModel:
         # should be taken to calculate the weights though
 
         average_time = [2, 3, 4, 0.3]
-        update_data[road_network_name]["road_segment_entities"][
-            "transport.average_time"
-        ] = average_time
+        update_data[road_network_name]["road_segment_entities"]["transport.average_time"] = (
+            average_time
+        )
         result, _ = tester.update(1, update_data)
         lengths = extract_length(result)
         np.testing.assert_allclose(

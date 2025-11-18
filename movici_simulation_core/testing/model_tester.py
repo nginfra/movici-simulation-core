@@ -259,7 +259,7 @@ def compare_results(
 ) -> ErrorList:
     if len(expected) != len(results):
         raise ValueError(
-            f"Length of results [{len(results)}" f" doesnt match expected [{len(expected)}"
+            f"Length of results [{len(results)} doesnt match expected [{len(expected)}"
         )
     errors = []
     for (t_result, result, nt_result), (t_expected, expected_data, nt_expected) in zip(

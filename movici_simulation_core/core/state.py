@@ -212,7 +212,7 @@ class TrackedState:
                 if attr.options.special not in (None, special_value):
                     self.log(
                         WARN,
-                        f"Special value already set for " f"{dataset_name}/{entity_name}/{name}",
+                        f"Special value already set for {dataset_name}/{entity_name}/{name}",
                     )
                 else:
                     attr.options.special = special_value
@@ -221,7 +221,7 @@ class TrackedState:
                 if attr.options.enum_values not in (None, enum):
                     self.log(
                         WARN,
-                        f"Enum already set for " f"{dataset_name}/{entity_name}/{name}",
+                        f"Enum already set for {dataset_name}/{entity_name}/{name}",
                     )
                 attr.options.enum_values = enum
 
@@ -256,7 +256,6 @@ class TrackedState:
 def parse_special_values(
     general_section: dict, special_keys: t.Iterable = ("special", "no_data")
 ) -> t.Dict[str, t.Dict[str, ValueType]]:
-
     special_section: t.Dict[str, t.Any] = {}
     for key in special_keys:
         if special_section := general_section.get(key, special_section):

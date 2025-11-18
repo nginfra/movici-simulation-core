@@ -156,7 +156,6 @@ class FromDictLookup(MoviciTypeLookup):
         attribute_types: t.Optional[list] = None,
         validate_dataset_types: bool = True,
     ) -> None:
-
         self.datasets = self.entity_types = self.attribute_types = None
         if datasets is not None:
             self.datasets = {

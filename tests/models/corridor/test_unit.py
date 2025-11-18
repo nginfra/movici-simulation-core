@@ -56,7 +56,6 @@ def model() -> Model:
 
 
 def test_node_attributes(model: Model):
-
     model._add_node_attributes(
         corridor_index=2, passenger_demand=10, cargo_demand=20, pcu_demand=30
     )
@@ -73,7 +72,6 @@ def test_node_attributes(model: Model):
 
 
 def test_energy_kpis(model: Model):
-
     model._transport_segments.passenger_car_unit.array = TrackedArray([10, 20, 30, 40])
     model._transport_segments.co2_emission.array = TrackedArray([10, 11, 12, 13])
     model._transport_segments.nox_emission.array = TrackedArray([100, 101, 102, 103])

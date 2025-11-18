@@ -124,7 +124,6 @@ class ModalityStrategy:
         model.cargo_pcu = model.config.get("cargo_pcu", default_parameters.cargo_pcu)
 
     def setup_state(self, model: Model, state: TrackedState, dataset_name: str):
-
         model.transport_segments = state.register_entity_group(
             dataset_name,
             self.transport_segment_entity(

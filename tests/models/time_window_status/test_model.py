@@ -353,7 +353,6 @@ class TestTimeWindowUndefinedWindow:
 class TestTimeWindowInEntitiesDataset:
     @pytest.fixture
     def model_config(self, model_name, road_network_name):
-
         return {
             "name": model_name,
             "type": "time_window_status",

@@ -54,7 +54,6 @@ def set_timeline_info(
     time_scale: t.Optional[float] = None,
     start_time: t.Optional[int] = None,
 ):
-
     if isinstance(info_or_reference, TimelineInfo):
         info = info_or_reference
     elif info_or_reference is None:

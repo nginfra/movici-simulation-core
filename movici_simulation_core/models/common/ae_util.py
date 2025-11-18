@@ -58,7 +58,6 @@ def get_transport_directions(segments: TransportSegmentEntity) -> np.ndarray:
 
 
 def get_nodes(nodes: PointEntity, point_generator: PointGenerator) -> NodeCollection:
-
     geometries = []
     for node_x, node_y in zip(nodes.x, nodes.y):
         geometry = point_generator.generate_and_add([node_x, node_y])
