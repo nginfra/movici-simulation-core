@@ -9,7 +9,7 @@ from movici_simulation_core.models.common.entity_groups import (
     PointEntity,
     TransportSegmentEntity,
 )
-from movici_simulation_core.models.common.network import Graph, Network, build_graph, link_indices
+from movici_simulation_core.models.common.network import Graph, Network, link_indices
 from movici_simulation_core.testing.helpers import create_entity_group_with_data
 
 
@@ -34,7 +34,9 @@ class TestGraph:
         """
         from_node_id = np.array([1, 2, 3, 2, 4, 4])
         to_node_id = np.array([2, 4, 4, 3, 5, 2])
-        graph = build_graph(nodes_index, from_node_id=from_node_id, to_node_id=to_node_id)
+        graph = Graph.from_network_data(
+            nodes_index, from_node_id=from_node_id, to_node_id=to_node_id
+        )
         graph.update_cost_factor(cost_factor)
         return graph
 
