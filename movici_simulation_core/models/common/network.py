@@ -22,16 +22,15 @@ class NetworkEntities(t.TypedDict):
 
 
 class Network:
-    """
-    Representation of a transport network containing transport nodes and -links and virtual nodes
-    and -links.
+    """Representation of a transport network containing transport nodes and -links and virtual
+    nodes and -links.
 
-    Transport nods and -links represent the real network, and can have a cost factor. Virtual nodes
-    and -links are special. They represent virtual entry/exit points to the network. Regular nodes
-    cannot be used as entry/exit points.
-    If a regular node needs to be used as an entry/exit point,
-    it needs to be connected to a virtual node, using a virtual link.
-    Virtual nodes can be used as source and target nodes for the the network
+    Transport nodes and -links represent the real network, and can have a cost factor. Virtual
+    nodes and -links are special. They represent virtual entry/exit points to the network. Regular
+    nodes cannot be used as entry/exit points.
+
+    If a regular node needs to be used as an entry/exit point, it must be connected to a virtual
+    node, using a virtual link.
     """
 
     # To prevent flow through (non source/non target) virtual nodes, the virtual links
@@ -39,23 +38,27 @@ class Network:
     # factor is very low (MIN_COST_FACTOR), so that the virtual link doesn't influence the shortest
     # path calculation / total cost factor
     # When doing a shortest path calculation, the outgoing cost factor for the source node are set
-    # to MIN_COST_FACTOR
+    # to MIN_COST_FACTOR so that that node can have traffic flow into the network
     MAX_COST_FACTOR = np.inf
     MIN_COST_FACTOR = 1e-12
 
-    tl_from_node_id: np.ndarray
-    tl_to_node_id: np.ndarray
+    all_node_index: Index  # Index containing all nodes, both transport and virtual
+    virtual_node_index: Index  # Index containing only all virtual nodes
+    transport_node_ids: np.ndarray  # All transport node ids
+    virtual_node_ids: np.ndarray  # All virtual node ids
+
+    tl_from_node_id: np.ndarray  # transport link from_node_id attribute data
+    tl_to_node_id: np.ndarray  # transport link to_node_id attribute data
+
+    # A mapping from the transport link attribute to their position in the graph data
     tl_mapping: np.ndarray
-    tl_count = 0
-    vn_ids: np.ndarray
-    vl_count = 0
+    tl_count = 0  # total number of transport links
+    vl_count = 0  # total number of virtual links
 
     vl_from_node_id: np.ndarray
     vl_to_node_id: np.ndarray
     vl_directionality: np.ndarray
     vl_cost_factor: np.ndarray
-
-    virtual_node_ids: np.ndarray
 
     graph: Graph
     source_node_idx = None
@@ -70,15 +73,15 @@ class Network:
         virtual_links: LinkEntity,
         cost_factor: t.Optional[np.ndarray] = None,
     ):
-        self.node_index = Index(raise_on_invalid=True)
+        self.all_node_index = Index(raise_on_invalid=True)
         self.virtual_node_index = Index(raise_on_invalid=False)
 
         self.transport_node_ids = transport_nodes.index.ids
-        self.node_index.add_ids(self.transport_node_ids)
+        self.all_node_index.add_ids(self.transport_node_ids)
         self.process_transport_links(transport_links)
 
         self.virtual_node_ids = virtual_nodes.index.ids
-        self.node_index.add_ids(self.virtual_node_ids)
+        self.all_node_index.add_ids(self.virtual_node_ids)
         self.virtual_node_index.add_ids(self.virtual_node_ids)
 
         self.process_virtual_links(virtual_links)
@@ -104,9 +107,9 @@ class Network:
         # every bidirectional link we must create a forward- and a reverse direction edge in the
         # graph
         #
-        # the layout governes the directionality of the transport link, it is a 4-tuple per link
-        # indicating the number of lanes for that link: (forward, reverse, bidirectional, unknown)
-        # if no layout is given, we assume a one-directional forward link
+        # the layout attribute governs the directionality of the transport link, it is a 4-tuple
+        # per link indicating the number of lanes for that link: (forward, reverse, bidirectional,
+        # unknown). If no layout is given, we assume a unidirectional forward link
         layout = transport_links.layout.array.copy()
         layout[transport_links.layout.is_undefined()] = [1, 0, 0, 0]
 
@@ -142,14 +145,14 @@ class Network:
         # node that it connects to.
         self.vl_directionality = np.zeros_like(self.vl_from_node_id)
 
-        # when checking the index, it returns -1 if the entry does not exist
+        # when checking the Index for a position, it returns -1 if the entry does not exist.
         self.vl_directionality[self.virtual_node_index[self.vl_from_node_id] != -1] = 1
         self.vl_directionality[self.virtual_node_index[self.vl_to_node_id] != -1] = -1
         if np.any(self.vl_directionality == 0):
             raise ValueError("Virtual links detected that do not connect to a virtual node")
 
     def initialize_cost_factor(self):
-        # outgoing links are vitual links going out of the virtual node (so from the network's
+        # outgoing links are virtual links going out of the virtual node (so from the network's
         # perspective this is for incoming traffic), while incoming links are going towards the
         # virtual link (outgoing traffic from the network's perspective)
         outgoing_links = np.flatnonzero(self.vl_directionality == 1)
@@ -173,12 +176,12 @@ class Network:
         self.update_cost_factor(np.ones((self.tl_count,)))
 
     def _build_graph(self) -> Graph:
-        from_node_id = self.tl_from_node_id
-        to_node_id = self.tl_to_node_id
-        from_node_id = np.concatenate((from_node_id, self.vl_from_node_id, self.vl_to_node_id))
-        to_node_id = np.concatenate((to_node_id, self.vl_to_node_id, self.vl_from_node_id))
+        from_node_ids = (self.tl_from_node_id, self.vl_from_node_id, self.vl_to_node_id)
+        to_node_ids = (self.tl_to_node_id, self.vl_to_node_id, self.vl_from_node_id)
         return Graph.from_network_data(
-            self.node_index, from_node_id=from_node_id, to_node_id=to_node_id
+            self.all_node_index,
+            from_node_id=np.concatenate(from_node_ids),
+            to_node_id=np.concatenate(to_node_ids),
         )
 
     def update_cost_factor(self, cost_factor: np.ndarray):
@@ -199,8 +202,7 @@ class Network:
         # The links in the graph do not match the transport links directly. In
         # ``process_transport_links`` we have created copies for bidirectional links (the graph
         # requires unidirectional links) and in `process_virtual_links` we have added virtual
-        # links to the graph with a set cost factor that we need to account for when updating
-        # graph's cost factor
+        # links to the graph that we need to account for when updating graph's cost factor
         self.graph.update_cost_factor(
             np.concatenate((cost_factor[self.tl_mapping], self.vl_cost_factor))
         )
@@ -211,7 +213,7 @@ class Network:
         """Compute the shortest path distance between all virtual nodes"""
         if virtual_node_ids is None:
             virtual_node_ids = self.virtual_node_ids
-        node_indices = self.node_index[virtual_node_ids]
+        node_indices = self.all_node_index[virtual_node_ids]
 
         return np.vstack(
             [
@@ -227,7 +229,7 @@ class Network:
 
         :returns a (dist, prev) tuple
 
-        """  # noqa E501
+        """
         try:
             return self._cache[int(source_node_id)]
         except KeyError:
@@ -238,7 +240,7 @@ class Network:
 
         self.set_source_node(source_node_id)
 
-        result = self.graph.shortest_path(self.node_index[source_node_id])
+        result = self.graph.shortest_path(self.all_node_index[source_node_id])
 
         self._cache[int(source_node_id)] = result
         return result
@@ -256,7 +258,7 @@ class Network:
             self.graph.set_node_outgoing_cost_factor(self.source_node_idx, self.MAX_COST_FACTOR)
 
         # then we enable transport from the desired source node into the network
-        self.source_node_idx = self.node_index[source_node_id]
+        self.source_node_idx = self.all_node_index[source_node_id]
         self.graph.set_node_outgoing_cost_factor(self.source_node_idx, self.MIN_COST_FACTOR)
 
     def all_shortest_paths_sum(self, values, virtual_node_ids=None, no_path_found=-1):
@@ -303,11 +305,11 @@ class Network:
             values = self._get_mapped_quantity(values)
 
         _, prev = self.get_shortest_path(source_node_id)
-        source_idx = self.node_index[source_node_id]
+        source_idx = self.all_node_index[source_node_id]
         return self.graph.shortest_path_sum(
             predecessors=prev,
             source_idx=source_idx,
-            target_indices=self.node_index[self.virtual_node_ids],
+            target_indices=self.all_node_index[self.virtual_node_ids],
             values=values,
             no_path_found=no_path_found,
         )
@@ -375,11 +377,11 @@ class Network:
             if weights is not None:
                 weights = self._get_mapped_quantity(weights)
         _, prev = self.get_shortest_path(source_node_id)
-        source_idx = self.node_index[source_node_id]
+        source_idx = self.all_node_index[source_node_id]
         return self.graph.shortest_path_weighted_average(
             predecessors=prev,
             source_idx=source_idx,
-            target_indices=self.node_index[self.virtual_node_ids],
+            target_indices=self.all_node_index[self.virtual_node_ids],
             weights=weights,
             values=values,
             no_path_found=no_path_found,
@@ -414,11 +416,11 @@ class Network:
         :param dataset_name: The dataset name for the entity groups
         :param transport_segment_name: The name of the transport segment entities. Eg. for a road
             network this may be ``"road_segment_entities"``
-        :param entities: An optional dictionary to override the default registered entity groups.
-            keys in this dictionary may be ``"transport_nodes"``, ``"transport_links"``,
-            ``"virtual_nodes"`` and ``"virtual_links"`` and values must be either subclasses of
-            ``Entity`` with the appropriate attributes instances of thereof, ie. a partial of
-            ``NetworkEntities``
+        :param entities: A partial ``NetworkEntities`` dictionary to override the default
+            registered entity groups. Keys in this dictionary may be ``"transport_nodes"``,
+            ``"transport_links"``,``"virtual_nodes"`` and ``"virtual_links"`` and values must be
+            either subclasses of ``Entity`` with the appropriate attributes or instances of these
+            subclasses.
         :return: A full ``NetworkEntities`` dictionary that can be used for the initialization of
         a ``Network``
         """
@@ -453,8 +455,8 @@ class Graph:
 
     :param indices: sparse matrix column indices array (see ``scipy.sparse.csr_matrix``)
     :param indptr: sparse matrix index pointer array (see ``scipy.sparse.csr_matrix``)
-    :param cost_factor_indices: a mapping between "TransportNode oriented cost factor" and their
-        position in the sparse matrix
+    :param cost_factor_indices: a mapping between position of a link in the transport link entity
+        group and their position in the sparse matrix
     """
 
     indices: np.ndarray
@@ -552,17 +554,21 @@ class Graph:
 
 
 @njit(cache=True)
-def _build_graph(nodes_ids, from_node_id, to_node_id):
+def _build_graph(node_ids, from_node_id, to_node_id):
+    """Build a Graph from the transport (and virtual) link from_node_id and to_node_id data.
+
+    :param nodes_ids: a np.ndarray containing all
+    """
     indices_length = len(from_node_id)
     if len(to_node_id) != indices_length:
         raise TypeError("lengths of from_node_id must match to_node_id")
-    indptr_length = len(nodes_ids) + 1
+    indptr_length = len(node_ids) + 1
     indptr = np.empty((indptr_length,), dtype=np.int64)
     indices = np.empty((indices_length,), dtype=np.int64)
     edge_indices = np.empty_like(indices)
 
     indptr[0] = 0
-    for idx, source in enumerate(nodes_ids):
+    for idx, source in enumerate(node_ids):
         edges = np.flatnonzero(from_node_id == source)
 
         targets = to_node_id[edges]
