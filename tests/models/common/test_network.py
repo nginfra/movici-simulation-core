@@ -217,9 +217,14 @@ class TestNetwork1:
             network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR
         )
 
-    def test_shortest_path(self, network):
+    def test_shortest_path(self, network: Network):
+        # slightly tweak the cost factor to favour route 6->2->3->7 over 6->2->4->7
+        cost_factor = network.cost_factor
+        cost_factor[1] *= 1.1
+        network.cost_factor = cost_factor
+
         dist, prev = network.get_shortest_path(6)
-        np.testing.assert_array_almost_equal(dist, [0, 0, 1, 1, 2, 0, 1, 2])
+        np.testing.assert_array_almost_equal(dist, [0, 0, 1, 1.1, 2.1, 0, 1, 2.1])
         np.testing.assert_array_almost_equal(prev, [5, 5, 1, 1, 3, -9999, 2, 4])
 
     def test_doesnt_route_through_virtual_node(self, network):

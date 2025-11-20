@@ -52,7 +52,7 @@ models = [
   "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
-  "scipy<1.16",
+  "scipy",
 ]
 dev = [
   "pytest",
@@ -69,7 +69,7 @@ all = [
   "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
-  "scipy<1.16",
+  "scipy",
   "pytest",
   "pytest-cov",
   "safety>=3.7.0",

@@ -3,7 +3,8 @@ import scipy.stats
 
 
 def linreg(values):
-    result = scipy.stats.linregress(values)
+    x, y = zip(*values)
+    result = scipy.stats.linregress(x, y)
     return result.slope, result.intercept
 
 
