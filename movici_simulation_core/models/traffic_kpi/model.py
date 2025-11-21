@@ -467,11 +467,11 @@ class Model(TrackedModel, name="traffic_kpi"):
         if self.scenario_parameters_tape is None:
             return scenario_multiplier
         if category == CARGO and self._cargo_scenario_parameters is not None:
-            for i, param in enumerate(self._cargo_scenario_parameters):
+            for param in self._cargo_scenario_parameters:
                 parameter_multiplier = self.scenario_parameters_tape[param]
                 scenario_multiplier *= parameter_multiplier
         elif category == PASSENGER and self._passenger_scenario_parameters is not None:
-            for i, param in enumerate(self._passenger_scenario_parameters):
+            for param in self._passenger_scenario_parameters:
                 parameter_multiplier = self.scenario_parameters_tape[param]
                 scenario_multiplier *= parameter_multiplier
         return scenario_multiplier

@@ -124,8 +124,8 @@ class DataCollector(SimpleModel, name="data_collector"):
     def get_storage_strategy(self, settings: Settings, logger: logging.Logger):
         try:
             strategy_cls = self.strategies[settings.storage]
-        except KeyError:
-            raise ValueError(f"Unsupported storage method '{settings.storage}'")
+        except KeyError as e:
+            raise ValueError(f"Unsupported storage method '{settings.storage}'") from e
         return strategy_cls.choose(model_config=self.config, settings=settings, logger=logger)
 
     @classmethod

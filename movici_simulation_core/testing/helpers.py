@@ -106,9 +106,9 @@ def _dataset_dicts_equal_helper(
             )
 
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
-        if np.issubdtype(getattr(a, "dtype") or getattr(b, "dtype"), float) and not np.allclose(
-            a, b, rtol=rtol, atol=atol, equal_nan=True
-        ):
+        if np.issubdtype(
+            getattr(a, "dtype", None) or getattr(b, "dtype", None), float
+        ) and not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
             current_errors[current_path] = f"{a} not equal to {b}"
 
         if not np.array_equal(a, b):
@@ -136,4 +136,4 @@ def data_mask_compare(data_mask):
 
 
 def assert_equivalent_data_mask(a, b):
-    assert data_mask_compare(a) == data_mask_compare(b)  # nosec
+    assert data_mask_compare(a) == data_mask_compare(b)  # noqa: S101

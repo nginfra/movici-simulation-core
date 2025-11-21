@@ -473,7 +473,7 @@ class ModelRunner(Runner):
                 # noinspection PyBroadException
                 try:
                     model.close(QuitMessage())
-                except Exception:  # nosec
+                except Exception:  # noqa: S110
                     pass
             sys.exit(1)
         finally:

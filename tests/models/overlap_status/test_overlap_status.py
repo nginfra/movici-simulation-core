@@ -335,14 +335,13 @@ class TestOverlapStatus:
         get_overlap_update,
         global_schema,
     ):
-
         del water_network["data"]["water_pipe_entities"]["reference"]
         del road_network["data"]["road_segment_entities"]["reference"]
         del mv_network["data"]["electrical_node_entities"]["reference"]
 
-        config["config"]["models"][0][
-            "display_name_template"
-        ] = "{from_dataset_name} {from_id} {to_dataset_name} {to_id}"
+        config["config"]["models"][0]["display_name_template"] = (
+            "{from_dataset_name} {from_id} {to_dataset_name} {to_id}"
+        )
 
         scenario = {
             "updates": [

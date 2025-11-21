@@ -45,20 +45,22 @@ def get_model(name="dummy", timeline=None, send=None, **kwargs):
 class TestContext:
     @pytest.fixture
     def make_context(self):
+        sentinel = object()
+
         def _make(
             models=None,
-            timeline=Mock(),
-            phase_timer=Mock(),
-            global_timer=Mock(),
-            logger=Mock(),
+            timeline=sentinel,
+            phase_timer=sentinel,
+            global_timer=sentinel,
+            logger=sentinel,
             **kwargs,
         ):
             return Context(
                 models=models if models is not None else ModelCollection(),
-                timeline=timeline,
-                phase_timer=phase_timer,
-                global_timer=global_timer,
-                logger=logger,
+                timeline=timeline if timeline is not sentinel else Mock(),
+                phase_timer=phase_timer if phase_timer is not sentinel else Mock(),
+                global_timer=global_timer if global_timer is not sentinel else Mock(),
+                logger=logger if logger is not sentinel else Mock(),
                 **kwargs,
             )
 
@@ -139,7 +141,7 @@ class TestModelCollection:
         message = object()
         models.queue_all(message)
         for model in models.values():
-            model.recv_event.call_args == call(message)
+            assert model.recv_event.call_args == call(message)
 
     def test_determine_interdependency_publishes_to(self, timeline):
         """

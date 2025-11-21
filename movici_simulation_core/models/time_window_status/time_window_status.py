@@ -65,10 +65,10 @@ class TimeWindowStatus:
             for i in range(len(entity)):
                 self.source_entities.add_connection(i, Connection(entity, [i]))
 
-        for idx, dataset in enumerate(self.source_entities.connection_to_dataset.array):
+        for idx in range(len(self.source_entities.connection_to_dataset.array)):
             to_references = self.source_entities.connection_to_references.csr.slice([idx]).data
             for target in self.foreign_targets:
-                connected_indices = np.flatnonzero(np.in1d(target.reference.array, to_references))
+                connected_indices = np.flatnonzero(np.isin(target.reference.array, to_references))
                 if len(connected_indices) > 0:
                     self.source_entities.add_connection(idx, Connection(target, connected_indices))
 
@@ -90,7 +90,6 @@ class TimeWindowStatus:
             self.source_entities.time_window_begin.array[defined],
             self.source_entities.time_window_end.array[defined],
         ):
-
             begin = self.timeline_info.string_to_timestamp(time_window_begin)
             end = self.timeline_info.string_to_timestamp(time_window_end)
 

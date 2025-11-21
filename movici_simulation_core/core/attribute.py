@@ -381,7 +381,6 @@ class CSRAttribute(Attribute):
     def strip_undefined(
         self, value: TrackedCSRArray, indices: np.ndarray
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
-
         is_undefined = self.data_type.is_undefined(value.data)
         if len(is_undefined.shape) > 1:
             num_undefined = np.sum(np.all(is_undefined, axis=-1))
@@ -552,7 +551,6 @@ def ensure_csr_data(
     value: t.Union[dict, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray], t.List[list]],
     data_type: t.Optional[DataType] = None,
 ) -> TrackedCSRArray:
-
     if isinstance(value, TrackedCSRArray):
         return value
 

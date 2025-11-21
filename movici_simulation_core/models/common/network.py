@@ -402,7 +402,6 @@ def _shortest_path_weighted_average(
         error = False
 
         while curr != source_idx:
-
             # We need to examine the first link from the current node towards the source node
             # ``prev`` is the next node on our path to the source node, so the link to examine
             # is prev->curr
@@ -467,7 +466,6 @@ def _shortest_path_sum(
         curr = target
 
         while curr != source_idx:
-
             # We need to examine the first link from the current node towards the source node
             # ``prev`` is the next node on our path to the source node, so the link to examine
             # is prev->curr

@@ -22,7 +22,6 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class Model(TrackedModel, name="tape_player"):
-
     timeline: t.Optional[TimeSeries[dict]] = None
 
     def __init__(self, model_config: dict):
