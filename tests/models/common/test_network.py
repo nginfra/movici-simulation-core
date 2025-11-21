@@ -57,9 +57,9 @@ class TestGraph:
 def network_1():
     r"""
     (6) ----v
-    ^- 1 -> 2 <-------> 4 -> 5 <-(8)
-          \-> 3--------^|
-               \->(7)<-/
+    ^- 1 -> 2 <---------> 4 -> 5 <-(8)
+            \-> 3---------^\
+                 \->(7)<---/
     """
     transport_nodes = create_entity_group_with_data(PointEntity("t"), {"id": [1, 2, 3, 4, 5]})
     virtual_nodes = create_entity_group_with_data(PointEntity("v"), {"id": [6, 7, 8]})
@@ -167,24 +167,44 @@ class TestNetwork1:
     def network(self, network_1):
         return network_1
 
-    def test_network_creates_graph(self, network):
+    def test_network_creates_graph(self, network: Network):
         graph = network.graph
-        np.testing.assert_array_equal(graph.indptr, [0, 2, 5, 7, 10, 11, 13, 15, 16])
-        # every virtual link is bidirectional, which means it gets duplicated in a directed graph
-        # 6 transport links plus 2*5 virtual links gives 16 links total
-        np.testing.assert_array_equal(
-            graph.indices, [1, 5, 2, 3, 5, 3, 6, 1, 4, 6, 7, 0, 1, 2, 3, 4]
-        )
 
+        # The indptr array cuts the indices array up into len(indptr)-1 chunks, each chunk
+        # representing the outgoing links from a node. First the transport nodes, and then the
+        # virtual nodes
+        np.testing.assert_array_equal(graph.indptr, [0, 2, 5, 7, 10, 11, 13, 15, 16])
+        assert len(graph.indptr) == len(network.all_node_index) + 1
+
+        # every virtual link is bidirectional, which means it gets duplicated in a directed graph:
+        # 6 transport links plus 2*5 virtual links gives 16 links total. Furthermore, prior to
+        # creatting the graph, virtual links are ordered so that the source links (which connect
+        # from a virtual node to a transport node) come first and target links (which connect from
+        # a tranport node to a virtual node) come last. Below, we repeat the virtual nodes in order
+
+        transport_links = [9, 10, 11, 12, 13, 14]
+        virtual_links = [16, 19, 15, 17, 18]
+        all_links_ids = np.concatenate((transport_links, virtual_links, virtual_links))
+        # In the graph, links are ordered by their outgoing node (see also the indptr array). The
+        # first two links are those connecting from node 1 (1, 2), (1, 6), then 3 connecting from
+        # node 2 (2, 4), (2, 3) and (2, 6), etc. we can reconstruct the graph order using the
+        # cost factor indices array, which maps the links in their original order, to the order in
+        # the indices array:
+        #
+        graph_order_ids = all_links_ids[graph.cost_factor_indices]
+
+        # furthermore, in the indices array, the links for a single outgoing node are sorted
+        # numerically by target node
         np.testing.assert_array_equal(
-            graph.cost_factor_indices, [0, 6, 3, 1, 12, 2, 8, 5, 4, 9, 15, 11, 7, 13, 14, 10]
+            graph_order_ids,
+            [9, 15, 12, 10, 16, 11, 17, 14, 13, 18, 19, 15, 16, 17, 18, 19],
         )
 
     def test_transport_links_have_a_normal_cost_factor(self, network):
         assert np.sum(network.graph.cost_factor == 1) == network.tl_count
 
     def test_outgoing_virtual_links_have_high_cost_factor(self, network):
-        indices = network.node_index[network.virtual_node_ids]
+        indices = network.all_node_index[network.virtual_node_ids]
         graph = network.graph
         for idx in indices:
             begin, end = graph.indptr[idx : idx + 2]
@@ -195,14 +215,14 @@ class TestNetwork1:
     def test_incoming_virtual_links_have_low_cost_factor(self, network):
         graph = network.graph
         incoming_virtual_links = [(1, 6), (2, 6), (3, 7), (4, 7), (5, 8)]
-        incoming_indices = (network.node_index[link] for link in incoming_virtual_links)
+        incoming_indices = (network.all_node_index[link] for link in incoming_virtual_links)
         for src, tgt in incoming_indices:
             assert graph.get_cost(src, tgt) == network.MIN_COST_FACTOR
 
     def test_set_source_node_lowers_outgoing_cost_factor(self, network):
         source_node = 6
         network.set_source_node(6)
-        idx = network.node_index[source_node]
+        idx = network.all_node_index[source_node]
         begin, end = network.graph.indptr[idx : idx + 2]
         np.testing.assert_array_equal(
             network.graph.cost_factor[begin:end], network.MIN_COST_FACTOR
@@ -211,7 +231,7 @@ class TestNetwork1:
     def test_set_other_source_node_resets_previous_cost_factor(self, network):
         network.set_source_node(6)
         network.set_source_node(8)
-        idx = network.node_index[6]
+        idx = network.all_node_index[6]
         begin, end = network.graph.indptr[idx : idx + 2]
         np.testing.assert_array_equal(
             network.graph.cost_factor[begin:end], network.MAX_COST_FACTOR
@@ -260,9 +280,6 @@ class TestNetwork2:
     @pytest.fixture
     def network(self, network_2):
         return network_2
-
-    def test_directionality(self, network):
-        np.testing.assert_array_equal(network.vl_directionality, [1, -1, 1, 1, -1])
 
     def test_graph_links(self, network):
         np.testing.assert_array_equal(network.graph.indptr, [0, 2, 5, 8, 11, 13, 14, 16, 17, 18])
@@ -360,7 +377,7 @@ def test_network_with_layout(layout, mapping, indices, indptr):
 
 
 def test_get_network_with_links_based_on_layout(network_3):
-    vn10, vn11, vn12 = network_3.node_index[[10, 11, 12]]
+    vn10, vn11, vn12 = network_3.all_node_index[[10, 11, 12]]
     np.testing.assert_array_equal(network_3.graph.indices, [2, vn10, 0, 0, vn11, 1, vn12, 0, 1, 2])
     np.testing.assert_array_equal(network_3.graph.indptr, [0, 2, 5, 7, 8, 9, 10])
 

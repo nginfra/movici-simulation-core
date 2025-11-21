@@ -55,9 +55,11 @@ class Network:
     tl_count = 0  # total number of transport links
     vl_count = 0  # total number of virtual links
 
-    vl_from_node_id: np.ndarray
-    vl_to_node_id: np.ndarray
-    vl_directionality: np.ndarray
+    vl_from_node_id: np.ndarray  # virtual link from_node_id attribute data
+    vl_to_node_id: np.ndarray  # virtual link to_node_id attribute data
+
+    # virtual link cost factor. This array has a length 2*vl_count since every virtual link exists
+    # in the graph twice, once in the forward direction and once in the reverse direction.
     vl_cost_factor: np.ndarray
 
     graph: Graph
@@ -140,44 +142,55 @@ class Network:
         self.vl_to_node_id = virtual_links.to_node_id.array
         self.vl_count = len(self.vl_to_node_id)
 
-        # virtual links are always unidirectional and must connect to exaclty one virtual node.
-        # vl_directionality is the directionality of the link from the viewpoint of the virtual
-        # node that it connects to.
-        self.vl_directionality = np.zeros_like(self.vl_from_node_id)
-
-        # when checking the Index for a position, it returns -1 if the entry does not exist.
-        self.vl_directionality[self.virtual_node_index[self.vl_from_node_id] != -1] = 1
-        self.vl_directionality[self.virtual_node_index[self.vl_to_node_id] != -1] = -1
-        if np.any(self.vl_directionality == 0):
-            raise ValueError("Virtual links detected that do not connect to a virtual node")
-
     def initialize_cost_factor(self):
-        # outgoing links are virtual links going out of the virtual node (so from the network's
-        # perspective this is for incoming traffic), while incoming links are going towards the
-        # virtual link (outgoing traffic from the network's perspective)
-        outgoing_links = np.flatnonzero(self.vl_directionality == 1)
-        incoming_links = np.flatnonzero(self.vl_directionality == -1)
-
-        # By default, for calculating the shortest path between a source node and multiple target
-        # nodes, we set the cost factor for outgoing links to a very high number to prevent
-        # transport going into the network from every virtual node. This way we prevent transport
-        # through virtual nodes where the virtual node is not a destination.
-        #
-        # In the ``set_source_node`` method we enable outgoing transport from a single node, ie
-        # the source node
+        # Every virtual link is added to the graph twice. Once representing its node as a source
+        # node and once representing its node as a sink node. See also ``Network._build_graph``
         self.vl_cost_factor = np.empty((2 * self.vl_count,), dtype=float)
-        self.vl_cost_factor[outgoing_links] = self.MAX_COST_FACTOR
-        self.vl_cost_factor[self.vl_count + incoming_links] = self.MAX_COST_FACTOR
 
-        # transport can always flow freely into any virtual node, so that every virtual node
-        # can act as a sink for connectivity/shortest path calculations
-        self.vl_cost_factor[incoming_links] = self.MIN_COST_FACTOR
-        self.vl_cost_factor[self.vl_count + outgoing_links] = self.MIN_COST_FACTOR
+        # When performing network calculations we always allow transport to flow freely to sink
+        # nodes. However, in order to prevent transport through a virtual node that is not a
+        # source node, we block transport coming from all virtual nodes except the current active
+        # source node. When initializing the network, we don't have an active source node yet, so
+        # we set the cost factor of all source links to a very high value and the cost factor of
+        # sink links to a very low value
+
+        self.vl_cost_factor[: self.vl_count] = self.MAX_COST_FACTOR
+        self.vl_cost_factor[self.vl_count :] = self.MIN_COST_FACTOR
+
         self.update_cost_factor(np.ones((self.tl_count,)))
 
     def _build_graph(self) -> Graph:
-        from_node_ids = (self.tl_from_node_id, self.vl_from_node_id, self.vl_to_node_id)
-        to_node_ids = (self.tl_to_node_id, self.vl_to_node_id, self.vl_from_node_id)
+        # In our Network attribute data we require every virtual link to be connected to one
+        # virtual node. However, we do not specify wether the node must be at the from
+        # side of the link or at the to side. When building the graph we normalize the virtual
+        # links so that the first set of virtual links is always directed towards the network
+        # (representing the virtual node as a source) and the second set of virtual links is
+        # directed towards the virtual node (representing the virtual node as a sink)
+
+        # We first build a directionality array to record the current directionality of the links.
+        # When we convert the ids to their index in the array, the Index object may give a -1 in
+        # case the id is not found
+        vl_directionality = np.zeros_like(self.vl_from_node_id)
+        vl_directionality[self.virtual_node_index[self.vl_from_node_id] != -1] = 1
+        vl_directionality[self.virtual_node_index[self.vl_to_node_id] != -1] = -1
+        if np.any(vl_directionality == 0):
+            raise ValueError("Virtual links detected that do not connect to a virtual node")
+
+        vl_from_node_id_norm = np.concatenate(
+            (
+                self.vl_from_node_id[vl_directionality == 1],
+                self.vl_to_node_id[vl_directionality == -1],
+            )
+        )
+        vl_to_node_id_norm = np.concatenate(
+            (
+                self.vl_to_node_id[vl_directionality == 1],
+                self.vl_from_node_id[vl_directionality == -1],
+            )
+        )
+
+        from_node_ids = (self.tl_from_node_id, vl_from_node_id_norm, vl_to_node_id_norm)
+        to_node_ids = (self.tl_to_node_id, vl_to_node_id_norm, vl_from_node_id_norm)
         return Graph.from_network_data(
             self.all_node_index,
             from_node_id=np.concatenate(from_node_ids),
