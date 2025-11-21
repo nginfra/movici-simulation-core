@@ -269,11 +269,7 @@ class SimulationDatabase:
         :param dataset_name: Name of the dataset
         :param entity_data: Update data in movici format::
 
-                {
-                    "entity_group_name": {
-                        "attribute_name": {"data": [...], "row_ptr": [...]}
-                    }
-                }
+                {"entity_group_name": {"attribute_name": {"data": [...], "row_ptr": [...]}}}
 
         :param origin: Optional model identifier
         :return: Update ID

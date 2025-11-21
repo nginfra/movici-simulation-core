@@ -139,7 +139,7 @@ class SQLiteStorageStrategy:
         # Error if init_data_dir doesn't exist
         if not init_data_dir.exists():
             raise FileNotFoundError(
-                f"init_data_dir does not exist: {init_data_dir}. " "Cannot store initial datasets."
+                f"init_data_dir does not exist: {init_data_dir}. Cannot store initial datasets."
             )
 
         if not init_data_dir.is_dir():
@@ -212,12 +212,12 @@ class SQLiteStorageStrategy:
             return DatasetFormat.UNSTRUCTURED
 
         # Check if all values are dicts containing attributes with "data" key
-        for entity_group, attributes in data.items():
+        for _entity_group, attributes in data.items():
             if not isinstance(attributes, dict):
                 return DatasetFormat.UNSTRUCTURED
 
             # Check if at least one attribute has "data" key
-            for attr_name, attr_data in attributes.items():
+            for _attr_name, attr_data in attributes.items():
                 if isinstance(attr_data, dict) and "data" in attr_data:
                     # Looks like entity-based format
                     return DatasetFormat.ENTITY_BASED

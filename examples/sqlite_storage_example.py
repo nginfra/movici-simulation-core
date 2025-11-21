@@ -161,10 +161,6 @@ if __name__ == "__main__":
     print("-" * 60)
     example_performance_comparison()
 
-    print("\n2. Configuration Comparison:")
-    print("-" * 60)
-    example_comparison_json_vs_sqlite()
-
     print("\n" + "=" * 60)
     print("To run a full simulation:")
     print("  - Use example_sqlite_storage()")
