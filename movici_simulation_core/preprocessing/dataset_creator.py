@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import itertools
 import typing as t
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -162,8 +163,15 @@ class CRSTransformation(DatasetOperation):
         crs_code = deep_get(self.config, "__meta__", "crs", default=self.default_crs)
         target_crs = pyproj.CRS.from_user_input(crs_code)
         dataset["epsg_code"] = target_crs.to_epsg()
-        for source in sources.values():
-            source.to_crs(target_crs)
+        # numpy issues a deprecation warning when pyproj tries to convert the crs. This
+        # issue will unfortunately not be solved until the next major release of pyproj
+        # See: https://github.com/pyproj4/pyproj/issues/1309
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="Conversion of an array with ndim > 0 to a scalar is deprecated"
+            )
+            for source in sources.values():
+                source.to_crs(target_crs)
         return dataset
 
 
