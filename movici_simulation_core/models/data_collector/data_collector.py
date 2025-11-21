@@ -27,6 +27,12 @@ from movici_simulation_core.types import (
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.validate import ensure_valid_config
 
+# Optional SQLite storage support
+try:
+    from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
+except ImportError:
+    SQLiteStorageStrategy = None
+
 
 @dataclasses.dataclass
 class UpdateInfo:
@@ -63,6 +69,7 @@ class DataCollector(SimpleModel, name="data_collector"):
     def initialize(self, settings: Settings, logger: logging.Logger, **_) -> DataMask:
         self.strategy = self.get_storage_strategy(settings, logger)
         self.strategy.initialize()
+
         self.state = TrackedState(track_unknown=SUB)
         self.aggregate = self.config.get("aggregate_updates", self.aggregate)
         return self._get_mask()
@@ -176,5 +183,9 @@ class LocalStorageStrategy(StorageStrategy):
 
 
 DataCollector.add_storage_strategy("disk", LocalStorageStrategy)
+
+# Register SQLite storage strategy if available
+if SQLiteStorageStrategy is not None:
+    DataCollector.add_storage_strategy("sqlite", SQLiteStorageStrategy)
 
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"

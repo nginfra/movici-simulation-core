@@ -54,6 +54,9 @@ models = [
   "movici-geo-query>=1.1.1",
   "scipy",
 ]
+sqlite = [
+    "sqlalchemy>=1.4,<3.0",
+]
 dev = [
   "pytest",
   "pytest-cov",
@@ -62,6 +65,7 @@ dev = [
   "bump2version",
   "taplo",
   "ruff",
+  "sqlalchemy>=1.4,<3.0",
 ]
 docs = ["sphinx", "furo", "sphinxcontrib-mermaid", "sphinxcontrib-plantuml"]
 all = [
@@ -69,6 +73,7 @@ all = [
   "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
+  "sqlalchemy>=1.4,<3.0",
   "scipy",
   "pytest",
   "pytest-cov",
