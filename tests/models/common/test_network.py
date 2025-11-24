@@ -178,7 +178,7 @@ class TestNetwork1:
 
         # every virtual link is bidirectional, which means it gets duplicated in a directed graph:
         # 6 transport links plus 2*5 virtual links gives 16 links total. Furthermore, prior to
-        # creatting the graph, virtual links are ordered so that the source links (which connect
+        # creating the graph, virtual links are ordered so that the source links (which connect
         # from a virtual node to a transport node) come first and target links (which connect from
         # a tranport node to a virtual node) come last. Below, we repeat the virtual nodes in order
 

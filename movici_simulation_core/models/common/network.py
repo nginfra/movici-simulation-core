@@ -161,7 +161,7 @@ class Network:
 
     def _build_graph(self) -> Graph:
         # In our Network attribute data we require every virtual link to be connected to one
-        # virtual node. However, we do not specify wether the node must be at the from
+        # virtual node. However, we do not specify whether the node must be at the from
         # side of the link or at the to side. When building the graph we normalize the virtual
         # links so that the first set of virtual links is always directed towards the network
         # (representing the virtual node as a source) and the second set of virtual links is
