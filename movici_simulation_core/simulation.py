@@ -318,17 +318,7 @@ class Simulation(Extensible):
 
 
 class Runner:
-    # By default (until python3.14) the default start method on linux systems is "fork". This
-    # is not a safe method when doing certain operations, such as multithreading. While we
-    # generally don't spawn threads prior to setting up models, we cannot guarantee this because
-    # users may spawn threads before running a simulation. We should therefore use the safer
-    # start method "forkserver" where it is available and safe to do so, and "spawn" where it's
-    # not (windows and macos). This is also the default behaviour starting from python3.14
-    #
-    # See: https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
-    ctx = multiprocessing.get_context(
-        "spawn" if sys.platform in ("darwin", "win32") else "forkserver"
-    )
+    ctx = multiprocessing.get_context()
 
     def __init__(
         self, strategies: t.List[type], schema: t.Optional[AttributeSchema] = None
