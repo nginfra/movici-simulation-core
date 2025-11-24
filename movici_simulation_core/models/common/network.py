@@ -434,8 +434,9 @@ class Network:
             ``"transport_links"``,``"virtual_nodes"`` and ``"virtual_links"`` and values must be
             either subclasses of ``Entity`` with the appropriate attributes or instances of these
             subclasses.
+
         :return: A full ``NetworkEntities`` dictionary that can be used for the initialization of
-        a ``Network``
+            a ``Network``
         """
         defaults = {
             "transport_nodes": (PointEntity, "transport_node_entities"),
@@ -480,12 +481,12 @@ class Graph:
 
     @staticmethod
     def from_network_data(node_idx: Index, from_node_id, to_node_id):
-        """Create a ``Graph`` from Network data.
+        """Create a :class:`Graph` from Network data.
 
-        :param node_idx: the ``Index with all node ids
+        :param node_idx: the :class:`Index` with all node ids
         :param from_node_id: an array with source node id for every edge/link
         :param to_node_id: an array with target node id for every edge/link
-        :return: a ``Graph`` representing the network
+        :return: a :class:`Graph` representing the network
         """
         indptr, indices, edge_indices = _build_graph(node_idx.ids, from_node_id, to_node_id)
         return Graph(node_idx[indices], indptr, edge_indices)
@@ -497,8 +498,8 @@ class Graph:
     def update_cost_factor(self, cost_factor: np.ndarray):
         """Set the cost factor of the graph.
 
-        :param cost_factor: a ``np.ndarray`` containing the cost factor of the links as they were
-            provided to the ``Graph.from_network_data`` constructor.
+        :param cost_factor: a :class:`np.ndarray` containing the cost factor of the links as they
+            were provided to the :meth:`Graph.from_network_data` constructor.
         """
         self.cost_factor = cost_factor[self.cost_factor_indices]
 
