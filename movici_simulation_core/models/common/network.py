@@ -455,16 +455,16 @@ class Network:
 
 @dataclasses.dataclass
 class Graph:
-    """Internal class that acts as an interface to ``scipy.sparse.csr_matrix`` and
-    ``scipy.sparse.csgraph.shortest_path`` to be used by a ``Network``. The arguments ``indices``
-    and ``indptr`` have the same meaining as in ``scipy.sparse.csr_matrix`.
+    """Internal class that acts as an interface to :func:`scipy.sparse.csr_matrix` and
+    :func:`scipy.sparse.csgraph.shortest_path` to be used by a :class:`Network`. The arguments
+    ``indices`` and ``indptr`` have the same meaining as in :func:`scipy.sparse.csr_matrix`.
 
     The graph is initially setup with a cost factor of 1, but a cost factor can be set using
-    the ``update_cost_factor`` method.
+    the :meth:`update_cost_factor` method.
 
     Rather than instantiating this class directly, it is recommended to use the
-    ``Graph.from_network_data`` constructor that will calculate the correct sparse matrix from
-    ``from_node_id`` and ``to_node_id`` data and a node ``Index``
+    :meth:`Graph.from_network_data` constructor that will calculate the correct sparse matrix from
+    ``from_node_id`` and ``to_node_id`` data and a node :class:`Index`
 
     :param indices: sparse matrix column indices array (see ``scipy.sparse.csr_matrix``)
     :param indptr: sparse matrix index pointer array (see ``scipy.sparse.csr_matrix``)
