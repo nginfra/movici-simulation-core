@@ -4,6 +4,7 @@ from pathlib import Path
 import geopandas
 import netCDF4
 import numpy as np
+from pyproj import CRS
 
 from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
@@ -33,7 +34,7 @@ class DataSource:
         """
         raise NotImplementedError
 
-    def to_crs(self, crs: t.Union[str, int]) -> None:
+    def to_crs(self, crs: t.Union[str, int, CRS]) -> None:
         """Convert the source geometry data the coordinate reference system specified in the
         ``crs`` argument
 
@@ -108,7 +109,7 @@ class GeopandasSource(DataSource):
         gdf = geopandas.read_file(source_info["path"])
         return cls(gdf)
 
-    def to_crs(self, crs: t.Union[str, int]):
+    def to_crs(self, crs: t.Union[str, int, CRS]):
         self.gdf = self.gdf.to_crs(crs)
 
     def get_geometry(self, geometry_type: GeometryType):

@@ -76,7 +76,7 @@ def row_wise_sum(data, row_ptr):
     return reduce_rows(data, row_ptr, np.sum)
 
 
-@numba.njit(cache=True)
+@numba.njit()
 def row_wise_max(data, row_ptr, empty_row=None):
     if empty_row is None:
         return reduce_rows(data, row_ptr, np.max)
@@ -84,7 +84,7 @@ def row_wise_max(data, row_ptr, empty_row=None):
     return reduce_rows_with_substitute(data, row_ptr, _substituted_max, empty_row)
 
 
-@numba.njit(cache=True)
+@numba.njit()
 def row_wise_min(data, row_ptr, empty_row=None):
     if empty_row is None:
         return reduce_rows(data, row_ptr, np.min)

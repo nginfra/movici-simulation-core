@@ -5,43 +5,37 @@ import typing as t
 from pathlib import Path
 
 from pydantic import DirectoryPath, Field
-
-try:
-    from pydantic import BaseSettings
-except ImportError:
-    from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from movici_simulation_core.core.moment import TimelineInfo
 
 
 class Settings(BaseSettings):
-    data_dir: DirectoryPath = "."
+    data_dir: DirectoryPath = Path(".")
     init_data_dir: t.Optional[Path] = None
-    log_level: str = "INFO"
-    log_format: str = "[{asctime}] [{levelname:8s}] {name:17s}: {message}"
+    log_level: str = Field(default="INFO", validation_alias="loglevel")
+    log_format: str = Field(
+        default="[{asctime}] [{levelname:8s}] {name:17s}: {message}", validation_alias="logformat"
+    )
     name: str = ""
     storage: t.Union[t.Literal["api"], t.Literal["disk"], t.Literal["sqlite"]] = "disk"
     storage_dir: t.Optional[Path] = None
-    temp_dir: DirectoryPath = str(tempfile.gettempdir())
+    temp_dir: DirectoryPath = Path(tempfile.gettempdir())
 
     reference: float = 0
     time_scale: float = 1
     start_time: int = 0
     duration: int = 0
 
-    datasets: t.List[dict] = Field(default_factory=list, env="")
-    model_names: t.List[str] = Field(default_factory=list, env="")
-    models: t.List[dict] = Field(default_factory=list, env="")
-    service_types: t.List[str] = Field(default_factory=list, env="")
-    scenario_config: t.Optional[dict] = Field(default=None, env="")
-    service_discovery: t.Dict[str, str] = Field(default_factory=dict, env="")
+    datasets: t.List[dict] = Field(default_factory=list)
+    model_names: t.List[str] = Field(default_factory=list)
+    models: t.List[dict] = Field(default_factory=list)
+    service_types: t.List[str] = Field(default_factory=list)
+    scenario_config: t.Optional[dict] = Field(default=None)
+    service_discovery: t.Dict[str, str] = Field(default_factory=dict)
 
-    class Config:
-        env_prefix = "movici_"
-        fields = {
-            "log_level": {"env": ["movici_log_level", "movici_loglevel"]},
-            "log_format": {"env": ["movici_log_format", "movici_logformat"]},
-        }
+    # pydantic settings. the "model_" here has nothing to do with movici models, but with pydantic
+    model_config = SettingsConfigDict(env_prefix="movici_")
 
     def apply_scenario_config(self, config: dict):
         self.scenario_config = config
@@ -62,9 +56,6 @@ class Settings(BaseSettings):
     # instead, as a workaround, we use a property to pack and unpack the TimelineInfo dataclass
     # into its fields.
     #
-    # However, now we run into a different issue where pydantic doesn't support property setters
-    # (https://github.com/samuelcolvin/pydantic/issues/3395). So we have to use another workaround
-    # involving __setattr__
 
     @property
     def timeline_info(self):
@@ -81,9 +72,3 @@ class Settings(BaseSettings):
         self.time_scale = timeline_info.time_scale
         self.reference = timeline_info.reference
         self.duration = timeline_info.duration
-
-    def __setattr__(self, name, value):
-        if name in ("timeline_info"):
-            object.__setattr__(self, name, value)
-        else:
-            super().__setattr__(name, value)
