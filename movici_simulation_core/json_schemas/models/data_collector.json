@@ -30,7 +30,7 @@
     },
     "database_path": {
       "type": "string",
-      "description": "Path to SQLite database file (for sqlite backend). If not specified, uses storage_dir/simulation_results_<timestamp>.db. Setting this will force the data collector to use sqlite storage"
+      "description": "Path to SQLite database file (for sqlite backend). If not specified, uses storage_dir/simulation_results_<timestamp>.db"
     }
   }
 }
