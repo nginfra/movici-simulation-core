@@ -470,3 +470,4 @@ def create_model_tester(tmp_path_factory, init_data, global_schema):
 
     for tester in testers:
         tester.close()
+        tester.cleanup()
