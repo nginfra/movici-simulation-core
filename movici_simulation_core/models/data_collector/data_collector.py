@@ -134,7 +134,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         cls.strategies[name] = strategy
 
 
-class LocalStorageStrategy(StorageStrategy):
+class FileStorageStrategy(StorageStrategy):
     def __init__(self, directory: Path, filename_template="t{timestamp}_{iteration}_{name}"):
         self.directory = Path(directory)
         self.filename_template = filename_template
@@ -145,7 +145,7 @@ class LocalStorageStrategy(StorageStrategy):
         directory = model_config.get("storage_dir") or settings.storage_dir
         if directory is None:
             raise ValueError("No storage_dir set")
-        return LocalStorageStrategy(directory)
+        return FileStorageStrategy(directory)
 
     def initialize(self):
         self._ensure_empty_directory()
@@ -166,7 +166,7 @@ class LocalStorageStrategy(StorageStrategy):
         self.directory.mkdir(parents=True, exist_ok=True)
 
 
-DataCollector.add_storage_strategy("disk", LocalStorageStrategy)
+DataCollector.add_storage_strategy("file", FileStorageStrategy)
 
 # Register SQLite storage strategy if available
 if SQLiteStorageStrategy is not None:

@@ -8,7 +8,7 @@ from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.models.data_collector.data_collector import (
     DataCollector,
-    LocalStorageStrategy,
+    FileStorageStrategy,
     UpdateInfo,
 )
 from movici_simulation_core.settings import Settings
@@ -54,12 +54,12 @@ def additional_attributes():
 
 
 def test_picks_strategy(model, logger):
-    settings = Settings(storage="disk")
-    assert isinstance(model.get_storage_strategy(settings, logger), LocalStorageStrategy)
+    settings = Settings(storage="file")
+    assert isinstance(model.get_storage_strategy(settings, logger), FileStorageStrategy)
 
 
 def test_local_storage_strategy_stores_update(tmp_path, global_schema):
-    strat = LocalStorageStrategy(tmp_path)
+    strat = FileStorageStrategy(tmp_path)
     upd = {"dataset": {"entity_group": {"id": [1, 2, 3]}}}
     info = UpdateInfo(
         "dataset", 1, 2, EntityInitDataFormat(schema=global_schema).load_json(upd)["dataset"]

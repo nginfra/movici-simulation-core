@@ -25,7 +25,7 @@ def example_sqlite_storage():
 
     # Create simulation with SQLite storage
     settings = Settings(
-        storage="sqlite",  # Use SQLite instead of "disk" (JSON files)
+        storage="sqlite",
         storage_dir=results_dir,
     )
 
