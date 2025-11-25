@@ -75,10 +75,10 @@ def additional_attributes():
 def model_tester(
     model, target_dataset, tape_dataset_name, tape_dataset, init_data, tmp_path, global_schema
 ):
-    tester = ModelTester(model, tmp_dir=tmp_path, schema=global_schema)
-    tester.add_init_data(target_dataset, init_data)
-    tester.add_init_data(tape_dataset_name, tape_dataset)
-    return tester
+    with ModelTester(model, tmp_dir=tmp_path, schema=global_schema) as tester:
+        tester.add_init_data(target_dataset, init_data)
+        tester.add_init_data(tape_dataset_name, tape_dataset)
+        yield tester
 
 
 def test_tape_player_sends_mask(model_tester):

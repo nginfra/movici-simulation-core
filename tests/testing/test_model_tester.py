@@ -49,8 +49,11 @@ class TestModelTester:
 
     @pytest.fixture
     def tester(self, model, temp_dir):
-        with set_timeline_info(TimelineInfo(0, 1, 0)):
-            yield ModelTester(model, tmp_dir=temp_dir)
+        with (
+            set_timeline_info(TimelineInfo(0, 1, 0)),
+            ModelTester(model, tmp_dir=temp_dir) as tester,
+        ):
+            yield tester
 
     @pytest.fixture
     def dict_init_data(self):
@@ -77,9 +80,9 @@ class TestModelTester:
                     json.loads(init_data_handler.get("dataset")[1].read_text()) == dict_init_data
                 )
 
-        tester = ModelTester(Model({}), tmp_dir=tmp_path)
-        tester.add_init_data("dataset", dict_init_data)
-        tester.initialize()
+        with ModelTester(Model({}), tmp_dir=tmp_path) as tester:
+            tester.add_init_data("dataset", dict_init_data)
+            tester.initialize()
 
     def test_updates_model(self, tester, model):
         tester.update(0, None)
