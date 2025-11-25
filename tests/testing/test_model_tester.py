@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from unittest.mock import call
 
 import pytest
@@ -87,6 +88,12 @@ class TestModelTester:
     def test_updates_model(self, tester, model):
         tester.update(0, None)
         assert model.update.call_args == call(UpdateMessage(0), None)
+
+    def test_removes_tmpdir(self, model):
+        with ModelTester(model) as tester:
+            tmpdir = tester.tmp_dir
+            assert Path(tmpdir).is_dir()
+        assert not Path(tmpdir).exists()
 
 
 @pytest.mark.parametrize("item", [None, {"some": "result"}])
