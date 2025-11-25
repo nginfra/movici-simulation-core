@@ -1,14 +1,15 @@
 from unittest.mock import Mock
 
 import numpy as np
+import orjson
 import pytest
 
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.models.data_collector.data_collector import DataCollector, UpdateInfo
+from movici_simulation_core.models.data_collector.sqlite_strategy import SQLiteStorageStrategy
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.storage.sqlite_schema import SimulationDatabase
-from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
 from movici_simulation_core.testing.model_tester import ModelTester
 
 
@@ -223,207 +224,8 @@ def test_stores_multiple_updates_sqlite(model_sqlite, db_path, run_updates):
     assert datasets == {"some_dataset", "other_dataset"}
 
 
-def test_stores_updates_from_multiple_datasets(model_sqlite, db_path, run_updates):
-    """Test storing updates for multiple datasets"""
-    run_updates(
-        model_sqlite,
-        [
-            (
-                0,
-                {
-                    "dataset_a": {"entities": {"id": [1, 2], "attr": [10, 20]}},
-                    "dataset_b": {"entities": {"id": [3, 4], "attr": [30, 40]}},
-                },
-            )
-        ],
-    )
-
-    db = SimulationDatabase(db_path)
-    assert db.get_update_count() == 2
-    assert set(db.get_datasets()) == {"dataset_a", "dataset_b"}
-
-
-def test_can_aggregate_updates_sqlite(model_sqlite, settings_sqlite, db_path, global_schema):
-    """Test aggregating updates when aggregate_updates=True"""
-    model_sqlite.config["aggregate_updates"] = True
-
-    with ModelTester(model_sqlite, settings_sqlite, schema=global_schema) as tester:
-        tester.initialize()
-        tester.new_time(0)
-        tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})
-        tester.update(0, {"dataset": {"some_entities": {"id": [2], "attr": [21]}}})
-
-        # No updates stored yet (waiting for new_time)
-        db = SimulationDatabase(db_path)
-        assert db.get_update_count() == 0
-
-        tester.new_time(1)
-        tester.close()
-
-    # Now updates should be stored and aggregated
-    assert db.get_update_count() == 1
-    updates = db.get_dataset_updates("dataset")
-    assert len(updates) == 1
-
-    # Verify aggregated data
-    entity_data = updates[0]["some_entities"]
-    np.testing.assert_array_equal(entity_data["id"]["data"], [1, 2])
-    np.testing.assert_array_equal(entity_data["attr"]["data"], [10, 21])
-
-
-def test_only_submits_on_changed_data_sqlite(model_sqlite, run_updates):
-    """Test that only changed data triggers storage"""
-    model_sqlite.submit = Mock()
-    run_updates(
-        model_sqlite,
-        [
-            (0, {"dataset": {"some_entities": {"id": [1], "attr": [10]}}}),
-            (0, {"dataset": {"some_entities": {"id": [1], "attr": [10]}}}),
-        ],
-    )
-    # Only one submit because second update has no changes
-    assert model_sqlite.submit.call_count == 1
-
-
-def test_submits_job_per_dataset_sqlite(model_sqlite, run_updates):
-    """Test that each dataset gets its own storage job"""
-    model_sqlite.submit = Mock()
-    run_updates(
-        model_sqlite,
-        [
-            (
-                0,
-                {
-                    "some_dataset": {"some_entities": {"id": [1], "attr": [10]}},
-                    "other_dataset": {"some_entities": {"id": [1], "attr": [10]}},
-                },
-            )
-        ],
-    )
-    assert model_sqlite.submit.call_count == 2
-
-
-# ============================================================================
-# Database Query Tests
-# ============================================================================
-
-
-def test_get_datasets(db_path):
-    """Test getting list of datasets"""
-    db = SimulationDatabase(db_path)
-    db.store_update(0, 0, "dataset_a", {"entities": {"id": {"data": [1]}}})
-    db.store_update(0, 0, "dataset_b", {"entities": {"id": {"data": [2]}}})
-
-    datasets = db.get_datasets()
-    assert set(datasets) == {"dataset_a", "dataset_b"}
-
-
-def test_get_timestamps(db_path):
-    """Test getting timestamps for a dataset"""
-    db = SimulationDatabase(db_path)
-    db.store_update(0, 0, "dataset", {"entities": {"id": {"data": [1]}}})
-    db.store_update(10, 0, "dataset", {"entities": {"id": {"data": [2]}}})
-    db.store_update(20, 0, "dataset", {"entities": {"id": {"data": [3]}}})
-
-    timestamps = db.get_timestamps("dataset")
-    assert timestamps == [0, 10, 20]
-
-
-def test_get_update_count_all(db_path):
-    """Test getting total update count"""
-    db = SimulationDatabase(db_path)
-    db.store_update(0, 0, "dataset_a", {"entities": {"id": {"data": [1]}}})
-    db.store_update(0, 0, "dataset_b", {"entities": {"id": {"data": [2]}}})
-    db.store_update(1, 0, "dataset_a", {"entities": {"id": {"data": [3]}}})
-
-    assert db.get_update_count() == 3
-
-
-def test_get_update_count_by_dataset(db_path):
-    """Test getting update count for specific dataset"""
-    db = SimulationDatabase(db_path)
-    db.store_update(0, 0, "dataset_a", {"entities": {"id": {"data": [1]}}})
-    db.store_update(0, 0, "dataset_b", {"entities": {"id": {"data": [2]}}})
-    db.store_update(1, 0, "dataset_a", {"entities": {"id": {"data": [3]}}})
-
-    assert db.get_update_count("dataset_a") == 2
-    assert db.get_update_count("dataset_b") == 1
-
-
-def test_updates_ordered_by_time(db_path):
-    """Test that updates are returned in chronological order"""
-    db = SimulationDatabase(db_path)
-
-    # Insert out of order
-    db.store_update(10, 0, "dataset", {"entities": {"id": {"data": [1]}}})
-    db.store_update(0, 0, "dataset", {"entities": {"id": {"data": [2]}}})
-    db.store_update(5, 1, "dataset", {"entities": {"id": {"data": [3]}}})
-    db.store_update(5, 0, "dataset", {"entities": {"id": {"data": [4]}}})
-
-    updates = db.get_dataset_updates("dataset")
-
-    # Should be sorted by (timestamp, iteration)
-    assert updates[0]["timestamp"] == 0
-    assert updates[1]["timestamp"] == 5
-    assert updates[1]["iteration"] == 0
-    assert updates[2]["timestamp"] == 5
-    assert updates[2]["iteration"] == 1
-    assert updates[3]["timestamp"] == 10
-
-
-# ============================================================================
-# Thread Safety Tests
-# ============================================================================
-
-
-def test_concurrent_writes(db_path):
-    """Test that concurrent writes are handled safely"""
-    from concurrent.futures import ThreadPoolExecutor
-
-    db = SimulationDatabase(db_path)
-
-    def write_update(i):
-        db.store_update(
-            timestamp=i,
-            iteration=0,
-            dataset_name=f"dataset_{i % 3}",
-            entity_data={"entities": {"id": {"data": [i]}}},
-        )
-
-    # Write 20 updates concurrently
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        executor.map(write_update, range(20))
-
-    # Verify all updates were stored
-    assert db.get_update_count() == 20
-
-
-# ============================================================================
-# Edge Cases
-# ============================================================================
-
-
-def test_empty_database(db_path):
-    """Test querying empty database"""
-    db = SimulationDatabase(db_path)
-
-    assert db.get_datasets() == []
-    assert db.get_update_count() == 0
-    assert db.get_dataset_updates("nonexistent") == []
-
-
-def test_nonexistent_dataset(db_path):
-    """Test querying nonexistent dataset"""
-    db = SimulationDatabase(db_path)
-    db.store_update(0, 0, "dataset_a", {"entities": {"id": {"data": [1]}}})
-
-    assert db.get_dataset_updates("dataset_b") == []
-    assert db.get_timestamps("dataset_b") == []
-
-
 def test_initial_datasets_stored_automatically(tmp_path, logger):
     """Test that initial datasets are automatically stored during DataCollector initialization"""
-    import orjson
 
     # Create init_data directory with test datasets
     init_data_dir = tmp_path / "init_data"

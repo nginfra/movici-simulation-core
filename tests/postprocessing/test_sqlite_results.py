@@ -39,8 +39,8 @@ def db_with_updates(tmp_path, global_schema):
     """Create SQLite database with sample updates"""
     db_path = tmp_path / "simulation_results.db"
     db = SimulationDatabase(db_path)
+    db.initialize()
 
-    # Add update at t=0
     db.store_update(
         timestamp=0,
         iteration=0,
@@ -53,7 +53,6 @@ def db_with_updates(tmp_path, global_schema):
         },
     )
 
-    # Add update at t=10
     db.store_update(
         timestamp=10,
         iteration=0,
@@ -257,7 +256,7 @@ def test_sqlite_results_multiple_datasets(tmp_path, init_data_dir):
     """Test SQLite results with multiple datasets"""
     db_path = tmp_path / "simulation_results.db"
     db = SimulationDatabase(db_path)
-
+    db.initialize()
     # Add init data for second dataset
     init_data_2 = {"water_network": {"pipes": {"id": [10, 20], "diameter": [0.5, 0.8]}}}
 

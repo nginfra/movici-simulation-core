@@ -17,6 +17,7 @@ from movici_simulation_core.models.data_collector.concurrent import (
     LimitedThreadPoolExecutor,
     MultipleFutures,
 )
+from movici_simulation_core.models.data_collector.strategy import StorageStrategy
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.types import (
     DataMask,
@@ -29,7 +30,7 @@ from movici_simulation_core.validate import ensure_valid_config
 
 # Optional SQLite storage support
 try:
-    from movici_simulation_core.storage.sqlite_strategy import SQLiteStorageStrategy
+    from .sqlite_strategy import SQLiteStorageStrategy
 except ImportError:
     SQLiteStorageStrategy = None
 
@@ -131,23 +132,6 @@ class DataCollector(SimpleModel, name="data_collector"):
     @classmethod
     def add_storage_strategy(cls, name, strategy: t.Type[StorageStrategy]):
         cls.strategies[name] = strategy
-
-
-class StorageStrategy:
-    @classmethod
-    def choose(
-        cls, model_config: dict, settings: Settings, logger: logging.Logger
-    ) -> StorageStrategy:
-        raise NotImplementedError
-
-    def initialize(self):
-        pass
-
-    def store(self, info: UpdateInfo):
-        raise NotImplementedError
-
-    def reset_iterations(self, model: DataCollector):
-        pass
 
 
 class LocalStorageStrategy(StorageStrategy):

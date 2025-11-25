@@ -1,7 +1,7 @@
 """SQLite storage strategy for DataCollector model.
 
 This module provides SQLiteStorageStrategy which stores simulation updates
-in an SQLite database instead of individual JSON files.
+in a SQLite database instead of individual JSON files.
 """
 
 from __future__ import annotations
@@ -13,11 +13,12 @@ from pathlib import Path
 
 import orjson
 
+from movici_simulation_core.models.data_collector.strategy import StorageStrategy
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.storage.sqlite_schema import DatasetFormat, SimulationDatabase
 
 
-class SQLiteStorageStrategy:
+class SQLiteStorageStrategy(StorageStrategy):
     """Storage strategy that persists simulation updates to an SQLite database.
 
     Features:
@@ -73,17 +74,13 @@ class SQLiteStorageStrategy:
     def initialize(self):
         """Initialize the database.
 
-        Creates the database file and schema. When using auto-generated paths,
-        each simulation run gets a timestamped database to prevent overwrites.
 
         Also stores initial datasets from init_data_dir for self-contained archives.
         """
-        # Ensure parent directory exists
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Initialize database connection
         self.db = SimulationDatabase(self.database_path)
 
+        self.db.initialize()
         # Store initial datasets in database for self-contained archives
         if self.settings.data_dir:
             self._store_initial_datasets()

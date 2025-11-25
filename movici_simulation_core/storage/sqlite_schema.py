@@ -10,6 +10,7 @@ This schema provides efficient storage for simulation updates with:
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import json
 import typing as t
@@ -49,6 +50,16 @@ class DatasetFormat(str, enum.Enum):
     ENTITY_BASED = "entity_based"
     UNSTRUCTURED = "unstructured"
     BINARY = "binary"
+
+
+_CURRENT_SCHEMA_VERSION = "v1"
+
+
+class Metadata(Base):
+    __tablename__ = "metadata"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    version = Column(String(16), nullable=False)
 
 
 class NumpyArray(Base):
@@ -163,7 +174,6 @@ class UpdateAttribute(Base):
         Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
     )
 
-    # Relationships
     update = relationship("Update", overlaps="attributes,updates")
     attribute_data = relationship("AttributeData", overlaps="attributes,updates")
 
@@ -185,7 +195,6 @@ class InitialDatasetAttribute(Base):
         Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
     )
 
-    # Relationships
     initial_dataset = relationship("InitialDataset", overlaps="attributes,initial_datasets")
     attribute_data = relationship("AttributeData", overlaps="attributes,initial_datasets")
 
@@ -208,10 +217,9 @@ class InitialDataset(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     dataset_name = Column(String, unique=True, nullable=False)
-    format = Column(Enum(DatasetFormat), nullable=False, default=DatasetFormat.UNSTRUCTURED)
-    data = Column(LargeBinary)  # For UNSTRUCTURED and BINARY formats
+    format = Column(Enum(DatasetFormat), nullable=False)
+    data = Column(LargeBinary)
 
-    # Relationships for ENTITY_BASED format
     attributes = relationship(
         "AttributeData", secondary="initial_dataset_attribute", back_populates="initial_datasets"
     )
@@ -228,31 +236,47 @@ class SimulationDatabase:
 
         :param db_path: Path to SQLite database file (use ":memory:" for in-memory)
         """
-        self.db_path = str(db_path)
+        self.db_path = db_path
         self.engine = create_engine(
-            f"sqlite:///{self.db_path}",
+            f"sqlite:///{self.db_path!s}",
             echo=False,
             connect_args={
-                "check_same_thread": False,  # Allow multi-threading
                 "timeout": 30.0,  # Wait up to 30s for locks
             },
         )
 
-        # Enable WAL mode for better concurrency
+        self._Session = sessionmaker(bind=self.engine)
+        self._write_lock = Lock()
+
+    @contextlib.contextmanager
+    def get_session(self):
+        session = self._Session()
+        try:
+            yield session
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def initialize(self):
         with self.engine.connect() as conn:
-            conn.execute(text("PRAGMA journal_mode=WAL"))
-            conn.execute(text("PRAGMA synchronous=NORMAL"))
             conn.execute(text("PRAGMA foreign_keys=ON"))
             conn.commit()
 
-        # Create tables
         Base.metadata.create_all(self.engine)
+        self.ensure_metadata()
 
-        # Session factory
-        self.Session = sessionmaker(bind=self.engine)
+    def ensure_metadata(self):
+        with self.get_session() as session:
+            metadata = session.query(Metadata).first()
+            if not metadata:
+                session.add(Metadata(version=_CURRENT_SCHEMA_VERSION))
+                session.commit()
 
-        # Lock for thread-safe writes
-        self._write_lock = Lock()
+    def get_metadata(self):
+        with self.get_session() as session:
+            return session.query(Metadata).one()
 
     def store_update(
         self,
@@ -275,8 +299,7 @@ class SimulationDatabase:
         :return: Update ID
         """
         with self._write_lock:
-            with self.Session() as session:
-                # Create update record
+            with self.get_session() as session:
                 update = Update(
                     timestamp=timestamp,
                     iteration=iteration,
@@ -285,15 +308,12 @@ class SimulationDatabase:
                 )
                 session.add(update)
 
-                # Process each entity group
                 for entity_group, attributes in entity_data.items():
                     for attr_name, attr_data in attributes.items():
-                        # Store main data array
                         data_array = np.asarray(attr_data["data"])
                         numpy_data = NumpyArray.from_array(data_array)
                         session.add(numpy_data)
 
-                        # Store indptr if CSR
                         numpy_indptr = None
                         if "row_ptr" in attr_data or "indptr" in attr_data:
                             indptr_key = "row_ptr" if "row_ptr" in attr_data else "indptr"
@@ -301,16 +321,14 @@ class SimulationDatabase:
                             numpy_indptr = NumpyArray.from_array(indptr_array)
                             session.add(numpy_indptr)
 
-                        # Create attribute data record using relationships
                         attr_data_record = AttributeData(
                             entity_group=entity_group,
                             attribute_name=attr_name,
-                            data=numpy_data,  # Use relationship, not data_id
-                            indptr=numpy_indptr,  # Use relationship, not indptr_id
+                            data=numpy_data,
+                            indptr=numpy_indptr,
                         )
                         session.add(attr_data_record)
 
-                        # Link to update using relationship
                         update_attr = UpdateAttribute(
                             update=update, attribute_data=attr_data_record
                         )
@@ -325,7 +343,7 @@ class SimulationDatabase:
         :param dataset_name: Name of the dataset
         :return: List of updates in movici format
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             updates = (
                 session.query(Update)
                 .filter(Update.dataset_name == dataset_name)
@@ -340,7 +358,6 @@ class SimulationDatabase:
                     "iteration": update.iteration,
                 }
 
-                # Reconstruct update data
                 data = {}
                 for attr in update.attributes:
                     if attr.entity_group not in data:
@@ -357,7 +374,7 @@ class SimulationDatabase:
 
         :return: List of dataset names
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             result = session.query(Update.dataset_name).distinct().all()
             return [row[0] for row in result]
 
@@ -367,7 +384,7 @@ class SimulationDatabase:
         :param dataset_name: Name of the dataset
         :return: List of timestamps in ascending order
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             result = (
                 session.query(Update.timestamp)
                 .filter(Update.dataset_name == dataset_name)
@@ -383,7 +400,7 @@ class SimulationDatabase:
         :param dataset_name: Optional dataset name to filter by
         :return: Number of updates
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             query = session.query(Update)
             if dataset_name:
                 query = query.filter(Update.dataset_name == dataset_name)
@@ -406,22 +423,19 @@ class SimulationDatabase:
         :return: Initial dataset ID
         """
         with self._write_lock:
-            with self.Session() as session:
+            with self.get_session() as session:
                 initial_dataset = InitialDataset(dataset_name=dataset_name, format=format)
                 session.add(initial_dataset)
 
                 if format == DatasetFormat.ENTITY_BASED:
-                    # Destructure entity-based data into AttributeData
                     for entity_group, attributes in dataset_data.items():
                         if not isinstance(attributes, dict):
                             continue
                         for attr_name, attr_data in attributes.items():
-                            # Store main data array
                             data_array = np.asarray(attr_data["data"])
                             numpy_data = NumpyArray.from_array(data_array)
                             session.add(numpy_data)
 
-                            # Store indptr if CSR
                             numpy_indptr = None
                             if "row_ptr" in attr_data or "indptr" in attr_data:
                                 indptr_key = "row_ptr" if "row_ptr" in attr_data else "indptr"
@@ -429,7 +443,6 @@ class SimulationDatabase:
                                 numpy_indptr = NumpyArray.from_array(indptr_array)
                                 session.add(numpy_indptr)
 
-                            # Create attribute data record
                             attr_data_record = AttributeData(
                                 entity_group=entity_group,
                                 attribute_name=attr_name,
@@ -438,18 +451,15 @@ class SimulationDatabase:
                             )
                             session.add(attr_data_record)
 
-                            # Link to initial dataset
                             initial_dataset_attr = InitialDatasetAttribute(
                                 initial_dataset=initial_dataset, attribute_data=attr_data_record
                             )
                             session.add(initial_dataset_attr)
 
                 elif format == DatasetFormat.UNSTRUCTURED:
-                    # Store as JSON blob
                     initial_dataset.data = orjson.dumps(dataset_data)
 
                 elif format == DatasetFormat.BINARY:
-                    # Store as raw binary blob
                     if not isinstance(dataset_data, bytes):
                         raise TypeError("Binary format requires bytes data")
                     initial_dataset.data = dataset_data
@@ -464,7 +474,7 @@ class SimulationDatabase:
         :return: Dataset data (``dict`` for JSON formats, ``bytes`` for binary), or ``None`` if
             not found
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             initial_dataset = (
                 session.query(InitialDataset)
                 .filter(InitialDataset.dataset_name == dataset_name)
@@ -474,7 +484,6 @@ class SimulationDatabase:
                 return None
 
             if initial_dataset.format == DatasetFormat.ENTITY_BASED:
-                # Reconstruct entity-based data from AttributeData
                 data = {}
                 for attr in initial_dataset.attributes:
                     if attr.entity_group not in data:
@@ -483,11 +492,9 @@ class SimulationDatabase:
                 return data
 
             elif initial_dataset.format == DatasetFormat.UNSTRUCTURED:
-                # Return deserialized JSON
                 return orjson.loads(initial_dataset.data)
 
             elif initial_dataset.format == DatasetFormat.BINARY:
-                # Return raw binary data
                 return initial_dataset.data
 
             return None
@@ -497,7 +504,7 @@ class SimulationDatabase:
 
         :return: Dictionary mapping dataset names to their data
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             initial_datasets = session.query(InitialDataset).all()
             result = {}
             for dataset in initial_datasets:
@@ -509,7 +516,7 @@ class SimulationDatabase:
 
         :return: True if initial datasets are stored, False otherwise
         """
-        with self.Session() as session:
+        with self.get_session() as session:
             return session.query(InitialDataset).count() > 0
 
     def close(self):
