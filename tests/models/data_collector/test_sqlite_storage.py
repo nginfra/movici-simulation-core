@@ -1,5 +1,3 @@
-"""Tests for SQLite storage strategy."""
-
 from unittest.mock import Mock
 
 import numpy as np
@@ -58,11 +56,11 @@ def additional_attributes():
 @pytest.fixture()
 def run_updates(global_schema, settings_sqlite):
     def _run(model, updates):
-        tester = ModelTester(model, settings_sqlite, schema=global_schema)
-        tester.initialize()
-        for timestamp, data in updates:
-            tester.update(timestamp, data)
-        tester.close()
+        with ModelTester(model, settings_sqlite, schema=global_schema) as tester:
+            tester.initialize()
+            for timestamp, data in updates:
+                tester.update(timestamp, data)
+            tester.close()
 
     return _run
 
@@ -249,18 +247,18 @@ def test_can_aggregate_updates_sqlite(model_sqlite, settings_sqlite, db_path, gl
     """Test aggregating updates when aggregate_updates=True"""
     model_sqlite.config["aggregate_updates"] = True
 
-    tester = ModelTester(model_sqlite, settings_sqlite, schema=global_schema)
-    tester.initialize()
-    tester.new_time(0)
-    tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})
-    tester.update(0, {"dataset": {"some_entities": {"id": [2], "attr": [21]}}})
+    with ModelTester(model_sqlite, settings_sqlite, schema=global_schema) as tester:
+        tester.initialize()
+        tester.new_time(0)
+        tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})
+        tester.update(0, {"dataset": {"some_entities": {"id": [2], "attr": [21]}}})
 
-    # No updates stored yet (waiting for new_time)
-    db = SimulationDatabase(db_path)
-    assert db.get_update_count() == 0
+        # No updates stored yet (waiting for new_time)
+        db = SimulationDatabase(db_path)
+        assert db.get_update_count() == 0
 
-    tester.new_time(1)
-    tester.close()
+        tester.new_time(1)
+        tester.close()
 
     # Now updates should be stored and aggregated
     assert db.get_update_count() == 1
@@ -444,7 +442,7 @@ def test_initial_datasets_stored_automatically(tmp_path, logger):
         "gather_filter": None,
         "database_path": str(db_path),
     }
-    settings = Settings(storage="sqlite", init_data_dir=init_data_dir)
+    settings = Settings(storage="sqlite", data_dir=init_data_dir)
 
     model = DataCollector(model_config)
     model.initialize(settings, logger)

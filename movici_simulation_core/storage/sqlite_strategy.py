@@ -85,7 +85,7 @@ class SQLiteStorageStrategy:
         self.db = SimulationDatabase(self.database_path)
 
         # Store initial datasets in database for self-contained archives
-        if self.settings.init_data_dir:
+        if self.settings.data_dir:
             self._store_initial_datasets()
 
     def store(self, info):
@@ -134,7 +134,7 @@ class SQLiteStorageStrategy:
         :raises FileNotFoundError: If init_data_dir does not exist
         :raises NotADirectoryError: If init_data_dir is not a directory
         """
-        init_data_dir = Path(self.settings.init_data_dir)
+        init_data_dir = Path(self.settings.data_dir)
 
         # Error if init_data_dir doesn't exist
         if not init_data_dir.exists():

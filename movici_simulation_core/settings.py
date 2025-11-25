@@ -12,13 +12,12 @@ from movici_simulation_core.core.moment import TimelineInfo
 
 class Settings(BaseSettings):
     data_dir: DirectoryPath = Path(".")
-    init_data_dir: t.Optional[Path] = None
     log_level: str = Field(default="INFO", validation_alias="loglevel")
     log_format: str = Field(
         default="[{asctime}] [{levelname:8s}] {name:17s}: {message}", validation_alias="logformat"
     )
     name: str = ""
-    storage: t.Union[t.Literal["api"], t.Literal["disk"], t.Literal["sqlite"]] = "disk"
+    storage: t.Literal["api", "disk", "sqlite"] = "disk"
     storage_dir: t.Optional[Path] = None
     temp_dir: DirectoryPath = Path(tempfile.gettempdir())
 
