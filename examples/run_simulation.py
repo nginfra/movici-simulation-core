@@ -44,7 +44,7 @@ class DummyModel(TrackedModel):
         if self.attr.flags & PUB:
             self.attr[0] = 1.0
         else:
-            (Path(tempfile.tempdir) / "test.json").write_text(
+            (Path(tempfile.tempdir) / "test.json").write_bytes(
                 EntityInitDataFormat().dumps(state.to_dict())
             )
 
