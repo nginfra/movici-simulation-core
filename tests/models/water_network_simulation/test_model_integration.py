@@ -68,10 +68,10 @@ R1  0  1000
         # Model should be registered as "water_network_simulation"
         assert hasattr(model, "__model_name__")
 
-    def test_model_requires_mode(self):
-        """Test model requires mode parameter"""
-        with pytest.raises(KeyError):
-            model = Model({})  # No mode specified
+    def test_model_default_mode(self):
+        """Test model has default mode of movici_network"""
+        model = Model({})  # No mode specified
+        assert model.mode == "movici_network"
 
     def test_inp_mode_requires_inp_file(self):
         """Test INP mode requires inp_file parameter"""

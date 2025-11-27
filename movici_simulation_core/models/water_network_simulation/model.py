@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.attribute import PUB, SUB
+from movici_simulation_core.core.attribute import PUB
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import TrackedState
@@ -61,6 +61,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         self.pipes: t.Optional[WaterPipeEntity] = None
         self.pumps: t.Optional[WaterPumpEntity] = None
         self.valves: t.Optional[WaterValveEntity] = None
+        self.pending_control_rules: list = []
 
     def setup(
         self,
@@ -78,10 +79,12 @@ class Model(TrackedModel, name="water_network_simulation"):
                 raise ValueError("inp_file required when mode='inp_file'")
 
             # Get the INP file through init_data_handler
-            _, inp_path = init_data_handler.get(inp_file_path)
+            # The handler looks up by stem (name without extension)
+            inp_file = Path(inp_file_path)
+            _, inp_path = init_data_handler.get(inp_file.stem)
             if inp_path is None:
                 # Try as direct path
-                inp_path = Path(inp_file_path)
+                inp_path = inp_file
                 if not inp_path.exists():
                     raise ValueError(f"INP file not found: {inp_file_path}")
 
@@ -109,66 +112,320 @@ class Model(TrackedModel, name="water_network_simulation"):
         for tape_name in demand_patterns:
             self._load_pattern_tape(tape_name, init_data_handler)
 
-        # Setup control rules from config
-        control_rules = self.config.get("control_rules", [])
-        for rule in control_rules:
-            self._add_control_from_config(rule)
+        # Store control rules to be added after network is built
+        self.pending_control_rules = self.config.get("control_rules", [])
 
     def _register_entities(self, state: TrackedState, dataset_name: str):
-        """Register entity groups for movici_network mode"""
+        """Register entity groups for movici_network mode
+
+        Only registers entity groups that are specified in the config or
+        that are required (junctions, pipes).
+
+        Config options:
+            entity_groups: list of entity group names to register
+                e.g., ["junctions", "pipes", "reservoirs", "tanks", "pumps", "valves"]
+                If not specified, registers junctions, pipes, and reservoirs.
+        """
+        # Get list of entity groups to register from config
+        entity_groups = self.config.get(
+            "entity_groups", ["junctions", "pipes", "reservoirs"]
+        )
 
         # Junctions (required)
-        self.junctions = WaterJunctionEntity()
-        state.register_entity_group(dataset_name, self.junctions)
+        if "junctions" in entity_groups:
+            self.junctions = WaterJunctionEntity()
+            state.register_entity_group(dataset_name, self.junctions)
 
         # Pipes (required)
-        self.pipes = WaterPipeEntity()
-        state.register_entity_group(dataset_name, self.pipes)
+        if "pipes" in entity_groups:
+            self.pipes = WaterPipeEntity()
+            state.register_entity_group(dataset_name, self.pipes)
 
-        # Optional entity groups
-        try:
-            self.tanks = WaterTankEntity()
-            state.register_entity_group(dataset_name, self.tanks)
-        except Exception:
-            self.tanks = None
-
-        try:
+        # Reservoirs
+        if "reservoirs" in entity_groups:
             self.reservoirs = WaterReservoirEntity()
             state.register_entity_group(dataset_name, self.reservoirs)
-        except Exception:
-            self.reservoirs = None
 
-        try:
+        # Tanks
+        if "tanks" in entity_groups:
+            self.tanks = WaterTankEntity()
+            state.register_entity_group(dataset_name, self.tanks)
+
+        # Pumps
+        if "pumps" in entity_groups:
             self.pumps = WaterPumpEntity()
             state.register_entity_group(dataset_name, self.pumps)
-        except Exception:
-            self.pumps = None
 
-        try:
+        # Valves
+        if "valves" in entity_groups:
             self.valves = WaterValveEntity()
             state.register_entity_group(dataset_name, self.valves)
-        except Exception:
-            self.valves = None
 
     def _register_output_entities_from_inp(self, state: TrackedState):
-        """Register entity groups for output only (INP file mode)"""
-        # In INP mode, we only publish results
-        # Entities are created from the loaded network
+        """Register entity groups and create entities from INP file network data
+
+        In INP mode, we extract network data from the loaded WNTR network
+        and create Movici entities with proper IDs and attributes.
+        Only entity groups that have data in the network are registered.
+        """
         dataset_name = self.config.get("dataset", "water_network")
+        wn = self.network.wn
 
-        # Create minimal entity groups for output
-        self.junctions = WaterJunctionEntity()
-        # Register only PUB attributes
-        for attr_name in ["pressure", "head", "actual_demand", "demand_deficit"]:
-            attr = getattr(self.junctions, attr_name, None)
-            if attr:
-                state.register_attribute(dataset_name, self.junctions, attr.spec, flags=PUB)
+        # Register entity groups only for elements that exist in the network
+        if wn.junction_name_list:
+            self.junctions = WaterJunctionEntity()
+            state.register_entity_group(dataset_name, self.junctions)
 
-        self.pipes = WaterPipeEntity()
-        for attr_name in ["flow", "velocity", "headloss", "flow_direction"]:
-            attr = getattr(self.pipes, attr_name, None)
-            if attr:
-                state.register_attribute(dataset_name, self.pipes, attr.spec, flags=PUB)
+        if wn.pipe_name_list:
+            self.pipes = WaterPipeEntity()
+            state.register_entity_group(dataset_name, self.pipes)
+
+        if wn.reservoir_name_list:
+            self.reservoirs = WaterReservoirEntity()
+            state.register_entity_group(dataset_name, self.reservoirs)
+
+        if wn.tank_name_list:
+            self.tanks = WaterTankEntity()
+            state.register_entity_group(dataset_name, self.tanks)
+
+        if wn.pump_name_list:
+            self.pumps = WaterPumpEntity()
+            state.register_entity_group(dataset_name, self.pumps)
+
+        if wn.valve_name_list:
+            self.valves = WaterValveEntity()
+            state.register_entity_group(dataset_name, self.valves)
+
+        # Build entity data from WNTR network
+        entity_data = self._extract_entities_from_wntr()
+
+        # Initialize entities with the extracted data
+        state.receive_update({dataset_name: entity_data}, is_initial=True)
+
+    def _extract_entities_from_wntr(self) -> dict:
+        """Extract entity data from WNTR network in Movici format
+
+        Returns dict in format:
+        {
+            "water_junction_entities": {"id": {"data": [...]}, "water.elevation": {"data": [...]}, ...},
+            "water_pipe_entities": {...},
+            ...
+        }
+        """
+        wn = self.network.wn
+        entity_data = {}
+
+        # Extract junctions
+        junction_names = list(wn.junction_name_list)
+        if junction_names:
+            junction_ids = []
+            elevations = []
+            base_demands = []
+            x_coords = []
+            y_coords = []
+
+            for i, name in enumerate(junction_names):
+                junction = wn.get_node(name)
+                movici_id = i + 1  # Start IDs at 1
+                # Map WNTR name to movici_id (using original INP file names)
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "junction"
+
+                junction_ids.append(movici_id)
+                elevations.append(junction.elevation)
+                base_demands.append(junction.base_demand)
+                if junction.coordinates:
+                    x_coords.append(junction.coordinates[0])
+                    y_coords.append(junction.coordinates[1])
+                else:
+                    x_coords.append(0.0)
+                    y_coords.append(0.0)
+
+            entity_data["water_junction_entities"] = {
+                "id": {"data": np.array(junction_ids, dtype=np.int32)},
+                "geometry.x": {"data": np.array(x_coords, dtype=np.float64)},
+                "geometry.y": {"data": np.array(y_coords, dtype=np.float64)},
+                "water.elevation": {"data": np.array(elevations, dtype=np.float64)},
+                "water.base_demand": {"data": np.array(base_demands, dtype=np.float64)},
+            }
+
+        # Extract reservoirs
+        reservoir_names = list(wn.reservoir_name_list)
+        if reservoir_names:
+            reservoir_ids = []
+            heads = []
+            x_coords = []
+            y_coords = []
+
+            id_offset = len(junction_names) + 1
+            for i, name in enumerate(reservoir_names):
+                reservoir = wn.get_node(name)
+                movici_id = id_offset + i
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "reservoir"
+
+                reservoir_ids.append(movici_id)
+                heads.append(reservoir.base_head)
+                if reservoir.coordinates:
+                    x_coords.append(reservoir.coordinates[0])
+                    y_coords.append(reservoir.coordinates[1])
+                else:
+                    x_coords.append(0.0)
+                    y_coords.append(0.0)
+
+            entity_data["water_reservoir_entities"] = {
+                "id": {"data": np.array(reservoir_ids, dtype=np.int32)},
+                "geometry.x": {"data": np.array(x_coords, dtype=np.float64)},
+                "geometry.y": {"data": np.array(y_coords, dtype=np.float64)},
+                "water.head": {"data": np.array(heads, dtype=np.float64)},
+            }
+
+        # Extract tanks
+        tank_names = list(wn.tank_name_list)
+        if tank_names:
+            tank_ids = []
+            elevations = []
+            init_levels = []
+            min_levels = []
+            max_levels = []
+            diameters = []
+            x_coords = []
+            y_coords = []
+
+            id_offset = len(junction_names) + len(reservoir_names) + 1
+            for i, name in enumerate(tank_names):
+                tank = wn.get_node(name)
+                movici_id = id_offset + i
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "tank"
+
+                tank_ids.append(movici_id)
+                elevations.append(tank.elevation)
+                init_levels.append(tank.init_level)
+                min_levels.append(tank.min_level)
+                max_levels.append(tank.max_level)
+                diameters.append(tank.diameter)
+                if tank.coordinates:
+                    x_coords.append(tank.coordinates[0])
+                    y_coords.append(tank.coordinates[1])
+                else:
+                    x_coords.append(0.0)
+                    y_coords.append(0.0)
+
+            entity_data["water_tank_entities"] = {
+                "id": {"data": np.array(tank_ids, dtype=np.int32)},
+                "geometry.x": {"data": np.array(x_coords, dtype=np.float64)},
+                "geometry.y": {"data": np.array(y_coords, dtype=np.float64)},
+                "water.elevation": {"data": np.array(elevations, dtype=np.float64)},
+                "water.initial_level": {"data": np.array(init_levels, dtype=np.float64)},
+                "water.min_level": {"data": np.array(min_levels, dtype=np.float64)},
+                "water.max_level": {"data": np.array(max_levels, dtype=np.float64)},
+                "water.tank_diameter": {"data": np.array(diameters, dtype=np.float64)},
+            }
+
+        # Track total node count for link ID offset
+        total_nodes = len(junction_names) + len(reservoir_names) + len(tank_names)
+
+        # Extract pipes
+        pipe_names = list(wn.pipe_name_list)
+        if pipe_names:
+            pipe_ids = []
+            from_node_ids = []
+            to_node_ids = []
+            diameters = []
+            roughnesses = []
+            minor_losses = []
+
+            link_id_offset = total_nodes + 1
+            for i, name in enumerate(pipe_names):
+                pipe = wn.get_link(name)
+                movici_id = link_id_offset + i
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "pipe"
+
+                pipe_ids.append(movici_id)
+                from_node_ids.append(self.network.id_mapper.wntr_to_movici[pipe.start_node_name])
+                to_node_ids.append(self.network.id_mapper.wntr_to_movici[pipe.end_node_name])
+                diameters.append(pipe.diameter)
+                roughnesses.append(pipe.roughness)
+                minor_losses.append(pipe.minor_loss)
+
+            entity_data["water_pipe_entities"] = {
+                "id": {"data": np.array(pipe_ids, dtype=np.int32)},
+                "topology.from_node_id": {"data": np.array(from_node_ids, dtype=np.int32)},
+                "topology.to_node_id": {"data": np.array(to_node_ids, dtype=np.int32)},
+                "water.diameter": {"data": np.array(diameters, dtype=np.float64)},
+                "water.roughness": {"data": np.array(roughnesses, dtype=np.float64)},
+                "water.minor_loss": {"data": np.array(minor_losses, dtype=np.float64)},
+            }
+
+        # Extract pumps
+        pump_names = list(wn.pump_name_list)
+        if pump_names:
+            pump_ids = []
+            from_node_ids = []
+            to_node_ids = []
+            pump_types = []
+
+            link_id_offset = total_nodes + len(pipe_names) + 1
+            for i, name in enumerate(pump_names):
+                pump = wn.get_link(name)
+                movici_id = link_id_offset + i
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "pump"
+
+                pump_ids.append(movici_id)
+                from_node_ids.append(self.network.id_mapper.wntr_to_movici[pump.start_node_name])
+                to_node_ids.append(self.network.id_mapper.wntr_to_movici[pump.end_node_name])
+                pump_types.append(str(pump.pump_type))
+
+            entity_data["water_pump_entities"] = {
+                "id": {"data": np.array(pump_ids, dtype=np.int32)},
+                "topology.from_node_id": {"data": np.array(from_node_ids, dtype=np.int32)},
+                "topology.to_node_id": {"data": np.array(to_node_ids, dtype=np.int32)},
+                "water.pump_type": {"data": pump_types},
+            }
+
+        # Extract valves
+        valve_names = list(wn.valve_name_list)
+        if valve_names:
+            valve_ids = []
+            from_node_ids = []
+            to_node_ids = []
+            valve_types = []
+            diameters = []
+            settings = []
+
+            link_id_offset = total_nodes + len(pipe_names) + len(pump_names) + 1
+            for i, name in enumerate(valve_names):
+                valve = wn.get_link(name)
+                movici_id = link_id_offset + i
+                self.network.id_mapper.wntr_to_movici[name] = movici_id
+                self.network.id_mapper.movici_to_wntr[movici_id] = name
+                self.network.id_mapper.entity_types[name] = "valve"
+
+                valve_ids.append(movici_id)
+                from_node_ids.append(self.network.id_mapper.wntr_to_movici[valve.start_node_name])
+                to_node_ids.append(self.network.id_mapper.wntr_to_movici[valve.end_node_name])
+                valve_types.append(valve.valve_type)
+                diameters.append(valve.diameter)
+                settings.append(valve.setting)
+
+            entity_data["water_valve_entities"] = {
+                "id": {"data": np.array(valve_ids, dtype=np.int32)},
+                "topology.from_node_id": {"data": np.array(from_node_ids, dtype=np.int32)},
+                "topology.to_node_id": {"data": np.array(to_node_ids, dtype=np.int32)},
+                "water.valve_type": {"data": valve_types},
+                "water.diameter": {"data": np.array(diameters, dtype=np.float64)},
+                "water.valve_setting": {"data": np.array(settings, dtype=np.float64)},
+            }
+
+        return entity_data
 
     def _load_pattern_tape(self, tape_name: str, init_data_handler: InitDataHandler):
         """Load demand pattern tape file"""
@@ -239,6 +496,10 @@ class Model(TrackedModel, name="water_network_simulation"):
             # Build network from Movici datasets
             self._build_network_from_state(state)
 
+        # Apply pending control rules now that network is built
+        for rule in self.pending_control_rules:
+            self._add_control_from_config(rule)
+
         # Run initial simulation
         duration = self.config.get("simulation_duration")
         hydraulic_timestep = self.config.get("hydraulic_timestep", 3600)
@@ -257,32 +518,32 @@ class Model(TrackedModel, name="water_network_simulation"):
         """Build WNTR network from Movici entity state"""
 
         # Add junctions
-        if self.junctions and self.junctions.is_initialized():
+        if self.junctions and len(self.junctions) > 0:
             junction_coll = get_junctions(self.junctions, self.network.id_mapper)
             self.network.add_junctions(junction_coll)
 
         # Add tanks
-        if self.tanks and self.tanks.is_initialized():
+        if self.tanks and len(self.tanks) > 0:
             tank_coll = get_tanks(self.tanks, self.network.id_mapper)
             self.network.add_tanks(tank_coll)
 
         # Add reservoirs
-        if self.reservoirs and self.reservoirs.is_initialized():
+        if self.reservoirs and len(self.reservoirs) > 0:
             reservoir_coll = get_reservoirs(self.reservoirs, self.network.id_mapper)
             self.network.add_reservoirs(reservoir_coll)
 
         # Add pipes
-        if self.pipes and self.pipes.is_initialized():
+        if self.pipes and len(self.pipes) > 0:
             pipe_coll = get_pipes(self.pipes, self.network.id_mapper)
             self.network.add_pipes(pipe_coll)
 
         # Add pumps
-        if self.pumps and self.pumps.is_initialized():
+        if self.pumps and len(self.pumps) > 0:
             pump_coll = get_pumps(self.pumps, self.network.id_mapper)
             self.network.add_pumps(pump_coll)
 
         # Add valves
-        if self.valves and self.valves.is_initialized():
+        if self.valves and len(self.valves) > 0:
             valve_coll = get_valves(self.valves, self.network.id_mapper)
             self.network.add_valves(valve_coll)
 
@@ -345,8 +606,8 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         # Update pipe statuses
         if self.pipes and self.pipes.status.has_data():
-            if self.pipes.status.is_updated():
-                movici_ids = self.pipes.id.array
+            if np.any(self.pipes.status.changed):
+                movici_ids = self.pipes.index.ids
                 link_names = [
                     self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
                 ]
@@ -355,8 +616,8 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         # Update valve statuses
         if self.valves and self.valves.status.has_data():
-            if self.valves.status.is_updated():
-                movici_ids = self.valves.id.array
+            if np.any(self.valves.status.changed):
+                movici_ids = self.valves.index.ids
                 link_names = [
                     self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
                 ]
@@ -365,8 +626,8 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         # Update pump statuses and speeds
         if self.pumps:
-            if self.pumps.status.has_data() and self.pumps.status.is_updated():
-                movici_ids = self.pumps.id.array
+            if self.pumps.status.has_data() and np.any(self.pumps.status.changed):
+                movici_ids = self.pumps.index.ids
                 link_names = [
                     self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
                 ]
@@ -475,7 +736,7 @@ class Model(TrackedModel, name="water_network_simulation"):
             if valve_indices:
                 self.valves.flow.array[valve_indices] = np.array(flows)
 
-    def shutdown(self):
+    def shutdown(self, state: TrackedState):
         """Clean up resources"""
         if self.network:
             self.network.close()

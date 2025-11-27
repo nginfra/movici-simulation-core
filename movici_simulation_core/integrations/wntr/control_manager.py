@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import typing as t
 
+import wntr
+
 
 class ControlManager:
     """Manages WNTR control rules from configuration and INP files
@@ -35,19 +37,20 @@ class ControlManager:
         :param control_name: Unique name for the control
             :param target_element: Name of the element to control (pipe, pump, valve)
             target_attribute: Attribute to modify (e.g., 'status', 'speed')
-            value: Value to set
+            value: Value to set (use 0/Closed or 1/Open for status)
             time: Time in seconds
             time_type: Type of time ('sim_time' or 'clock_time')
         """
         try:
-            import wntr
-
             # Get the target object
             target = self._get_element(target_element)
 
+            # Convert status values to LinkStatus
+            converted_value = self._convert_status_value(target_attribute, value)
+
             # Create the action
             action = wntr.network.controls.ControlAction(
-                target, target_attribute, value
+                target, target_attribute, converted_value
             )
 
             # Create the condition based on time type
@@ -100,8 +103,6 @@ class ControlManager:
             threshold: Threshold value for comparison
         """
         try:
-            import wntr
-
             # Get the target and source objects
             target = self._get_element(target_element)
             source = self._get_element(source_element)
@@ -155,8 +156,6 @@ class ControlManager:
             priority: Priority level (0-6, default 3=medium)
         """
         try:
-            import wntr
-
             # Parse conditions
             conditions = []
             for cond_spec in if_conditions:
@@ -219,6 +218,36 @@ class ControlManager:
         except KeyError:
             return self.wn.get_node(element_name)
 
+    def _convert_status_value(self, attribute: str, value: t.Any) -> t.Any:
+        """Convert status values to WNTR LinkStatus enum
+
+        :param attribute: Attribute name
+        :param value: Value to convert
+
+        :return: Converted value (LinkStatus enum for status attributes)
+        """
+        if attribute == "status":
+            if isinstance(value, str):
+                value_lower = value.lower()
+                if value_lower in ("closed", "close", "0"):
+                    return wntr.network.LinkStatus.Closed
+                elif value_lower in ("open", "1"):
+                    return wntr.network.LinkStatus.Open
+                elif value_lower == "active":
+                    return wntr.network.LinkStatus.Active
+                else:
+                    raise ValueError(f"Unknown status value: {value}")
+            elif isinstance(value, int):
+                if value == 0:
+                    return wntr.network.LinkStatus.Closed
+                elif value == 1:
+                    return wntr.network.LinkStatus.Open
+                elif value == 2:
+                    return wntr.network.LinkStatus.Active
+                else:
+                    raise ValueError(f"Unknown status value: {value}")
+        return value
+
     def _parse_condition(self, cond_spec: dict) -> t.Any:
         """Parse a condition specification
 
@@ -226,8 +255,6 @@ class ControlManager:
 
         :return: WNTR Condition object
         """
-        import wntr
-
         cond_type = cond_spec.get("type", "value")
 
         if cond_type == "sim_time":
@@ -256,8 +283,6 @@ class ControlManager:
 
         :return: WNTR ControlAction object
         """
-        import wntr
-
         element = self._get_element(act_spec["element"])
         return wntr.network.controls.ControlAction(
             element, act_spec["attribute"], act_spec["value"]

@@ -37,7 +37,7 @@ def get_junctions(
 
     :return: JunctionCollection
     """
-    movici_ids = junctions.id.array
+    movici_ids = junctions.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="junction")
 
     elevations = junctions.elevation.array
@@ -70,7 +70,7 @@ def get_tanks(tanks: "WaterTankEntity", id_mapper: IdMapper) -> TankCollection:
 
     :return: TankCollection
     """
-    movici_ids = tanks.id.array
+    movici_ids = tanks.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="tank")
 
     elevations = tanks.elevation.array
@@ -113,7 +113,7 @@ def get_reservoirs(
 
     :return: ReservoirCollection
     """
-    movici_ids = reservoirs.id.array
+    movici_ids = reservoirs.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="reservoir")
 
     heads = reservoirs.head.array
@@ -144,7 +144,7 @@ def get_pipes(pipes: "WaterPipeEntity", id_mapper: IdMapper) -> PipeCollection:
 
     :return: PipeCollection
     """
-    movici_ids = pipes.id.array
+    movici_ids = pipes.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="pipe")
 
     # Get from/to node names from IDs
@@ -193,7 +193,7 @@ def get_pumps(pumps: "WaterPumpEntity", id_mapper: IdMapper) -> PumpCollection:
 
     :return: PumpCollection
     """
-    movici_ids = pumps.id.array
+    movici_ids = pumps.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="pump")
 
     # Get from/to node names
@@ -237,7 +237,7 @@ def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollecti
 
     :return: ValveCollection
     """
-    movici_ids = valves.id.array
+    movici_ids = valves.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="valve")
 
     # Get from/to node names

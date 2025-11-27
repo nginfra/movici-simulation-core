@@ -1,6 +1,6 @@
 """Entity definitions for water network simulation"""
 
-from movici_simulation_core.core.attribute import INIT, OPT, PUB, SUB, field
+from movici_simulation_core.core.attribute import INIT, OPT, PUB, field
 from movici_simulation_core.models.common.entity_groups import LinkEntity, PointEntity
 
 from .attributes import (
@@ -50,15 +50,15 @@ class WaterJunctionEntity(PointEntity):
     elevation = field(Water_Elevation, flags=INIT)
     base_demand = field(Water_BaseDemand, flags=INIT)
 
-    # SUB attributes (input from tape files or other models)
-    demand_multiplier = field(Water_DemandMultiplier, flags=SUB | OPT)
-    demand_pattern = field(Water_DemandPattern, flags=SUB | OPT)
+    # OPT attributes (optional input from tape files or other models)
+    demand_multiplier = field(Water_DemandMultiplier, flags=OPT)
+    demand_pattern = field(Water_DemandPattern, flags=OPT)
 
     # PUB attributes (simulation outputs)
     pressure = field(Water_Pressure, flags=PUB)
     head = field(Water_Head, flags=PUB)
     actual_demand = field(Water_ActualDemand, flags=PUB)
-    demand_deficit = field(Water_DemandDeficit, flags=PUB | OPT)
+    demand_deficit = field(Water_DemandDeficit, flags=PUB)
 
 
 class WaterTankEntity(PointEntity):
@@ -72,8 +72,8 @@ class WaterTankEntity(PointEntity):
     min_level = field(Water_MinLevel, flags=INIT)
     max_level = field(Water_MaxLevel, flags=INIT)
     diameter = field(Water_TankDiameter, flags=INIT)
-    min_volume = field(Water_MinVolume, flags=INIT | OPT)
-    volume_curve = field(Water_VolumeCurve, flags=INIT | OPT)
+    min_volume = field(Water_MinVolume, flags=OPT)
+    volume_curve = field(Water_VolumeCurve, flags=OPT)
 
     # PUB attributes
     level = field(Water_Level, flags=PUB)
@@ -89,9 +89,9 @@ class WaterReservoirEntity(PointEntity):
     # INIT attributes
     head = field(Water_Head, flags=INIT)
 
-    # SUB attributes (can vary with head pattern)
-    head_multiplier = field(Water_HeadMultiplier, flags=SUB | OPT)
-    head_pattern = field(Water_HeadPattern, flags=SUB | OPT)
+    # OPT attributes (can vary with head pattern)
+    head_multiplier = field(Water_HeadMultiplier, flags=OPT)
+    head_pattern = field(Water_HeadPattern, flags=OPT)
 
     # PUB attributes
     flow = field(Water_Flow, flags=PUB)
@@ -105,19 +105,19 @@ class WaterPipeEntity(LinkEntity):
     # INIT attributes
     diameter = field(Water_Diameter, flags=INIT)
     roughness = field(Water_Roughness, flags=INIT)
-    minor_loss = field(Water_MinorLoss, flags=INIT | OPT)
-    initial_status = field(Water_InitialStatus, flags=INIT | OPT)
-    bulk_coeff = field(Water_BulkCoeff, flags=INIT | OPT)
-    wall_coeff = field(Water_WallCoeff, flags=INIT | OPT)
+    minor_loss = field(Water_MinorLoss, flags=OPT)
+    initial_status = field(Water_InitialStatus, flags=OPT)
+    bulk_coeff = field(Water_BulkCoeff, flags=OPT)
+    wall_coeff = field(Water_WallCoeff, flags=OPT)
 
-    # SUB attributes (dynamic control)
-    status = field(Water_LinkStatus, flags=SUB | OPT)
+    # OPT attributes (dynamic control)
+    status = field(Water_LinkStatus, flags=OPT)
 
     # PUB attributes (simulation results)
     flow = field(Water_Flow, flags=PUB)
     velocity = field(Water_Velocity, flags=PUB)
     headloss = field(Water_Headloss, flags=PUB)
-    flow_direction = field(Water_FlowDirection, flags=PUB | OPT)
+    flow_direction = field(Water_FlowDirection, flags=PUB)
 
 
 class WaterPumpEntity(LinkEntity):
@@ -127,12 +127,12 @@ class WaterPumpEntity(LinkEntity):
 
     # INIT attributes
     pump_type = field(Water_PumpType, flags=INIT)
-    pump_curve = field(Water_PumpCurve, flags=INIT | OPT)
-    power = field(Water_Power, flags=INIT | OPT)
+    pump_curve = field(Water_PumpCurve, flags=OPT)
+    power = field(Water_Power, flags=OPT)
 
-    # SUB attributes
-    status = field(Water_LinkStatus, flags=SUB | OPT)
-    speed = field(Water_PumpSpeed, flags=SUB | OPT)
+    # OPT attributes
+    status = field(Water_LinkStatus, flags=OPT)
+    speed = field(Water_PumpSpeed, flags=OPT)
 
     # PUB attributes
     flow = field(Water_Flow, flags=PUB)
@@ -148,13 +148,13 @@ class WaterValveEntity(LinkEntity):
     valve_type = field(Water_ValveType, flags=INIT)
     diameter = field(Water_Diameter, flags=INIT)
     setting = field(Water_ValveSetting, flags=INIT)
-    minor_loss = field(Water_MinorLoss, flags=INIT | OPT)
-    initial_status = field(Water_InitialStatus, flags=INIT | OPT)
+    minor_loss = field(Water_MinorLoss, flags=OPT)
+    initial_status = field(Water_InitialStatus, flags=OPT)
 
-    # SUB attributes
-    status = field(Water_LinkStatus, flags=SUB | OPT)
+    # OPT attributes
+    status = field(Water_LinkStatus, flags=OPT)
 
     # PUB attributes
     flow = field(Water_Flow, flags=PUB)
-    velocity = field(Water_Velocity, flags=PUB | OPT)
-    headloss = field(Water_Headloss, flags=PUB | OPT)
+    velocity = field(Water_Velocity, flags=PUB)
+    headloss = field(Water_Headloss, flags=PUB)

@@ -6,6 +6,7 @@ import typing as t
 from pathlib import Path
 
 import numpy as np
+import wntr
 
 from .collections import (
     JunctionCollection,
@@ -34,13 +35,6 @@ class NetworkWrapper:
         :param mode: Either 'inp_file' or 'movici_network'
         :param inp_file: Path to INP file (required if mode='inp_file')
         """
-        try:
-            import wntr
-        except ImportError as e:
-            raise ImportError(
-                "WNTR is not installed. Install with: pip install wntr"
-            ) from e
-
         self.mode = mode
         self.wntr = wntr
 
@@ -272,7 +266,11 @@ class NetworkWrapper:
         link_names = list(results.link["flowrate"].columns)
         link_flows = results.link["flowrate"].loc[last_time].values
         link_velocities = results.link["velocity"].loc[last_time].values
-        link_headlosses = results.link["headloss"].loc[last_time].values
+        # headloss may not be available in all WNTR versions
+        if "headloss" in results.link:
+            link_headlosses = results.link["headloss"].loc[last_time].values
+        else:
+            link_headlosses = np.zeros(len(link_names))
         link_statuses = results.link["status"].loc[last_time].values
 
         # Pump power if available
