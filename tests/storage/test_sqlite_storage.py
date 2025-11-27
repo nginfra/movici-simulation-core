@@ -10,9 +10,9 @@ def db_path(tmp_path):
 
 @pytest.fixture
 def db(db_path):
-    db = SimulationDatabase(db_path)
-    db.initialize()
-    return db
+    with SimulationDatabase(db_path) as db:
+        db.initialize()
+        yield db
 
 
 def test_database_version(db: SimulationDatabase):

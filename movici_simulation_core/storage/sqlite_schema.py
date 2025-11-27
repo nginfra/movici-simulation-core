@@ -259,6 +259,12 @@ class SimulationDatabase:
         finally:
             session.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_, **__):
+        self.close()
+
     def initialize(self):
         with self.engine.connect() as conn:
             conn.execute(text("PRAGMA foreign_keys=ON"))

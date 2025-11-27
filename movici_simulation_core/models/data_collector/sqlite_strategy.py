@@ -75,7 +75,7 @@ class SQLiteStorageStrategy(StorageStrategy):
         """Initialize the database.
 
 
-        Also stores initial datasets from init_data_dir for self-contained archives.
+        Also stores initial datasets from Settings.data_dir for self-contained archives.
         """
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
         self.db = SimulationDatabase(self.database_path)
@@ -221,7 +221,7 @@ class SQLiteStorageStrategy(StorageStrategy):
 
         return DatasetFormat.UNSTRUCTURED
 
-    def finalize(self):
+    def close(self):
         """Clean up database connections.
 
         Called when simulation ends. Ensures all connections are properly closed.

@@ -121,6 +121,7 @@ def test_sqlite_storage_creates_database(db_path, global_schema):
     settings = Settings(storage="sqlite")
     strategy = SQLiteStorageStrategy(db_path, settings)
     strategy.initialize()
+    strategy.close()
 
     assert db_path.exists()
     assert db_path.is_file()
@@ -141,13 +142,13 @@ def test_sqlite_storage_stores_update(db_path, global_schema):
     )
 
     strategy.store(info)
-
+    strategy.close()
     # Verify data was stored
-    db = SimulationDatabase(db_path)
-    updates = db.get_dataset_updates("dataset")
-    assert len(updates) == 1
-    assert updates[0]["timestamp"] == 1
-    assert updates[0]["iteration"] == 2
+    with SimulationDatabase(db_path) as db:
+        updates = db.get_dataset_updates("dataset")
+        assert len(updates) == 1
+        assert updates[0]["timestamp"] == 1
+        assert updates[0]["iteration"] == 2
 
 
 def test_sqlite_storage_stores_sparse_array(db_path, global_schema):
@@ -173,10 +174,11 @@ def test_sqlite_storage_stores_sparse_array(db_path, global_schema):
     )
 
     strategy.store(info)
+    strategy.close()
 
     # Verify CSR data was stored correctly
-    db = SimulationDatabase(db_path)
-    updates = db.get_dataset_updates("dataset")
+    with SimulationDatabase(db_path) as db:
+        updates = db.get_dataset_updates("dataset")
     assert len(updates) == 1
 
     sparse_data = updates[0]["entity_group"]["sparse_attr"]
@@ -197,10 +199,10 @@ def test_stores_one_update_sqlite(model_sqlite, db_path, run_updates):
     run_updates(model_sqlite, [(0, upd)])
 
     # Verify data in database
-    db = SimulationDatabase(db_path)
-    assert db.get_update_count() == 1
+    with SimulationDatabase(db_path) as db:
+        assert db.get_update_count() == 1
 
-    updates = db.get_dataset_updates("some_dataset")
+        updates = db.get_dataset_updates("some_dataset")
     assert len(updates) == 1
     assert updates[0]["timestamp"] == 0
     assert updates[0]["iteration"] == 0
@@ -217,11 +219,11 @@ def test_stores_multiple_updates_sqlite(model_sqlite, db_path, run_updates):
     )
 
     # Verify data in database
-    db = SimulationDatabase(db_path)
-    assert db.get_update_count() == 2
+    with SimulationDatabase(db_path) as db:
+        assert db.get_update_count() == 2
 
-    datasets = set(db.get_datasets())
-    assert datasets == {"some_dataset", "other_dataset"}
+        datasets = set(db.get_datasets())
+        assert datasets == {"some_dataset", "other_dataset"}
 
 
 def test_initial_datasets_stored_automatically(tmp_path, logger):
@@ -248,22 +250,21 @@ def test_initial_datasets_stored_automatically(tmp_path, logger):
 
     model = DataCollector(model_config)
     model.initialize(settings, logger)
+    model.close()
 
     # Verify initial datasets were stored in database
-    db = SimulationDatabase(db_path)
-    assert db.has_initial_datasets() is True
+    with SimulationDatabase(db_path) as db:
+        assert db.has_initial_datasets() is True
 
-    # Verify both datasets are present
-    all_datasets = db.get_all_initial_datasets()
-    assert "transport_network" in all_datasets
-    assert "water_network" in all_datasets
+        # Verify both datasets are present
+        all_datasets = db.get_all_initial_datasets()
+        assert "transport_network" in all_datasets
+        assert "water_network" in all_datasets
 
-    # Verify content matches
-    assert all_datasets["transport_network"] == dataset1
-    assert all_datasets["water_network"] == dataset2
+        # Verify content matches
+        assert all_datasets["transport_network"] == dataset1
+        assert all_datasets["water_network"] == dataset2
 
-    # Verify individual retrieval
-    transport_data = db.get_initial_dataset("transport_network")
-    assert transport_data == dataset1
-
-    model.close()
+        # Verify individual retrieval
+        transport_data = db.get_initial_dataset("transport_network")
+        assert transport_data == dataset1

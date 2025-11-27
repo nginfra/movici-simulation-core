@@ -27,3 +27,6 @@ class StorageStrategy:
 
     def reset_iterations(self, model: DataCollector):
         pass
+
+    def close(self):
+        pass

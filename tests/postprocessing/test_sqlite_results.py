@@ -4,6 +4,7 @@ import numpy as np
 import orjson
 import pytest
 
+from movici_simulation_core.postprocessing.results import SimulationResults
 from movici_simulation_core.postprocessing.sqlite_results import (
     SQLiteSimulationResults,
     detect_results_format,
@@ -65,6 +66,7 @@ def db_with_updates(tmp_path, global_schema):
         },
     )
 
+    db.close()
     return db_path
 
 
@@ -75,18 +77,20 @@ def db_with_updates(tmp_path, global_schema):
 
 def test_sqlite_results_init(db_with_updates, init_data_dir):
     """Test SQLiteSimulationResults initialization"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    assert results.db_path == db_with_updates
-    assert results.init_data_dir == init_data_dir
-    assert "transport_network" in results.datasets
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        assert results.db_path == db_with_updates
+        assert results.init_data_dir == init_data_dir
+        assert "transport_network" in results.datasets
 
 
 def test_sqlite_results_get_dataset(db_with_updates, init_data_dir):
     """Test getting a dataset from SQLite results"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    dataset = results.get_dataset("transport_network")
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        dataset = results.get_dataset("transport_network")
 
     # Check dataset metadata
     assert dataset.name == "transport_network"
@@ -97,42 +101,37 @@ def test_sqlite_results_get_dataset(db_with_updates, init_data_dir):
 
 def test_sqlite_results_get_dataset_not_found(db_with_updates, init_data_dir):
     """Test error when dataset not found"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    with pytest.raises(ValueError, match="Dataset nonexistent not found"):
-        results.get_dataset("nonexistent")
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        with pytest.raises(ValueError, match="Dataset nonexistent not found"):
+            results.get_dataset("nonexistent")
 
 
 def test_sqlite_results_get_datasets(db_with_updates, init_data_dir):
     """Test getting list of datasets"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    datasets = results.get_datasets()
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        datasets = results.get_datasets()
     assert "transport_network" in datasets
 
 
 def test_sqlite_results_get_timestamps(db_with_updates, init_data_dir):
     """Test getting timestamps for a dataset"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    timestamps = results.get_timestamps("transport_network")
-    assert timestamps == [0, 10]
-
-
-def test_sqlite_results_context_manager(db_with_updates, init_data_dir):
-    """Test using SQLiteSimulationResults as context manager"""
     with SQLiteSimulationResults(
         database_path=db_with_updates, init_data_dir=init_data_dir
     ) as results:
-        dataset = results.get_dataset("transport_network")
-        assert dataset.name == "transport_network"
+        timestamps = results.get_timestamps("transport_network")
+    assert timestamps == [0, 10]
 
 
 def test_sqlite_results_updates_applied(db_with_updates, init_data_dir):
     """Test that updates are properly applied to dataset state"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    dataset = results.get_dataset("transport_network")
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        dataset = results.get_dataset("transport_network")
 
     # Move to timestamp 0
     dataset.state.move_to(0)
@@ -149,11 +148,10 @@ def test_sqlite_results_updates_applied(db_with_updates, init_data_dir):
 
 def test_sqlite_results_with_schema(db_with_updates, init_data_dir, global_schema):
     """Test SQLiteSimulationResults with schema"""
-    results = SQLiteSimulationResults(
+    with SQLiteSimulationResults(
         database_path=db_with_updates, init_data_dir=init_data_dir, attributes=global_schema
-    )
-
-    dataset = results.get_dataset("transport_network")
+    ) as results:
+        dataset = results.get_dataset("transport_network")
     assert dataset is not None
 
 
@@ -217,19 +215,16 @@ def test_detect_json_format_empty_dir(tmp_path):
 
 def test_get_simulation_results_sqlite(db_with_updates, init_data_dir):
     """Test factory returns SQLiteSimulationResults for SQLite format"""
-    results = get_simulation_results(
+    with get_simulation_results(
         init_data_dir=init_data_dir, updates_path=db_with_updates.parent
-    )
-
-    assert isinstance(results, SQLiteSimulationResults)
-    dataset = results.get_dataset("transport_network")
-    assert dataset.name == "transport_network"
+    ) as results:
+        assert isinstance(results, SQLiteSimulationResults)
+        dataset = results.get_dataset("transport_network")
+        assert dataset.name == "transport_network"
 
 
 def test_get_simulation_results_json(tmp_path, init_data_dir):
     """Test factory returns SimulationResults for JSON format"""
-    from movici_simulation_core.postprocessing.results import SimulationResults
-
     updates_dir = tmp_path / "updates"
     updates_dir.mkdir()
 
@@ -240,11 +235,12 @@ def test_get_simulation_results_json(tmp_path, init_data_dir):
 
 def test_get_simulation_results_with_db_file(db_with_updates, init_data_dir):
     """Test factory with direct database file path"""
-    results = get_simulation_results(init_data_dir=init_data_dir, updates_path=db_with_updates)
-
-    assert isinstance(results, SQLiteSimulationResults)
-    dataset = results.get_dataset("transport_network")
-    assert dataset.name == "transport_network"
+    with get_simulation_results(
+        init_data_dir=init_data_dir, updates_path=db_with_updates
+    ) as results:
+        assert isinstance(results, SQLiteSimulationResults)
+        dataset = results.get_dataset("transport_network")
+        assert dataset.name == "transport_network"
 
 
 # ============================================================================
@@ -255,67 +251,66 @@ def test_get_simulation_results_with_db_file(db_with_updates, init_data_dir):
 def test_sqlite_results_multiple_datasets(tmp_path, init_data_dir):
     """Test SQLite results with multiple datasets"""
     db_path = tmp_path / "simulation_results.db"
-    db = SimulationDatabase(db_path)
-    db.initialize()
-    # Add init data for second dataset
-    init_data_2 = {"water_network": {"pipes": {"id": [10, 20], "diameter": [0.5, 0.8]}}}
 
-    (init_data_dir / "water_network.json").write_bytes(orjson.dumps(init_data_2))
+    with SimulationDatabase(db_path) as db:
+        db.initialize()
+        # Add init data for second dataset
+        init_data_2 = {"water_network": {"pipes": {"id": [10, 20], "diameter": [0.5, 0.8]}}}
 
-    # Add updates for both datasets
-    db.store_update(
-        timestamp=0,
-        iteration=0,
-        dataset_name="transport_network",
-        entity_data={"road_segments": {"id": {"data": [1, 2]}, "speed": {"data": [50.0, 60.0]}}},
-    )
+        (init_data_dir / "water_network.json").write_bytes(orjson.dumps(init_data_2))
 
-    db.store_update(
-        timestamp=0,
-        iteration=1,
-        dataset_name="water_network",
-        entity_data={"pipes": {"id": {"data": [10, 20]}, "flow": {"data": [10.0, 15.0]}}},
-    )
+        # Add updates for both datasets
+        db.store_update(
+            timestamp=0,
+            iteration=0,
+            dataset_name="transport_network",
+            entity_data={
+                "road_segments": {"id": {"data": [1, 2]}, "speed": {"data": [50.0, 60.0]}}
+            },
+        )
 
-    # Create results
-    results = SQLiteSimulationResults(database_path=db_path, init_data_dir=init_data_dir)
+        db.store_update(
+            timestamp=0,
+            iteration=1,
+            dataset_name="water_network",
+            entity_data={"pipes": {"id": {"data": [10, 20]}, "flow": {"data": [10.0, 15.0]}}},
+        )
 
-    # Check both datasets
-    datasets = results.get_datasets()
-    assert "transport_network" in datasets
-    assert "water_network" in datasets
+    with SQLiteSimulationResults(database_path=db_path, init_data_dir=init_data_dir) as results:
+        datasets = results.get_datasets()
+        assert "transport_network" in datasets
+        assert "water_network" in datasets
 
-    # Get both datasets
-    ds1 = results.get_dataset("transport_network")
-    ds2 = results.get_dataset("water_network")
+        ds1 = results.get_dataset("transport_network")
+        ds2 = results.get_dataset("water_network")
 
-    assert ds1.name == "transport_network"
-    assert ds2.name == "water_network"
+        assert ds1.name == "transport_network"
+        assert ds2.name == "water_network"
 
 
 def test_sqlite_results_backwards_compatible_interface(db_with_updates, init_data_dir):
     """Test that SQLiteSimulationResults has same interface as SimulationResults"""
-    sqlite_results = SQLiteSimulationResults(
+    with SQLiteSimulationResults(
         database_path=db_with_updates, init_data_dir=init_data_dir
-    )
+    ) as results:
+        # Check interface matches
+        assert hasattr(results, "get_dataset")
+        assert hasattr(results, "use")
 
-    # Check interface matches
-    assert hasattr(sqlite_results, "get_dataset")
-    assert hasattr(sqlite_results, "use")
-
-    # Test get_dataset works same way
-    dataset = sqlite_results.get_dataset("transport_network")
-    assert hasattr(dataset, "state")
-    assert hasattr(dataset, "metadata")
-    assert hasattr(dataset, "slice")
+        # Test get_dataset works same way
+        dataset = results.get_dataset("transport_network")
+        assert hasattr(dataset, "state")
+        assert hasattr(dataset, "metadata")
+        assert hasattr(dataset, "slice")
 
 
 def test_sqlite_results_timeline_progression(db_with_updates, init_data_dir):
     """Test that timeline progression works correctly"""
-    results = SQLiteSimulationResults(database_path=db_with_updates, init_data_dir=init_data_dir)
-
-    dataset = results.get_dataset("transport_network")
-    timestamps = dataset.state.get_timestamps("transport_network")
+    with SQLiteSimulationResults(
+        database_path=db_with_updates, init_data_dir=init_data_dir
+    ) as results:
+        dataset = results.get_dataset("transport_network")
+        timestamps = dataset.state.get_timestamps("transport_network")
 
     # Should have 0 and 10 from database updates
     # Note: -1 is the internal initial state, not stored in database

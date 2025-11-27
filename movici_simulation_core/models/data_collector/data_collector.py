@@ -99,6 +99,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.maybe_flush(self.current_time, origin=None, trigger=self.aggregate)
         self.futures.wait()
         self.pool.shutdown()
+        self.strategy.close()
 
     def maybe_flush(self, moment: Moment, origin, trigger):
         if exc := self.futures.exception():
