@@ -5,3 +5,4 @@ Simulations
    :maxdepth: 2
 
    settings
+   storage

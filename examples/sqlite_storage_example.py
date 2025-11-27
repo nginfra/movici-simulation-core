@@ -94,23 +94,26 @@ def example_migration_json_to_sqlite():
     )
 
     # Create SQLite database
-    db = SimulationDatabase("./results_sqlite/migrated.db")
+    with SimulationDatabase("./results_sqlite/migrated.db") as db:
+        db.initialize()
 
-    # Migrate each dataset
-    for dataset_name in json_results.get_datasets():
-        dataset = json_results.get_dataset(dataset_name)
+        # Migrate each dataset
+        for dataset_name in json_results.datasets.keys():
+            dataset = json_results.get_dataset(dataset_name)
 
-        # Store each update
-        for update in dataset.updates:
-            # Extract entity data (exclude timestamp/iteration)
-            entity_data = {k: v for k, v in update.items() if k not in ["timestamp", "iteration"]}
+            # Store each update
+            for update in dataset.updates:
+                # Extract entity data (exclude timestamp/iteration)
+                entity_data = {
+                    k: v for k, v in update.items() if k not in ["timestamp", "iteration"]
+                }
 
-            db.store_update(
-                timestamp=update["timestamp"],
-                iteration=update["iteration"],
-                dataset_name=dataset_name,
-                entity_data=entity_data,
-            )
+                db.store_update(
+                    timestamp=update["timestamp"],
+                    iteration=update["iteration"],
+                    dataset_name=dataset_name,
+                    entity_data=entity_data,
+                )
 
     print(f"Migration complete. Total updates: {db.get_update_count()}")
 
@@ -120,32 +123,35 @@ def example_performance_comparison():
     Example: Demonstrating performance benefits
     """
     # === SQLite Performance ===
-    db = SimulationDatabase(":memory:")  # In-memory for speed
+    path = Path(".movici-benchmark.db")
+    with SimulationDatabase(path) as db:  # In-memory for speed
+        db.initialize()
 
-    # Write 1000 updates
-    start = time.time()
-    for i in range(1000):
-        db.store_update(
-            timestamp=i,
-            iteration=0,
-            dataset_name="dataset",
-            entity_data={"entities": {"id": {"data": list(range(100))}}},
-        )
-    write_time = time.time() - start
-    print(f"SQLite: Wrote 1000 updates in {write_time:.2f}s")
+        # Write 1000 updates
+        start = time.time()
+        for i in range(1000):
+            db.store_update(
+                timestamp=i,
+                iteration=0,
+                dataset_name="dataset",
+                entity_data={"entities": {"id": {"data": list(range(100))}}},
+            )
+        write_time = time.time() - start
+        print(f"SQLite: Wrote 1000 updates in {write_time:.2f}s")
 
-    # Read all updates
-    start = time.time()
-    updates = db.get_dataset_updates("dataset")
-    read_time = time.time() - start
-    print(f"SQLite: Read {len(updates)} updates in {read_time:.3f}s")
+        # Read all updates
+        start = time.time()
+        updates = db.get_dataset_updates("dataset")
+        read_time = time.time() - start
+        print(f"SQLite: Read {len(updates)} updates in {read_time:.3f}s")
 
-    # Query specific timestamps
-    start = time.time()
-    timestamps = db.get_timestamps("dataset")
-    query_time = time.time() - start
-    print(f"SQLite: Queried {len(timestamps)} timestamps in {query_time:.3f}s")
+        # Query specific timestamps
+        start = time.time()
+        timestamps = db.get_timestamps("dataset")
+        query_time = time.time() - start
+        print(f"SQLite: Queried {len(timestamps)} timestamps in {query_time:.3f}s")
 
+    path.unlink()
     # JSON would require:
     # - Write: 1000 individual file writes (slower)
     # - Read: glob + 1000 file reads + JSON parsing (much slower)
