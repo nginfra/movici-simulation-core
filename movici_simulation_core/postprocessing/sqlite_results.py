@@ -241,22 +241,15 @@ def get_simulation_results(
     format_type = detect_results_format(updates_path)
 
     if format_type == "sqlite":
-        # Determine database path
         if updates_path.is_file() and updates_path.suffix == ".db":
             db_path = updates_path
         elif updates_path.is_dir():
-            # Look for any .db file (including timestamped ones)
             db_files = list(updates_path.glob("*.db"))
             if db_files:
                 # Use the most recent database file
                 db_path = max(db_files, key=lambda p: p.stat().st_mtime)
             else:
-                # Check parent directory
-                parent_db_files = list(updates_path.parent.glob("*.db"))
-                if parent_db_files:
-                    db_path = max(parent_db_files, key=lambda p: p.stat().st_mtime)
-                else:
-                    raise FileNotFoundError(f"No database file found in {updates_path}")
+                raise FileNotFoundError(f"No database file found in {updates_path}")
         else:
             raise ValueError(f"Invalid updates_path: {updates_path}")
 
