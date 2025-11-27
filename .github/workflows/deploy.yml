@@ -26,5 +26,5 @@ jobs:
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
-        repository-url: ${{ vars.PYPI_REPOSITORY_URL }}
+        repository-url: https://test.pypi.org/legacy/
         attestations: true
