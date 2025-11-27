@@ -4,10 +4,11 @@ import tempfile
 import typing as t
 from pathlib import Path
 
-from pydantic import DirectoryPath, Field
+from pydantic import DirectoryPath, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from movici_simulation_core.core.moment import TimelineInfo
+from movici_simulation_core.utils.lifecycle import deprecation_warning
 
 
 class Settings(BaseSettings):
@@ -17,7 +18,7 @@ class Settings(BaseSettings):
         default="[{asctime}] [{levelname:8s}] {name:17s}: {message}", validation_alias="logformat"
     )
     name: str = ""
-    storage: t.Union[t.Literal["api"], t.Literal["disk"]] = "disk"
+    storage: t.Literal["api", "file", "sqlite"] = "file"
     storage_dir: t.Optional[Path] = None
     temp_dir: DirectoryPath = Path(tempfile.gettempdir())
 
@@ -71,3 +72,11 @@ class Settings(BaseSettings):
         self.time_scale = timeline_info.time_scale
         self.reference = timeline_info.reference
         self.duration = timeline_info.duration
+
+    @field_validator("storage", mode="before")
+    @classmethod
+    def check_deprecated_storage(cls, value: str):
+        if value == "disk":
+            deprecation_warning("'disk' storage is deprecated, use 'file' instead")
+            value = "file"
+        return value
