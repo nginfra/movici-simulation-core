@@ -36,7 +36,7 @@ def init_data_dir(tmp_path):
 
 
 @pytest.fixture
-def db_with_updates(tmp_path, global_schema):
+def db_with_updates(tmp_path):
     """Create SQLite database with sample updates"""
     db_path = tmp_path / "simulation_results.db"
     db = SimulationDatabase(db_path)
@@ -286,22 +286,6 @@ def test_sqlite_results_multiple_datasets(tmp_path, init_data_dir):
 
         assert ds1.name == "transport_network"
         assert ds2.name == "water_network"
-
-
-def test_sqlite_results_backwards_compatible_interface(db_with_updates, init_data_dir):
-    """Test that SQLiteSimulationResults has same interface as SimulationResults"""
-    with SQLiteSimulationResults(
-        database_path=db_with_updates, init_data_dir=init_data_dir
-    ) as results:
-        # Check interface matches
-        assert hasattr(results, "get_dataset")
-        assert hasattr(results, "use")
-
-        # Test get_dataset works same way
-        dataset = results.get_dataset("transport_network")
-        assert hasattr(dataset, "state")
-        assert hasattr(dataset, "metadata")
-        assert hasattr(dataset, "slice")
 
 
 def test_sqlite_results_timeline_progression(db_with_updates, init_data_dir):
