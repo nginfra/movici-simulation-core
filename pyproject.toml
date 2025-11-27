@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "movici-simulation-core"
-version = "2.10.6"
+version = "2.11.0"
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
 requires-python = ">=3.10,<3.14"
@@ -54,9 +54,7 @@ models = [
   "movici-geo-query>=1.1.1",
   "scipy",
 ]
-sqlite = [
-    "sqlalchemy>=1.4,<3.0",
-]
+sqlite = ["sqlalchemy>=1.4,<3.0"]
 dev = [
   "pytest",
   "pytest-cov",
