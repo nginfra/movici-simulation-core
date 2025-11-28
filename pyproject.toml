@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "movici-simulation-core"
-version = "2.10.6"
+version = "2.11.0"
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
 requires-python = ">=3.10,<3.14"
@@ -55,6 +55,7 @@ models = [
   "scipy",
   "wntr>=1.0.0",
 ]
+sqlite = ["sqlalchemy>=1.4,<3.0"]
 dev = [
   "pytest",
   "pytest-cov",
@@ -63,6 +64,7 @@ dev = [
   "bump2version",
   "taplo",
   "ruff",
+  "sqlalchemy>=1.4,<3.0",
 ]
 docs = ["sphinx", "furo", "sphinxcontrib-mermaid", "sphinxcontrib-plantuml"]
 all = [
@@ -70,6 +72,7 @@ all = [
   "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
+  "sqlalchemy>=1.4,<3.0",
   "scipy",
   "wntr>=1.0.0",
   "pytest",

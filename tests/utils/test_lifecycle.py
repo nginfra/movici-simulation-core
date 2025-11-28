@@ -22,30 +22,30 @@ def match(old, new):
 
 
 def test_calling_deprecated_function_warns():
-    with pytest.warns(DeprecationWarning, match=match("old_func", "new_func")):
+    with pytest.warns(FutureWarning, match=match("old_func", "new_func")):
         old_func(42)
 
 
 def test_deprecated_function_still_works():
-    with pytest.warns(DeprecationWarning):
+    with pytest.warns(FutureWarning):
         result = old_func(42)
     assert result == 42
 
 
 def test_instantiating_deprecated_class_warns():
-    with pytest.warns(DeprecationWarning, match=match("OldCls", "NewCls")):
+    with pytest.warns(FutureWarning, match=match("OldCls", "NewCls")):
         OldCls()
 
 
 def test_deprecated_cls_still_works():
-    with pytest.warns(DeprecationWarning, match=match("OldCls", "NewCls")):
+    with pytest.warns(FutureWarning, match=match("OldCls", "NewCls")):
         obj = OldCls(42)
 
     assert obj.method() == 42
 
 
 def test_deprecated_cls_passes_instance_checks():
-    with pytest.warns(DeprecationWarning, match=match("OldCls", "NewCls")):
+    with pytest.warns(FutureWarning, match=match("OldCls", "NewCls")):
         obj = OldCls()
 
     assert isinstance(obj, OldCls)
@@ -66,7 +66,7 @@ def test_methods(method_type):
     Class.old_method = deprecated(Class.old_method, alternative="Class.other_method")
 
     with pytest.warns(
-        DeprecationWarning,
+        FutureWarning,
         match=match("Class.old_method", "Class.other_method"),
     ):
         result = to_test.old_method()
@@ -83,7 +83,7 @@ def test_correctly_deprecates_methods_in_subclass():
     class Subclass(Class):
         pass
 
-    with pytest.warns(DeprecationWarning, match=match("Class.method", "new_method")):
+    with pytest.warns(FutureWarning, match=match("Class.method", "new_method")):
         Subclass().method()
 
 
@@ -95,7 +95,7 @@ def test_works_with_property_decorator():
         def some_prop(self):
             return 12
 
-    with pytest.warns(DeprecationWarning, match=match("Class.some_prop", "Class.new_prop")):
+    with pytest.warns(FutureWarning, match=match("Class.some_prop", "Class.new_prop")):
         result = Class().some_prop
 
     assert result == 12

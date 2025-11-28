@@ -570,6 +570,9 @@ Next, we provide our first update at ``t=0``:
     },
     rtol=1e-2,
   )
+  
+  # finally we clean up the test data
+  tester.cleanup()
 
 We feed the model with the antenna's reference signal strength and look at the output. We use the
 :func:`movici_simulation_core.testing.helpers.assert_dataset_dicts_equal` helper function to deep
@@ -582,50 +585,51 @@ implementation of the signal strength formula:
   model = get_model()
   schema = get_schema()
   
-  tester = ModelTester(model, schema=schema)
-  ref_signal_strength = 0
+  # using the ModelTester as a context manager will ensure that we cleanup temporary data
+  with ModelTester(model, schema=schema) as tester:
+    ref_signal_strength = 0
 
-  tester.add_init_data(
-      "some_antennas",
-      {
-          "name": "some_antennas",
-          "data": {
-              "antenna_entities": {
-                  "id": [1],
-                  "geometry.x": [0],
-                  "geometry.y": [1],
-                  "antennas.signal_strength": [ref_signal_strength],
-              }
-          },
-      },
-  )
-  tester.add_init_data(
-      "some_roads",
-      {
-          "name": "some_roads",
-          "data": {
-              "road_segment_entities": {
-                  "id": [1, 2, 3, 4],
-                  "geometry.linestring_2d": [
-                      [[0, 0], [0, 2]], # dist = 0
-                      [[1, 0], [1, 2]], # dist = 1
-                      [[2, 0], [2, 2]], # dist = 2
-                      [[10, 0], [10, 2]], # dist = 10
-                  ],
-              }
-          },
-      },
-  )
-  tester.initialize()
-
-
-  expected_signal_loss = np.array([0, 0, 6.0206, 20])
+    tester.add_init_data(
+        "some_antennas",
+        {
+            "name": "some_antennas",
+            "data": {
+                "antenna_entities": {
+                    "id": [1],
+                    "geometry.x": [0],
+                    "geometry.y": [1],
+                    "antennas.signal_strength": [ref_signal_strength],
+                }
+            },
+        },
+    )
+    tester.add_init_data(
+        "some_roads",
+        {
+            "name": "some_roads",
+            "data": {
+                "road_segment_entities": {
+                    "id": [1, 2, 3, 4],
+                    "geometry.linestring_2d": [
+                        [[0, 0], [0, 2]], # dist = 0
+                        [[1, 0], [1, 2]], # dist = 1
+                        [[2, 0], [2, 2]], # dist = 2
+                        [[10, 0], [10, 2]], # dist = 10
+                    ],
+                }
+            },
+        },
+    )
+    tester.initialize()
 
 
-  expected = ref_signal_strength - expected_signal_loss
-  result, _ = tester.update(0, None)
-  signal_strength = result["some_roads"]["road_segment_entities"]["antennas.signal_strength"]
-  np.testing.assert_allclose(signal_strength, expected)
+    expected_signal_loss = np.array([0, 0, 6.0206, 20])
+
+
+    expected = ref_signal_strength - expected_signal_loss
+    result, _ = tester.update(0, None)
+    signal_strength = result["some_roads"]["road_segment_entities"]["antennas.signal_strength"]
+    np.testing.assert_allclose(signal_strength, expected)
       
 
 For this test we simplify our datasets. There is one antenna and a number of parallel roads, each

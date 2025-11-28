@@ -146,6 +146,7 @@ class ModelTester:
           - A `Plugin` that registers attributes
         """
         self.tmp_dir = Path(tmp_dir or tempfile.mkdtemp())
+        self.created_tmp_dir = not tmp_dir
         self.init_data_handler = init_data_handler or DirectoryInitDataHandler(self.tmp_dir)
         self.settings = settings or Settings()
         self.schema = read_schema(schema)
@@ -162,6 +163,12 @@ class ModelTester:
         if not (preprocessor := DEFAULT_PREPROCESSORS.get(adapter)):
             raise TypeError(f"Unsupported model adapter {adapter.__name__}")
         return preprocessor(model, settings=self.settings, schema=self.schema)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_, **__):
+        self.cleanup()
 
     def add_init_data(self, name: str, data: t.Union[dict, str, Path]):
         if isinstance(data, dict):
@@ -197,6 +204,10 @@ class ModelTester:
             if self.raise_on_premature_shutdown:
                 raise
 
+    def cleanup(self):
+        if self.created_tmp_dir:
+            shutil.rmtree(self.tmp_dir, ignore_errors=False)
+
     @classmethod
     def run_scenario(
         cls,
@@ -224,25 +235,24 @@ class ModelTester:
 
         inst = model(model_config)
         with set_timeline_info(settings.timeline_info):
-            tester = ModelTester(
+            with ModelTester(
                 inst, settings, schema=global_schema, raise_on_premature_shutdown=True
-            )
-            for init_data in scenario.get("init_data", []):
-                tester.add_init_data(**init_data)
+            ) as tester:
+                for init_data in scenario.get("init_data", []):
+                    tester.add_init_data(**init_data)
 
-            tester.initialize()
+                tester.initialize()
 
-            curr_time = None
-            results: t.List[t.Tuple[int, UpdateData, NextTime]] = []
-            for upd in scenario.get("updates"):
-                time, data = upd["time"], upd["data"]
-                if use_new_time and time != curr_time:
-                    curr_time = time
-                    tester.new_time(time)
-                data, next_time = tester.update(time, data)
-                results.append((time, data, next_time))
-            tester.close()
-
+                curr_time = None
+                results: t.List[t.Tuple[int, UpdateData, NextTime]] = []
+                for upd in scenario.get("updates", []):
+                    time, data = upd["time"], upd["data"]
+                    if use_new_time and time != curr_time:
+                        curr_time = time
+                        tester.new_time(time)
+                    data, next_time = tester.update(time, data)
+                    results.append((time, data, next_time))
+                tester.close()
         errors = compare_results(expected, results, rtol, atol)
         if errors:
             raise AssertionError(format_errors(errors))

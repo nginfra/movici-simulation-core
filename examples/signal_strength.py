@@ -129,26 +129,26 @@ def get_tester(model):
 
 def test_intialize():
     model = get_model()
-    tester = get_tester(model)
-    tester.initialize()
-    np.testing.assert_equal(model.nearest_antennas, [0, 1])
+    with get_tester(model) as tester:
+        tester.initialize()
+        np.testing.assert_equal(model.nearest_antennas, [0, 1])
 
 
 def test_update():
     model = get_model()
-    tester = get_tester(model)
-    tester.initialize()
-    result, next_time = tester.update(
-        timestamp=0,
-        data={
-            "some_antennas": {
-                "antenna_entities": {
-                    "id": [1, 2, 3],
-                    "antennas.signal_strength": [-30, -30, -30],
+    with get_tester(model) as tester:
+        tester.initialize()
+        result, next_time = tester.update(
+            timestamp=0,
+            data={
+                "some_antennas": {
+                    "antenna_entities": {
+                        "id": [1, 2, 3],
+                        "antennas.signal_strength": [-30, -30, -30],
+                    }
                 }
-            }
-        },
-    )
+            },
+        )
 
     # the Model is a steady state model, so we expect no next_time
     assert next_time is None
@@ -172,46 +172,46 @@ def test_signal_strength_calculation():
     model = get_model()
     schema = get_schema()
 
-    tester = ModelTester(model, schema=schema)
-    ref_signal_strength = 0
+    with ModelTester(model, schema=schema) as tester:
+        ref_signal_strength = 0
 
-    tester.add_init_data(
-        "some_antennas",
-        {
-            "name": "some_antennas",
-            "data": {
-                "antenna_entities": {
-                    "id": [1],
-                    "geometry.x": [0],
-                    "geometry.y": [1],
-                    "antennas.signal_strength": [ref_signal_strength],
-                }
+        tester.add_init_data(
+            "some_antennas",
+            {
+                "name": "some_antennas",
+                "data": {
+                    "antenna_entities": {
+                        "id": [1],
+                        "geometry.x": [0],
+                        "geometry.y": [1],
+                        "antennas.signal_strength": [ref_signal_strength],
+                    }
+                },
             },
-        },
-    )
-    tester.add_init_data(
-        "some_roads",
-        {
-            "name": "some_roads",
-            "data": {
-                "road_segment_entities": {
-                    "id": [1, 2, 3, 4],
-                    "geometry.linestring_2d": [
-                        [[0, 0], [0, 2]],
-                        [[1, 0], [1, 2]],
-                        [[2, 0], [2, 2]],
-                        [[10, 0], [10, 2]],
-                    ],
-                }
+        )
+        tester.add_init_data(
+            "some_roads",
+            {
+                "name": "some_roads",
+                "data": {
+                    "road_segment_entities": {
+                        "id": [1, 2, 3, 4],
+                        "geometry.linestring_2d": [
+                            [[0, 0], [0, 2]],
+                            [[1, 0], [1, 2]],
+                            [[2, 0], [2, 2]],
+                            [[10, 0], [10, 2]],
+                        ],
+                    }
+                },
             },
-        },
-    )
-    tester.initialize()
+        )
+        tester.initialize()
 
-    expected_signal_loss = np.array([0, 0, 6.0206, 20])
+        expected_signal_loss = np.array([0, 0, 6.0206, 20])
 
-    expected = ref_signal_strength - expected_signal_loss
-    result, _ = tester.update(0, None)
+        expected = ref_signal_strength - expected_signal_loss
+        result, _ = tester.update(0, None)
     signal_strength = result["some_roads"]["road_segment_entities"]["antennas.signal_strength"]
     np.testing.assert_allclose(signal_strength, expected)
 
