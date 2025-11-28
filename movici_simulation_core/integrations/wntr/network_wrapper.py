@@ -73,9 +73,7 @@ class NetworkWrapper:
             self.wn.add_junction(
                 name=name,
                 base_demand=float(junctions.base_demands[i]),
-                demand_pattern=junctions.demand_patterns[i]
-                if junctions.demand_patterns
-                else None,
+                demand_pattern=junctions.demand_patterns[i] if junctions.demand_patterns else None,
                 elevation=float(junctions.elevations[i]),
                 coordinates=coords,
             )
@@ -121,9 +119,7 @@ class NetworkWrapper:
             self.wn.add_reservoir(
                 name=name,
                 base_head=float(reservoirs.heads[i]),
-                head_pattern=reservoirs.head_patterns[i]
-                if reservoirs.head_patterns
-                else None,
+                head_pattern=reservoirs.head_patterns[i] if reservoirs.head_patterns else None,
                 coordinates=coords,
             )
 
@@ -142,9 +138,7 @@ class NetworkWrapper:
                 length=float(pipes.lengths[i]),
                 diameter=float(pipes.diameters[i]),
                 roughness=float(pipes.roughnesses[i]),
-                minor_loss=float(pipes.minor_losses[i])
-                if pipes.minor_losses is not None
-                else 0.0,
+                minor_loss=float(pipes.minor_losses[i]) if pipes.minor_losses is not None else 0.0,
                 initial_status=status_str,
             )
 
@@ -253,9 +247,7 @@ class NetworkWrapper:
         # Tank levels if available
         node_levels = None
         # Extract tank levels separately
-        tank_names = [
-            name for name in node_names if self.wn.get_node(name).node_type == "Tank"
-        ]
+        tank_names = [name for name in node_names if self.wn.get_node(name).node_type == "Tank"]
         if tank_names:
             node_levels = np.zeros(len(node_names))
             for i, name in enumerate(node_names):
@@ -275,9 +267,7 @@ class NetworkWrapper:
 
         # Pump power if available
         link_powers = None
-        pump_names = [
-            name for name in link_names if self.wn.get_link(name).link_type == "Pump"
-        ]
+        pump_names = [name for name in link_names if self.wn.get_link(name).link_type == "Pump"]
         if pump_names and "pump_power" in results.link:
             link_powers = np.zeros(len(link_names))
             pump_powers = results.link["pump_power"].loc[last_time]

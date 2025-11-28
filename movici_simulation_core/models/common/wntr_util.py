@@ -27,9 +27,7 @@ if t.TYPE_CHECKING:
     )
 
 
-def get_junctions(
-    junctions: "WaterJunctionEntity", id_mapper: IdMapper
-) -> JunctionCollection:
+def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> JunctionCollection:
     """Convert junction entities to JunctionCollection
 
         :param junctions: WaterJunctionEntity instance
@@ -103,9 +101,7 @@ def get_tanks(tanks: "WaterTankEntity", id_mapper: IdMapper) -> TankCollection:
     )
 
 
-def get_reservoirs(
-    reservoirs: "WaterReservoirEntity", id_mapper: IdMapper
-) -> ReservoirCollection:
+def get_reservoirs(reservoirs: "WaterReservoirEntity", id_mapper: IdMapper) -> ReservoirCollection:
     """Convert reservoir entities to ReservoirCollection
 
         :param reservoirs: WaterReservoirEntity instance

@@ -23,9 +23,7 @@ class IdMapper:
         # Track entity type for each WNTR name
         self.entity_types: t.Dict[str, str] = {}
 
-    def register_nodes(
-        self, movici_ids: np.ndarray, entity_type: str = "junction"
-    ) -> t.List[str]:
+    def register_nodes(self, movici_ids: np.ndarray, entity_type: str = "junction") -> t.List[str]:
         """Register node IDs and return corresponding WNTR names
 
         :param movici_ids: Array of Movici entity IDs
@@ -45,9 +43,7 @@ class IdMapper:
             wntr_names.append(wntr_name)
         return wntr_names
 
-    def register_links(
-        self, movici_ids: np.ndarray, entity_type: str = "pipe"
-    ) -> t.List[str]:
+    def register_links(self, movici_ids: np.ndarray, entity_type: str = "pipe") -> t.List[str]:
         """Register link IDs and return corresponding WNTR names
 
         :param movici_ids: Array of Movici entity IDs

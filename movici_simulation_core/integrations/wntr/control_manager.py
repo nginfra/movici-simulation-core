@@ -49,24 +49,18 @@ class ControlManager:
             converted_value = self._convert_status_value(target_attribute, value)
 
             # Create the action
-            action = wntr.network.controls.ControlAction(
-                target, target_attribute, converted_value
-            )
+            action = wntr.network.controls.ControlAction(target, target_attribute, converted_value)
 
             # Create the condition based on time type
             if time_type == "sim_time":
-                condition = wntr.network.controls.SimTimeCondition(
-                    self.wn, "=", time
-                )
+                condition = wntr.network.controls.SimTimeCondition(self.wn, "=", time)
             elif time_type == "clock_time":
                 # Convert seconds to hours for ClockTimeCondition
                 hours = int(time // 3600)
                 minutes = int((time % 3600) // 60)
                 seconds = int(time % 60)
                 time_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-                condition = wntr.network.controls.TimeOfDayCondition(
-                    self.wn, "at", time_str
-                )
+                condition = wntr.network.controls.TimeOfDayCondition(self.wn, "at", time_str)
             else:
                 raise ValueError(f"Unknown time_type: {time_type}")
 
@@ -76,9 +70,7 @@ class ControlManager:
             self.controls[control_name] = control
 
         except Exception as e:
-            raise ValueError(
-                f"Failed to create time control '{control_name}': {e}"
-            ) from e
+            raise ValueError(f"Failed to create time control '{control_name}': {e}") from e
 
     def add_conditional_control(
         self,
@@ -108,9 +100,7 @@ class ControlManager:
             source = self._get_element(source_element)
 
             # Create the action
-            action = wntr.network.controls.ControlAction(
-                target, target_attribute, value
-            )
+            action = wntr.network.controls.ControlAction(target, target_attribute, value)
 
             # Map operator strings to WNTR operators
             op_map = {
@@ -135,9 +125,7 @@ class ControlManager:
             self.controls[control_name] = control
 
         except Exception as e:
-            raise ValueError(
-                f"Failed to create conditional control '{control_name}': {e}"
-            ) from e
+            raise ValueError(f"Failed to create conditional control '{control_name}': {e}") from e
 
     def add_rule(
         self,

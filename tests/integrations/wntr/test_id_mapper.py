@@ -1,7 +1,6 @@
 """Tests for IdMapper"""
 
 import numpy as np
-import pytest
 
 from movici_simulation_core.integrations.wntr.id_mapper import IdMapper
 

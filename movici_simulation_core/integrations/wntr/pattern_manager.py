@@ -110,9 +110,7 @@ class PatternManager:
         """
         return self.create_pattern(pattern_name, [value], wrap=True)
 
-    def create_daily_pattern(
-        self, pattern_name: str, hourly_multipliers: t.List[float]
-    ) -> t.Any:
+    def create_daily_pattern(self, pattern_name: str, hourly_multipliers: t.List[float]) -> t.Any:
         """Create a daily repeating pattern (24 hourly values)
 
         :param pattern_name: Name of the pattern
@@ -121,9 +119,7 @@ class PatternManager:
         :return: WNTR Pattern object
         """
         if len(hourly_multipliers) != 24:
-            raise ValueError(
-                f"Daily pattern requires 24 values, got {len(hourly_multipliers)}"
-            )
+            raise ValueError(f"Daily pattern requires 24 values, got {len(hourly_multipliers)}")
         return self.create_pattern(pattern_name, hourly_multipliers, wrap=True)
 
     def interpolate_pattern(

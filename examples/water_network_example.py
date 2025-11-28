@@ -15,12 +15,12 @@ The water network is a simple example with:
 """
 
 import json
+import shutil
 from pathlib import Path
 from tempfile import mkdtemp
 
 import numpy as np
 
-from movici_simulation_core import Simulation
 from movici_simulation_core.integrations.wntr import (
     JunctionCollection,
     NetworkWrapper,
@@ -31,6 +31,7 @@ from movici_simulation_core.models import DataCollectorModel, WaterNetworkSimula
 from movici_simulation_core.models.water_network_simulation.attributes import (
     WaterNetworkAttributes,
 )
+from movici_simulation_core.simulation import Simulation
 
 
 def create_simple_water_network_data():
@@ -104,10 +105,7 @@ def example_direct_wntr():
         node_names=[f"J{i}" for i in junction_data["id"]],
         elevations=np.array(junction_data["water.elevation"]),
         base_demands=np.array(junction_data["water.base_demand"]),
-        coordinates=np.column_stack([
-            junction_data["geometry.x"],
-            junction_data["geometry.y"]
-        ]),
+        coordinates=np.column_stack([junction_data["geometry.x"], junction_data["geometry.y"]]),
     )
     network.add_junctions(junctions)
 
@@ -116,10 +114,7 @@ def example_direct_wntr():
     reservoirs = ReservoirCollection(
         node_names=[f"R{i}" for i in reservoir_data["id"]],
         heads=np.array(reservoir_data["water.head"]),
-        coordinates=np.column_stack([
-            reservoir_data["geometry.x"],
-            reservoir_data["geometry.y"]
-        ]),
+        coordinates=np.column_stack([reservoir_data["geometry.x"], reservoir_data["geometry.y"]]),
     )
     network.add_reservoirs(reservoirs)
 
@@ -134,9 +129,9 @@ def example_direct_wntr():
 
     # Map node IDs to names
     node_id_to_name = {}
-    for i, nid in enumerate(junction_data["id"]):
+    for nid in junction_data["id"]:
         node_id_to_name[nid] = f"J{nid}"
-    for i, nid in enumerate(reservoir_data["id"]):
+    for nid in reservoir_data["id"]:
         node_id_to_name[nid] = f"R{nid}"
 
     pipes = PipeCollection(
@@ -248,7 +243,7 @@ def example_simulation_framework():
     results_dir = Path(output_dir)
     results_files = list(results_dir.glob("*.json"))
     if results_files:
-        print(f"\nOutput files:")
+        print("\nOutput files:")
         for f in results_files:
             print(f"  - {f.name}")
 
@@ -343,7 +338,6 @@ def example_simulation_with_inp_file():
     output_dir = mkdtemp(prefix="movici-water-inp-output-")
 
     # Copy INP file to input directory (required for init_data_handler)
-    import shutil
     shutil.copy(inp_file, Path(input_dir) / inp_file.name)
 
     print(f"Input directory: {input_dir}")
@@ -388,7 +382,7 @@ def example_simulation_with_inp_file():
     results_dir = Path(output_dir)
     results_files = list(results_dir.glob("*.json"))
     if results_files:
-        print(f"\nOutput files:")
+        print("\nOutput files:")
         for f in results_files:
             print(f"  - {f.name}")
 
@@ -409,10 +403,10 @@ def example_save_movici_dataset():
     dataset_path.write_text(json.dumps(dataset, indent=2))
 
     print(f"\nDataset saved to: {dataset_path}")
-    print(f"\nTo visualize with movici-viewer:")
-    print(f"  1. Create a scenario file referencing this dataset")
+    print("\nTo visualize with movici-viewer:")
+    print("  1. Create a scenario file referencing this dataset")
     print(f"  2. Run: movici-viewer {output_dir}")
-    print(f"\nDataset structure:")
+    print("\nDataset structure:")
     print(f"  - Name: {dataset['name']}")
     print(f"  - Type: {dataset['type']}")
     for group_name, group_data in dataset["data"].items():

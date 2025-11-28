@@ -5,15 +5,17 @@ from __future__ import annotations
 import typing as t
 from pathlib import Path
 
+import msgpack
 import numpy as np
+import orjson as json
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core.attribute import PUB
-from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.data_format import load_from_json
+from movici_simulation_core.core.moment import Moment, get_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.integrations.wntr import NetworkWrapper
-from movici_simulation_core.model_connector.init_data import InitDataHandler
+from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common.time_series import TimeSeries
 from movici_simulation_core.models.common.wntr_util import (
     get_junctions,
@@ -127,9 +129,7 @@ class Model(TrackedModel, name="water_network_simulation"):
                 If not specified, registers junctions, pipes, and reservoirs.
         """
         # Get list of entity groups to register from config
-        entity_groups = self.config.get(
-            "entity_groups", ["junctions", "pipes", "reservoirs"]
-        )
+        entity_groups = self.config.get("entity_groups", ["junctions", "pipes", "reservoirs"])
 
         # Junctions (required)
         if "junctions" in entity_groups:
@@ -207,7 +207,7 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         Returns dict in format:
         {
-            "water_junction_entities": {"id": {"data": [...]}, "water.elevation": {"data": [...]}, ...},
+            "water_junction_entities": {"id": {"data": [...]}, ...},
             "water_pipe_entities": {...},
             ...
         }
@@ -429,13 +429,6 @@ class Model(TrackedModel, name="water_network_simulation"):
 
     def _load_pattern_tape(self, tape_name: str, init_data_handler: InitDataHandler):
         """Load demand pattern tape file"""
-        import msgpack
-        import orjson as json
-
-        from movici_simulation_core.core.data_format import load_from_json
-        from movici_simulation_core.core.moment import get_timeline_info
-        from movici_simulation_core.model_connector.init_data import FileType
-
         ftype, tapefile_path = init_data_handler.get(tape_name)
         if tapefile_path is None:
             raise ValueError(f"Tape file {tape_name} not found!")
@@ -454,9 +447,7 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         schema = AttributeSchema()  # Empty schema for pattern data
 
-        for seconds, json_data in zip(
-            data_section["time_series"], data_section["data_series"]
-        ):
+        for seconds, json_data in zip(data_section["time_series"], data_section["data_series"]):
             timestamp = timeline_info.seconds_to_timestamp(seconds)
             numpy_data = load_from_json({dataset_name: json_data}, schema)
             self.pattern_timeline.append((timestamp, numpy_data))
@@ -577,8 +568,8 @@ class Model(TrackedModel, name="water_network_simulation"):
     def _apply_pattern_data(self, pattern_data: dict):
         """Apply demand multipliers from tape file data"""
         # pattern_data is in format: {dataset_name: {entity_group: {id: [...], attr: [...]}}}
-        for dataset_name, dataset in pattern_data.items():
-            for entity_group_name, entity_data in dataset.items():
+        for _dataset_name, dataset in pattern_data.items():
+            for _entity_group_name, entity_data in dataset.items():
                 if "id" not in entity_data:
                     continue
 
@@ -608,9 +599,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         if self.pipes and self.pipes.status.has_data():
             if np.any(self.pipes.status.changed):
                 movici_ids = self.pipes.index.ids
-                link_names = [
-                    self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
-                ]
+                link_names = [self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids]
                 statuses = self.pipes.status.array
                 self.network.update_link_status(link_names, statuses)
 
@@ -618,9 +607,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         if self.valves and self.valves.status.has_data():
             if np.any(self.valves.status.changed):
                 movici_ids = self.valves.index.ids
-                link_names = [
-                    self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
-                ]
+                link_names = [self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids]
                 statuses = self.valves.status.array
                 self.network.update_link_status(link_names, statuses)
 
@@ -628,9 +615,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         if self.pumps:
             if self.pumps.status.has_data() and np.any(self.pumps.status.changed):
                 movici_ids = self.pumps.index.ids
-                link_names = [
-                    self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
-                ]
+                link_names = [self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids]
                 statuses = self.pumps.status.array
                 self.network.update_link_status(link_names, statuses)
 
@@ -658,7 +643,7 @@ class Model(TrackedModel, name="water_network_simulation"):
             demands = []
             deficits = []
 
-            for i, (name, movici_id) in enumerate(node_id_map.items()):
+            for name, movici_id in node_id_map.items():
                 if self.network.id_mapper.get_entity_type(name) == "junction":
                     idx = self.junctions.index[movici_id]
                     if idx >= 0:

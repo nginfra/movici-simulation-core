@@ -4,11 +4,7 @@ import pytest
 
 pytest.importorskip("wntr")  # Skip all tests if WNTR not installed
 
-from pathlib import Path
 
-import numpy as np
-
-from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.water_network_simulation.model import Model

@@ -1,7 +1,6 @@
 """Tests for collection classes"""
 
 import numpy as np
-import pytest
 
 from movici_simulation_core.integrations.wntr.collections import (
     JunctionCollection,
