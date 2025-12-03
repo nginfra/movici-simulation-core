@@ -11,13 +11,13 @@ Rules
 #####
 
 Rules are constructed to update the value of a specific entity in a specific dataset. This target
-entity is described by the ``"to_dataset"``, ``to_entity_group``, and either a ``"to_id"`` or 
+entity is described by the ``"to_dataset"``, ``"to_entity_group"``, and either a ``"to_id"`` or 
 ``"to_reference"`` key. Based on a condition described in the ``"if"`` key, the target entity is
 updated: the attribute in the ``"output"`` is given the value in the ``"value"`` key. The
 condition in the ``"if"`` key can be one of the following:
 
 - a single expression describing an attribute from a source entity. This source entity is described
-  by the ``"from_dataset"``, ``from_entity_group`` and either the ``"from_id"`` or
+  by the ``"from_dataset"``, ``"from_entity_group"`` and either the ``"from_id"`` or
   ``"from_reference"`` keys.
 - an expression involving a special variable: ``<simtime>`` or ``<clocktime>``. These variables 
   represent the simulation time since the beginning of the simulation, or the time of the day
@@ -30,7 +30,7 @@ a dataset of type ``"rules"``. See the example dataset below.
 Example rules dataset
 ---------------------
 
-.. codeblock:: json
+.. code-block:: json
  
   {
     "name": "water_network_rules",
