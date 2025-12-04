@@ -1,0 +1,175 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/water_network_simulation/1.0.0",
+  "type": "object",
+  "required": ["mode"],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["inp_file", "movici_network"],
+      "description": "Network loading mode: 'inp_file' loads from EPANET INP, 'movici_network' builds from Movici datasets"
+    },
+    "inp_file": {
+      "type": "string",
+      "description": "Path to EPANET INP file (required if mode='inp_file')"
+    },
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "description": "Water network dataset name (required if mode='movici_network')"
+    },
+    "demand_patterns": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "movici.type": "dataset",
+            "movici.datasetType": "tabular"
+          },
+          "description": "Array of tape files containing demand pattern time series"
+        },
+        {
+          "type": "string",
+          "movici.type": "dataset",
+          "movici.datasetType": "tabular",
+          "description": "Single tape file containing demand pattern time series"
+        }
+      ]
+    },
+    "control_rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/controlRule"
+      },
+      "description": "Control rules for valves, pumps, etc."
+    },
+    "simulation_duration": {
+      "type": "number",
+      "description": "Total simulation duration in seconds (if not specified, uses model default or Movici timeline)"
+    },
+    "hydraulic_timestep": {
+      "type": "number",
+      "default": 3600,
+      "description": "Hydraulic timestep in seconds (default: 3600 = 1 hour)"
+    },
+    "report_timestep": {
+      "type": "number",
+      "description": "Report timestep in seconds (default: same as hydraulic_timestep)"
+    },
+    "pattern_timestep": {
+      "type": "number",
+      "default": 3600,
+      "description": "Pattern timestep in seconds (default: 3600 = 1 hour)"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "inp_file"
+          }
+        }
+      },
+      "then": {
+        "required": ["inp_file"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "movici_network"
+          }
+        }
+      },
+      "then": {
+        "required": ["dataset"]
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "controlRule": {
+      "type": "object",
+      "required": ["type", "target", "value"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the control"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["time", "conditional"],
+          "description": "Type of control rule"
+        },
+        "target": {
+          "type": "string",
+          "description": "Name of the element to control (pipe, pump, valve)"
+        },
+        "attribute": {
+          "type": "string",
+          "default": "status",
+          "description": "Attribute to modify (e.g., 'status', 'speed')"
+        },
+        "value": {
+          "description": "Value to set (0 for closed, 1 for open, or numeric for other attributes)"
+        },
+        "time": {
+          "type": "number",
+          "description": "Time in seconds (for time controls)"
+        },
+        "time_type": {
+          "type": "string",
+          "enum": ["sim_time", "clock_time"],
+          "default": "sim_time",
+          "description": "Time reference type"
+        },
+        "source": {
+          "type": "string",
+          "description": "Element to monitor (for conditional controls)"
+        },
+        "source_attribute": {
+          "type": "string",
+          "description": "Attribute to monitor (for conditional controls)"
+        },
+        "operator": {
+          "type": "string",
+          "enum": [">", "<", ">=", "<=", "=", "==", "!="],
+          "description": "Comparison operator (for conditional controls)"
+        },
+        "threshold": {
+          "type": "number",
+          "description": "Threshold value for comparison (for conditional controls)"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "time"
+              }
+            }
+          },
+          "then": {
+            "required": ["time"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "conditional"
+              }
+            }
+          },
+          "then": {
+            "required": ["source", "source_attribute", "operator", "threshold"]
+          }
+        }
+      ]
+    }
+  }
+}
