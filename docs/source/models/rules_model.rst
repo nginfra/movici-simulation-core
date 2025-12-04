@@ -11,13 +11,13 @@ Rules
 #####
 
 Rules are constructed to update the value of a specific entity in a specific dataset. This target
-entity is described by the ``"to_dataset"``, ``"to_entity_group"``, and either a ``"to_id"`` or 
+entity is described by the ``"to_dataset"``, and either a ``"to_id"`` or 
 ``"to_reference"`` key. Based on a condition described in the ``"if"`` key, the target entity is
 updated: the attribute in the ``"output"`` is given the value in the ``"value"`` key. The
 condition in the ``"if"`` key can be one of the following:
 
 - a single expression describing an attribute from a source entity. This source entity is described
-  by the ``"from_dataset"``, ``"from_entity_group"`` and either the ``"from_id"`` or
+  by the ``"from_dataset"`` and either the ``"from_id"`` or
   ``"from_reference"`` keys.
 - an expression involving a special variable: ``<simtime>`` or ``<clocktime>``. These variables 
   represent the simulation time since the beginning of the simulation, or the time of the day
@@ -39,9 +39,7 @@ Example rules dataset
     "data": {
       "defaults": {
         "from_dataset": "a dataset",
-        "to_dataset": "another dataset",
-        "from_entity_group": "some_entities",
-        "to_entity_group": "to_entities",
+        "to_dataset": "another dataset"
       },
       "rules": [
         {
@@ -96,15 +94,15 @@ Notes
 #####
 
 - if a given reference is not unique in the dataset, we should raise an error
-- while reference and id should/must be unique in a dataset, we currently do not have a way to
-  use the TrackedModel to find the required id/reference *somewhere* in the dataset, we must
-  provide an entity group.
+- An id must (and a reference should) be unique in a dataset. We just need to find which entity
+  group it belongs to before we can register it to the :class:`TrackedState`. We can do the
+  registration in two stages. In the first stage in :meth:`TrackedModel.setup` we retrieve the to
+  and from datasets ourselves, and process them. We find the entity groups that our ids/references
+  belong to (if we can't find them, we give a warning (or perhaps throw an error?)). We can now
+  register those entity groups to the :class:`TrackedState` and continue business as usual.
 - If a value in the condition is undefined, we should stop processing the rule
 
 Possible future work
 ####################
 
 - support not just a wall clock time, but a ISO datestring
-- Migrate away from TrackedModel, and use SimpleModel instead so that we can do our own init data
-  retrieval. Or design a nice api in TrackedModel to achieve finding ids/references without
-  defining the entity group
