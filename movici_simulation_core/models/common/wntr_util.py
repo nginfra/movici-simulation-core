@@ -1,4 +1,8 @@
-"""Utility functions for converting Movici entities to WNTR collections"""
+"""Utility functions for converting Movici entities to WNTR collections.
+
+These functions extract data from Movici entity groups and create the
+intermediate collection objects used by the WNTR network wrapper.
+"""
 
 from __future__ import annotations
 
@@ -28,12 +32,11 @@ if t.TYPE_CHECKING:
 
 
 def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> JunctionCollection:
-    """Convert junction entities to JunctionCollection
+    """Convert junction entities to JunctionCollection.
 
-        :param junctions: WaterJunctionEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: JunctionCollection
+    :param junctions: WaterJunctionEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: JunctionCollection with junction data
     """
     movici_ids = junctions.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="junction")
@@ -41,10 +44,10 @@ def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> Junc
     elevations = junctions.elevation.array
     base_demands = junctions.base_demand.array
 
-    # Get demand patterns if available
-    demand_patterns = None
-    if junctions.demand_pattern.has_data():
-        demand_patterns = [str(p) if p else None for p in junctions.demand_pattern.array]
+    # Get demand factors if available
+    demand_factors = None
+    if junctions.demand_factor.is_initialized():
+        demand_factors = junctions.demand_factor.array
 
     # Get coordinates if available
     coordinates = None
@@ -55,33 +58,39 @@ def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> Junc
         node_names=node_names,
         elevations=elevations,
         base_demands=base_demands,
-        demand_patterns=demand_patterns,
+        demand_factors=demand_factors,
         coordinates=coordinates,
     )
 
 
 def get_tanks(tanks: "WaterTankEntity", id_mapper: IdMapper) -> TankCollection:
-    """Convert tank entities to TankCollection
+    """Convert tank entities to TankCollection.
 
-        :param tanks: WaterTankEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: TankCollection
+    :param tanks: WaterTankEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: TankCollection with tank data
     """
     movici_ids = tanks.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="tank")
 
     elevations = tanks.elevation.array
-    init_levels = tanks.init_level.array
-    min_levels = tanks.min_level.array
-    max_levels = tanks.max_level.array
-    diameters = tanks.diameter.array
+    init_levels = tanks.level.array  # level is INIT|PUB, initial value
 
-    # Optional attributes
-    min_volumes = tanks.min_volume.array if tanks.min_volume.has_data() else None
+    # Cylindrical tank attributes (optional)
+    diameters = tanks.diameter.array if tanks.diameter.is_initialized() else None
+    min_levels = tanks.min_level.array if tanks.min_level.is_initialized() else None
+    max_levels = tanks.max_level.array if tanks.max_level.is_initialized() else None
+
+    # Volume curve tank attributes (optional)
+    min_volumes = tanks.min_volume.array if tanks.min_volume.is_initialized() else None
+
+    # Volume curves as CSR data
     volume_curves = None
-    if tanks.volume_curve.has_data():
-        volume_curves = [str(c) if c else None for c in tanks.volume_curve.array]
+    if tanks.volume_curve.is_initialized():
+        volume_curves = _extract_csr_curves(tanks.volume_curve)
+
+    # Overflow flag
+    overflows = tanks.overflow.array if tanks.overflow.is_initialized() else None
 
     # Coordinates
     coordinates = None
@@ -97,27 +106,27 @@ def get_tanks(tanks: "WaterTankEntity", id_mapper: IdMapper) -> TankCollection:
         diameters=diameters,
         min_volumes=min_volumes,
         volume_curves=volume_curves,
+        overflows=overflows,
         coordinates=coordinates,
     )
 
 
 def get_reservoirs(reservoirs: "WaterReservoirEntity", id_mapper: IdMapper) -> ReservoirCollection:
-    """Convert reservoir entities to ReservoirCollection
+    """Convert reservoir entities to ReservoirCollection.
 
-        :param reservoirs: WaterReservoirEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: ReservoirCollection
+    :param reservoirs: WaterReservoirEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: ReservoirCollection with reservoir data
     """
     movici_ids = reservoirs.index.ids
     node_names = id_mapper.register_nodes(movici_ids, entity_type="reservoir")
 
-    heads = reservoirs.head.array
+    base_heads = reservoirs.base_head.array
 
-    # Get head patterns if available
-    head_patterns = None
-    if reservoirs.head_pattern.has_data():
-        head_patterns = [str(p) if p else None for p in reservoirs.head_pattern.array]
+    # Get head factors if available
+    head_factors = None
+    if reservoirs.head_factor.is_initialized():
+        head_factors = reservoirs.head_factor.array
 
     # Coordinates
     coordinates = None
@@ -126,19 +135,18 @@ def get_reservoirs(reservoirs: "WaterReservoirEntity", id_mapper: IdMapper) -> R
 
     return ReservoirCollection(
         node_names=node_names,
-        heads=heads,
-        head_patterns=head_patterns,
+        base_heads=base_heads,
+        head_factors=head_factors,
         coordinates=coordinates,
     )
 
 
 def get_pipes(pipes: "WaterPipeEntity", id_mapper: IdMapper) -> PipeCollection:
-    """Convert pipe entities to PipeCollection
+    """Convert pipe entities to PipeCollection.
 
-        :param pipes: WaterPipeEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: PipeCollection
+    :param pipes: WaterPipeEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: PipeCollection with pipe data
     """
     movici_ids = pipes.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="pipe")
@@ -149,25 +157,29 @@ def get_pipes(pipes: "WaterPipeEntity", id_mapper: IdMapper) -> PipeCollection:
     from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
     to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
 
-    # Calculate lengths from geometry if available
-    lengths = np.zeros(len(link_names))
-    if pipes.linestring.is_initialized():
+    # Get lengths - from attribute or calculate from geometry
+    if pipes.length.is_initialized():
+        lengths = pipes.length.array
+    elif pipes.linestring.is_initialized():
+        lengths = np.zeros(len(link_names))
         for i in range(len(link_names)):
             geom = pipes.get_single_geometry(i)
             lengths[i] = geom.length
     else:
         # Default length if no geometry
-        lengths[:] = 100.0
+        lengths = np.full(len(link_names), 100.0)
 
     diameters = pipes.diameter.array
     roughnesses = pipes.roughness.array
 
     # Optional attributes
-    minor_losses = pipes.minor_loss.array if pipes.minor_loss.has_data() else None
+    minor_losses = pipes.minor_loss.array if pipes.minor_loss.is_initialized() else None
+    check_valves = pipes.check_valve.array if pipes.check_valve.is_initialized() else None
 
+    # Status as boolean
     statuses = None
-    if pipes.initial_status.has_data():
-        statuses = ["OPEN" if s == 1 else "CLOSED" for s in pipes.initial_status.array]
+    if pipes.status.is_initialized():
+        statuses = pipes.status.array
 
     return PipeCollection(
         link_names=link_names,
@@ -177,17 +189,17 @@ def get_pipes(pipes: "WaterPipeEntity", id_mapper: IdMapper) -> PipeCollection:
         diameters=diameters,
         roughnesses=roughnesses,
         minor_losses=minor_losses,
+        check_valves=check_valves,
         statuses=statuses,
     )
 
 
 def get_pumps(pumps: "WaterPumpEntity", id_mapper: IdMapper) -> PumpCollection:
-    """Convert pump entities to PumpCollection
+    """Convert pump entities to PumpCollection.
 
-        :param pumps: WaterPumpEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: PumpCollection
+    :param pumps: WaterPumpEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: PumpCollection with pump data
     """
     movici_ids = pumps.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="pump")
@@ -198,40 +210,43 @@ def get_pumps(pumps: "WaterPumpEntity", id_mapper: IdMapper) -> PumpCollection:
     from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
     to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
 
-    # Pump types
+    # Pump types as strings
     pump_types = [str(t) for t in pumps.pump_type.array]
 
-    # Optional attributes
-    pump_curves = None
-    if pumps.pump_curve.has_data():
-        pump_curves = [str(c) if c else None for c in pumps.pump_curve.array]
+    # Power for power pumps
+    powers = pumps.power.array if pumps.power.is_initialized() else None
 
-    powers = pumps.power.array if pumps.power.has_data() else None
-    speeds = pumps.speed.array if pumps.speed.has_data() else None
+    # Head curves as CSR data for head pumps
+    head_curves = None
+    if pumps.head_curve.is_initialized():
+        head_curves = _extract_csr_curves(pumps.head_curve)
 
+    # Speeds
+    speeds = pumps.speed.array if pumps.speed.is_initialized() else None
+
+    # Status as boolean
     statuses = None
-    if pumps.status.has_data():
-        statuses = ["OPEN" if s == 1 else "CLOSED" for s in pumps.status.array]
+    if pumps.status.is_initialized():
+        statuses = pumps.status.array
 
     return PumpCollection(
         link_names=link_names,
         from_nodes=from_nodes,
         to_nodes=to_nodes,
         pump_types=pump_types,
-        pump_curves=pump_curves,
         powers=powers,
+        head_curves=head_curves,
         speeds=speeds,
         statuses=statuses,
     )
 
 
 def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollection:
-    """Convert valve entities to ValveCollection
+    """Convert valve entities to ValveCollection.
 
-        :param valves: WaterValveEntity instance
-        :param id_mapper: IdMapper for tracking IDs
-
-    :return: ValveCollection
+    :param valves: WaterValveEntity instance
+    :param id_mapper: IdMapper for tracking IDs
+    :return: ValveCollection with valve data
     """
     movici_ids = valves.index.ids
     link_names = id_mapper.register_links(movici_ids, entity_type="valve")
@@ -242,16 +257,24 @@ def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollecti
     from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
     to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
 
+    # Valve types as strings
     valve_types = [str(t) for t in valves.valve_type.array]
     diameters = valves.diameter.array
-    settings = valves.setting.array
 
-    # Optional attributes
-    minor_losses = valves.minor_loss.array if valves.minor_loss.has_data() else None
+    # Type-specific settings
+    valve_pressures = valves.valve_pressure.array if valves.valve_pressure.is_initialized() else None
+    valve_flows = valves.valve_flow.array if valves.valve_flow.is_initialized() else None
+    valve_loss_coefficients = (
+        valves.valve_loss_coefficient.array if valves.valve_loss_coefficient.is_initialized() else None
+    )
 
-    statuses = None
-    if valves.status.has_data():
-        statuses = ["OPEN" if s == 1 else "CLOSED" for s in valves.status.array]
+    # Valve curves as CSR data for GPV
+    valve_curves = None
+    if valves.valve_curve.is_initialized():
+        valve_curves = _extract_csr_curves(valves.valve_curve)
+
+    # Minor losses
+    minor_losses = valves.minor_loss.array if valves.minor_loss.is_initialized() else None
 
     return ValveCollection(
         link_names=link_names,
@@ -259,7 +282,35 @@ def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollecti
         to_nodes=to_nodes,
         valve_types=valve_types,
         diameters=diameters,
-        settings=settings,
+        valve_pressures=valve_pressures,
+        valve_flows=valve_flows,
+        valve_loss_coefficients=valve_loss_coefficients,
+        valve_curves=valve_curves,
         minor_losses=minor_losses,
-        statuses=statuses,
     )
+
+
+def _extract_csr_curves(csr_attribute) -> t.List[t.Optional[np.ndarray]]:
+    """Extract individual curve arrays from a CSR attribute.
+
+    CSR (Compressed Sparse Row) attributes store variable-length arrays
+    for each entity. This function extracts them into a list of arrays.
+
+    :param csr_attribute: CSR attribute containing curve data
+    :return: List of numpy arrays, one per entity (or None if no data)
+    """
+    csr = csr_attribute.csr
+    curves = []
+
+    for i in range(len(csr.row_ptr) - 1):
+        start = csr.row_ptr[i]
+        end = csr.row_ptr[i + 1]
+
+        if end > start:
+            # Extract the curve data for this entity
+            curve_data = csr.data[start:end]
+            curves.append(curve_data)
+        else:
+            curves.append(None)
+
+    return curves

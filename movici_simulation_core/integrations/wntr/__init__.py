@@ -1,4 +1,9 @@
-"""WNTR integration for Movici water network simulation"""
+"""WNTR integration for Movici water network simulation.
+
+This package provides the interface between Movici's entity-based data model
+and WNTR's water network simulation engine. Controls are handled externally
+by the Movici Rules Model rather than internally by WNTR.
+"""
 
 from .collections import (
     JunctionCollection,
@@ -9,7 +14,6 @@ from .collections import (
     TankCollection,
     ValveCollection,
 )
-from .control_manager import ControlManager
 from .id_mapper import IdMapper
 from .network_wrapper import NetworkWrapper
 from .pattern_manager import PatternManager
@@ -18,7 +22,6 @@ __all__ = [
     "NetworkWrapper",
     "IdMapper",
     "PatternManager",
-    "ControlManager",
     "JunctionCollection",
     "TankCollection",
     "ReservoirCollection",

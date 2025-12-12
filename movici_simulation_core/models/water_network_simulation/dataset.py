@@ -1,160 +1,264 @@
-"""Entity definitions for water network simulation"""
+"""Entity definitions for drinking water network simulation
+
+Entity groups follow the documentation specification with:
+
+- ``drinking_water.*`` attributes for water-specific properties
+- ``shape.*`` attributes for physical dimensions
+- ``geometry.z`` for elevation (redeclared as INIT where required)
+- ``operational.status`` for link status
+- ``type`` attribute for pump/valve type enums
+"""
 
 from movici_simulation_core.core.attribute import INIT, OPT, PUB, field
 from movici_simulation_core.models.common.entity_groups import LinkEntity, PointEntity
 
 from .attributes import (
-    Water_ActualDemand,
-    Water_BaseDemand,
-    Water_BulkCoeff,
-    Water_DemandDeficit,
-    Water_DemandMultiplier,
-    Water_DemandPattern,
-    Water_Diameter,
-    Water_Elevation,
-    Water_Flow,
-    Water_FlowDirection,
-    Water_Head,
-    Water_Headloss,
-    Water_HeadMultiplier,
-    Water_HeadPattern,
-    Water_InitialLevel,
-    Water_InitialStatus,
-    Water_Level,
-    Water_LinkStatus,
-    Water_MaxLevel,
-    Water_MinLevel,
-    Water_MinorLoss,
-    Water_MinVolume,
-    Water_Power,
-    Water_Pressure,
-    Water_PumpCurve,
-    Water_PumpSpeed,
-    Water_PumpType,
-    Water_Roughness,
-    Water_TankDiameter,
-    Water_ValveSetting,
-    Water_ValveType,
-    Water_Velocity,
-    Water_VolumeCurve,
-    Water_WallCoeff,
+    DrinkingWater_BaseDemand,
+    DrinkingWater_BaseHead,
+    DrinkingWater_CheckValve,
+    DrinkingWater_Demand,
+    DrinkingWater_DemandFactor,
+    DrinkingWater_Flow,
+    DrinkingWater_Head,
+    DrinkingWater_HeadCurve,
+    DrinkingWater_HeadFactor,
+    DrinkingWater_Headloss,
+    DrinkingWater_Level,
+    DrinkingWater_MaxLevel,
+    DrinkingWater_MinLevel,
+    DrinkingWater_MinorLoss,
+    DrinkingWater_MinVolume,
+    DrinkingWater_Overflow,
+    DrinkingWater_Power,
+    DrinkingWater_Pressure,
+    DrinkingWater_Roughness,
+    DrinkingWater_Speed,
+    DrinkingWater_ValveCurve,
+    DrinkingWater_ValveFlow,
+    DrinkingWater_ValveLossCoefficient,
+    DrinkingWater_ValvePressure,
+    DrinkingWater_Velocity,
+    Geometry_Z,
+    Operational_Status,
+    Shape_Diameter,
+    Shape_Length,
+    Shape_VolumeCurve,
+    Type_PumpType,
+    Type_ValveType,
 )
 
 
 class WaterJunctionEntity(PointEntity):
-    """Water network junctions (demand nodes)"""
+    """Water network junctions (demand nodes).
+
+    Junctions are nodes in the drinking water network. They connect pipes
+    and can be used as demand nodes.
+
+    :ivar elevation: Elevation (``geometry.z``, INIT)
+    :ivar base_demand: Base demand on this node (``drinking_water.base_demand``, INIT)
+    :ivar demand_factor: Scaling factor for demand (``drinking_water.demand_factor``, OPT)
+    :ivar demand: Effective demand output (``drinking_water.demand``, PUB)
+    :ivar pressure: Dynamic pressure at the node (``drinking_water.pressure``, PUB)
+    :ivar head: Static (total) head (``drinking_water.head``, PUB)
+    """
 
     __entity_name__ = "water_junction_entities"
 
-    # INIT attributes (static network properties)
-    elevation = field(Water_Elevation, flags=INIT)
-    base_demand = field(Water_BaseDemand, flags=INIT)
+    # INIT attributes - redeclare z as required
+    elevation = field(Geometry_Z, flags=INIT)
+    base_demand = field(DrinkingWater_BaseDemand, flags=INIT)
 
-    # OPT attributes (optional input from tape files or other models)
-    demand_multiplier = field(Water_DemandMultiplier, flags=OPT)
-    demand_pattern = field(Water_DemandPattern, flags=OPT)
+    # OPT attributes
+    demand_factor = field(DrinkingWater_DemandFactor, flags=OPT)
 
-    # PUB attributes (simulation outputs)
-    pressure = field(Water_Pressure, flags=PUB)
-    head = field(Water_Head, flags=PUB)
-    actual_demand = field(Water_ActualDemand, flags=PUB)
-    demand_deficit = field(Water_DemandDeficit, flags=PUB)
+    # PUB attributes
+    demand = field(DrinkingWater_Demand, flags=PUB)
+    pressure = field(DrinkingWater_Pressure, flags=PUB)
+    head = field(DrinkingWater_Head, flags=PUB)
 
 
 class WaterTankEntity(PointEntity):
-    """Water storage tanks"""
+    """Water storage tanks.
+
+    Tanks are buffers for drinking water. They are transient elements -
+    as simulation progresses, tanks may fill up or empty over time.
+
+    Tank volume can be defined either by:
+
+    - Constant diameter (cylindrical tank): use ``diameter``, ``min_level``, ``max_level``
+    - Volume curve (non-cylindrical): use ``volume_curve``, ``min_volume``
+
+    :ivar elevation: Elevation at tank bottom (``geometry.z``, INIT)
+    :ivar diameter: Tank diameter for cylindrical tanks (``shape.diameter``, OPT)
+    :ivar min_level: Minimum level for drainage (``drinking_water.min_level``, OPT)
+    :ivar max_level: Maximum level / overflow threshold (``drinking_water.max_level``, OPT)
+    :ivar volume_curve: Volume vs depth curve as CSR (``shape.volume_curve``, OPT)
+    :ivar min_volume: Minimum volume for drainage (``drinking_water.min_volume``, OPT)
+    :ivar overflow: Whether tank can overflow when full (``drinking_water.overflow``, OPT)
+    :ivar level: Water level, initial + output (``drinking_water.level``, INIT|PUB)
+    :ivar pressure: Pressure in the tank (``drinking_water.pressure``, PUB)
+    :ivar head: Total head in the tank (``drinking_water.head``, PUB)
+    """
 
     __entity_name__ = "water_tank_entities"
 
-    # INIT attributes
-    elevation = field(Water_Elevation, flags=INIT)
-    init_level = field(Water_InitialLevel, flags=INIT)
-    min_level = field(Water_MinLevel, flags=INIT)
-    max_level = field(Water_MaxLevel, flags=INIT)
-    diameter = field(Water_TankDiameter, flags=INIT)
-    min_volume = field(Water_MinVolume, flags=OPT)
-    volume_curve = field(Water_VolumeCurve, flags=OPT)
+    # INIT attributes - redeclare z as required
+    elevation = field(Geometry_Z, flags=INIT)
+
+    # OPT attributes - either diameter group OR volume_curve group
+    # Cylindrical tank attributes
+    diameter = field(Shape_Diameter, flags=OPT)
+    min_level = field(DrinkingWater_MinLevel, flags=OPT)
+    max_level = field(DrinkingWater_MaxLevel, flags=OPT)
+
+    # Volume curve tank attributes
+    volume_curve = field(Shape_VolumeCurve, flags=OPT)
+    min_volume = field(DrinkingWater_MinVolume, flags=OPT)
+
+    # Common optional attributes
+    overflow = field(DrinkingWater_Overflow, flags=OPT)
+
+    # INIT|PUB attributes - initial value required, then published
+    level = field(DrinkingWater_Level, flags=INIT | PUB)
 
     # PUB attributes
-    level = field(Water_Level, flags=PUB)
-    head = field(Water_Head, flags=PUB)
-    pressure = field(Water_Pressure, flags=PUB)
+    pressure = field(DrinkingWater_Pressure, flags=PUB)
+    head = field(DrinkingWater_Head, flags=PUB)
 
 
 class WaterReservoirEntity(PointEntity):
-    """Water reservoirs (infinite head sources)"""
+    """Water reservoirs (infinite head sources).
+
+    A reservoir is a tank that never empties. It has a fixed head which
+    can be scaled by a multiplier. Reservoirs can act as water sources
+    or drains depending on the head relative to connected nodes.
+
+    .. note::
+       Reservoirs don't use elevation - head is specified directly.
+
+    :ivar base_head: Base head of the reservoir (``drinking_water.base_head``, INIT)
+    :ivar head_factor: Head multiplier, default 1.0 (``drinking_water.head_factor``, OPT)
+    :ivar head: Calculated head output (``drinking_water.head``, PUB)
+    :ivar flow: Total flow rate out of reservoir (``drinking_water.flow``, PUB)
+    """
 
     __entity_name__ = "water_reservoir_entities"
 
     # INIT attributes
-    head = field(Water_Head, flags=INIT)
+    base_head = field(DrinkingWater_BaseHead, flags=INIT)
 
-    # OPT attributes (can vary with head pattern)
-    head_multiplier = field(Water_HeadMultiplier, flags=OPT)
-    head_pattern = field(Water_HeadPattern, flags=OPT)
+    # OPT attributes
+    head_factor = field(DrinkingWater_HeadFactor, flags=OPT)
 
     # PUB attributes
-    flow = field(Water_Flow, flags=PUB)
+    head = field(DrinkingWater_Head, flags=PUB)
+    flow = field(DrinkingWater_Flow, flags=PUB)
 
 
 class WaterPipeEntity(LinkEntity):
-    """Water pipes"""
+    """Water pipes.
+
+    Pipes transport water from one node at high head to another at lower
+    head, experiencing pressure drop (head loss) in the process.
+
+    :ivar diameter: Pipe diameter (``shape.diameter``, INIT)
+    :ivar roughness: Pipe roughness factor (``drinking_water.roughness``, INIT)
+    :ivar length: Pipe length, calculated from geometry if not set (``shape.length``, OPT)
+    :ivar minor_loss: Minor loss coefficient (``drinking_water.minor_loss``, OPT)
+    :ivar check_valve: Whether pipe has check valve (``drinking_water.check_valve``, OPT)
+    :ivar status: Whether pipe is open/closed (``operational.status``, OPT|PUB)
+    :ivar flow: Flow rate through pipe (``drinking_water.flow``, PUB)
+    :ivar velocity: Flow velocity (``drinking_water.velocity``, PUB)
+    :ivar headloss: Head loss in pipe (``drinking_water.headloss``, PUB)
+    """
 
     __entity_name__ = "water_pipe_entities"
 
     # INIT attributes
-    diameter = field(Water_Diameter, flags=INIT)
-    roughness = field(Water_Roughness, flags=INIT)
-    minor_loss = field(Water_MinorLoss, flags=OPT)
-    initial_status = field(Water_InitialStatus, flags=OPT)
-    bulk_coeff = field(Water_BulkCoeff, flags=OPT)
-    wall_coeff = field(Water_WallCoeff, flags=OPT)
+    diameter = field(Shape_Diameter, flags=INIT)
+    roughness = field(DrinkingWater_Roughness, flags=INIT)
 
-    # OPT attributes (dynamic control)
-    status = field(Water_LinkStatus, flags=OPT)
+    # OPT attributes
+    length = field(Shape_Length, flags=OPT)
+    minor_loss = field(DrinkingWater_MinorLoss, flags=OPT)
+    check_valve = field(DrinkingWater_CheckValve, flags=OPT)
 
-    # PUB attributes (simulation results)
-    flow = field(Water_Flow, flags=PUB)
-    velocity = field(Water_Velocity, flags=PUB)
-    headloss = field(Water_Headloss, flags=PUB)
-    flow_direction = field(Water_FlowDirection, flags=PUB)
+    # OPT|PUB attributes
+    status = field(Operational_Status, flags=OPT | PUB)
+
+    # PUB attributes
+    flow = field(DrinkingWater_Flow, flags=PUB)
+    velocity = field(DrinkingWater_Velocity, flags=PUB)
+    headloss = field(DrinkingWater_Headloss, flags=PUB)
 
 
 class WaterPumpEntity(LinkEntity):
-    """Water pumps"""
+    """Water pumps.
+
+    Pumps increase the head from one node to another. Two types:
+
+    - Power pump: Fixed power, speed ignored
+    - Head pump: Uses head curve, speed scales the curve
+
+    :ivar pump_type: Pump type, ``"power"`` or ``"head"`` (``type``, INIT)
+    :ivar power: Fixed power for power pumps (``drinking_water.power``, OPT)
+    :ivar head_curve: Head/flow curve as CSR for head pumps (``drinking_water.head_curve``, OPT)
+    :ivar speed: Relative pump speed, default 1.0 (``drinking_water.speed``, OPT)
+    :ivar status: Whether pump is open/closed (``operational.status``, OPT|PUB)
+    :ivar flow: Flow rate through pump (``drinking_water.flow``, PUB)
+    """
 
     __entity_name__ = "water_pump_entities"
 
     # INIT attributes
-    pump_type = field(Water_PumpType, flags=INIT)
-    pump_curve = field(Water_PumpCurve, flags=OPT)
-    power = field(Water_Power, flags=OPT)
+    pump_type = field(Type_PumpType, flags=INIT)
 
-    # OPT attributes
-    status = field(Water_LinkStatus, flags=OPT)
-    speed = field(Water_PumpSpeed, flags=OPT)
+    # OPT attributes (depends on pump_type)
+    power = field(DrinkingWater_Power, flags=OPT)
+    head_curve = field(DrinkingWater_HeadCurve, flags=OPT)
+    speed = field(DrinkingWater_Speed, flags=OPT)
+
+    # OPT|PUB attributes
+    status = field(Operational_Status, flags=OPT | PUB)
 
     # PUB attributes
-    flow = field(Water_Flow, flags=PUB)
-    pump_power = field(Water_Power, flags=PUB)
+    flow = field(DrinkingWater_Flow, flags=PUB)
 
 
 class WaterValveEntity(LinkEntity):
-    """Water valves (PRV, PSV, FCV, TCV, etc.)"""
+    """Water valves.
+
+    Valves reduce flow in a controlled manner. Types:
+
+    - PRV (Pressure Reducing): Limits downstream pressure
+    - PSV (Pressure Sustaining): Maintains upstream pressure
+    - PBV (Pressure Breaker): Maintains constant pressure drop
+    - FCV (Flow Control): Limits maximum flow
+    - TCV (Throttle Control): Uses loss coefficient
+    - GPV (General Purpose): User-defined head loss curve
+
+    :ivar valve_type: Valve type string (``type``, INIT)
+    :ivar diameter: Valve diameter (``shape.diameter``, INIT)
+    :ivar valve_pressure: Pressure setting for PRV/PSV/PBV (``drinking_water.valve_pressure``, OPT)
+    :ivar valve_flow: Flow setting for FCV (``drinking_water.valve_flow``, OPT)
+    :ivar valve_loss_coefficient: Loss coefficient for TCV (``drinking_water.valve_loss_coefficient``, OPT)
+    :ivar valve_curve: Head loss curve as CSR for GPV (``drinking_water.valve_curve``, OPT)
+    :ivar minor_loss: Minor loss coefficient (``drinking_water.minor_loss``, OPT)
+    :ivar flow: Flow rate through valve (``drinking_water.flow``, PUB)
+    """
 
     __entity_name__ = "water_valve_entities"
 
     # INIT attributes
-    valve_type = field(Water_ValveType, flags=INIT)
-    diameter = field(Water_Diameter, flags=INIT)
-    setting = field(Water_ValveSetting, flags=INIT)
-    minor_loss = field(Water_MinorLoss, flags=OPT)
-    initial_status = field(Water_InitialStatus, flags=OPT)
+    valve_type = field(Type_ValveType, flags=INIT)
+    diameter = field(Shape_Diameter, flags=INIT)
 
-    # OPT attributes
-    status = field(Water_LinkStatus, flags=OPT)
+    # OPT attributes (depends on valve_type)
+    valve_pressure = field(DrinkingWater_ValvePressure, flags=OPT)
+    valve_flow = field(DrinkingWater_ValveFlow, flags=OPT)
+    valve_loss_coefficient = field(DrinkingWater_ValveLossCoefficient, flags=OPT)
+    valve_curve = field(DrinkingWater_ValveCurve, flags=OPT)
+    minor_loss = field(DrinkingWater_MinorLoss, flags=OPT)
 
     # PUB attributes
-    flow = field(Water_Flow, flags=PUB)
-    velocity = field(Water_Velocity, flags=PUB)
-    headloss = field(Water_Headloss, flags=PUB)
+    flow = field(DrinkingWater_Flow, flags=PUB)

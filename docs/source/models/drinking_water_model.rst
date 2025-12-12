@@ -65,13 +65,12 @@ Since the model can act both on internal changes and external changes, it cannot
 once. It must be able to react to changes from the outside. When it receives an outside change, it
 must incorporate those changes into its internal state and then calculate from there on
 
-.. admonition:: Question
+.. note:: Pause and Restart
 
-   Since the model can only calculate small timesteps at a time, it can be helpful if it can be
-   "paused" at a certain internal timestamp and then "resumed" later on. Is there a way in WNTR
-   to "continue" from an existing result with small changes to the input state? There is some
-   documentation that alludes to this
-   `here <https://usepa.github.io/WNTR/hydraulics.html#pause-and-restart>`_
+   WNTR supports pausing and restarting simulations using ``sim.run_sim(convergence_error=True)``
+   followed by ``sim.run_sim()`` with modified network state. When WNTR encounters non-convergence
+   or a control action time, it can pause and allow modifications before continuing. This allows
+   our model to integrate external changes between WNTR simulation steps.
 
 Data Model
 ##########
@@ -97,11 +96,11 @@ nodes. Junctions derive from ``PointEntity`` and contain the following attribute
 - ``drinking_water.pressure`` (``PUB``): The dynamic pressure at the node.
 - ``drinking_water.head`` (``PUB``): The static (total) head at the node (elevation + pressure)
 
-.. admonition:: Question
+.. note:: About demand_deficit
 
-   In the PR, currently there is a ``demand_deficit`` attribute, that takes data from the WNTR
-   result. However, I cannot find anything in the WNTR documentation about this attribute. Where
-   did you find out about this attribute and what does it mean?
+   The ``demand_deficit`` attribute has been removed from the implementation. It is not a standard
+   WNTR attribute and would need to be calculated manually if required (actual_demand - required_demand
+   when pressure is insufficient).
 
 Water Tanks
 -----------
@@ -120,11 +119,12 @@ model, as a simulation progresses, tanks may fill up or empty over time. Tanks d
 - ``drinking_water.overflow`` (``OPT``): boolean to indicate whether a tank can overflow when full
   (max_level reached). Default: ``False``
 
-.. admonition :: Question
+.. note:: Tank Overflow Behavior
 
-   Tanks can be specified to be overflowable. If set to be overflowable, any water added when it
-   is at max capacity (max level) is removed. What happens to a tank when it's full but not
-   overflowable
+   If a tank is set to overflow (``drinking_water.overflow = True``), water added when at max_level
+   is lost (spilled). If overflow is ``False`` and the tank reaches max_level, the connected pipe
+   flows and pump operations are constrained - the network will find a new equilibrium where
+   inflow matches outflow, potentially causing backpressure or pump shutoffs.
 
 The shape and volume of the tank can either be of constant diameter for cylindrical tanks, or the
 volume can be defined by a volume curve. Either is valid, so they must be ``OPT`` attributes.
@@ -145,14 +145,12 @@ For a non-cylindrical tank we must supply the following attributes:
   the depth of the tank). This can be defined as a (2,)-csr attribute.
 - ``drinking_water.min_volume`` (``OPT``): Minimum volume to be able to drain
 
-.. admonition :: Question
+.. note:: Tank Level vs Volume Attributes
 
-   We can specifiy min_level and min_volume which represent the minimum (residual) level or volume
-   for a tank to empty out (the tank does not empty out beyond it's minimum level/volume). There is
-   also max_level. But there is not max_volume. How do these attributes work? Can they be combined
-   or are they restricted to the tank type (either constant diameter or volume curve)? Which one 
-   takes precedence? I have now made the assumption that it must either take one group of
-   attributes, or the other, but that may not be right.
+   WNTR uses ``min_level`` and ``max_level`` for all tank types. For volume curve tanks,
+   ``min_vol`` can also be specified and WNTR will derive the corresponding min_level from
+   the curve. The ``max_level`` is always used as the upper bound. If both ``min_vol`` and
+   ``min_level`` are specified, the higher effective level takes precedence.
 
 The following attributes are published by the model
 
@@ -179,11 +177,12 @@ multiplier). Reservoir derive from ``PointEntity`` and contain the following att
 .. note:: 
    Reservoirs are not calculated using an elevation, so we don't care about the ``geometry.z``
 
-.. admonition:: Question
+.. note:: Reservoirs as Sources and Drains
 
-   Reservoirs can be used as infinite water sources. But can they also be used as water drains?
-   Related question: does a reservoir need to be connected to a pump, or can it also connect to
-   a pipe?
+   Yes, reservoirs can act as both sources (water flows out) and drains (water flows in),
+   depending on the hydraulic conditions. A reservoir with lower head than connected nodes will
+   act as a drain. Reservoirs can connect directly to pipes - no pump is required. Flow direction
+   is determined by head differences.
 
 Pipes
 -----
@@ -226,11 +225,11 @@ derive from ``LinkEntity`` and ``LineEntity`` and contain the following attribut
    currently not yet possible, but very doable to implement. Also we do not have logic that can
    validate the ``"general"`` section, so we must be careful when using this part of the dataset
 
-.. admonition:: Question
+.. note:: Check Valve Direction
 
-   I think the flow direction is given by the sign of the velocity, but are we sure? Also, to what
-   direction is the flow restricted if a check valve is set? from -> to direction or reverse? I
-   hope that it allows flow from -> to
+   Yes, flow direction is indicated by the sign of velocity/flow (positive = from_node to to_node).
+   Check valves (``drinking_water.check_valve = True``) restrict flow to the from_node → to_node
+   direction only. Reverse flow (from to_node back to from_node) is prevented.
 
 Pumps
 -----
@@ -254,17 +253,17 @@ following attributes
 - ``drinking_water.flow`` (``PUB``): pump flow rate
 
 
-.. admonition:: Question
+.. note:: Pump Status
 
-   In WNTR, a pump status may be ``open``, ``active`` or ``closed`` where ``active`` is a
-   subcategory of ``open``, but with a specific speed set. Can we get away with just modeling this
-   with ``open`` and ``closed`` (ie, ``operational.status`` set to ``True`` or ``False``)?
+   We model pump status as a boolean (``operational.status``): ``True`` = open/active, ``False`` = closed.
+   The WNTR "active" status (open with specific speed) is handled by combining ``operational.status = True``
+   with a ``drinking_water.speed`` value. This simplifies the interface while maintaining full functionality.
 
-.. admonition:: Question
+.. note:: Power Pump Speed
 
-   When configuring a ``power`` pump, the documentation states that it is a fixed power pump. Does
-   that also mean that the speed value is ignored in that case? How does the speed affect the pump
-   in case of a head pump? What is the meaning of speed = 1? (nominal pump speed)
+   For ``power`` pumps, the speed setting is **ignored** by WNTR. Power pumps provide constant power
+   regardless of the speed setting. For ``head`` pumps, speed scales the pump curve: speed=1 is nominal,
+   speed=0.8 reduces head and flow by 80%, etc.
 
 Valves
 ------
@@ -299,17 +298,20 @@ each operate in their own way. Valves derive from ``LinkEntity`` and have the fo
    meaning be derived from the valve type. We would still need a separate attribute for the ``GPV``
    setting, since it's a curve and not a simple floating point number.
 
-.. admonition:: Question
+.. note:: Valve Types Explained
 
-   It might be useful to figure out exactly how the different valve types are modeled, so that we
-   are confident in what they do and what the various settings mean
+   - **PRV** (Pressure Reducing): Limits downstream pressure to the set value
+   - **PSV** (Pressure Sustaining): Maintains upstream pressure at the set value
+   - **PBV** (Pressure Breaker): Reduces pressure by a fixed amount
+   - **FCV** (Flow Control): Limits flow to the set value
+   - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient
+   - **GPV** (General Purpose): Custom headloss-vs-flow relationship via curve
 
-.. admonition:: Question
+.. note:: Valve Status
 
-   As with pumps, in WNTR a valve status may be ``open``, ``active`` or ``closed``. However, in
-   an EPANET ``.inp`` file, a valve does not have such a status. It only has a setting, based on
-   the valve type. What does it mean when a valve is given an ``open`` or ``close`` status in WNTR?
-   Should we support this? It might be easier to not expose this behaviour for now.
+   Valves do not have an ``operational.status`` attribute in our implementation. The valve setting
+   (pressure, flow, or coefficient) determines the valve behavior. Setting a valve_pressure of 0
+   for a PRV effectively closes it. This simplifies the interface and matches EPANET INP behavior.
 
 Controls
 --------

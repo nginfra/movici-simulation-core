@@ -44,6 +44,8 @@ dependencies = [
   "pyproj",
   "netCDF4",
   "Fiona>=1.9",
+  "pyparsing",
+  "timelength",
 ]
 
 [project.optional-dependencies]
@@ -117,6 +119,7 @@ udf = "movici_simulation_core.models.udf_model.udf_model:UDFModel"
 unit_conversions = "movici_simulation_core.models.unit_conversions.model:Model"
 water_network_simulation = "movici_simulation_core.models.water_network_simulation.model:Model"
 water_network_attributes = "movici_simulation_core.models.water_network_simulation.attributes:WaterNetworkAttributes"
+rules = "movici_simulation_core.models.rules.model:Model"
 
 [project.urls]
 Homepage = "https://github.com/nginfra/movici-simulation-core"

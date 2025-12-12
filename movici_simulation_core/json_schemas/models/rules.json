@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/rules/1.0.0",
+  "type": "object",
+  "properties": {
+    "rules_dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "description": "Name of the rules dataset to load rules from"
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "from_dataset": {
+          "type": "string",
+          "movici.type": "dataset",
+          "description": "Default source dataset for rules"
+        },
+        "to_dataset": {
+          "type": "string",
+          "movici.type": "dataset",
+          "description": "Default target dataset for rules"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/rule"
+      },
+      "description": "List of rules to apply"
+    }
+  },
+  "definitions": {
+    "condition": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Expression like '<simtime> == 34h' or 'level >= 23'"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "and": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/condition"
+              },
+              "description": "All conditions must be true"
+            }
+          },
+          "required": ["and"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "or": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/condition"
+              },
+              "description": "At least one condition must be true"
+            }
+          },
+          "required": ["or"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "rule": {
+      "type": "object",
+      "required": ["if", "output", "value"],
+      "properties": {
+        "if": {
+          "$ref": "#/definitions/condition",
+          "description": "Condition that triggers the rule"
+        },
+        "from_dataset": {
+          "type": "string",
+          "movici.type": "dataset",
+          "description": "Source dataset for attribute conditions"
+        },
+        "from_id": {
+          "type": "integer",
+          "description": "Source entity ID"
+        },
+        "from_reference": {
+          "type": "string",
+          "description": "Source entity reference"
+        },
+        "to_dataset": {
+          "type": "string",
+          "movici.type": "dataset",
+          "description": "Target dataset to update"
+        },
+        "to_id": {
+          "type": "integer",
+          "description": "Target entity ID"
+        },
+        "to_reference": {
+          "type": "string",
+          "description": "Target entity reference"
+        },
+        "output": {
+          "type": "string",
+          "description": "Attribute name to update"
+        },
+        "value": {
+          "description": "Value to set when condition is true"
+        },
+        "else_value": {
+          "description": "Value to set when condition is false"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

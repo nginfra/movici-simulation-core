@@ -1,4 +1,8 @@
-"""Main wrapper for WNTR WaterNetworkModel with Movici integration"""
+"""Main wrapper for WNTR WaterNetworkModel with Movici integration.
+
+This module provides a clean interface between Movici's entity-based
+data model and WNTR's water network simulation engine.
+"""
 
 from __future__ import annotations
 
@@ -17,48 +21,35 @@ from .collections import (
     TankCollection,
     ValveCollection,
 )
-from .control_manager import ControlManager
 from .id_mapper import IdMapper
-from .pattern_manager import PatternManager
 
 
 class NetworkWrapper:
-    """Wraps WNTR WaterNetworkModel with Movici-friendly API
+    """Wraps WNTR WaterNetworkModel with Movici-friendly API.
 
     This class provides a clean interface between Movici's entity-based
     data model and WNTR's water network simulation engine.
+
+    :param mode: Either ``"inp_file"`` or ``"movici_network"``
+    :param inp_file: Path to INP file (required if mode is ``"inp_file"``)
     """
 
     def __init__(self, mode: str = "movici_network", inp_file: t.Optional[Path] = None):
-        """Initialize network wrapper
-
-        :param mode: Either 'inp_file' or 'movici_network'
-        :param inp_file: Path to INP file (required if mode='inp_file')
-        """
         self.mode = mode
         self.wntr = wntr
+        self._curve_counter = 0
 
         if mode == "inp_file":
             if inp_file is None:
                 raise ValueError("inp_file required when mode='inp_file'")
             self.wn = wntr.network.WaterNetworkModel(str(inp_file))
-            # Build ID mapping from existing network
-            self._build_id_mapping_from_inp()
         else:
             self.wn = wntr.network.WaterNetworkModel()
 
         self.id_mapper = IdMapper()
-        self.pattern_manager = PatternManager(self.wn)
-        self.control_manager = ControlManager(self.wn)
-
-    def _build_id_mapping_from_inp(self):
-        """Build ID mapping from elements loaded from INP file"""
-        # For INP mode, WNTR element names are already set
-        # We'll create mappings when results are requested
-        pass
 
     def add_junctions(self, junctions: JunctionCollection):
-        """Add junctions to the network
+        """Add junctions to the network.
 
         :param junctions: Collection of junction data
         """
@@ -70,16 +61,24 @@ class NetworkWrapper:
                     float(junctions.coordinates[i, 1]),
                 )
 
+            # Calculate effective demand
+            base_demand = float(junctions.base_demands[i])
+            if junctions.demand_factors is not None:
+                base_demand *= float(junctions.demand_factors[i])
+
             self.wn.add_junction(
                 name=name,
-                base_demand=float(junctions.base_demands[i]),
-                demand_pattern=junctions.demand_patterns[i] if junctions.demand_patterns else None,
+                base_demand=base_demand,
+                demand_pattern=None,
                 elevation=float(junctions.elevations[i]),
                 coordinates=coords,
             )
 
     def add_tanks(self, tanks: TankCollection):
-        """Add tanks to the network
+        """Add tanks to the network.
+
+        Supports both cylindrical tanks (diameter-based) and non-cylindrical
+        tanks (volume curve-based).
 
         :param tanks: Collection of tank data
         """
@@ -91,20 +90,48 @@ class NetworkWrapper:
                     float(tanks.coordinates[i, 1]),
                 )
 
+            # Get min/max levels with defaults
+            min_level = 0.0
+            max_level = float(tanks.init_levels[i]) * 2  # Default to 2x init level
+            if tanks.min_levels is not None:
+                min_level = float(tanks.min_levels[i])
+            if tanks.max_levels is not None:
+                max_level = float(tanks.max_levels[i])
+
+            # Get diameter or use default
+            diameter = 0.0
+            if tanks.diameters is not None:
+                diameter = float(tanks.diameters[i])
+
+            # Handle volume curve if provided
+            vol_curve_name = None
+            if tanks.volume_curves is not None and tanks.volume_curves[i] is not None:
+                vol_curve_name = self._add_curve(tanks.volume_curves[i], "VOLUME")
+
+            # Get min volume
+            min_vol = 0.0
+            if tanks.min_volumes is not None:
+                min_vol = float(tanks.min_volumes[i])
+
             self.wn.add_tank(
                 name=name,
                 elevation=float(tanks.elevations[i]),
                 init_level=float(tanks.init_levels[i]),
-                min_level=float(tanks.min_levels[i]),
-                max_level=float(tanks.max_levels[i]),
-                diameter=float(tanks.diameters[i]),
-                min_vol=float(tanks.min_volumes[i]) if tanks.min_volumes is not None else 0.0,
-                vol_curve=tanks.volume_curves[i] if tanks.volume_curves else None,
+                min_level=min_level,
+                max_level=max_level,
+                diameter=diameter,
+                min_vol=min_vol,
+                vol_curve=vol_curve_name,
                 coordinates=coords,
             )
 
+            # Set overflow flag if provided
+            if tanks.overflows is not None:
+                tank = self.wn.get_node(name)
+                tank.overflow = bool(tanks.overflows[i])
+
     def add_reservoirs(self, reservoirs: ReservoirCollection):
-        """Add reservoirs to the network
+        """Add reservoirs to the network.
 
         :param reservoirs: Collection of reservoir data
         """
@@ -116,20 +143,33 @@ class NetworkWrapper:
                     float(reservoirs.coordinates[i, 1]),
                 )
 
+            # Calculate effective head
+            base_head = float(reservoirs.base_heads[i])
+            if reservoirs.head_factors is not None:
+                base_head *= float(reservoirs.head_factors[i])
+
             self.wn.add_reservoir(
                 name=name,
-                base_head=float(reservoirs.heads[i]),
-                head_pattern=reservoirs.head_patterns[i] if reservoirs.head_patterns else None,
+                base_head=base_head,
+                head_pattern=None,
                 coordinates=coords,
             )
 
     def add_pipes(self, pipes: PipeCollection):
-        """Add pipes to the network
+        """Add pipes to the network.
 
         :param pipes: Collection of pipe data
         """
         for i, name in enumerate(pipes.link_names):
-            status_str = pipes.statuses[i] if pipes.statuses else "OPEN"
+            # Determine initial status
+            status_str = "OPEN"
+            if pipes.statuses is not None:
+                status_str = "OPEN" if pipes.statuses[i] else "CLOSED"
+
+            # Get check valve flag
+            check_valve = False
+            if pipes.check_valves is not None:
+                check_valve = bool(pipes.check_valves[i])
 
             self.wn.add_pipe(
                 name=name,
@@ -140,10 +180,13 @@ class NetworkWrapper:
                 roughness=float(pipes.roughnesses[i]),
                 minor_loss=float(pipes.minor_losses[i]) if pipes.minor_losses is not None else 0.0,
                 initial_status=status_str,
+                check_valve=check_valve,
             )
 
     def add_pumps(self, pumps: PumpCollection):
-        """Add pumps to the network
+        """Add pumps to the network.
+
+        Supports both power pumps and head pumps with CSR curve data.
 
         :param pumps: Collection of pump data
         """
@@ -151,15 +194,26 @@ class NetworkWrapper:
             pump_type = pumps.pump_types[i].upper()
 
             if pump_type == "POWER":
+                power = 1.0
+                if pumps.powers is not None:
+                    power = float(pumps.powers[i])
+
                 self.wn.add_pump(
                     name=name,
                     start_node_name=pumps.from_nodes[i],
                     end_node_name=pumps.to_nodes[i],
-                    pump_type=pump_type,
-                    pump_parameter=float(pumps.powers[i]) if pumps.powers is not None else 1.0,
+                    pump_type="POWER",
+                    pump_parameter=power,
                 )
             else:  # HEAD pump
-                curve_name = pumps.pump_curves[i] if pumps.pump_curves else None
+                # Create curve from CSR data
+                curve_name = None
+                if pumps.head_curves is not None and pumps.head_curves[i] is not None:
+                    curve_name = self._add_curve(pumps.head_curves[i], "HEAD")
+
+                if curve_name is None:
+                    raise ValueError(f"Head pump '{name}' requires a head_curve")
+
                 self.wn.add_pump(
                     name=name,
                     start_node_name=pumps.from_nodes[i],
@@ -168,42 +222,90 @@ class NetworkWrapper:
                     pump_parameter=curve_name,
                 )
 
-            # Set initial speed if provided
-            if pumps.speeds is not None:
+            # Set initial speed if provided (only affects head pumps)
+            if pumps.speeds is not None and pump_type == "HEAD":
                 pump = self.wn.get_link(name)
                 if hasattr(pump, "speed_timeseries"):
                     pump.speed_timeseries.base_value = float(pumps.speeds[i])
 
+            # Set initial status if provided
+            if pumps.statuses is not None:
+                pump = self.wn.get_link(name)
+                pump.initial_status = wntr.network.LinkStatus.Open if pumps.statuses[i] else wntr.network.LinkStatus.Closed
+
     def add_valves(self, valves: ValveCollection):
-        """Add valves to the network
+        """Add valves to the network.
+
+        Supports all valve types with type-specific settings.
 
         :param valves: Collection of valve data
         """
         for i, name in enumerate(valves.link_names):
+            valve_type = valves.valve_types[i].upper()
+
+            # Get the appropriate setting based on valve type
+            if valve_type == "GPV":
+                # GPV needs a curve
+                curve_name = None
+                if valves.valve_curves is not None and valves.valve_curves[i] is not None:
+                    curve_name = self._add_curve(valves.valve_curves[i], "HEADLOSS")
+
+                if curve_name is None:
+                    raise ValueError(f"GPV valve '{name}' requires a valve_curve")
+
+                setting = curve_name
+            else:
+                # Get scalar setting from collection
+                setting = valves.get_setting(i)
+
             self.wn.add_valve(
                 name=name,
                 start_node_name=valves.from_nodes[i],
                 end_node_name=valves.to_nodes[i],
                 diameter=float(valves.diameters[i]),
-                valve_type=valves.valve_types[i],
+                valve_type=valve_type,
                 minor_loss=float(valves.minor_losses[i])
                 if valves.minor_losses is not None
                 else 0.0,
-                initial_setting=float(valves.settings[i]),
+                initial_setting=setting,
             )
+
+    def _add_curve(self, curve_data: np.ndarray, curve_type: str) -> str:
+        """Add a curve to the WNTR network from CSR data.
+
+        :param curve_data: Numpy array of shape (N, 2) with x, y points
+        :param curve_type: Type of curve (``"HEAD"``, ``"VOLUME"``, ``"HEADLOSS"``, etc.)
+        :return: Name of the created curve
+        """
+        self._curve_counter += 1
+        curve_name = f"curve_{self._curve_counter}"
+
+        # Convert numpy array to list of tuples
+        if curve_data.ndim == 1:
+            # Single point, reshape to (1, 2)
+            curve_data = curve_data.reshape(-1, 2)
+
+        curve_points = [(float(row[0]), float(row[1])) for row in curve_data]
+
+        self.wn.add_curve(curve_name, curve_type, curve_points)
+        return curve_name
 
     def run_simulation(
         self,
         duration: t.Optional[float] = None,
         hydraulic_timestep: float = 3600,
         report_timestep: t.Optional[float] = None,
+        viscosity: float = 1.0,
+        specific_gravity: float = 1.0,
     ) -> SimulationResults:
-        """Run WNTR simulation
+        """Run WNTR simulation.
 
-        :param duration: Simulation duration in seconds (None = use model setting)
+        :param duration: Simulation duration in seconds (None uses model setting)
         :param hydraulic_timestep: Hydraulic timestep in seconds
         :param report_timestep: Report timestep in seconds (None = same as hydraulic)
-        :return: SimulationResults object with results mapped to Movici IDs
+        :param viscosity: Kinematic viscosity (default 1.0)
+        :param specific_gravity: Specific gravity of fluid (default 1.0)
+        :return: SimulationResults object with results
         """
         # Set simulation options
         if duration is not None:
@@ -216,6 +318,10 @@ class NetworkWrapper:
         else:
             self.wn.options.time.report_timestep = int(hydraulic_timestep)
 
+        # Set hydraulic options
+        self.wn.options.hydraulic.viscosity = viscosity
+        self.wn.options.hydraulic.specific_gravity = specific_gravity
+
         # Run simulation
         sim = self.wntr.sim.WNTRSimulator(self.wn)
         results = sim.run_sim()
@@ -224,10 +330,9 @@ class NetworkWrapper:
         return self._extract_results(results)
 
     def _extract_results(self, results) -> SimulationResults:
-        """Extract results from WNTR simulation
+        """Extract results from WNTR simulation.
 
         :param results: WNTR SimulationResults object
-
         :return: SimulationResults collection
         """
         # Get last timestep results (steady state)
@@ -239,80 +344,54 @@ class NetworkWrapper:
         node_heads = results.node["head"].loc[last_time].values
         node_demands = results.node["demand"].loc[last_time].values
 
-        # Demand deficit if available
-        node_demand_deficits = None
-        if "demand_deficit" in results.node:
-            node_demand_deficits = results.node["demand_deficit"].loc[last_time].values
-
-        # Tank levels if available
-        node_levels = None
-        # Extract tank levels separately
-        tank_names = [name for name in node_names if self.wn.get_node(name).node_type == "Tank"]
-        if tank_names:
-            node_levels = np.zeros(len(node_names))
-            for i, name in enumerate(node_names):
-                if name in tank_names:
-                    node_levels[i] = self.wn.get_node(name).init_level
+        # Tank levels
+        node_levels = np.zeros(len(node_names))
+        for i, name in enumerate(node_names):
+            node = self.wn.get_node(name)
+            if node.node_type == "Tank":
+                # Get level from head - elevation
+                node_levels[i] = node_heads[i] - node.elevation
 
         # Link results
         link_names = list(results.link["flowrate"].columns)
         link_flows = results.link["flowrate"].loc[last_time].values
         link_velocities = results.link["velocity"].loc[last_time].values
-        # headloss may not be available in all WNTR versions
+
+        # Headloss may not be available in all WNTR versions
         if "headloss" in results.link:
             link_headlosses = results.link["headloss"].loc[last_time].values
         else:
             link_headlosses = np.zeros(len(link_names))
-        link_statuses = results.link["status"].loc[last_time].values
 
-        # Pump power if available
-        link_powers = None
-        pump_names = [name for name in link_names if self.wn.get_link(name).link_type == "Pump"]
-        if pump_names and "pump_power" in results.link:
-            link_powers = np.zeros(len(link_names))
-            pump_powers = results.link["pump_power"].loc[last_time]
-            for i, name in enumerate(link_names):
-                if name in pump_names:
-                    link_powers[i] = pump_powers[name]
+        link_statuses = results.link["status"].loc[last_time].values
 
         return SimulationResults(
             node_names=node_names,
             node_pressures=node_pressures,
             node_heads=node_heads,
             node_demands=node_demands,
-            node_demand_deficits=node_demand_deficits,
             node_levels=node_levels,
             link_names=link_names,
             link_flows=link_flows,
             link_velocities=link_velocities,
             link_headlosses=link_headlosses,
             link_statuses=link_statuses,
-            link_powers=link_powers,
         )
 
-    def update_junction_demands(self, junction_names: t.List[str], demands: np.ndarray):
-        """Update base demands for junctions
-
-        :param junction_names: List of junction names
-            :param demands: Array of demand values
-        """
-        for name, demand in zip(junction_names, demands):
-            junction = self.wn.get_node(name)
-            junction.base_demand = float(demand)
-
     def update_link_status(self, link_names: t.List[str], statuses: np.ndarray):
-        """Update link status (open/closed)
+        """Update link status (open/closed).
 
         :param link_names: List of link names
-            :param statuses: Array of status values (0=closed, 1=open)
+        :param statuses: Array of status values (True=open, False=closed)
         """
         for name, status in zip(link_names, statuses):
             link = self.wn.get_link(name)
-            status_str = "OPEN" if int(status) == 1 else "CLOSED"
-            link.initial_status = status_str
+            link.initial_status = (
+                wntr.network.LinkStatus.Open if status else wntr.network.LinkStatus.Closed
+            )
 
     def get_network_summary(self) -> dict:
-        """Get summary statistics of the network
+        """Get summary statistics of the network.
 
         :return: Dictionary with network statistics
         """
@@ -325,10 +404,9 @@ class NetworkWrapper:
             "num_valves": self.wn.num_valves,
             "num_patterns": len(self.wn.pattern_name_list),
             "num_curves": len(self.wn.curve_name_list),
-            "num_controls": len(self.wn.control_name_list),
         }
 
     def close(self):
-        """Clean up resources"""
+        """Clean up resources."""
         # WNTR doesn't require explicit cleanup, but included for consistency
         pass
