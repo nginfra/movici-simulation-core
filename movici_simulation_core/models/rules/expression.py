@@ -229,9 +229,9 @@ def _build_grammar() -> pp.ParserElement:
     :rtype: pp.ParserElement
     """
     integer = pp.Word(pp.nums).setParseAction(lambda t: int(t[0]))
-    decimal = pp.Combine(
-        pp.Optional(pp.Word(pp.nums)) + "." + pp.Word(pp.nums)
-    ).setParseAction(lambda t: float(t[0]))
+    decimal = pp.Combine(pp.Optional(pp.Word(pp.nums)) + "." + pp.Word(pp.nums)).setParseAction(
+        lambda t: float(t[0])
+    )
     number = decimal | integer
 
     # Time expressions: durations (34h, 5m, 1d5h30s) and clock times (12:30)
@@ -240,14 +240,13 @@ def _build_grammar() -> pp.ParserElement:
     duration = pp.Combine(pp.OneOrMore(single_duration)).setParseAction(
         lambda t: parse_time_value(t[0])
     )
-    clock_time = pp.Combine(
-        pp.Word(pp.nums) + ":" + pp.Word(pp.nums)
-    ).setParseAction(lambda t: parse_time_value(t[0]))
-
-    boolean = (
-        pp.CaselessKeyword("true").setParseAction(lambda: True)
-        | pp.CaselessKeyword("false").setParseAction(lambda: False)
+    clock_time = pp.Combine(pp.Word(pp.nums) + ":" + pp.Word(pp.nums)).setParseAction(
+        lambda t: parse_time_value(t[0])
     )
+
+    boolean = pp.CaselessKeyword("true").setParseAction(lambda: True) | pp.CaselessKeyword(
+        "false"
+    ).setParseAction(lambda: False)
 
     value = duration | clock_time | number | boolean
 

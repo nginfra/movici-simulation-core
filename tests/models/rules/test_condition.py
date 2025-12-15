@@ -2,7 +2,7 @@
 
 import pytest
 
-from movici_simulation_core.models.rules.condition import Condition, parse_rule_condition
+from movici_simulation_core.models.rules.condition import parse_rule_condition
 
 
 class TestParseRuleCondition:

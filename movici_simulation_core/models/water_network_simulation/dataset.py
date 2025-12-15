@@ -241,7 +241,7 @@ class WaterValveEntity(LinkEntity):
     :ivar diameter: Valve diameter (``shape.diameter``, INIT)
     :ivar valve_pressure: Pressure setting for PRV/PSV/PBV (``drinking_water.valve_pressure``, OPT)
     :ivar valve_flow: Flow setting for FCV (``drinking_water.valve_flow``, OPT)
-    :ivar valve_loss_coefficient: Loss coefficient for TCV (``drinking_water.valve_loss_coefficient``, OPT)
+    :ivar valve_loss_coefficient: TCV loss coeff (``drinking_water.valve_loss_coefficient``, OPT)
     :ivar valve_curve: Head loss curve as CSR for GPV (``drinking_water.valve_curve``, OPT)
     :ivar minor_loss: Minor loss coefficient (``drinking_water.minor_loss``, OPT)
     :ivar flow: Flow rate through valve (``drinking_water.flow``, PUB)

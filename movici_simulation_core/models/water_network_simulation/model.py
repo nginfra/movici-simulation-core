@@ -216,9 +216,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         :param state: Tracked state for entity registration
         :param dataset_name: Name of the dataset to register entities in
         """
-        entity_groups = self.config.get(
-            "entity_groups", ["junctions", "pipes", "reservoirs"]
-        )
+        entity_groups = self.config.get("entity_groups", ["junctions", "pipes", "reservoirs"])
 
         if "junctions" in entity_groups:
             self.junctions = WaterJunctionEntity()
@@ -582,9 +580,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         if self.pipes and self.pipes.status.has_data():
             if np.any(self.pipes.status.changed):
                 movici_ids = self.pipes.index.ids
-                link_names = [
-                    self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
-                ]
+                link_names = [self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids]
                 statuses = self.pipes.status.array
                 self.network.update_link_status(link_names, statuses)
 
@@ -592,9 +588,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         if self.pumps and self.pumps.status.has_data():
             if np.any(self.pumps.status.changed):
                 movici_ids = self.pumps.index.ids
-                link_names = [
-                    self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids
-                ]
+                link_names = [self.network.id_mapper.get_wntr_name(int(mid)) for mid in movici_ids]
                 statuses = self.pumps.status.array
                 self.network.update_link_status(link_names, statuses)
 

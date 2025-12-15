@@ -262,10 +262,14 @@ def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollecti
     diameters = valves.diameter.array
 
     # Type-specific settings
-    valve_pressures = valves.valve_pressure.array if valves.valve_pressure.is_initialized() else None
+    valve_pressures = (
+        valves.valve_pressure.array if valves.valve_pressure.is_initialized() else None
+    )
     valve_flows = valves.valve_flow.array if valves.valve_flow.is_initialized() else None
     valve_loss_coefficients = (
-        valves.valve_loss_coefficient.array if valves.valve_loss_coefficient.is_initialized() else None
+        valves.valve_loss_coefficient.array
+        if valves.valve_loss_coefficient.is_initialized()
+        else None
     )
 
     # Valve curves as CSR data for GPV

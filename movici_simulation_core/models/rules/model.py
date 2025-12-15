@@ -163,9 +163,7 @@ class Model(TrackedModel, name="rules"):
 
             # Register target attribute
             if rule.to_dataset and rule.output:
-                self._register_target_attribute(
-                    rule, state, schema, init_data_handler, registered
-                )
+                self._register_target_attribute(rule, state, schema, init_data_handler, registered)
 
     def _register_source_attributes(
         self,
@@ -195,9 +193,7 @@ class Model(TrackedModel, name="rules"):
 
         if entity_group_name is None:
             if self.logger:
-                self.logger.warning(
-                    f"Could not find entity group for source entity in rule"
-                )
+                self.logger.warning("Could not find entity group for source entity in rule")
             return
 
         rule.from_entity_group = entity_group_name
@@ -251,9 +247,7 @@ class Model(TrackedModel, name="rules"):
 
         if entity_group_name is None:
             if self.logger:
-                self.logger.warning(
-                    f"Could not find entity group for target entity in rule"
-                )
+                self.logger.warning("Could not find entity group for target entity in rule")
             return
 
         rule.to_entity_group = entity_group_name
@@ -267,12 +261,11 @@ class Model(TrackedModel, name="rules"):
             registered[key] = eg
 
         # Determine output attribute type from value
-        value_type = type(rule.value)
-        if value_type == bool:
+        if isinstance(rule.value, bool):
             dtype = DataType(bool)
-        elif value_type == int:
+        elif isinstance(rule.value, int):
             dtype = DataType(int)
-        elif value_type == float:
+        elif isinstance(rule.value, float):
             dtype = DataType(float)
         else:
             dtype = DataType(float)
@@ -330,8 +323,7 @@ class Model(TrackedModel, name="rules"):
             if reference is not None and reference in references:
                 return key
 
-        # If not found in data, check general section
-        general = data.get("general", {})
+        # If not found in data, return first entity group as fallback
         if entity_id is not None:
             for key, value in data.get("data", {}).items():
                 if isinstance(value, dict):
@@ -374,13 +366,11 @@ class Model(TrackedModel, name="rules"):
             # Get reference time and calculate clock time
             ref_time = getattr(self.timeline_info, "reference", None)
             if ref_time is not None:
-                from datetime import datetime, timedelta
+                from datetime import timedelta
 
                 current_time = ref_time + timedelta(seconds=simtime)
                 clocktime = (
-                    current_time.hour * 3600
-                    + current_time.minute * 60
-                    + current_time.second
+                    current_time.hour * 3600 + current_time.minute * 60 + current_time.second
                 )
 
         for rule in self.rules:

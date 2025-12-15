@@ -231,7 +231,11 @@ class NetworkWrapper:
             # Set initial status if provided
             if pumps.statuses is not None:
                 pump = self.wn.get_link(name)
-                pump.initial_status = wntr.network.LinkStatus.Open if pumps.statuses[i] else wntr.network.LinkStatus.Closed
+                pump.initial_status = (
+                    wntr.network.LinkStatus.Open
+                    if pumps.statuses[i]
+                    else wntr.network.LinkStatus.Closed
+                )
 
     def add_valves(self, valves: ValveCollection):
         """Add valves to the network.

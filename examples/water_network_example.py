@@ -29,7 +29,7 @@ from movici_simulation_core.integrations.wntr import (
 )
 from movici_simulation_core.models import DataCollectorModel, WaterNetworkSimulationModel
 from movici_simulation_core.models.water_network_simulation.attributes import (
-    WaterNetworkAttributes,
+    DrinkingWaterNetworkAttributes,
 )
 from movici_simulation_core.simulation import Simulation
 
@@ -214,7 +214,7 @@ def example_simulation_framework():
     sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
 
     # Register water network attributes using the plugin system
-    sim.use(WaterNetworkAttributes)
+    sim.use(DrinkingWaterNetworkAttributes)
 
     # Add the water network simulation model
     sim.add_model(
@@ -269,7 +269,7 @@ def example_simulation_with_controls():
 
     # Create and configure the simulation with controls
     sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
-    sim.use(WaterNetworkAttributes)
+    sim.use(DrinkingWaterNetworkAttributes)
 
     # Add the water network simulation model with control rules
     sim.add_model(
@@ -347,7 +347,7 @@ def example_simulation_with_inp_file():
     sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
 
     # Register water network attributes
-    sim.use(WaterNetworkAttributes)
+    sim.use(DrinkingWaterNetworkAttributes)
 
     # Add the water network simulation model in inp_file mode
     sim.add_model(

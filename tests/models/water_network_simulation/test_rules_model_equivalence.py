@@ -13,9 +13,6 @@ import pytest
 import wntr
 
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.models.water_network_simulation.attributes import (
-    DrinkingWaterNetworkAttributes,
-)
 from movici_simulation_core.models.water_network_simulation.model import Model
 
 
@@ -95,12 +92,8 @@ class TestPipeStatusEquivalence:
         wn.add_reservoir("n1", base_head=50.0, coordinates=(0.0, 0.0))
 
         # Add junctions
-        wn.add_junction(
-            "n2", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0)
-        )
-        wn.add_junction(
-            "n3", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0)
-        )
+        wn.add_junction("n2", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0))
+        wn.add_junction("n3", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0))
 
         # Add pipes
         wn.add_pipe(
@@ -169,12 +162,8 @@ class TestPipeStatusEquivalence:
 
         # Extract Movici results
         if result is not None:
-            junctions = result.get("water_network", {}).get(
-                "water_junction_entities", {}
-            )
-            pipes = result.get("water_network", {}).get(
-                "water_pipe_entities", {}
-            )
+            junctions = result.get("water_network", {}).get("water_junction_entities", {})
+            pipes = result.get("water_network", {}).get("water_pipe_entities", {})
 
             if "drinking_water.pressure" in junctions:
                 movici_j1_pressure = junctions["drinking_water.pressure"][0]
@@ -258,9 +247,7 @@ class TestPipeStatusEquivalence:
 
         # Extract and compare results
         if result_closed is not None:
-            pipes = result_closed.get("water_network", {}).get(
-                "water_pipe_entities", {}
-            )
+            pipes = result_closed.get("water_network", {}).get("water_pipe_entities", {})
 
             if "drinking_water.flow" in pipes:
                 movici_pipe2_flow = pipes["drinking_water.flow"][1]  # PIPE2 index
@@ -272,7 +259,7 @@ class TestPipeStatusEquivalence:
 
                 # WNTR closed pipe should also have ~0 flow
                 assert abs(wntr_closed_results["pipe2_flow"]) < 0.0001, (
-                    f"WNTR closed pipe should have near-zero flow"
+                    "WNTR closed pipe should have near-zero flow"
                 )
 
 
@@ -369,9 +356,7 @@ class TestBranchedNetworkControl:
         # Store initial flows by ID
         initial_flows = {}
         if result_open is not None:
-            pipe_data = result_open.get("water_network", {}).get(
-                "water_pipe_entities", {}
-            )
+            pipe_data = result_open.get("water_network", {}).get("water_pipe_entities", {})
             initial_flows = {
                 "pipe1": self._get_flow_by_id(pipe_data, 101),
                 "pipe2": self._get_flow_by_id(pipe_data, 102),
@@ -392,9 +377,7 @@ class TestBranchedNetworkControl:
 
         # Verify PIPE3 flow is zero and flow is redistributed
         if result_closed is not None:
-            pipe_data = result_closed.get("water_network", {}).get(
-                "water_pipe_entities", {}
-            )
+            pipe_data = result_closed.get("water_network", {}).get("water_pipe_entities", {})
             if "drinking_water.flow" in pipe_data:
                 pipe3_flow = self._get_flow_by_id(pipe_data, 103)
 
@@ -412,7 +395,7 @@ class TestBranchedNetworkControl:
                     # PIPE1 flow should be less than before (no longer serving J3)
                     if initial_flows.get("pipe1") is not None:
                         assert pipe1_flow < initial_flows["pipe1"], (
-                            f"PIPE1 flow should decrease after closing PIPE3"
+                            "PIPE1 flow should decrease after closing PIPE3"
                         )
 
 
@@ -427,12 +410,8 @@ class TestWNTRNetworkDirect:
         wn.add_reservoir("R1", base_head=50.0, coordinates=(0.0, 0.0))
 
         # Add junctions with small demands
-        wn.add_junction(
-            "J1", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0)
-        )
-        wn.add_junction(
-            "J2", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0)
-        )
+        wn.add_junction("J1", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0))
+        wn.add_junction("J2", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0))
 
         # Add pipes
         wn.add_pipe(
@@ -479,16 +458,28 @@ class TestWNTRNetworkDirect:
 
         # Add pipes
         wn.add_pipe(
-            "P1", start_node_name="R1", end_node_name="J1",
-            length=100.0, diameter=0.3, roughness=100.0,
+            "P1",
+            start_node_name="R1",
+            end_node_name="J1",
+            length=100.0,
+            diameter=0.3,
+            roughness=100.0,
         )
         wn.add_pipe(
-            "P2", start_node_name="J1", end_node_name="J2",
-            length=100.0, diameter=0.2, roughness=100.0,
+            "P2",
+            start_node_name="J1",
+            end_node_name="J2",
+            length=100.0,
+            diameter=0.2,
+            roughness=100.0,
         )
         wn.add_pipe(
-            "P3", start_node_name="J1", end_node_name="J3",
-            length=100.0, diameter=0.2, roughness=100.0,
+            "P3",
+            start_node_name="J1",
+            end_node_name="J3",
+            length=100.0,
+            diameter=0.2,
+            roughness=100.0,
         )
 
         wn.options.time.duration = 3600
@@ -512,12 +503,20 @@ class TestWNTRNetworkDirect:
         wn.add_junction("J2", base_demand=0.001, elevation=10.0)
 
         wn.add_pipe(
-            "P1", start_node_name="R1", end_node_name="J1",
-            length=100.0, diameter=0.3, roughness=100.0,
+            "P1",
+            start_node_name="R1",
+            end_node_name="J1",
+            length=100.0,
+            diameter=0.3,
+            roughness=100.0,
         )
         wn.add_pipe(
-            "P2", start_node_name="J1", end_node_name="J2",
-            length=100.0, diameter=0.3, roughness=100.0,
+            "P2",
+            start_node_name="J1",
+            end_node_name="J2",
+            length=100.0,
+            diameter=0.3,
+            roughness=100.0,
             initial_status="CLOSED",  # P2 is closed
         )
 
@@ -603,12 +602,8 @@ class TestWNTRTimeBasedControlEquivalence:
         wn.add_reservoir("n1", base_head=50.0, coordinates=(0.0, 0.0))
 
         # Add junctions
-        wn.add_junction(
-            "n2", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0)
-        )
-        wn.add_junction(
-            "n3", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0)
-        )
+        wn.add_junction("n2", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0))
+        wn.add_junction("n3", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0))
 
         # Add pipes
         wn.add_pipe(
@@ -630,9 +625,7 @@ class TestWNTRTimeBasedControlEquivalence:
 
         # Add time-based control: close PIPE2 at close_time
         pipe2 = wn.get_link("l102")
-        act = wntr.network.controls.ControlAction(
-            pipe2, "status", wntr.network.LinkStatus.Closed
-        )
+        act = wntr.network.controls.ControlAction(pipe2, "status", wntr.network.LinkStatus.Closed)
         cond = wntr.network.controls.SimTimeCondition(wn, "=", close_time)
         ctrl = wntr.network.controls.Control(cond, act)
         wn.add_control("close_pipe2", ctrl)
@@ -827,18 +820,14 @@ class TestWNTRTimeBasedControlEquivalence:
         # t=3600: Close
         tester.new_time(3600)
         close_update = {
-            "water_network": {
-                "water_pipe_entities": {"id": [102], "operational.status": [False]}
-            }
+            "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [False]}}
         }
         result1, _ = tester.update(3600, close_update)
 
         # t=7200: Reopen
         tester.new_time(7200)
         open_update = {
-            "water_network": {
-                "water_pipe_entities": {"id": [102], "operational.status": [True]}
-            }
+            "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [True]}}
         }
         result2, _ = tester.update(7200, open_update)
 
@@ -983,9 +972,7 @@ class TestWNTRConditionalControlEquivalence:
         act_close = wntr.network.controls.ControlAction(
             pump, "status", wntr.network.LinkStatus.Closed
         )
-        cond_high = wntr.network.controls.ValueCondition(
-            tank, "level", ">=", 7.0
-        )
+        cond_high = wntr.network.controls.ValueCondition(tank, "level", ">=", 7.0)
         ctrl_close = wntr.network.controls.Control(cond_high, act_close)
         wn.add_control("close_pump_high", ctrl_close)
 
@@ -993,9 +980,7 @@ class TestWNTRConditionalControlEquivalence:
         act_open = wntr.network.controls.ControlAction(
             pump, "status", wntr.network.LinkStatus.Open
         )
-        cond_low = wntr.network.controls.ValueCondition(
-            tank, "level", "<=", 2.0
-        )
+        cond_low = wntr.network.controls.ValueCondition(tank, "level", "<=", 2.0)
         ctrl_open = wntr.network.controls.Control(cond_low, act_open)
         wn.add_control("open_pump_low", ctrl_open)
 
@@ -1056,9 +1041,7 @@ class TestWNTRConditionalControlEquivalence:
     def init_data_pressure(self, simple_network_for_pressure):
         return [("water_network", simple_network_for_pressure)]
 
-    def test_pressure_threshold_control_equivalence(
-        self, create_model_tester, init_data_pressure
-    ):
+    def test_pressure_threshold_control_equivalence(self, create_model_tester, init_data_pressure):
         """Test pressure-based control equivalence.
 
         This simulates what the Rules Model would do when it has a rule like:
@@ -1075,10 +1058,11 @@ class TestWNTRConditionalControlEquivalence:
         }
 
         # Use the fixture by overriding init_data in the tester
-        from movici_simulation_core.testing.model_tester import ModelTester
-        from pathlib import Path
-        import tempfile
         import json
+        import tempfile
+        from pathlib import Path
+
+        from movici_simulation_core.testing.model_tester import ModelTester
 
         tmp_dir = Path(tempfile.mkdtemp())
         for name, data in init_data_pressure:
@@ -1105,9 +1089,7 @@ class TestWNTRConditionalControlEquivalence:
         # Here we just verify the mechanism works
         tester.new_time(3600)
         close_update = {
-            "water_network": {
-                "water_pipe_entities": {"id": [102], "operational.status": [False]}
-            }
+            "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [False]}}
         }
         result_closed, _ = tester.update(3600, close_update)
 
@@ -1133,4 +1115,5 @@ class TestWNTRConditionalControlEquivalence:
         # Cleanup
         tester.close()
         import shutil
+
         shutil.rmtree(tmp_dir)
