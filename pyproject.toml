@@ -142,9 +142,10 @@ line-length = 99
 target-version = "py310"
 
 [tool.ruff.lint]
+exclude = ["*.ipynb"]
+
 # Ideally we'd have the following rules enabled. However, that is currently not feasible,
 # so some of them are still disabled, we should work on enabling and fixing them:
-
 select = [
   # "ARG", # check for unused arguments -- there are too many false positives with overriding methods -> maybe typing.override will help?
   "B", # (bugbear) catches certain common programming bugs
