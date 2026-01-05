@@ -326,6 +326,9 @@ class NetworkWrapper:
         self.wn.options.hydraulic.viscosity = viscosity
         self.wn.options.hydraulic.specific_gravity = specific_gravity
 
+        # Reset network to apply initial_status changes from update_link_status
+        self.wn.reset_initial_values()
+
         # Run simulation
         sim = self.wntr.sim.WNTRSimulator(self.wn)
         results = sim.run_sim()

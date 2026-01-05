@@ -7,70 +7,103 @@ from movici_simulation_core.models.rules.expression import (
     Comparison,
     ComparisonOperator,
     ExpressionType,
+    parse_clock_time,
     parse_condition,
-    parse_time_value,
+    parse_duration,
 )
 
 
-class TestParseTimeValue:
-    """Tests for time value parsing using timelength."""
+class TestParseDuration:
+    """Tests for duration parsing."""
 
-    def test_parse_hours(self):
-        assert parse_time_value("34h") == 34 * 3600
+    @pytest.mark.parametrize(
+        "expr,expected",
+        [
+            ("34h", 34 * 3600),
+            ("5m", 5 * 60),
+            ("30s", 30),
+            ("1d", 24 * 3600),
+            ("1h30m", 3600 + 1800),
+            ("1d5h30m10s", 86400 + 5 * 3600 + 30 * 60 + 10),
+            ("2H", 2 * 3600),  # Case insensitive
+        ],
+    )
+    def test_parse_duration(self, expr, expected):
+        assert parse_duration(expr) == expected
 
-    def test_parse_minutes(self):
-        assert parse_time_value("5m") == 5 * 60
-
-    def test_parse_seconds(self):
-        assert parse_time_value("30s") == 30
-
-    def test_parse_days(self):
-        assert parse_time_value("1d") == 24 * 3600
-
-    def test_parse_combined(self):
-        assert parse_time_value("1h30m") == 3600 + 1800
-
-    def test_parse_clock_format_as_mm_ss(self):
-        # timelength interprets HH:MM as MM:SS
-        assert parse_time_value("12:30") == 12 * 60 + 30
-
-    def test_invalid_time_raises(self):
+    def test_invalid_duration_raises(self):
         with pytest.raises(ValueError):
-            parse_time_value("invalid")
+            parse_duration("invalid")
+
+
+class TestParseClockTime:
+    """Tests for clock time parsing."""
+
+    @pytest.mark.parametrize(
+        "expr,expected",
+        [
+            ("12:30", 12 * 3600 + 30 * 60),
+            ("08:15", 8 * 3600 + 15 * 60),
+            ("23:59", 23 * 3600 + 59 * 60),
+            ("00:00", 0),
+            ("12:30:45", 12 * 3600 + 30 * 60 + 45),
+        ],
+    )
+    def test_parse_clock_time(self, expr, expected):
+        assert parse_clock_time(expr) == expected
+
+    def test_invalid_clock_time_raises(self):
+        with pytest.raises(ValueError):
+            parse_clock_time("invalid")
 
 
 class TestComparisonOperator:
     """Tests for comparison operator evaluation."""
 
-    def test_eq(self):
-        assert ComparisonOperator.EQ.evaluate(5, 5)
-        assert not ComparisonOperator.EQ.evaluate(5, 6)
+    @pytest.mark.parametrize(
+        "op,left,right,expected",
+        [
+            # EQ tests
+            (ComparisonOperator.EQ, 5, 5, True),
+            (ComparisonOperator.EQ, 5, 6, False),
+            (ComparisonOperator.EQ, "a", "a", True),
+            # NE tests
+            (ComparisonOperator.NE, 5, 6, True),
+            (ComparisonOperator.NE, 5, 5, False),
+            # LT tests
+            (ComparisonOperator.LT, 5, 6, True),
+            (ComparisonOperator.LT, 6, 5, False),
+            (ComparisonOperator.LT, 5, 5, False),
+            # LE tests
+            (ComparisonOperator.LE, 5, 6, True),
+            (ComparisonOperator.LE, 5, 5, True),
+            (ComparisonOperator.LE, 6, 5, False),
+            # GT tests
+            (ComparisonOperator.GT, 6, 5, True),
+            (ComparisonOperator.GT, 5, 6, False),
+            (ComparisonOperator.GT, 5, 5, False),
+            # GE tests
+            (ComparisonOperator.GE, 6, 5, True),
+            (ComparisonOperator.GE, 5, 5, True),
+            (ComparisonOperator.GE, 5, 6, False),
+        ],
+    )
+    def test_comparison_operators(self, op, left, right, expected):
+        assert op.evaluate(left, right) == expected
 
-    def test_ne(self):
-        assert ComparisonOperator.NE.evaluate(5, 6)
-        assert not ComparisonOperator.NE.evaluate(5, 5)
-
-    def test_lt(self):
-        assert ComparisonOperator.LT.evaluate(5, 6)
-        assert not ComparisonOperator.LT.evaluate(6, 5)
-
-    def test_le(self):
-        assert ComparisonOperator.LE.evaluate(5, 6)
-        assert ComparisonOperator.LE.evaluate(5, 5)
-        assert not ComparisonOperator.LE.evaluate(6, 5)
-
-    def test_gt(self):
-        assert ComparisonOperator.GT.evaluate(6, 5)
-        assert not ComparisonOperator.GT.evaluate(5, 6)
-
-    def test_ge(self):
-        assert ComparisonOperator.GE.evaluate(6, 5)
-        assert ComparisonOperator.GE.evaluate(5, 5)
-        assert not ComparisonOperator.GE.evaluate(5, 6)
-
-    def test_none_returns_false(self):
-        assert not ComparisonOperator.EQ.evaluate(None, 5)
-        assert not ComparisonOperator.EQ.evaluate(5, None)
+    @pytest.mark.parametrize(
+        "op,left,right",
+        [
+            (ComparisonOperator.EQ, None, 5),
+            (ComparisonOperator.EQ, 5, None),
+            (ComparisonOperator.EQ, None, None),
+            (ComparisonOperator.LT, None, 5),
+            (ComparisonOperator.GT, 5, None),
+        ],
+    )
+    def test_none_returns_false(self, op, left, right):
+        """Any comparison involving None should return False."""
+        assert not op.evaluate(left, right)
 
 
 class TestParseConditionSimple:
@@ -122,28 +155,45 @@ class TestParseConditionSimple:
 class TestParseConditionBoolean:
     """Tests for parsing boolean compound expressions."""
 
-    def test_and_operator(self):
-        cond = parse_condition("level >= 10 & level <= 20")
+    @pytest.mark.parametrize(
+        "expr,expected_op",
+        [
+            ("level >= 10 & level <= 20", "AND"),
+            ("level >= 10 && level <= 20", "AND"),  # Double symbol
+            ("level >= 10 AND level <= 20", "AND"),  # Keyword
+            ("level >= 10 and level <= 20", "AND"),  # Lowercase keyword
+        ],
+    )
+    def test_and_operators(self, expr, expected_op):
+        cond = parse_condition(expr)
         assert isinstance(cond, BooleanExpression)
-        assert cond.operator == "AND"
+        assert cond.operator == expected_op
         assert len(cond.operands) == 2
 
-    def test_or_operator(self):
-        cond = parse_condition("level < 10 | level > 90")
+    @pytest.mark.parametrize(
+        "expr,expected_op",
+        [
+            ("level < 10 | level > 90", "OR"),
+            ("level < 10 || level > 90", "OR"),  # Double symbol
+            ("level < 10 OR level > 90", "OR"),  # Keyword
+            ("level < 10 or level > 90", "OR"),  # Lowercase keyword
+        ],
+    )
+    def test_or_operators(self, expr, expected_op):
+        cond = parse_condition(expr)
         assert isinstance(cond, BooleanExpression)
-        assert cond.operator == "OR"
+        assert cond.operator == expected_op
         assert len(cond.operands) == 2
 
-    def test_and_keyword(self):
-        cond = parse_condition("level >= 10 AND level <= 20")
-        assert cond.operator == "AND"
-
-    def test_or_keyword(self):
-        cond = parse_condition("level < 10 OR level > 90")
-        assert cond.operator == "OR"
-
-    def test_not_operator(self):
-        cond = parse_condition("NOT status == true")
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "NOT status == true",
+            "! status == true",
+        ],
+    )
+    def test_not_operators(self, expr):
+        cond = parse_condition(expr)
         assert isinstance(cond, BooleanExpression)
         assert cond.operator == "NOT"
         assert len(cond.operands) == 1
@@ -154,10 +204,19 @@ class TestParseConditionBoolean:
         assert len(cond.operands) == 2
         assert cond.operands[0].operator == "OR"
 
-    def test_complex_nested(self):
-        cond = parse_condition("a > 1 & b > 2 & c > 3")
-        assert cond.operator == "AND"
-        assert len(cond.operands) == 3
+    @pytest.mark.parametrize(
+        "expr,expected_op,expected_operand_count",
+        [
+            ("a > 1 & b > 2 & c > 3", "AND", 3),
+            ("a > 1 | b > 2 | c > 3", "OR", 3),
+            ("a > 1 && b > 2 && c > 3", "AND", 3),
+            ("a > 1 || b > 2 || c > 3", "OR", 3),
+        ],
+    )
+    def test_chained_operators(self, expr, expected_op, expected_operand_count):
+        cond = parse_condition(expr)
+        assert cond.operator == expected_op
+        assert len(cond.operands) == expected_operand_count
 
 
 class TestComparisonEvaluate:
@@ -241,3 +300,57 @@ class TestGetAttributeNames:
     def test_multiple_attributes_complex(self):
         cond = parse_condition("(level < 10 | flow > 5) & status == true")
         assert cond.get_attribute_names() == {"level", "flow", "status"}
+
+
+class TestMultiDotAttributeNames:
+    """Tests for attribute names with multiple dots."""
+
+    @pytest.mark.parametrize(
+        "expr,expected_name",
+        [
+            ("a.b >= 1", "a.b"),
+            ("a.b.c >= 1", "a.b.c"),
+            ("a.b.c.d >= 1", "a.b.c.d"),
+            ("drinking_water.network.level >= 1", "drinking_water.network.level"),
+        ],
+    )
+    def test_multi_dot_attribute_parsing(self, expr, expected_name):
+        cond = parse_condition(expr)
+        assert cond.attribute_name == expected_name
+
+    def test_multi_dot_in_boolean_expression(self):
+        cond = parse_condition("a.b.c >= 10 & x.y.z <= 20")
+        assert cond.get_attribute_names() == {"a.b.c", "x.y.z"}
+
+
+class TestInvalidExpressions:
+    """Tests for invalid expression handling."""
+
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "",  # Empty
+            "level",  # Missing operator and value
+            "level >",  # Missing value
+            "> 5",  # Missing left-hand side
+            "level >> 5",  # Invalid operator
+            "level === 5",  # Invalid operator
+        ],
+    )
+    def test_invalid_expression_raises(self, expr):
+        with pytest.raises(ValueError, match="Invalid condition expression"):
+            parse_condition(expr)
+
+
+class TestClockTimeInConditions:
+    """Tests for clock time expressions in conditions."""
+
+    def test_clock_time_format_in_condition(self):
+        """Clock time with HH:MM format should be parsed correctly."""
+        cond = parse_condition("<clocktime> == 12:30")
+        assert cond.value == 12 * 3600 + 30 * 60
+
+    def test_clock_time_format_hms_in_condition(self):
+        """Clock time with HH:MM:SS format should be parsed correctly."""
+        cond = parse_condition("<clocktime> >= 08:30:00")
+        assert cond.value == 8 * 3600 + 30 * 60

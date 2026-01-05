@@ -161,49 +161,51 @@ class TestPipeStatusEquivalence:
         wntr_results = self._run_wntr_simulation(wntr_network)
 
         # Extract Movici results
-        if result is not None:
-            junctions = result.get("water_network", {}).get("water_junction_entities", {})
-            pipes = result.get("water_network", {}).get("water_pipe_entities", {})
+        assert result is not None, "Movici simulation should return results"
+        junctions = result.get("water_network", {}).get("water_junction_entities", {})
+        pipes = result.get("water_network", {}).get("water_pipe_entities", {})
 
-            if "drinking_water.pressure" in junctions:
-                movici_j1_pressure = junctions["drinking_water.pressure"][0]
-                movici_j2_pressure = junctions["drinking_water.pressure"][1]
+        assert "drinking_water.pressure" in junctions, "Junction results should contain pressure"
+        movici_j1_pressure = junctions["drinking_water.pressure"][0]
+        movici_j2_pressure = junctions["drinking_water.pressure"][1]
 
-                # Compare pressures (allowing for numerical differences)
-                np.testing.assert_allclose(
-                    movici_j1_pressure,
-                    wntr_results["j1_pressure"],
-                    rtol=0.01,
-                    atol=0.5,
-                    err_msg="J1 pressure mismatch",
-                )
-                np.testing.assert_allclose(
-                    movici_j2_pressure,
-                    wntr_results["j2_pressure"],
-                    rtol=0.01,
-                    atol=0.5,
-                    err_msg="J2 pressure mismatch",
-                )
+        # Compare pressures
+        # Note: rtol=0.01 (1%) accounts for minor floating-point differences between
+        # our network construction and WNTR's internal representation
+        np.testing.assert_allclose(
+            movici_j1_pressure,
+            wntr_results["j1_pressure"],
+            rtol=0.01,
+            atol=0.1,
+            err_msg="J1 pressure mismatch",
+        )
+        np.testing.assert_allclose(
+            movici_j2_pressure,
+            wntr_results["j2_pressure"],
+            rtol=0.01,
+            atol=0.1,
+            err_msg="J2 pressure mismatch",
+        )
 
-            if "drinking_water.flow" in pipes:
-                movici_pipe1_flow = pipes["drinking_water.flow"][0]
-                movici_pipe2_flow = pipes["drinking_water.flow"][1]
+        assert "drinking_water.flow" in pipes, "Pipe results should contain flow"
+        movici_pipe1_flow = pipes["drinking_water.flow"][0]
+        movici_pipe2_flow = pipes["drinking_water.flow"][1]
 
-                # Compare flows
-                np.testing.assert_allclose(
-                    movici_pipe1_flow,
-                    wntr_results["pipe1_flow"],
-                    rtol=0.01,
-                    atol=0.0001,
-                    err_msg="PIPE1 flow mismatch",
-                )
-                np.testing.assert_allclose(
-                    movici_pipe2_flow,
-                    wntr_results["pipe2_flow"],
-                    rtol=0.01,
-                    atol=0.0001,
-                    err_msg="PIPE2 flow mismatch",
-                )
+        # Compare flows
+        np.testing.assert_allclose(
+            movici_pipe1_flow,
+            wntr_results["pipe1_flow"],
+            rtol=0.01,
+            atol=0.0001,
+            err_msg="PIPE1 flow mismatch",
+        )
+        np.testing.assert_allclose(
+            movici_pipe2_flow,
+            wntr_results["pipe2_flow"],
+            rtol=0.01,
+            atol=0.0001,
+            err_msg="PIPE2 flow mismatch",
+        )
 
     def test_pipe_closure_matches_wntr(self, create_model_tester, init_data):
         """Test that pipe closure via external update matches WNTR control.
@@ -227,6 +229,14 @@ class TestPipeStatusEquivalence:
         # Initial state - both pipes open
         result_open, _ = tester.update(0, None)
 
+        # Verify initial state has flow in both pipes
+        assert result_open is not None, "Initial simulation should return results"
+        pipes_open = result_open.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipes_open, "Initial results should contain flow"
+        # Both pipes should have positive flow when open
+        assert pipes_open["drinking_water.flow"][0] > 1e-6, "PIPE1 should have flow when open"
+        assert pipes_open["drinking_water.flow"][1] > 1e-6, "PIPE2 should have flow when open"
+
         # Close PIPE2 via external update (simulating Rules Model)
         tester.new_time(3600)
         pipe_close_update = {
@@ -246,21 +256,21 @@ class TestPipeStatusEquivalence:
         wntr_closed_results = self._run_wntr_simulation(wntr_network)
 
         # Extract and compare results
-        if result_closed is not None:
-            pipes = result_closed.get("water_network", {}).get("water_pipe_entities", {})
+        assert result_closed is not None, "Closed pipe simulation should return results"
+        pipes = result_closed.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipes, "Closed pipe results should contain flow"
 
-            if "drinking_water.flow" in pipes:
-                movici_pipe2_flow = pipes["drinking_water.flow"][1]  # PIPE2 index
+        movici_pipe2_flow = pipes["drinking_water.flow"][1]  # PIPE2 index
 
-                # PIPE2 flow should be ~0 when closed
-                assert abs(movici_pipe2_flow) < 0.0001, (
-                    f"Closed pipe should have near-zero flow, got {movici_pipe2_flow}"
-                )
+        # PIPE2 flow should be ~0 when closed (use threshold for numerical residual)
+        assert abs(movici_pipe2_flow) < 1e-6, (
+            f"Closed pipe should have near-zero flow, got {movici_pipe2_flow}"
+        )
 
-                # WNTR closed pipe should also have ~0 flow
-                assert abs(wntr_closed_results["pipe2_flow"]) < 0.0001, (
-                    "WNTR closed pipe should have near-zero flow"
-                )
+        # WNTR closed pipe should also have ~0 flow
+        assert abs(wntr_closed_results["pipe2_flow"]) < 1e-6, (
+            "WNTR closed pipe should have near-zero flow"
+        )
 
 
 class TestBranchedNetworkControl:
@@ -320,23 +330,6 @@ class TestBranchedNetworkControl:
     def init_data(self, branched_network_data):
         return [("water_network", branched_network_data)]
 
-    def _get_flow_by_id(self, pipe_data, pipe_id):
-        """Get flow for a specific pipe ID from result data.
-
-        :param pipe_data: Pipe entity data from result
-        :param pipe_id: ID of the pipe to look up
-        :return: Flow value or None if not found
-        """
-        if "id" not in pipe_data or "drinking_water.flow" not in pipe_data:
-            return None
-        ids = pipe_data["id"]
-        flows = pipe_data["drinking_water.flow"]
-        try:
-            idx = ids.index(pipe_id)
-            return flows[idx]
-        except (ValueError, IndexError):
-            return None
-
     def test_branch_isolation(self, create_model_tester, init_data):
         """Test that closing a branch pipe isolates that branch correctly."""
         config = {
@@ -350,18 +343,33 @@ class TestBranchedNetworkControl:
         tester = create_model_tester(Model, config)
         tester.initialize()
 
+        def get_flow_by_id(pipe_data, pipe_id):
+            """Get flow value for a specific pipe ID from result data."""
+            ids = pipe_data.get("id", [])
+            flows = pipe_data.get("drinking_water.flow", [])
+            for i, eid in enumerate(ids):
+                if eid == pipe_id:
+                    return flows[i]
+            return None
+
         # Initial state - all pipes open
         result_open, _ = tester.update(0, None)
 
-        # Store initial flows by ID
-        initial_flows = {}
-        if result_open is not None:
-            pipe_data = result_open.get("water_network", {}).get("water_pipe_entities", {})
-            initial_flows = {
-                "pipe1": self._get_flow_by_id(pipe_data, 101),
-                "pipe2": self._get_flow_by_id(pipe_data, 102),
-                "pipe3": self._get_flow_by_id(pipe_data, 103),
-            }
+        # Verify initial state
+        assert result_open is not None, "Initial simulation should return results"
+        pipe_data_open = result_open.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipe_data_open, "Results should contain flow data"
+
+        # Look up flows by ID (results only contain changed values)
+        initial_pipe1_flow = get_flow_by_id(pipe_data_open, 101)
+        initial_pipe3_flow = get_flow_by_id(pipe_data_open, 103)
+
+        assert initial_pipe1_flow is not None, "PIPE1 should be in initial results"
+        assert initial_pipe3_flow is not None, "PIPE3 should be in initial results"
+
+        # All pipes should have flow when open
+        assert initial_pipe1_flow > 1e-6, "PIPE1 should have flow when all pipes open"
+        assert initial_pipe3_flow > 1e-6, "PIPE3 should have flow when open"
 
         # Close PIPE3 (to J3)
         tester.new_time(3600)
@@ -375,28 +383,30 @@ class TestBranchedNetworkControl:
         }
         result_closed, _ = tester.update(3600, pipe_close_update)
 
-        # Verify PIPE3 flow is zero and flow is redistributed
-        if result_closed is not None:
-            pipe_data = result_closed.get("water_network", {}).get("water_pipe_entities", {})
-            if "drinking_water.flow" in pipe_data:
-                pipe3_flow = self._get_flow_by_id(pipe_data, 103)
+        # Verify closed state
+        assert result_closed is not None, "Closed pipe simulation should return results"
+        pipe_data_closed = result_closed.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipe_data_closed, "Closed results should contain flow"
 
-                if pipe3_flow is not None:
-                    # PIPE3 should have zero flow after closing
-                    assert abs(pipe3_flow) < 0.0001, (
-                        f"Closed pipe should have zero flow, got {pipe3_flow}"
-                    )
+        # Look up flows by ID
+        closed_pipe1_flow = get_flow_by_id(pipe_data_closed, 101)
+        closed_pipe3_flow = get_flow_by_id(pipe_data_closed, 103)
 
-                # PIPE1 should still have flow (serving J2 through PIPE2)
-                pipe1_flow = self._get_flow_by_id(pipe_data, 101)
-                if pipe1_flow is not None:
-                    assert pipe1_flow > 0, "PIPE1 should still have flow"
+        # PIPE3 should have zero flow after closing (use 1e-6 for numerical residual)
+        assert closed_pipe3_flow is not None, "PIPE3 should be in closed results"
+        assert abs(closed_pipe3_flow) < 1e-6, (
+            f"Closed pipe should have zero flow, got {closed_pipe3_flow}"
+        )
 
-                    # PIPE1 flow should be less than before (no longer serving J3)
-                    if initial_flows.get("pipe1") is not None:
-                        assert pipe1_flow < initial_flows["pipe1"], (
-                            "PIPE1 flow should decrease after closing PIPE3"
-                        )
+        # PIPE1 should still have flow (serving J2 through PIPE2)
+        assert closed_pipe1_flow is not None, "PIPE1 should be in closed results"
+        assert closed_pipe1_flow > 1e-6, "PIPE1 should still have flow"
+
+        # PIPE1 flow should be less than before (no longer serving J3)
+        assert closed_pipe1_flow < initial_pipe1_flow, (
+            f"PIPE1 flow should decrease after closing PIPE3: "
+            f"{closed_pipe1_flow} should be < {initial_pipe1_flow}"
+        )
 
 
 class TestWNTRNetworkDirect:
@@ -632,24 +642,6 @@ class TestWNTRTimeBasedControlEquivalence:
 
         return wn
 
-    def _get_value_by_id(self, entity_data, attr_name, entity_id):
-        """Get attribute value for a specific entity ID.
-
-        :param entity_data: Entity data dict from result
-        :param attr_name: Attribute name to look up
-        :param entity_id: ID of the entity
-        :return: Value or None
-        """
-        if "id" not in entity_data or attr_name not in entity_data:
-            return None
-        ids = entity_data["id"]
-        values = entity_data[attr_name]
-        try:
-            idx = ids.index(entity_id)
-            return values[idx]
-        except (ValueError, IndexError):
-            return None
-
     def test_time_control_close_pipe_at_1h(self, create_model_tester, init_data):
         """Test time-based pipe closure: close PIPE2 at t=3600s (1 hour).
 
@@ -692,16 +684,15 @@ class TestWNTRTimeBasedControlEquivalence:
         tester = create_model_tester(Model, config)
         tester.initialize()
 
-        movici_flows = {}
-
         # t=0: Initial state (both pipes open)
-        result, _ = tester.update(0, None)
-        if result:
-            pipes = result.get("water_network", {}).get("water_pipe_entities", {})
-            movici_flows[0] = {
-                "pipe1": self._get_value_by_id(pipes, "drinking_water.flow", 101),
-                "pipe2": self._get_value_by_id(pipes, "drinking_water.flow", 102),
-            }
+        result_t0, _ = tester.update(0, None)
+        assert result_t0 is not None, "t=0 simulation should return results"
+        pipes_t0 = result_t0.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipes_t0, "t=0 results should contain flow"
+
+        # Pipes ordered by id: [101, 102] -> indices [0, 1]
+        movici_pipe1_t0 = pipes_t0["drinking_water.flow"][0]
+        movici_pipe2_t0 = pipes_t0["drinking_water.flow"][1]
 
         # t=3600: Close PIPE2 (simulating Rules Model action)
         tester.new_time(3600)
@@ -713,51 +704,51 @@ class TestWNTRTimeBasedControlEquivalence:
                 }
             }
         }
-        result, _ = tester.update(3600, pipe_close_update)
-        if result:
-            pipes = result.get("water_network", {}).get("water_pipe_entities", {})
-            movici_flows[3600] = {
-                "pipe1": self._get_value_by_id(pipes, "drinking_water.flow", 101),
-                "pipe2": self._get_value_by_id(pipes, "drinking_water.flow", 102),
-            }
+        result_t3600, _ = tester.update(3600, pipe_close_update)
+        assert result_t3600 is not None, "t=3600 simulation should return results"
+        pipes_t3600 = result_t3600.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipes_t3600, "t=3600 results should contain flow"
+
+        movici_pipe1_t3600 = pipes_t3600["drinking_water.flow"][0]
+        movici_pipe2_t3600 = pipes_t3600["drinking_water.flow"][1]
 
         # --- Compare results ---
         # At t=0: Both systems should have flow in both pipes
-        if 0 in wntr_flows and 0 in movici_flows:
-            np.testing.assert_allclose(
-                movici_flows[0]["pipe1"],
-                wntr_flows[0]["pipe1"],
-                rtol=0.01,
-                atol=0.0001,
-                err_msg="PIPE1 flow mismatch at t=0",
-            )
-            np.testing.assert_allclose(
-                movici_flows[0]["pipe2"],
-                wntr_flows[0]["pipe2"],
-                rtol=0.01,
-                atol=0.0001,
-                err_msg="PIPE2 flow mismatch at t=0",
-            )
+        assert 0 in wntr_flows, "WNTR should have results at t=0"
+        np.testing.assert_allclose(
+            movici_pipe1_t0,
+            wntr_flows[0]["pipe1"],
+            rtol=0.01,
+            atol=1e-6,
+            err_msg="PIPE1 flow mismatch at t=0",
+        )
+        np.testing.assert_allclose(
+            movici_pipe2_t0,
+            wntr_flows[0]["pipe2"],
+            rtol=0.01,
+            atol=1e-6,
+            err_msg="PIPE2 flow mismatch at t=0",
+        )
 
         # At t=3600: PIPE2 should be closed in both
-        if 3600 in wntr_flows and 3600 in movici_flows:
-            # PIPE2 should have zero flow after closure
-            assert abs(wntr_flows[3600]["pipe2"]) < 0.0001, (
-                f"WNTR PIPE2 should be closed, got flow={wntr_flows[3600]['pipe2']}"
-            )
-            if movici_flows[3600]["pipe2"] is not None:
-                assert abs(movici_flows[3600]["pipe2"]) < 0.0001, (
-                    f"Movici PIPE2 should be closed, got flow={movici_flows[3600]['pipe2']}"
-                )
+        assert 3600 in wntr_flows, "WNTR should have results at t=3600"
 
-            # PIPE1 should still have flow (reduced)
-            np.testing.assert_allclose(
-                movici_flows[3600]["pipe1"],
-                wntr_flows[3600]["pipe1"],
-                rtol=0.01,
-                atol=0.0001,
-                err_msg="PIPE1 flow mismatch at t=3600 (after closure)",
-            )
+        # PIPE2 should have zero flow after closure (use 1e-6 for numerical residual)
+        assert abs(wntr_flows[3600]["pipe2"]) < 1e-6, (
+            f"WNTR PIPE2 should be closed, got flow={wntr_flows[3600]['pipe2']}"
+        )
+        assert abs(movici_pipe2_t3600) < 1e-6, (
+            f"Movici PIPE2 should be closed, got flow={movici_pipe2_t3600}"
+        )
+
+        # PIPE1 should still have flow (reduced)
+        np.testing.assert_allclose(
+            movici_pipe1_t3600,
+            wntr_flows[3600]["pipe1"],
+            rtol=0.01,
+            atol=1e-6,
+            err_msg="PIPE1 flow mismatch at t=3600 (after closure)",
+        )
 
     def test_time_control_reopen_pipe(self, create_model_tester, init_data):
         """Test time-based pipe open/close cycle.
@@ -832,13 +823,21 @@ class TestWNTRTimeBasedControlEquivalence:
         result2, _ = tester.update(7200, open_update)
 
         # --- Compare key results ---
-        # At t=0: PIPE2 open
-        wntr_pipe2_t0 = float(wntr_results.link["flowrate"].loc[0, "l102"])
-        assert wntr_pipe2_t0 > 0, "WNTR PIPE2 should be open at t=0"
+        # Define threshold for distinguishing open (flowing) vs closed (zero flow)
+        # Using 1e-6 as threshold since closed pipes may have tiny numerical residual
+        FLOW_THRESHOLD = 1e-6
 
-        # At t=3600: PIPE2 closed
+        # At t=0: PIPE2 open - should have significant flow (well above threshold)
+        wntr_pipe2_t0 = float(wntr_results.link["flowrate"].loc[0, "l102"])
+        assert wntr_pipe2_t0 > FLOW_THRESHOLD, (
+            f"WNTR PIPE2 should have flow when open, got {wntr_pipe2_t0}"
+        )
+
+        # At t=3600: PIPE2 closed - flow should be below threshold
         wntr_pipe2_t3600 = float(wntr_results.link["flowrate"].loc[3600, "l102"])
-        assert abs(wntr_pipe2_t3600) < 0.0001, "WNTR PIPE2 should be closed at t=3600"
+        assert abs(wntr_pipe2_t3600) < FLOW_THRESHOLD, (
+            f"WNTR PIPE2 should be closed at t=3600, got {wntr_pipe2_t3600}"
+        )
 
         # At t=7200: PIPE2 reopened (should match t=0 approximately)
         wntr_pipe2_t7200 = float(wntr_results.link["flowrate"].loc[7200, "l102"])
@@ -846,22 +845,24 @@ class TestWNTRTimeBasedControlEquivalence:
             wntr_pipe2_t7200,
             wntr_pipe2_t0,
             rtol=0.01,
-            atol=0.0001,
+            atol=1e-6,
             err_msg="WNTR PIPE2 flow should return to original after reopening",
         )
 
         # Verify Movici matches at t=7200 (reopened)
-        if result2:
-            pipes = result2.get("water_network", {}).get("water_pipe_entities", {})
-            movici_pipe2_t7200 = self._get_value_by_id(pipes, "drinking_water.flow", 102)
-            if movici_pipe2_t7200 is not None:
-                np.testing.assert_allclose(
-                    movici_pipe2_t7200,
-                    wntr_pipe2_t7200,
-                    rtol=0.01,
-                    atol=0.0001,
-                    err_msg="Movici PIPE2 flow should match WNTR after reopening",
-                )
+        assert result2 is not None, "Reopened pipe simulation should return results"
+        pipes = result2.get("water_network", {}).get("water_pipe_entities", {})
+        assert "drinking_water.flow" in pipes, "Reopened results should contain flow"
+
+        # Find PIPE2 (id=102) in results - pipes ordered by id [101, 102]
+        movici_pipe2_t7200 = pipes["drinking_water.flow"][1]
+        np.testing.assert_allclose(
+            movici_pipe2_t7200,
+            wntr_pipe2_t7200,
+            rtol=0.01,
+            atol=1e-6,
+            err_msg="Movici PIPE2 flow should match WNTR after reopening",
+        )
 
 
 class TestWNTRConditionalControlEquivalence:
@@ -937,10 +938,6 @@ class TestWNTRConditionalControlEquivalence:
                 },
             },
         }
-
-    @pytest.fixture
-    def init_data(self, tank_network_data):
-        return [("water_network", tank_network_data)]
 
     def test_conditional_control_concept(self):
         """Demonstrate WNTR conditional control for documentation.
@@ -1038,10 +1035,11 @@ class TestWNTRConditionalControlEquivalence:
         }
 
     @pytest.fixture
-    def init_data_pressure(self, simple_network_for_pressure):
+    def init_data(self, simple_network_for_pressure):
+        """Override init_data fixture with pressure test network."""
         return [("water_network", simple_network_for_pressure)]
 
-    def test_pressure_threshold_control_equivalence(self, create_model_tester, init_data_pressure):
+    def test_pressure_threshold_control_equivalence(self, create_model_tester, init_data):
         """Test pressure-based control equivalence.
 
         This simulates what the Rules Model would do when it has a rule like:
@@ -1057,33 +1055,18 @@ class TestWNTRConditionalControlEquivalence:
             "simulation_duration": 3600,
         }
 
-        # Use the fixture by overriding init_data in the tester
-        import json
-        import tempfile
-        from pathlib import Path
-
-        from movici_simulation_core.testing.model_tester import ModelTester
-
-        tmp_dir = Path(tempfile.mkdtemp())
-        for name, data in init_data_pressure:
-            tmp_dir.joinpath(f"{name}.json").write_text(json.dumps(data))
-
-        model = Model(config)
-        tester = ModelTester(model, tmp_dir=tmp_dir)
+        tester = create_model_tester(Model, config)
         tester.initialize()
 
         # Get initial pressure at J2
         result, _ = tester.update(0, None)
 
-        initial_j2_pressure = None
-        if result:
-            junctions = result.get("water_network", {}).get("water_junction_entities", {})
-            if "id" in junctions and "drinking_water.pressure" in junctions:
-                try:
-                    idx = junctions["id"].index(3)  # J2
-                    initial_j2_pressure = junctions["drinking_water.pressure"][idx]
-                except (ValueError, IndexError):
-                    pass
+        assert result is not None, "Initial simulation should return results"
+        junctions = result.get("water_network", {}).get("water_junction_entities", {})
+        assert "drinking_water.pressure" in junctions, "Results should contain pressure"
+
+        # J2 has id=3, junctions are ordered by id [2, 3] -> indices [0, 1]
+        initial_j2_pressure = junctions["drinking_water.pressure"][1]
 
         # Simulate a Rules Model action: if we detect low pressure, close a pipe
         # Here we just verify the mechanism works
@@ -1094,26 +1077,17 @@ class TestWNTRConditionalControlEquivalence:
         result_closed, _ = tester.update(3600, close_update)
 
         # After closing PIPE2, J2 becomes isolated and pressure drops
-        final_j2_pressure = None
-        if result_closed:
-            junctions = result_closed.get("water_network", {}).get("water_junction_entities", {})
-            if "id" in junctions and "drinking_water.pressure" in junctions:
-                try:
-                    idx = junctions["id"].index(3)  # J2
-                    final_j2_pressure = junctions["drinking_water.pressure"][idx]
-                except (ValueError, IndexError):
-                    pass
+        assert result_closed is not None, "Closed pipe simulation should return results"
+        junctions_closed = result_closed.get("water_network", {}).get(
+            "water_junction_entities", {}
+        )
+        assert "drinking_water.pressure" in junctions_closed, "Should contain pressure"
 
-        # Verify the control action had an effect
-        if initial_j2_pressure is not None and final_j2_pressure is not None:
-            # After pipe closure, J2 is isolated - pressure should be affected
-            # (In this simple case, it might go to 0 or become meaningless)
-            assert initial_j2_pressure != final_j2_pressure or final_j2_pressure == 0, (
-                "Closing pipe should affect downstream junction pressure"
-            )
+        final_j2_pressure = junctions_closed["drinking_water.pressure"][1]
 
-        # Cleanup
-        tester.close()
-        import shutil
-
-        shutil.rmtree(tmp_dir)
+        # After pipe closure, J2 is isolated - pressure should be affected
+        # (In this simple case, it might go to 0 or become meaningless)
+        assert initial_j2_pressure != final_j2_pressure or final_j2_pressure == 0, (
+            f"Closing pipe should affect downstream junction pressure: "
+            f"initial={initial_j2_pressure}, final={final_j2_pressure}"
+        )

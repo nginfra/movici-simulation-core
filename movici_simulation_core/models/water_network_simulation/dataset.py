@@ -19,6 +19,7 @@ from .attributes import (
     DrinkingWater_Demand,
     DrinkingWater_DemandFactor,
     DrinkingWater_Flow,
+    DrinkingWater_FlowRateMagnitude,
     DrinkingWater_Head,
     DrinkingWater_HeadCurve,
     DrinkingWater_HeadFactor,
@@ -153,6 +154,7 @@ class WaterReservoirEntity(PointEntity):
     # PUB attributes
     head = field(DrinkingWater_Head, flags=PUB)
     flow = field(DrinkingWater_Flow, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
 
 
 class WaterPipeEntity(LinkEntity):
@@ -188,6 +190,7 @@ class WaterPipeEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
     velocity = field(DrinkingWater_Velocity, flags=PUB)
     headloss = field(DrinkingWater_Headloss, flags=PUB)
 
@@ -223,6 +226,7 @@ class WaterPumpEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
 
 
 class WaterValveEntity(LinkEntity):
@@ -262,3 +266,4 @@ class WaterValveEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)

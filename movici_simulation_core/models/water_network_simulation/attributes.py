@@ -11,19 +11,17 @@ Attribute naming follows the documentation specification:
 
 from __future__ import annotations
 
+from movici_simulation_core.attributes import Geometry_Z, Shape_Length
 from movici_simulation_core.core import DataType
 from movici_simulation_core.core.schema import AttributeSpec, attribute_plugin_from_dict
 
-# =============================================================================
-# Geometry attributes
-# =============================================================================
-Geometry_Z = AttributeSpec("geometry.z", data_type=DataType(float))
+# Re-export for use by dataset.py and model.py
+__all__ = ["Geometry_Z", "Shape_Length"]
 
 # =============================================================================
 # Shape attributes
 # =============================================================================
 Shape_Diameter = AttributeSpec("shape.diameter", data_type=DataType(float))
-Shape_Length = AttributeSpec("shape.length", data_type=DataType(float))
 Shape_VolumeCurve = AttributeSpec("shape.volume_curve", data_type=DataType(float, (2,), csr=True))
 
 # =============================================================================
@@ -67,6 +65,9 @@ DrinkingWater_CheckValve = AttributeSpec("drinking_water.check_valve", data_type
 # Drinking water attributes - Link outputs
 # =============================================================================
 DrinkingWater_Flow = AttributeSpec("drinking_water.flow", data_type=DataType(float))
+DrinkingWater_FlowRateMagnitude = AttributeSpec(
+    "drinking_water.flow_rate.magnitude", data_type=DataType(float)
+)
 DrinkingWater_Velocity = AttributeSpec("drinking_water.velocity", data_type=DataType(float))
 DrinkingWater_Headloss = AttributeSpec("drinking_water.headloss", data_type=DataType(float))
 

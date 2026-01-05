@@ -38,6 +38,7 @@ from .attributes import (
     DrinkingWater_Demand,
     DrinkingWater_DemandFactor,
     DrinkingWater_Flow,
+    DrinkingWater_FlowRateMagnitude,
     DrinkingWater_Head,
     DrinkingWater_HeadCurve,
     DrinkingWater_HeadFactor,
@@ -136,6 +137,7 @@ class Model(TrackedModel, name="water_network_simulation"):
             DrinkingWater_CheckValve,
             # Link outputs
             DrinkingWater_Flow,
+            DrinkingWater_FlowRateMagnitude,
             DrinkingWater_Velocity,
             DrinkingWater_Headloss,
             # Pump attributes
@@ -681,7 +683,9 @@ class Model(TrackedModel, name="water_network_simulation"):
 
             if reservoir_indices:
                 self.reservoirs.head.array[reservoir_indices] = np.array(heads)
-                self.reservoirs.flow.array[reservoir_indices] = np.array(flows)
+                flows_array = np.array(flows)
+                self.reservoirs.flow.array[reservoir_indices] = flows_array
+                self.reservoirs.flow_rate_magnitude.array[reservoir_indices] = np.abs(flows_array)
 
         # Publish pipe results
         if self.pipes:
@@ -701,7 +705,9 @@ class Model(TrackedModel, name="water_network_simulation"):
                         headlosses.append(results.link_headlosses[link_idx])
 
             if pipe_indices:
-                self.pipes.flow.array[pipe_indices] = np.array(flows)
+                flows_array = np.array(flows)
+                self.pipes.flow.array[pipe_indices] = flows_array
+                self.pipes.flow_rate_magnitude.array[pipe_indices] = np.abs(flows_array)
                 self.pipes.velocity.array[pipe_indices] = np.array(velocities)
                 self.pipes.headloss.array[pipe_indices] = np.array(headlosses)
 
@@ -719,7 +725,9 @@ class Model(TrackedModel, name="water_network_simulation"):
                         flows.append(results.link_flows[link_idx])
 
             if pump_indices:
-                self.pumps.flow.array[pump_indices] = np.array(flows)
+                flows_array = np.array(flows)
+                self.pumps.flow.array[pump_indices] = flows_array
+                self.pumps.flow_rate_magnitude.array[pump_indices] = np.abs(flows_array)
 
         # Publish valve results
         if self.valves:
@@ -735,7 +743,9 @@ class Model(TrackedModel, name="water_network_simulation"):
                         flows.append(results.link_flows[link_idx])
 
             if valve_indices:
-                self.valves.flow.array[valve_indices] = np.array(flows)
+                flows_array = np.array(flows)
+                self.valves.flow.array[valve_indices] = flows_array
+                self.valves.flow_rate_magnitude.array[valve_indices] = np.abs(flows_array)
 
     def shutdown(self, state: TrackedState):
         """Clean up resources.

@@ -33,49 +33,13 @@
     }
   },
   "definitions": {
-    "condition": {
-      "oneOf": [
-        {
-          "type": "string",
-          "description": "Expression like '<simtime> == 34h' or 'level >= 23'"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "and": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/condition"
-              },
-              "description": "All conditions must be true"
-            }
-          },
-          "required": ["and"],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "properties": {
-            "or": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/condition"
-              },
-              "description": "At least one condition must be true"
-            }
-          },
-          "required": ["or"],
-          "additionalProperties": false
-        }
-      ]
-    },
     "rule": {
       "type": "object",
       "required": ["if", "output", "value"],
       "properties": {
         "if": {
-          "$ref": "#/definitions/condition",
-          "description": "Condition that triggers the rule"
+          "type": "string",
+          "description": "Condition expression that triggers the rule (e.g. '<simtime> >= 1h', 'level > 10 & status == true')"
         },
         "from_dataset": {
           "type": "string",
