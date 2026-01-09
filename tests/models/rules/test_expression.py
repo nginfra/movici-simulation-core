@@ -35,6 +35,19 @@ class TestParseDuration:
         with pytest.raises(ValueError):
             parse_duration("invalid")
 
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "1h garbage",  # trailing garbage
+            "1h2",  # trailing number without unit
+            "abc1h",  # leading garbage
+            "1h 30m",  # space between units
+        ],
+    )
+    def test_invalid_duration_with_extra_chars_raises(self, expr):
+        with pytest.raises(ValueError, match="contains invalid characters"):
+            parse_duration(expr)
+
 
 class TestParseClockTime:
     """Tests for clock time parsing."""
@@ -47,6 +60,7 @@ class TestParseClockTime:
             ("23:59", 23 * 3600 + 59 * 60),
             ("00:00", 0),
             ("12:30:45", 12 * 3600 + 30 * 60 + 45),
+            ("9:45", 9 * 3600 + 45 * 60),  # single-digit hour
         ],
     )
     def test_parse_clock_time(self, expr, expected):
@@ -56,6 +70,17 @@ class TestParseClockTime:
         with pytest.raises(ValueError):
             parse_clock_time("invalid")
 
+    @pytest.mark.parametrize(
+        "expr",
+        [
+            "24:00",  # hour 24 is invalid
+            "12:60",  # minute 60 is invalid
+            "00:00:60",  # second 60 is invalid
+        ],
+    )
+    def test_invalid_clock_time_values_raise(self, expr):
+        with pytest.raises(ValueError, match="Invalid clock time"):
+            parse_clock_time(expr)
 
 class TestComparisonOperator:
     """Tests for comparison operator evaluation."""
@@ -122,10 +147,6 @@ class TestParseConditionSimple:
         assert cond.expr_type == ExpressionType.CLOCKTIME
         assert cond.value == 12 * 3600 + 30 * 60
 
-    def test_clocktime_keyword(self):
-        cond = parse_condition("clocktime >= 23h")
-        assert cond.expr_type == ExpressionType.CLOCKTIME
-
     def test_attribute_comparison(self):
         cond = parse_condition("drinking_water.level >= 23")
         assert isinstance(cond, Comparison)
@@ -158,7 +179,6 @@ class TestParseConditionBoolean:
     @pytest.mark.parametrize(
         "expr,expected_op",
         [
-            ("level >= 10 & level <= 20", "AND"),
             ("level >= 10 && level <= 20", "AND"),  # Double symbol
             ("level >= 10 AND level <= 20", "AND"),  # Keyword
             ("level >= 10 and level <= 20", "AND"),  # Lowercase keyword
@@ -173,7 +193,6 @@ class TestParseConditionBoolean:
     @pytest.mark.parametrize(
         "expr,expected_op",
         [
-            ("level < 10 | level > 90", "OR"),
             ("level < 10 || level > 90", "OR"),  # Double symbol
             ("level < 10 OR level > 90", "OR"),  # Keyword
             ("level < 10 or level > 90", "OR"),  # Lowercase keyword
@@ -199,16 +218,29 @@ class TestParseConditionBoolean:
         assert len(cond.operands) == 1
 
     def test_parentheses(self):
-        cond = parse_condition("(level < 10 | level > 90) & status == true")
+        cond = parse_condition("(level < 10 || level > 90) && status == true")
         assert cond.operator == "AND"
         assert len(cond.operands) == 2
         assert cond.operands[0].operator == "OR"
 
+    def test_parentheses_and_inside_or(self):
+        """Test (a && b) || (c && d) pattern for correct precedence."""
+        cond = parse_condition("(a > 1 && b > 2) || (c > 3 && d > 4)")
+        assert cond.operator == "OR"
+        assert len(cond.operands) == 2
+        assert cond.operands[0].operator == "AND"
+        assert cond.operands[1].operator == "AND"
+
+    def test_parentheses_or_inside_and(self):
+        """Test a && (b || c) && d pattern for correct precedence."""
+        cond = parse_condition("a > 1 && (b > 2 || c > 3) && d > 4")
+        assert cond.operator == "AND"
+        assert len(cond.operands) == 3
+        assert cond.operands[1].operator == "OR"
+
     @pytest.mark.parametrize(
         "expr,expected_op,expected_operand_count",
         [
-            ("a > 1 & b > 2 & c > 3", "AND", 3),
-            ("a > 1 | b > 2 | c > 3", "OR", 3),
             ("a > 1 && b > 2 && c > 3", "AND", 3),
             ("a > 1 || b > 2 || c > 3", "OR", 3),
         ],
@@ -249,20 +281,20 @@ class TestBooleanExpressionEvaluate:
     """Tests for evaluating BooleanExpression objects."""
 
     def test_evaluate_and_true(self):
-        cond = parse_condition("level >= 10 & level <= 20")
+        cond = parse_condition("level >= 10 && level <= 20")
         assert cond.evaluate(attributes={"level": 15})
 
     def test_evaluate_and_false(self):
-        cond = parse_condition("level >= 10 & level <= 20")
+        cond = parse_condition("level >= 10 && level <= 20")
         assert not cond.evaluate(attributes={"level": 25})
 
     def test_evaluate_or_true(self):
-        cond = parse_condition("level < 10 | level > 90")
+        cond = parse_condition("level < 10 || level > 90")
         assert cond.evaluate(attributes={"level": 5})
         assert cond.evaluate(attributes={"level": 95})
 
     def test_evaluate_or_false(self):
-        cond = parse_condition("level < 10 | level > 90")
+        cond = parse_condition("level < 10 || level > 90")
         assert not cond.evaluate(attributes={"level": 50})
 
     def test_evaluate_not(self):
@@ -271,11 +303,26 @@ class TestBooleanExpressionEvaluate:
         assert not cond.evaluate(attributes={"status": True})
 
     def test_evaluate_complex(self):
-        cond = parse_condition("(level < 10 | level > 90) & status == true")
+        cond = parse_condition("(level < 10 || level > 90) && status == true")
         assert cond.evaluate(attributes={"level": 5, "status": True})
         assert cond.evaluate(attributes={"level": 95, "status": True})
         assert not cond.evaluate(attributes={"level": 50, "status": True})
         assert not cond.evaluate(attributes={"level": 5, "status": False})
+
+    def test_evaluate_with_float_values(self):
+        """Test evaluation with floating point values."""
+        cond = parse_condition("level > 23.5 && level < 24.5")
+        assert cond.evaluate(attributes={"level": 24.0})
+        assert cond.evaluate(attributes={"level": 23.7})
+        assert not cond.evaluate(attributes={"level": 23.5})  # not > 23.5
+        assert not cond.evaluate(attributes={"level": 24.5})  # not < 24.5
+
+    def test_evaluate_with_boolean_values(self):
+        """Test evaluation with boolean attribute values."""
+        cond = parse_condition("active == true && enabled == false")
+        assert cond.evaluate(attributes={"active": True, "enabled": False})
+        assert not cond.evaluate(attributes={"active": True, "enabled": True})
+        assert not cond.evaluate(attributes={"active": False, "enabled": False})
 
 
 class TestGetAttributeNames:
@@ -294,11 +341,11 @@ class TestGetAttributeNames:
         assert cond.get_attribute_names() == {"drinking_water.level"}
 
     def test_multiple_attributes_and(self):
-        cond = parse_condition("level >= 10 & diameter > 5")
+        cond = parse_condition("level >= 10 && diameter > 5")
         assert cond.get_attribute_names() == {"level", "diameter"}
 
     def test_multiple_attributes_complex(self):
-        cond = parse_condition("(level < 10 | flow > 5) & status == true")
+        cond = parse_condition("(level < 10 || flow > 5) && status == true")
         assert cond.get_attribute_names() == {"level", "flow", "status"}
 
 
@@ -319,7 +366,7 @@ class TestMultiDotAttributeNames:
         assert cond.attribute_name == expected_name
 
     def test_multi_dot_in_boolean_expression(self):
-        cond = parse_condition("a.b.c >= 10 & x.y.z <= 20")
+        cond = parse_condition("a.b.c >= 10 && x.y.z <= 20")
         assert cond.get_attribute_names() == {"a.b.c", "x.y.z"}
 
 
@@ -335,6 +382,11 @@ class TestInvalidExpressions:
             "> 5",  # Missing left-hand side
             "level >> 5",  # Invalid operator
             "level === 5",  # Invalid operator
+            "and",  # Just an operator
+            "and a",  # Operator followed by incomplete expression
+            "a > 1 and and b > 2",  # Double operator
+            "a > 1 or and b > 2",  # Mixed double operator
+            "a > 1 and",  # Trailing operator
         ],
     )
     def test_invalid_expression_raises(self, expr):

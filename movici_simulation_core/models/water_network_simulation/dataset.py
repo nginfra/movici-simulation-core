@@ -9,6 +9,7 @@ Entity groups follow the documentation specification with:
 - ``type`` attribute for pump/valve type enums
 """
 
+from movici_simulation_core.attributes import Geometry_Z, Shape_Length
 from movici_simulation_core.core.attribute import INIT, OPT, PUB, field
 from movici_simulation_core.models.common.entity_groups import LinkEntity, PointEntity
 
@@ -19,7 +20,7 @@ from .attributes import (
     DrinkingWater_Demand,
     DrinkingWater_DemandFactor,
     DrinkingWater_Flow,
-    DrinkingWater_FlowRateMagnitude,
+    DrinkingWater_FlowRate_Magnitude,
     DrinkingWater_Head,
     DrinkingWater_HeadCurve,
     DrinkingWater_HeadFactor,
@@ -39,10 +40,8 @@ from .attributes import (
     DrinkingWater_ValveLossCoefficient,
     DrinkingWater_ValvePressure,
     DrinkingWater_Velocity,
-    Geometry_Z,
     Operational_Status,
     Shape_Diameter,
-    Shape_Length,
     Shape_VolumeCurve,
     Type_PumpType,
     Type_ValveType,
@@ -154,7 +153,7 @@ class WaterReservoirEntity(PointEntity):
     # PUB attributes
     head = field(DrinkingWater_Head, flags=PUB)
     flow = field(DrinkingWater_Flow, flags=PUB)
-    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
 
 
 class WaterPipeEntity(LinkEntity):
@@ -190,7 +189,7 @@ class WaterPipeEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
-    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
     velocity = field(DrinkingWater_Velocity, flags=PUB)
     headloss = field(DrinkingWater_Headloss, flags=PUB)
 
@@ -226,7 +225,7 @@ class WaterPumpEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
-    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
 
 
 class WaterValveEntity(LinkEntity):
@@ -266,4 +265,4 @@ class WaterValveEntity(LinkEntity):
 
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
-    flow_rate_magnitude = field(DrinkingWater_FlowRateMagnitude, flags=PUB)
+    flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)

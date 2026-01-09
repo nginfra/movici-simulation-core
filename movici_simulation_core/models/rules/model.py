@@ -81,9 +81,7 @@ def validate_rule_spec(rule_spec: dict, defaults: t.Optional[dict] = None) -> No
     has_to_id = "to_id" in rule_spec
     has_to_ref = "to_reference" in rule_spec
     if not (has_to_id ^ has_to_ref):
-        raise RuleValidationError(
-            "Rule must have exactly one of 'to_id' or 'to_reference'"
-        )
+        raise RuleValidationError("Rule must have exactly one of 'to_id' or 'to_reference'")
 
     # If condition references attributes, must have from_dataset and from entity
     # (This is checked during attribute registration)
@@ -542,9 +540,7 @@ class Model(TrackedModel, name="rules"):
         if rule.to_entity_idx is None:
             # Entity index should have been resolved during setup
             if self.logger:
-                self.logger.warning(
-                    f"Target entity index not resolved for output '{rule.output}'"
-                )
+                self.logger.warning(f"Target entity index not resolved for output '{rule.output}'")
             return
 
         output_data = rule.output_array.array

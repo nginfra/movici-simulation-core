@@ -169,21 +169,18 @@ class TestPipeStatusEquivalence:
         movici_j1_pressure = junctions["drinking_water.pressure"][0]
         movici_j2_pressure = junctions["drinking_water.pressure"][1]
 
-        # Compare pressures
-        # Note: rtol=0.01 (1%) accounts for minor floating-point differences between
-        # our network construction and WNTR's internal representation
+        # Both Movici and reference use WNTR's solver, so results should match
+        # within floating-point precision
         np.testing.assert_allclose(
             movici_j1_pressure,
             wntr_results["j1_pressure"],
-            rtol=0.01,
-            atol=0.1,
+            rtol=1e-6,
             err_msg="J1 pressure mismatch",
         )
         np.testing.assert_allclose(
             movici_j2_pressure,
             wntr_results["j2_pressure"],
-            rtol=0.01,
-            atol=0.1,
+            rtol=1e-6,
             err_msg="J2 pressure mismatch",
         )
 
@@ -191,19 +188,16 @@ class TestPipeStatusEquivalence:
         movici_pipe1_flow = pipes["drinking_water.flow"][0]
         movici_pipe2_flow = pipes["drinking_water.flow"][1]
 
-        # Compare flows
         np.testing.assert_allclose(
             movici_pipe1_flow,
             wntr_results["pipe1_flow"],
-            rtol=0.01,
-            atol=0.0001,
+            rtol=1e-6,
             err_msg="PIPE1 flow mismatch",
         )
         np.testing.assert_allclose(
             movici_pipe2_flow,
             wntr_results["pipe2_flow"],
-            rtol=0.01,
-            atol=0.0001,
+            rtol=1e-6,
             err_msg="PIPE2 flow mismatch",
         )
 
@@ -718,15 +712,13 @@ class TestWNTRTimeBasedControlEquivalence:
         np.testing.assert_allclose(
             movici_pipe1_t0,
             wntr_flows[0]["pipe1"],
-            rtol=0.01,
-            atol=1e-6,
+            rtol=1e-6,
             err_msg="PIPE1 flow mismatch at t=0",
         )
         np.testing.assert_allclose(
             movici_pipe2_t0,
             wntr_flows[0]["pipe2"],
-            rtol=0.01,
-            atol=1e-6,
+            rtol=1e-6,
             err_msg="PIPE2 flow mismatch at t=0",
         )
 
@@ -745,8 +737,7 @@ class TestWNTRTimeBasedControlEquivalence:
         np.testing.assert_allclose(
             movici_pipe1_t3600,
             wntr_flows[3600]["pipe1"],
-            rtol=0.01,
-            atol=1e-6,
+            rtol=1e-6,
             err_msg="PIPE1 flow mismatch at t=3600 (after closure)",
         )
 
@@ -844,8 +835,7 @@ class TestWNTRTimeBasedControlEquivalence:
         np.testing.assert_allclose(
             wntr_pipe2_t7200,
             wntr_pipe2_t0,
-            rtol=0.01,
-            atol=1e-6,
+            rtol=1e-6,
             err_msg="WNTR PIPE2 flow should return to original after reopening",
         )
 
@@ -859,8 +849,7 @@ class TestWNTRTimeBasedControlEquivalence:
         np.testing.assert_allclose(
             movici_pipe2_t7200,
             wntr_pipe2_t7200,
-            rtol=0.01,
-            atol=1e-6,
+            rtol=1e-6,
             err_msg="Movici PIPE2 flow should match WNTR after reopening",
         )
 

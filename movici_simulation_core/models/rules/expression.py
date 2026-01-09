@@ -91,12 +91,17 @@ def parse_duration(expr: str) -> float:
     if not matches:
         raise ValueError(f"Invalid duration expression: {expr!r}")
 
+    # Validate that the entire expression is consumed (no extra characters)
+    reconstructed = "".join(f"{value}{unit}" for value, unit in matches)
+    if reconstructed.lower() != expr.lower():
+        raise ValueError(
+            f"Invalid duration expression: {expr!r} "
+            f"(contains invalid characters or format)"
+        )
+
     total_seconds = 0.0
     for value_str, unit in matches:
-        unit_lower = unit.lower()
-        if unit_lower not in _TIME_UNITS:
-            raise ValueError(f"Unknown time unit '{unit}' in: {expr!r}")
-        total_seconds += int(value_str) * _TIME_UNITS[unit_lower]
+        total_seconds += int(value_str) * _TIME_UNITS[unit.lower()]
 
     return total_seconds
 
@@ -287,9 +292,9 @@ class _BinaryExpr:
             else:
                 # Odd indices are operators
                 op = token.upper() if isinstance(token, str) else token
-                if op in ("&", "&&", "AND"):
+                if op in ("&&", "AND"):
                     operator = "AND"
-                elif op in ("|", "||", "OR"):
+                elif op in ("||", "OR"):
                     operator = "OR"
 
         if len(operands) == 1:
@@ -317,9 +322,9 @@ def _build_grammar() -> pp.ParserElement:
     duration = pp.Combine(pp.OneOrMore(single_duration)).setParseAction(
         lambda t: parse_duration(t[0])
     )
-    # Clock time: HH:MM or HH:MM:SS
+    # Clock time: H:MM, HH:MM, H:MM:SS, or HH:MM:SS (single-digit hour allowed)
     clock_time = pp.Combine(
-        pp.Word(pp.nums, exact=2)
+        pp.Word(pp.nums, min=1, max=2)
         + ":"
         + pp.Word(pp.nums, exact=2)
         + pp.Optional(":" + pp.Word(pp.nums, exact=2))
@@ -337,9 +342,9 @@ def _build_grammar() -> pp.ParserElement:
 
     # Special time variables - simplified patterns
     simtime_var = pp.Literal("<simtime>").setParseAction(lambda: ExpressionType.SIMTIME)
-    clocktime_var = (
-        pp.Literal("<clocktime>") | pp.CaselessKeyword("clocktime")
-    ).setParseAction(lambda: ExpressionType.CLOCKTIME)
+    clocktime_var = pp.Literal("<clocktime>").setParseAction(
+        lambda: ExpressionType.CLOCKTIME
+    )
 
     # Attribute names: support multiple dots (e.g., "a.b.c.d")
     identifier = pp.Word(pp.alphas + "_", pp.alphanums + "_")
@@ -379,8 +384,8 @@ def _build_grammar() -> pp.ParserElement:
 
     # Boolean operators (support both single and double symbols)
     NOT = pp.CaselessKeyword("NOT") | pp.Literal("!")
-    AND = pp.CaselessKeyword("AND") | pp.Literal("&&") | pp.Literal("&")
-    OR = pp.CaselessKeyword("OR") | pp.Literal("||") | pp.Literal("|")
+    AND = pp.CaselessKeyword("AND") | pp.Literal("&&")
+    OR = pp.CaselessKeyword("OR") | pp.Literal("||")
 
     # Build boolean expression with proper operator precedence using infixNotation
     # The second element in each tuple is the operand count:

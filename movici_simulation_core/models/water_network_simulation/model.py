@@ -16,6 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
+from movici_simulation_core.attributes import Geometry_Z, Shape_Length
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema
@@ -38,7 +39,7 @@ from .attributes import (
     DrinkingWater_Demand,
     DrinkingWater_DemandFactor,
     DrinkingWater_Flow,
-    DrinkingWater_FlowRateMagnitude,
+    DrinkingWater_FlowRate_Magnitude,
     DrinkingWater_Head,
     DrinkingWater_HeadCurve,
     DrinkingWater_HeadFactor,
@@ -58,10 +59,8 @@ from .attributes import (
     DrinkingWater_ValveLossCoefficient,
     DrinkingWater_ValvePressure,
     DrinkingWater_Velocity,
-    Geometry_Z,
     Operational_Status,
     Shape_Diameter,
-    Shape_Length,
     Shape_VolumeCurve,
     Type_PumpType,
     Type_ValveType,
@@ -137,7 +136,7 @@ class Model(TrackedModel, name="water_network_simulation"):
             DrinkingWater_CheckValve,
             # Link outputs
             DrinkingWater_Flow,
-            DrinkingWater_FlowRateMagnitude,
+            DrinkingWater_FlowRate_Magnitude,
             DrinkingWater_Velocity,
             DrinkingWater_Headloss,
             # Pump attributes
