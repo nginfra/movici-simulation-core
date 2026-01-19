@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import typing as t
 
+import numpy as np
+
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core import TrackedState
 from movici_simulation_core.core.moment import Moment
@@ -52,7 +54,10 @@ class Model(TrackedModel, name="power_grid_calculation"):
 
         # Entity groups (initialized in setup)
         self.nodes: t.Optional[ds.ElectricalNodeEntity] = None
+        self.virtual_nodes: t.Optional[ds.ElectricalVirtualNodeEntity] = None
         self.lines: t.Optional[ds.ElectricalLineEntity] = None
+        self.cables: t.Optional[ds.ElectricalCableEntity] = None
+        self.links: t.Optional[ds.ElectricalLinkEntity] = None
         self.transformers: t.Optional[ds.ElectricalTransformerEntity] = None
         self.loads: t.Optional[ds.ElectricalLoadEntity] = None
         self.generators: t.Optional[ds.ElectricalGeneratorEntity] = None
@@ -89,27 +94,54 @@ class Model(TrackedModel, name="power_grid_calculation"):
             ds.ElectricalSourceEntity(name="electrical_source_entities"),
         )
 
-        # Register optional entity groups
-        self.lines = state.register_entity_group(
+        # Register optional entity groups based on config
+        # TODO: Add proper config-based entity group registration
+        # For now, entity groups with INIT attributes are only registered if
+        # explicitly enabled, to avoid issues with missing entity types in datasets.
+
+        # Virtual nodes (external grid connection points) - no INIT attributes
+        self.virtual_nodes = state.register_entity_group(
             dataset_name,
-            ds.ElectricalLineEntity(name="electrical_line_entities"),
+            ds.ElectricalVirtualNodeEntity(name="electrical_virtual_node_entities"),
         )
+
+        # Lines - only register if explicitly requested (has INIT attributes)
+        # self.lines = state.register_entity_group(
+        #     dataset_name,
+        #     ds.ElectricalLineEntity(name="electrical_line_entities"),
+        # )
+
+        # Cables (underground lines, treated same as lines)
+        self.cables = state.register_entity_group(
+            dataset_name,
+            ds.ElectricalCableEntity(name="electrical_cable_entities"),
+        )
+
+        # Links (zero-impedance connections, typically from virtual nodes)
+        self.links = state.register_entity_group(
+            dataset_name,
+            ds.ElectricalLinkEntity(name="electrical_link_entities"),
+        )
+
         self.transformers = state.register_entity_group(
             dataset_name,
             ds.ElectricalTransformerEntity(name="electrical_transformer_entities"),
         )
+
         self.loads = state.register_entity_group(
             dataset_name,
             ds.ElectricalLoadEntity(name="electrical_load_entities"),
         )
-        self.generators = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalGeneratorEntity(name="electrical_generator_entities"),
-        )
-        self.shunts = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalShuntEntity(name="electrical_shunt_entities"),
-        )
+
+        # Generators and shunts - only register if explicitly requested (has INIT attributes)
+        # self.generators = state.register_entity_group(
+        #     dataset_name,
+        #     ds.ElectricalGeneratorEntity(name="electrical_generator_entities"),
+        # )
+        # self.shunts = state.register_entity_group(
+        #     dataset_name,
+        #     ds.ElectricalShuntEntity(name="electrical_shunt_entities"),
+        # )
 
         # Register sensor entity groups for state estimation
         if calc_type == CalculationType.STATE_ESTIMATION:
@@ -146,11 +178,22 @@ class Model(TrackedModel, name="power_grid_calculation"):
 
     def _build_network(self):
         """Build the power grid model from entity data."""
+        # Build node collection, merging virtual nodes with regular nodes
         nodes = pgm_util.get_nodes(self.nodes)
+        if self._has_entities(self.virtual_nodes):
+            virtual_nodes = pgm_util.get_nodes(self.virtual_nodes)
+            nodes = pgm_util.merge_node_collections(nodes, virtual_nodes)
 
+        # Build line collection, merging lines, cables, and links
         lines = None
         if self._has_entities(self.lines):
             lines = pgm_util.get_lines(self.lines)
+        if self._has_entities(self.cables):
+            cables = pgm_util.get_lines(self.cables)
+            lines = pgm_util.merge_line_collections(lines, cables)
+        if self._has_entities(self.links):
+            link_lines = pgm_util.get_links_as_lines(self.links)
+            lines = pgm_util.merge_line_collections(lines, link_lines)
 
         transformers = None
         if self._has_entities(self.transformers):
@@ -269,34 +312,79 @@ class Model(TrackedModel, name="power_grid_calculation"):
         :param result: PowerFlowResult with node data.
         """
         node_result = result.nodes
-        # Result IDs are already Movici IDs, use entity index to get array indices
-        indices = self.nodes.get_indices(node_result.ids)
 
-        self.nodes.voltage_pu[indices] = node_result.u_pu
-        self.nodes.voltage_angle[indices] = node_result.u_angle
-        self.nodes.voltage[indices] = node_result.u
-        self.nodes.active_power[indices] = node_result.p
-        self.nodes.reactive_power[indices] = node_result.q
+        # Publish to regular nodes
+        self._publish_to_node_entity(self.nodes, node_result)
+
+        # Publish to virtual nodes
+        if self._has_entities(self.virtual_nodes):
+            self._publish_to_node_entity(self.virtual_nodes, node_result)
+
+    def _publish_to_node_entity(self, entity, node_result):
+        """Publish node results to a specific node entity group.
+
+        :param entity: Node entity group to publish to.
+        :param node_result: NodeResult with calculation data.
+        """
+        # Result IDs are already Movici IDs, use entity index to get array indices
+        # Only publish results for IDs that exist in this entity group
+        mask = np.isin(node_result.ids, entity.index.ids)
+        if not np.any(mask):
+            return
+
+        result_ids = node_result.ids[mask]
+        indices = entity.get_indices(result_ids)
+
+        entity.voltage_pu[indices] = node_result.u_pu[mask]
+        entity.voltage_angle[indices] = node_result.u_angle[mask]
+        entity.voltage[indices] = node_result.u[mask]
+        entity.active_power[indices] = node_result.p[mask]
+        entity.reactive_power[indices] = node_result.q[mask]
 
     def _publish_line_results(self, result):
         """Publish line results to entity group.
 
         :param result: PowerFlowResult with line data.
         """
-        if result.lines is None or self.lines is None:
+        if result.lines is None:
             return
 
         line_result = result.lines
-        # Result IDs are already Movici IDs, use entity index to get array indices
-        indices = self.lines.get_indices(line_result.ids)
 
-        self.lines.current_from[indices] = line_result.i_from
-        self.lines.current_to[indices] = line_result.i_to
-        self.lines.power_from[indices] = line_result.p_from
-        self.lines.power_to[indices] = line_result.p_to
-        self.lines.reactive_power_from[indices] = line_result.q_from
-        self.lines.reactive_power_to[indices] = line_result.q_to
-        self.lines.loading[indices] = line_result.loading
+        # Publish to regular lines
+        if self._has_entities(self.lines):
+            self._publish_to_line_entity(self.lines, line_result)
+
+        # Publish to cables
+        if self._has_entities(self.cables):
+            self._publish_to_line_entity(self.cables, line_result)
+
+        # Publish to links
+        if self._has_entities(self.links):
+            self._publish_to_line_entity(self.links, line_result)
+
+    def _publish_to_line_entity(self, entity, line_result):
+        """Publish line results to a specific line entity group.
+
+        :param entity: Line entity group to publish to.
+        :param line_result: BranchResult with calculation data.
+        """
+        # Result IDs are already Movici IDs, use entity index to get array indices
+        # Only publish results for IDs that exist in this entity group
+        mask = np.isin(line_result.ids, entity.index.ids)
+        if not np.any(mask):
+            return
+
+        result_ids = line_result.ids[mask]
+        indices = entity.get_indices(result_ids)
+
+        entity.current_from[indices] = line_result.i_from[mask]
+        entity.current_to[indices] = line_result.i_to[mask]
+        entity.power_from[indices] = line_result.p_from[mask]
+        entity.power_to[indices] = line_result.p_to[mask]
+        entity.reactive_power_from[indices] = line_result.q_from[mask]
+        entity.reactive_power_to[indices] = line_result.q_to[mask]
+        entity.loading[indices] = line_result.loading[mask]
 
     def _publish_transformer_results(self, result):
         """Publish transformer results to entity group.

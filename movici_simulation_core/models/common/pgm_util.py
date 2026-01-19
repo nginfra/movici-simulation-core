@@ -28,6 +28,7 @@ if t.TYPE_CHECKING:
         ElectricalFaultEntity,
         ElectricalGeneratorEntity,
         ElectricalLineEntity,
+        ElectricalLinkEntity,
         ElectricalLoadEntity,
         ElectricalNodeEntity,
         ElectricalPowerSensorEntity,
@@ -234,4 +235,83 @@ def get_faults(entity: "ElectricalFaultEntity") -> FaultCollection:
         fault_object=entity.fault_object_id.array,
         r_f=get_optional_array(entity.fault_resistance, default=0.0),
         x_f=get_optional_array(entity.fault_reactance, default=0.0),
+    )
+
+
+def get_links_as_lines(entity: "ElectricalLinkEntity") -> LineCollection:
+    """Convert link entities to low-impedance lines.
+
+    Links are zero-impedance connections in Movici, typically connecting
+    virtual nodes to the main network. Since power-grid-model requires
+    non-zero impedance, we use minimal values to approximate zero impedance.
+
+    This is analogous to how virtual_link_entities are handled in
+    traffic assignment - they connect centroids to the network.
+
+    :param entity: Electrical link entity group.
+    :returns: LineCollection with minimal impedance values.
+    """
+    n = len(entity.index.ids)
+    return LineCollection(
+        ids=entity.index.ids,
+        from_node=entity.from_node_id.array,
+        to_node=entity.to_node_id.array,
+        from_status=get_status_array(entity.from_status),
+        to_status=get_status_array(entity.to_status),
+        r1=np.full(n, 1e-6),  # Minimal resistance (Ohm)
+        x1=np.full(n, 1e-6),  # Minimal reactance (Ohm)
+        c1=np.full(n, 1e-12),  # Minimal capacitance (Farad)
+        tan1=np.zeros(n),  # No losses
+        i_n=np.full(n, np.inf),  # No current limit
+    )
+
+
+def merge_node_collections(
+    nodes1: NodeCollection,
+    nodes2: NodeCollection,
+) -> NodeCollection:
+    """Merge two node collections.
+
+    Used to combine regular nodes with virtual nodes into a single
+    collection for power-grid-model.
+
+    :param nodes1: First node collection.
+    :param nodes2: Second node collection.
+    :returns: Combined NodeCollection.
+    """
+    return NodeCollection(
+        ids=np.concatenate([nodes1.ids, nodes2.ids]),
+        u_rated=np.concatenate([nodes1.u_rated, nodes2.u_rated]),
+    )
+
+
+def merge_line_collections(
+    lines1: t.Optional[LineCollection],
+    lines2: t.Optional[LineCollection],
+) -> t.Optional[LineCollection]:
+    """Merge two line collections.
+
+    Used to combine lines, cables, and links into a single collection
+    for power-grid-model. Handles None values gracefully.
+
+    :param lines1: First line collection (may be None).
+    :param lines2: Second line collection (may be None).
+    :returns: Combined LineCollection, or None if both inputs are None.
+    """
+    if lines1 is None:
+        return lines2
+    if lines2 is None:
+        return lines1
+
+    return LineCollection(
+        ids=np.concatenate([lines1.ids, lines2.ids]),
+        from_node=np.concatenate([lines1.from_node, lines2.from_node]),
+        to_node=np.concatenate([lines1.to_node, lines2.to_node]),
+        from_status=np.concatenate([lines1.from_status, lines2.from_status]),
+        to_status=np.concatenate([lines1.to_status, lines2.to_status]),
+        r1=np.concatenate([lines1.r1, lines2.r1]),
+        x1=np.concatenate([lines1.x1, lines2.x1]),
+        c1=np.concatenate([lines1.c1, lines2.c1]),
+        tan1=np.concatenate([lines1.tan1, lines2.tan1]),
+        i_n=np.concatenate([lines1.i_n, lines2.i_n]),
     )

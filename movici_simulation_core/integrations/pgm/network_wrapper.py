@@ -228,7 +228,10 @@ class PowerGridWrapper:
         if self.model is None:
             raise RuntimeError("Network not built. Call build_network first.")
 
-        if "sym_voltage_sensor" not in self.input_data and "sym_power_sensor" not in self.input_data:
+        if (
+            "sym_voltage_sensor" not in self.input_data
+            and "sym_power_sensor" not in self.input_data
+        ):
             raise RuntimeError(
                 "No sensors defined. Provide voltage_sensors or power_sensors in build_network()."
             )
@@ -453,9 +456,7 @@ class PowerGridWrapper:
             component_types = terminal_type_to_component.get(int(term_type), [])
             for comp_type in component_types:
                 try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(
-                        comp_type, np.array([obj_id])
-                    )[0]
+                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
                     break
                 except (ValueError, KeyError):
                     continue

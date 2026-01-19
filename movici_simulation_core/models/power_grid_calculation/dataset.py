@@ -99,6 +99,31 @@ class ElectricalNodeEntity(PointEntity):
     reactive_power = field(Electrical_ReactivePower, flags=PUB)
 
 
+class ElectricalVirtualNodeEntity(EntityGroup):
+    """External grid connection node (virtual bus).
+
+    Represents the external grid connection point where sources attach.
+    These nodes are merged with regular nodes during network building,
+    similar to how virtual_node_entities are handled in traffic assignment.
+
+    Unlike regular nodes, virtual nodes may not have geometry as they
+    represent conceptual connection points to the external grid.
+    """
+
+    __entity_name__ = "electrical_virtual_node_entities"
+
+    # Input attributes
+    rated_voltage = field(Electrical_RatedVoltage, flags=INIT)
+    status = field(Electrical_Status, flags=OPT)
+
+    # Output attributes (same as regular nodes)
+    voltage_pu = field(Electrical_VoltagePU, flags=PUB)
+    voltage_angle = field(Electrical_VoltageAngle, flags=PUB)
+    voltage = field(Electrical_Voltage, flags=PUB)
+    active_power = field(Electrical_ActivePower, flags=PUB)
+    reactive_power = field(Electrical_ReactivePower, flags=PUB)
+
+
 class ElectricalLineEntity(LinkEntity):
     """Electrical transmission/distribution line.
 
@@ -118,6 +143,60 @@ class ElectricalLineEntity(LinkEntity):
     to_status = field(Electrical_ToStatus, flags=OPT)
 
     # Output attributes
+    current_from = field(Electrical_CurrentFrom, flags=PUB)
+    current_to = field(Electrical_CurrentTo, flags=PUB)
+    power_from = field(Electrical_PowerFrom, flags=PUB)
+    power_to = field(Electrical_PowerTo, flags=PUB)
+    reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
+    reactive_power_to = field(Electrical_ReactivePowerTo, flags=PUB)
+    loading = field(Electrical_Loading, flags=PUB)
+
+
+class ElectricalCableEntity(LinkEntity):
+    """Electrical cable (underground line).
+
+    Represents an underground cable with the same electrical characteristics
+    as overhead lines. Treated identically to lines in power flow calculations.
+    """
+
+    __entity_name__ = "electrical_cable_entities"
+
+    # Input attributes (same as ElectricalLineEntity)
+    resistance = field(Electrical_Resistance, flags=INIT)
+    reactance = field(Electrical_Reactance, flags=INIT)
+    capacitance = field(Electrical_Capacitance, flags=INIT)
+    tan_delta = field(Electrical_TanDelta, flags=INIT)
+    rated_current = field(Electrical_RatedCurrent, flags=OPT)
+    from_status = field(Electrical_FromStatus, flags=OPT)
+    to_status = field(Electrical_ToStatus, flags=OPT)
+
+    # Output attributes
+    current_from = field(Electrical_CurrentFrom, flags=PUB)
+    current_to = field(Electrical_CurrentTo, flags=PUB)
+    power_from = field(Electrical_PowerFrom, flags=PUB)
+    power_to = field(Electrical_PowerTo, flags=PUB)
+    reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
+    reactive_power_to = field(Electrical_ReactivePowerTo, flags=PUB)
+    loading = field(Electrical_Loading, flags=PUB)
+
+
+class ElectricalLinkEntity(LinkEntity):
+    """Zero-impedance electrical connection.
+
+    Represents a zero-impedance connection between nodes, typically
+    connecting virtual nodes to the main network. Converted to
+    low-impedance lines for PGM calculations, similar to how
+    virtual_link_entities are handled in traffic assignment.
+    """
+
+    __entity_name__ = "electrical_link_entities"
+
+    # Only topology, no electrical parameters
+    # from_node_id and to_node_id inherited from LinkEntity
+    from_status = field(Electrical_FromStatus, flags=OPT)
+    to_status = field(Electrical_ToStatus, flags=OPT)
+
+    # Output attributes (same as lines)
     current_from = field(Electrical_CurrentFrom, flags=PUB)
     current_to = field(Electrical_CurrentTo, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
