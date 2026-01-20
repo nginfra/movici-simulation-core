@@ -96,6 +96,7 @@ class WaterTankEntity(PointEntity):
     :ivar min_volume: Minimum volume for drainage (``drinking_water.min_volume``, OPT)
     :ivar overflow: Whether tank can overflow when full (``drinking_water.overflow``, OPT)
     :ivar level: Water level, initial + output (``drinking_water.level``, INIT|PUB)
+    :ivar demand: Net flow into tank (``drinking_water.demand``, PUB)
     :ivar pressure: Pressure in the tank (``drinking_water.pressure``, PUB)
     :ivar head: Total head in the tank (``drinking_water.head``, PUB)
     """
@@ -122,6 +123,7 @@ class WaterTankEntity(PointEntity):
     level = field(DrinkingWater_Level, flags=INIT | PUB)
 
     # PUB attributes
+    demand = field(DrinkingWater_Demand, flags=PUB)
     pressure = field(DrinkingWater_Pressure, flags=PUB)
     head = field(DrinkingWater_Head, flags=PUB)
 
@@ -139,6 +141,7 @@ class WaterReservoirEntity(PointEntity):
     :ivar base_head: Base head of the reservoir (``drinking_water.base_head``, INIT)
     :ivar head_factor: Head multiplier, default 1.0 (``drinking_water.head_factor``, OPT)
     :ivar head: Calculated head output (``drinking_water.head``, PUB)
+    :ivar demand: Net flow into reservoir, negative means outflow (``drinking_water.demand``, PUB)
     :ivar flow: Total flow rate out of reservoir (``drinking_water.flow``, PUB)
     """
 
@@ -152,6 +155,7 @@ class WaterReservoirEntity(PointEntity):
 
     # PUB attributes
     head = field(DrinkingWater_Head, flags=PUB)
+    demand = field(DrinkingWater_Demand, flags=PUB)
     flow = field(DrinkingWater_Flow, flags=PUB)
     flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
 

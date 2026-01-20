@@ -82,6 +82,7 @@ class TestParseClockTime:
         with pytest.raises(ValueError, match="Invalid clock time"):
             parse_clock_time(expr)
 
+
 class TestComparisonOperator:
     """Tests for comparison operator evaluation."""
 

@@ -95,8 +95,7 @@ def parse_duration(expr: str) -> float:
     reconstructed = "".join(f"{value}{unit}" for value, unit in matches)
     if reconstructed.lower() != expr.lower():
         raise ValueError(
-            f"Invalid duration expression: {expr!r} "
-            f"(contains invalid characters or format)"
+            f"Invalid duration expression: {expr!r} (contains invalid characters or format)"
         )
 
     total_seconds = 0.0
@@ -342,9 +341,7 @@ def _build_grammar() -> pp.ParserElement:
 
     # Special time variables - simplified patterns
     simtime_var = pp.Literal("<simtime>").setParseAction(lambda: ExpressionType.SIMTIME)
-    clocktime_var = pp.Literal("<clocktime>").setParseAction(
-        lambda: ExpressionType.CLOCKTIME
-    )
+    clocktime_var = pp.Literal("<clocktime>").setParseAction(lambda: ExpressionType.CLOCKTIME)
 
     # Attribute names: support multiple dots (e.g., "a.b.c.d")
     identifier = pp.Word(pp.alphas + "_", pp.alphanums + "_")

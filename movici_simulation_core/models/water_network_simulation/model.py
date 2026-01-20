@@ -16,10 +16,9 @@ from pathlib import Path
 
 import numpy as np
 
-from movici_simulation_core.attributes import Geometry_Z, Shape_Length
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.moment import Moment
-from movici_simulation_core.core.schema import AttributeSchema
+from movici_simulation_core.core.schema import AttributeSchema, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.integrations.wntr import NetworkWrapper
 from movici_simulation_core.model_connector.init_data import InitDataHandler
@@ -32,39 +31,7 @@ from movici_simulation_core.models.common.wntr_util import (
     get_valves,
 )
 
-from .attributes import (
-    DrinkingWater_BaseDemand,
-    DrinkingWater_BaseHead,
-    DrinkingWater_CheckValve,
-    DrinkingWater_Demand,
-    DrinkingWater_DemandFactor,
-    DrinkingWater_Flow,
-    DrinkingWater_FlowRate_Magnitude,
-    DrinkingWater_Head,
-    DrinkingWater_HeadCurve,
-    DrinkingWater_HeadFactor,
-    DrinkingWater_Headloss,
-    DrinkingWater_Level,
-    DrinkingWater_MaxLevel,
-    DrinkingWater_MinLevel,
-    DrinkingWater_MinorLoss,
-    DrinkingWater_MinVolume,
-    DrinkingWater_Overflow,
-    DrinkingWater_Power,
-    DrinkingWater_Pressure,
-    DrinkingWater_Roughness,
-    DrinkingWater_Speed,
-    DrinkingWater_ValveCurve,
-    DrinkingWater_ValveFlow,
-    DrinkingWater_ValveLossCoefficient,
-    DrinkingWater_ValvePressure,
-    DrinkingWater_Velocity,
-    Operational_Status,
-    Shape_Diameter,
-    Shape_VolumeCurve,
-    Type_PumpType,
-    Type_ValveType,
-)
+from . import attributes
 from .dataset import (
     WaterJunctionEntity,
     WaterPipeEntity,
@@ -107,53 +74,7 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         :return: Sequence of AttributeSpec objects
         """
-        return [
-            # Geometry attributes
-            Geometry_Z,
-            # Shape attributes
-            Shape_Diameter,
-            Shape_Length,
-            Shape_VolumeCurve,
-            # Junction attributes
-            DrinkingWater_BaseDemand,
-            DrinkingWater_DemandFactor,
-            DrinkingWater_Demand,
-            # Node outputs
-            DrinkingWater_Pressure,
-            DrinkingWater_Head,
-            # Tank attributes
-            DrinkingWater_Level,
-            DrinkingWater_MinLevel,
-            DrinkingWater_MaxLevel,
-            DrinkingWater_MinVolume,
-            DrinkingWater_Overflow,
-            # Reservoir attributes
-            DrinkingWater_BaseHead,
-            DrinkingWater_HeadFactor,
-            # Pipe attributes
-            DrinkingWater_Roughness,
-            DrinkingWater_MinorLoss,
-            DrinkingWater_CheckValve,
-            # Link outputs
-            DrinkingWater_Flow,
-            DrinkingWater_FlowRate_Magnitude,
-            DrinkingWater_Velocity,
-            DrinkingWater_Headloss,
-            # Pump attributes
-            DrinkingWater_Power,
-            DrinkingWater_Speed,
-            DrinkingWater_HeadCurve,
-            # Valve attributes
-            DrinkingWater_ValvePressure,
-            DrinkingWater_ValveFlow,
-            DrinkingWater_ValveLossCoefficient,
-            DrinkingWater_ValveCurve,
-            # Operational attributes
-            Operational_Status,
-            # Type attributes
-            Type_PumpType,
-            Type_ValveType,
-        ]
+        return attributes_from_dict(vars(attributes))
 
     def __init__(self, model_config: dict):
         super().__init__(model_config)
@@ -639,6 +560,7 @@ class Model(TrackedModel, name="water_network_simulation"):
             pressures = []
             heads = []
             levels = []
+            demands = []
 
             for name, movici_id in node_id_map.items():
                 if self.network.id_mapper.get_entity_type(name) == "tank":
@@ -649,17 +571,19 @@ class Model(TrackedModel, name="water_network_simulation"):
                         pressures.append(results.node_pressures[node_idx])
                         heads.append(results.node_heads[node_idx])
                         levels.append(results.node_levels[node_idx])
+                        demands.append(results.node_demands[node_idx])
 
             if tank_indices:
                 self.tanks.pressure.array[tank_indices] = np.array(pressures)
                 self.tanks.head.array[tank_indices] = np.array(heads)
                 self.tanks.level.array[tank_indices] = np.array(levels)
+                self.tanks.demand.array[tank_indices] = np.array(demands)
 
         # Publish reservoir results
         if self.reservoirs:
             reservoir_indices = []
             heads = []
-            flows = []
+            demands = []
 
             for name, movici_id in node_id_map.items():
                 if self.network.id_mapper.get_entity_type(name) == "reservoir":
@@ -668,23 +592,17 @@ class Model(TrackedModel, name="water_network_simulation"):
                         reservoir_indices.append(idx)
                         node_idx = results.node_names.index(name)
                         heads.append(results.node_heads[node_idx])
-                        # Calculate total flow from connected links
-                        total_flow = 0.0
-                        for link_name in results.link_names:
-                            link = self.network.wn.get_link(link_name)
-                            if link.start_node_name == name or link.end_node_name == name:
-                                link_idx = results.link_names.index(link_name)
-                                if link.start_node_name == name:
-                                    total_flow -= results.link_flows[link_idx]
-                                else:
-                                    total_flow += results.link_flows[link_idx]
-                        flows.append(total_flow)
+                        demands.append(results.node_demands[node_idx])
 
             if reservoir_indices:
                 self.reservoirs.head.array[reservoir_indices] = np.array(heads)
-                flows_array = np.array(flows)
-                self.reservoirs.flow.array[reservoir_indices] = flows_array
-                self.reservoirs.flow_rate_magnitude.array[reservoir_indices] = np.abs(flows_array)
+                demands_array = np.array(demands)
+                self.reservoirs.demand.array[reservoir_indices] = demands_array
+                # Flow is the negative of demand (outflow is positive flow)
+                self.reservoirs.flow.array[reservoir_indices] = -demands_array
+                self.reservoirs.flow_rate_magnitude.array[reservoir_indices] = np.abs(
+                    demands_array
+                )
 
         # Publish pipe results
         if self.pipes:
