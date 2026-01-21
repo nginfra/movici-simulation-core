@@ -31,6 +31,29 @@ if t.TYPE_CHECKING:
     )
 
 
+def _get_coordinates(entity) -> t.Optional[np.ndarray]:
+    """Extract coordinates from an entity if available.
+
+    :param entity: Entity with optional x and y attributes
+    :return: (N, 2) array of coordinates or None
+    """
+    if entity.x.is_initialized() and entity.y.is_initialized():
+        return np.column_stack([entity.x.array, entity.y.array])
+    return None
+
+
+def _get_node_names(entity, id_mapper: IdMapper) -> t.Tuple[t.List[str], t.List[str]]:
+    """Extract from/to node names for link entities.
+
+    :param entity: Link entity with from_node_id and to_node_id attributes
+    :param id_mapper: IdMapper for ID translation
+    :return: Tuple of (from_nodes, to_nodes) lists
+    """
+    from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in entity.from_node_id.array]
+    to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in entity.to_node_id.array]
+    return from_nodes, to_nodes
+
+
 def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> JunctionCollection:
     """Convert junction entities to JunctionCollection.
 
@@ -38,28 +61,17 @@ def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> Junc
     :param id_mapper: IdMapper for tracking IDs
     :return: JunctionCollection with junction data
     """
-    movici_ids = junctions.index.ids
-    node_names = id_mapper.register_nodes(movici_ids, entity_type="junction")
-
-    elevations = junctions.elevation.array
-    base_demands = junctions.base_demand.array
-
-    # Get demand factors if available
-    demand_factors = None
-    if junctions.demand_factor.is_initialized():
-        demand_factors = junctions.demand_factor.array
-
-    # Get coordinates if available
-    coordinates = None
-    if junctions.x.is_initialized() and junctions.y.is_initialized():
-        coordinates = np.column_stack([junctions.x.array, junctions.y.array])
+    node_names = id_mapper.register_nodes(junctions.index.ids, entity_type="junction")
+    demand_factors = (
+        junctions.demand_factor.array if junctions.demand_factor.is_initialized() else None
+    )
 
     return JunctionCollection(
         node_names=node_names,
-        elevations=elevations,
-        base_demands=base_demands,
+        elevations=junctions.elevation.array,
+        base_demands=junctions.base_demand.array,
         demand_factors=demand_factors,
-        coordinates=coordinates,
+        coordinates=_get_coordinates(junctions),
     )
 
 
@@ -70,44 +82,22 @@ def get_tanks(tanks: "WaterTankEntity", id_mapper: IdMapper) -> TankCollection:
     :param id_mapper: IdMapper for tracking IDs
     :return: TankCollection with tank data
     """
-    movici_ids = tanks.index.ids
-    node_names = id_mapper.register_nodes(movici_ids, entity_type="tank")
-
-    elevations = tanks.elevation.array
-    init_levels = tanks.level.array  # level is INIT|PUB, initial value
-
-    # Cylindrical tank attributes (optional)
-    diameters = tanks.diameter.array if tanks.diameter.is_initialized() else None
-    min_levels = tanks.min_level.array if tanks.min_level.is_initialized() else None
-    max_levels = tanks.max_level.array if tanks.max_level.is_initialized() else None
-
-    # Volume curve tank attributes (optional)
-    min_volumes = tanks.min_volume.array if tanks.min_volume.is_initialized() else None
-
-    # Volume curves as CSR data
-    volume_curves = None
-    if tanks.volume_curve.is_initialized():
-        volume_curves = _extract_csr_curves(tanks.volume_curve)
-
-    # Overflow flag
-    overflows = tanks.overflow.array if tanks.overflow.is_initialized() else None
-
-    # Coordinates
-    coordinates = None
-    if tanks.x.is_initialized() and tanks.y.is_initialized():
-        coordinates = np.column_stack([tanks.x.array, tanks.y.array])
+    node_names = id_mapper.register_nodes(tanks.index.ids, entity_type="tank")
+    volume_curves = (
+        _extract_csr_curves(tanks.volume_curve) if tanks.volume_curve.is_initialized() else None
+    )
 
     return TankCollection(
         node_names=node_names,
-        elevations=elevations,
-        init_levels=init_levels,
-        min_levels=min_levels,
-        max_levels=max_levels,
-        diameters=diameters,
-        min_volumes=min_volumes,
+        elevations=tanks.elevation.array,
+        init_levels=tanks.level.array,
+        min_levels=tanks.min_level.array if tanks.min_level.is_initialized() else None,
+        max_levels=tanks.max_level.array if tanks.max_level.is_initialized() else None,
+        diameters=tanks.diameter.array if tanks.diameter.is_initialized() else None,
+        min_volumes=tanks.min_volume.array if tanks.min_volume.is_initialized() else None,
         volume_curves=volume_curves,
-        overflows=overflows,
-        coordinates=coordinates,
+        overflows=tanks.overflow.array if tanks.overflow.is_initialized() else None,
+        coordinates=_get_coordinates(tanks),
     )
 
 
@@ -118,26 +108,16 @@ def get_reservoirs(reservoirs: "WaterReservoirEntity", id_mapper: IdMapper) -> R
     :param id_mapper: IdMapper for tracking IDs
     :return: ReservoirCollection with reservoir data
     """
-    movici_ids = reservoirs.index.ids
-    node_names = id_mapper.register_nodes(movici_ids, entity_type="reservoir")
-
-    base_heads = reservoirs.base_head.array
-
-    # Get head factors if available
-    head_factors = None
-    if reservoirs.head_factor.is_initialized():
-        head_factors = reservoirs.head_factor.array
-
-    # Coordinates
-    coordinates = None
-    if reservoirs.x.is_initialized() and reservoirs.y.is_initialized():
-        coordinates = np.column_stack([reservoirs.x.array, reservoirs.y.array])
+    node_names = id_mapper.register_nodes(reservoirs.index.ids, entity_type="reservoir")
+    head_factors = (
+        reservoirs.head_factor.array if reservoirs.head_factor.is_initialized() else None
+    )
 
     return ReservoirCollection(
         node_names=node_names,
-        base_heads=base_heads,
+        base_heads=reservoirs.base_head.array,
         head_factors=head_factors,
-        coordinates=coordinates,
+        coordinates=_get_coordinates(reservoirs),
     )
 
 
@@ -148,49 +128,27 @@ def get_pipes(pipes: "WaterPipeEntity", id_mapper: IdMapper) -> PipeCollection:
     :param id_mapper: IdMapper for tracking IDs
     :return: PipeCollection with pipe data
     """
-    movici_ids = pipes.index.ids
-    link_names = id_mapper.register_links(movici_ids, entity_type="pipe")
-
-    # Get from/to node names from IDs
-    from_node_ids = pipes.from_node_id.array
-    to_node_ids = pipes.to_node_id.array
-    from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
-    to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
+    link_names = id_mapper.register_links(pipes.index.ids, entity_type="pipe")
+    from_nodes, to_nodes = _get_node_names(pipes, id_mapper)
 
     # Get lengths - from attribute or calculate from geometry
     if pipes.length.is_initialized():
         lengths = pipes.length.array
     elif pipes.linestring.is_initialized():
-        lengths = np.zeros(len(link_names))
-        for i in range(len(link_names)):
-            geom = pipes.get_single_geometry(i)
-            lengths[i] = geom.length
+        lengths = np.array([pipes.get_single_geometry(i).length for i in range(len(link_names))])
     else:
-        # Default length if no geometry
         lengths = np.full(len(link_names), 100.0)
-
-    diameters = pipes.diameter.array
-    roughnesses = pipes.roughness.array
-
-    # Optional attributes
-    minor_losses = pipes.minor_loss.array if pipes.minor_loss.is_initialized() else None
-    check_valves = pipes.check_valve.array if pipes.check_valve.is_initialized() else None
-
-    # Status as boolean
-    statuses = None
-    if pipes.status.is_initialized():
-        statuses = pipes.status.array
 
     return PipeCollection(
         link_names=link_names,
         from_nodes=from_nodes,
         to_nodes=to_nodes,
         lengths=lengths,
-        diameters=diameters,
-        roughnesses=roughnesses,
-        minor_losses=minor_losses,
-        check_valves=check_valves,
-        statuses=statuses,
+        diameters=pipes.diameter.array,
+        roughnesses=pipes.roughness.array,
+        minor_losses=pipes.minor_loss.array if pipes.minor_loss.is_initialized() else None,
+        check_valves=pipes.check_valve.array if pipes.check_valve.is_initialized() else None,
+        statuses=pipes.status.array if pipes.status.is_initialized() else None,
     )
 
 
@@ -201,43 +159,21 @@ def get_pumps(pumps: "WaterPumpEntity", id_mapper: IdMapper) -> PumpCollection:
     :param id_mapper: IdMapper for tracking IDs
     :return: PumpCollection with pump data
     """
-    movici_ids = pumps.index.ids
-    link_names = id_mapper.register_links(movici_ids, entity_type="pump")
-
-    # Get from/to node names
-    from_node_ids = pumps.from_node_id.array
-    to_node_ids = pumps.to_node_id.array
-    from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
-    to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
-
-    # Pump types as strings
-    pump_types = [str(t) for t in pumps.pump_type.array]
-
-    # Power for power pumps
-    powers = pumps.power.array if pumps.power.is_initialized() else None
-
-    # Head curves as CSR data for head pumps
-    head_curves = None
-    if pumps.head_curve.is_initialized():
-        head_curves = _extract_csr_curves(pumps.head_curve)
-
-    # Speeds
-    speeds = pumps.speed.array if pumps.speed.is_initialized() else None
-
-    # Status as boolean
-    statuses = None
-    if pumps.status.is_initialized():
-        statuses = pumps.status.array
+    link_names = id_mapper.register_links(pumps.index.ids, entity_type="pump")
+    from_nodes, to_nodes = _get_node_names(pumps, id_mapper)
+    head_curves = (
+        _extract_csr_curves(pumps.head_curve) if pumps.head_curve.is_initialized() else None
+    )
 
     return PumpCollection(
         link_names=link_names,
         from_nodes=from_nodes,
         to_nodes=to_nodes,
-        pump_types=pump_types,
-        powers=powers,
+        pump_types=[str(t) for t in pumps.pump_type.array],
+        powers=pumps.power.array if pumps.power.is_initialized() else None,
         head_curves=head_curves,
-        speeds=speeds,
-        statuses=statuses,
+        speeds=pumps.speed.array if pumps.speed.is_initialized() else None,
+        statuses=pumps.status.array if pumps.status.is_initialized() else None,
     )
 
 
@@ -248,49 +184,30 @@ def get_valves(valves: "WaterValveEntity", id_mapper: IdMapper) -> ValveCollecti
     :param id_mapper: IdMapper for tracking IDs
     :return: ValveCollection with valve data
     """
-    movici_ids = valves.index.ids
-    link_names = id_mapper.register_links(movici_ids, entity_type="valve")
-
-    # Get from/to node names
-    from_node_ids = valves.from_node_id.array
-    to_node_ids = valves.to_node_id.array
-    from_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in from_node_ids]
-    to_nodes = [id_mapper.get_wntr_name(int(nid)) for nid in to_node_ids]
-
-    # Valve types as strings
-    valve_types = [str(t) for t in valves.valve_type.array]
-    diameters = valves.diameter.array
-
-    # Type-specific settings
-    valve_pressures = (
-        valves.valve_pressure.array if valves.valve_pressure.is_initialized() else None
+    link_names = id_mapper.register_links(valves.index.ids, entity_type="valve")
+    from_nodes, to_nodes = _get_node_names(valves, id_mapper)
+    valve_curves = (
+        _extract_csr_curves(valves.valve_curve) if valves.valve_curve.is_initialized() else None
     )
-    valve_flows = valves.valve_flow.array if valves.valve_flow.is_initialized() else None
     valve_loss_coefficients = (
         valves.valve_loss_coefficient.array
         if valves.valve_loss_coefficient.is_initialized()
         else None
     )
 
-    # Valve curves as CSR data for GPV
-    valve_curves = None
-    if valves.valve_curve.is_initialized():
-        valve_curves = _extract_csr_curves(valves.valve_curve)
-
-    # Minor losses
-    minor_losses = valves.minor_loss.array if valves.minor_loss.is_initialized() else None
-
     return ValveCollection(
         link_names=link_names,
         from_nodes=from_nodes,
         to_nodes=to_nodes,
-        valve_types=valve_types,
-        diameters=diameters,
-        valve_pressures=valve_pressures,
-        valve_flows=valve_flows,
+        valve_types=[str(t) for t in valves.valve_type.array],
+        diameters=valves.diameter.array,
+        valve_pressures=valves.valve_pressure.array
+        if valves.valve_pressure.is_initialized()
+        else None,
+        valve_flows=valves.valve_flow.array if valves.valve_flow.is_initialized() else None,
         valve_loss_coefficients=valve_loss_coefficients,
         valve_curves=valve_curves,
-        minor_losses=minor_losses,
+        minor_losses=valves.minor_loss.array if valves.minor_loss.is_initialized() else None,
     )
 
 

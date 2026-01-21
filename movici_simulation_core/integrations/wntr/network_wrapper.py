@@ -48,20 +48,26 @@ class NetworkWrapper:
 
         self.id_mapper = IdMapper()
 
+    @staticmethod
+    def _get_coords(
+        coordinates: t.Optional[np.ndarray], index: int
+    ) -> t.Optional[t.Tuple[float, float]]:
+        """Extract coordinates for a single element.
+
+        :param coordinates: Optional (N, 2) array of x, y coordinates
+        :param index: Index of the element
+        :return: Tuple of (x, y) or None if coordinates not provided
+        """
+        if coordinates is None:
+            return None
+        return (float(coordinates[index, 0]), float(coordinates[index, 1]))
+
     def add_junctions(self, junctions: JunctionCollection):
         """Add junctions to the network.
 
         :param junctions: Collection of junction data
         """
         for i, name in enumerate(junctions.node_names):
-            coords = None
-            if junctions.coordinates is not None:
-                coords = (
-                    float(junctions.coordinates[i, 0]),
-                    float(junctions.coordinates[i, 1]),
-                )
-
-            # Calculate effective demand
             base_demand = float(junctions.base_demands[i])
             if junctions.demand_factors is not None:
                 base_demand *= float(junctions.demand_factors[i])
@@ -71,7 +77,7 @@ class NetworkWrapper:
                 base_demand=base_demand,
                 demand_pattern=None,
                 elevation=float(junctions.elevations[i]),
-                coordinates=coords,
+                coordinates=self._get_coords(junctions.coordinates, i),
             )
 
     def add_tanks(self, tanks: TankCollection):
@@ -83,35 +89,18 @@ class NetworkWrapper:
         :param tanks: Collection of tank data
         """
         for i, name in enumerate(tanks.node_names):
-            coords = None
-            if tanks.coordinates is not None:
-                coords = (
-                    float(tanks.coordinates[i, 0]),
-                    float(tanks.coordinates[i, 1]),
-                )
+            min_level = float(tanks.min_levels[i]) if tanks.min_levels is not None else 0.0
+            max_level = (
+                float(tanks.max_levels[i])
+                if tanks.max_levels is not None
+                else float(tanks.init_levels[i]) * 2
+            )
+            diameter = float(tanks.diameters[i]) if tanks.diameters is not None else 0.0
+            min_vol = float(tanks.min_volumes[i]) if tanks.min_volumes is not None else 0.0
 
-            # Get min/max levels with defaults
-            min_level = 0.0
-            max_level = float(tanks.init_levels[i]) * 2  # Default to 2x init level
-            if tanks.min_levels is not None:
-                min_level = float(tanks.min_levels[i])
-            if tanks.max_levels is not None:
-                max_level = float(tanks.max_levels[i])
-
-            # Get diameter or use default
-            diameter = 0.0
-            if tanks.diameters is not None:
-                diameter = float(tanks.diameters[i])
-
-            # Handle volume curve if provided
             vol_curve_name = None
             if tanks.volume_curves is not None and tanks.volume_curves[i] is not None:
                 vol_curve_name = self._add_curve(tanks.volume_curves[i], "VOLUME")
-
-            # Get min volume
-            min_vol = 0.0
-            if tanks.min_volumes is not None:
-                min_vol = float(tanks.min_volumes[i])
 
             self.wn.add_tank(
                 name=name,
@@ -122,10 +111,9 @@ class NetworkWrapper:
                 diameter=diameter,
                 min_vol=min_vol,
                 vol_curve=vol_curve_name,
-                coordinates=coords,
+                coordinates=self._get_coords(tanks.coordinates, i),
             )
 
-            # Set overflow flag if provided
             if tanks.overflows is not None:
                 tank = self.wn.get_node(name)
                 tank.overflow = bool(tanks.overflows[i])
@@ -136,14 +124,6 @@ class NetworkWrapper:
         :param reservoirs: Collection of reservoir data
         """
         for i, name in enumerate(reservoirs.node_names):
-            coords = None
-            if reservoirs.coordinates is not None:
-                coords = (
-                    float(reservoirs.coordinates[i, 0]),
-                    float(reservoirs.coordinates[i, 1]),
-                )
-
-            # Calculate effective head
             base_head = float(reservoirs.base_heads[i])
             if reservoirs.head_factors is not None:
                 base_head *= float(reservoirs.head_factors[i])
@@ -152,7 +132,7 @@ class NetworkWrapper:
                 name=name,
                 base_head=base_head,
                 head_pattern=None,
-                coordinates=coords,
+                coordinates=self._get_coords(reservoirs.coordinates, i),
             )
 
     def add_pipes(self, pipes: PipeCollection):

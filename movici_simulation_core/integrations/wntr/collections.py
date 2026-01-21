@@ -190,6 +190,14 @@ class ValveCollection:
     def __len__(self):
         return len(self.link_names)
 
+    _VALVE_SETTING_SOURCES: t.ClassVar[t.Dict[str, str]] = {
+        "PRV": "valve_pressures",
+        "PSV": "valve_pressures",
+        "PBV": "valve_pressures",
+        "FCV": "valve_flows",
+        "TCV": "valve_loss_coefficients",
+    }
+
     def get_setting(self, index: int) -> float:
         """Get the appropriate setting value for a valve based on its type.
 
@@ -199,18 +207,14 @@ class ValveCollection:
         """
         valve_type = self.valve_types[index].upper()
 
-        if valve_type in ("PRV", "PSV", "PBV"):
-            if self.valve_pressures is not None:
-                return float(self.valve_pressures[index])
-        elif valve_type == "FCV":
-            if self.valve_flows is not None:
-                return float(self.valve_flows[index])
-        elif valve_type == "TCV":
-            if self.valve_loss_coefficients is not None:
-                return float(self.valve_loss_coefficients[index])
-        elif valve_type == "GPV":
-            # GPV uses curve, not a scalar setting
-            return 0.0
+        if valve_type == "GPV":
+            return 0.0  # GPV uses curve, not a scalar setting
+
+        attr = self._VALVE_SETTING_SOURCES.get(valve_type)
+        if attr:
+            source = getattr(self, attr)
+            if source is not None:
+                return float(source[index])
 
         raise ValueError(f"No setting available for valve type {valve_type} at index {index}")
 
@@ -244,27 +248,43 @@ class SimulationResults:
     link_headlosses: t.Optional[np.ndarray] = None
     link_statuses: t.Optional[np.ndarray] = None
 
+    def _get_results(
+        self, name: str, names_list: t.List[str], attr_mapping: t.Dict[str, str]
+    ) -> dict:
+        """Get results for a specific element.
+
+        :param name: Name of the element
+        :param names_list: List of element names to search in
+        :param attr_mapping: Mapping of result key to attribute name
+        :return: Dictionary of result values, empty if not found
+        """
+        try:
+            idx = names_list.index(name)
+        except ValueError:
+            return {}
+
+        return {
+            key: getattr(self, attr)[idx]
+            for key, attr in attr_mapping.items()
+            if getattr(self, attr) is not None
+        }
+
     def get_node_results(self, node_name: str) -> dict:
         """Get all results for a specific node.
 
         :param node_name: Name of the node
         :return: Dictionary of result values, empty if node not found
         """
-        try:
-            idx = self.node_names.index(node_name)
-        except ValueError:
-            return {}
-
-        results = {}
-        if self.node_pressures is not None:
-            results["pressure"] = self.node_pressures[idx]
-        if self.node_heads is not None:
-            results["head"] = self.node_heads[idx]
-        if self.node_demands is not None:
-            results["demand"] = self.node_demands[idx]
-        if self.node_levels is not None:
-            results["level"] = self.node_levels[idx]
-        return results
+        return self._get_results(
+            node_name,
+            self.node_names,
+            {
+                "pressure": "node_pressures",
+                "head": "node_heads",
+                "demand": "node_demands",
+                "level": "node_levels",
+            },
+        )
 
     def get_link_results(self, link_name: str) -> dict:
         """Get all results for a specific link.
@@ -272,18 +292,13 @@ class SimulationResults:
         :param link_name: Name of the link
         :return: Dictionary of result values, empty if link not found
         """
-        try:
-            idx = self.link_names.index(link_name)
-        except ValueError:
-            return {}
-
-        results = {}
-        if self.link_flows is not None:
-            results["flow"] = self.link_flows[idx]
-        if self.link_velocities is not None:
-            results["velocity"] = self.link_velocities[idx]
-        if self.link_headlosses is not None:
-            results["headloss"] = self.link_headlosses[idx]
-        if self.link_statuses is not None:
-            results["status"] = self.link_statuses[idx]
-        return results
+        return self._get_results(
+            link_name,
+            self.link_names,
+            {
+                "flow": "link_flows",
+                "velocity": "link_velocities",
+                "headloss": "link_headlosses",
+                "status": "link_statuses",
+            },
+        )

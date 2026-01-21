@@ -23,45 +23,42 @@ class IdMapper:
         # Track entity type for each WNTR name
         self.entity_types: t.Dict[str, str] = {}
 
+    def _register_ids(self, movici_ids: np.ndarray, prefix: str, entity_type: str) -> t.List[str]:
+        """Register IDs and return corresponding WNTR names.
+
+        :param movici_ids: Array of Movici entity IDs
+        :param prefix: Prefix for WNTR names ('n' for nodes, 'l' for links)
+        :param entity_type: Type of entity
+        :return: List of WNTR names
+        """
+        wntr_names = []
+        for movici_id in movici_ids:
+            movici_id = int(movici_id)
+            if movici_id not in self.movici_to_wntr:
+                wntr_name = f"{prefix}{movici_id}"
+                self.movici_to_wntr[movici_id] = wntr_name
+                self.wntr_to_movici[wntr_name] = movici_id
+                self.entity_types[wntr_name] = entity_type
+            wntr_names.append(self.movici_to_wntr[movici_id])
+        return wntr_names
+
     def register_nodes(self, movici_ids: np.ndarray, entity_type: str = "junction") -> t.List[str]:
-        """Register node IDs and return corresponding WNTR names
+        """Register node IDs and return corresponding WNTR names.
 
         :param movici_ids: Array of Movici entity IDs
         :param entity_type: Type of entity (junction, tank, reservoir)
         :return: List of WNTR node names
         """
-        wntr_names = []
-        for movici_id in movici_ids:
-            movici_id = int(movici_id)
-            if movici_id in self.movici_to_wntr:
-                wntr_name = self.movici_to_wntr[movici_id]
-            else:
-                wntr_name = f"n{movici_id}"
-                self.movici_to_wntr[movici_id] = wntr_name
-                self.wntr_to_movici[wntr_name] = movici_id
-                self.entity_types[wntr_name] = entity_type
-            wntr_names.append(wntr_name)
-        return wntr_names
+        return self._register_ids(movici_ids, "n", entity_type)
 
     def register_links(self, movici_ids: np.ndarray, entity_type: str = "pipe") -> t.List[str]:
-        """Register link IDs and return corresponding WNTR names
+        """Register link IDs and return corresponding WNTR names.
 
         :param movici_ids: Array of Movici entity IDs
         :param entity_type: Type of entity (pipe, pump, valve)
         :return: List of WNTR link names
         """
-        wntr_names = []
-        for movici_id in movici_ids:
-            movici_id = int(movici_id)
-            if movici_id in self.movici_to_wntr:
-                wntr_name = self.movici_to_wntr[movici_id]
-            else:
-                wntr_name = f"l{movici_id}"
-                self.movici_to_wntr[movici_id] = wntr_name
-                self.wntr_to_movici[wntr_name] = movici_id
-                self.entity_types[wntr_name] = entity_type
-            wntr_names.append(wntr_name)
-        return wntr_names
+        return self._register_ids(movici_ids, "l", entity_type)
 
     def get_wntr_name(self, movici_id: int) -> str:
         """Get WNTR name for a Movici ID
