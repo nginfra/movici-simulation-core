@@ -12,7 +12,6 @@ including pressure, flow, and velocity calculations.
 from __future__ import annotations
 
 import typing as t
-from pathlib import Path
 
 import numpy as np
 
@@ -21,7 +20,6 @@ from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.integrations.wntr import NetworkWrapper
-from movici_simulation_core.model_connector.init_data import InitDataHandler
 from movici_simulation_core.models.common.wntr_util import (
     get_junctions,
     get_pipes,
@@ -71,11 +69,6 @@ class Model(TrackedModel, name="water_network_simulation"):
     - Support for pipes, pumps, valves, tanks, and reservoirs
     - CSR curve data for pump head curves and tank volume curves
 
-    Supports two modes:
-
-    - ``inp_file``: Load existing EPANET INP file
-    - ``movici_network``: Build network from Movici datasets
-
     .. note::
        Controls are handled by the Movici Rules Model, not internally.
 
@@ -99,7 +92,6 @@ class Model(TrackedModel, name="water_network_simulation"):
     def __init__(self, model_config: dict):
         super().__init__(model_config)
         self.network: t.Optional[NetworkWrapper] = None
-        self.mode = model_config.get("mode", "movici_network")
 
         # Simulation options
         self.viscosity = model_config.get("viscosity", 1.0)
@@ -117,43 +109,23 @@ class Model(TrackedModel, name="water_network_simulation"):
         self,
         state: TrackedState,
         schema: AttributeSchema,
-        init_data_handler: InitDataHandler,
         **kwargs,
     ):
         """Setup the model and initialize network.
 
         :param state: Tracked state for entity registration
         :param schema: Attribute schema
-        :param init_data_handler: Handler for initialization data files
         """
-        # Initialize network wrapper based on mode
-        if self.mode == "inp_file":
-            inp_file_path = self.config.get("inp_file")
-            if not inp_file_path:
-                raise ValueError("inp_file required when mode='inp_file'")
+        self.network = NetworkWrapper()
 
-            # Get the INP file through init_data_handler
-            inp_file = Path(inp_file_path)
-            _, inp_path = init_data_handler.get(inp_file.stem)
-            if inp_path is None:
-                inp_path = inp_file
-                if not inp_path.exists():
-                    raise ValueError(f"INP file not found: {inp_file_path}")
+        dataset_name = self.config.get("dataset")
+        if not dataset_name:
+            raise ValueError("dataset required in model config")
 
-            self.network = NetworkWrapper(mode="inp_file", inp_file=inp_path)
-            self._register_output_entities_from_inp(state)
-
-        else:  # movici_network mode
-            self.network = NetworkWrapper(mode="movici_network")
-
-            dataset_name = self.config.get("dataset")
-            if not dataset_name:
-                raise ValueError("dataset required when mode='movici_network'")
-
-            self._register_entities(state, dataset_name)
+        self._register_entities(state, dataset_name)
 
     def _register_entities(self, state: TrackedState, dataset_name: str):
-        """Register entity groups for movici_network mode.
+        """Register entity groups.
 
         :param state: Tracked state for entity registration
         :param dataset_name: Name of the dataset to register entities in
@@ -166,231 +138,12 @@ class Model(TrackedModel, name="water_network_simulation"):
                 setattr(self, name, entity)
                 state.register_entity_group(dataset_name, entity)
 
-    def _register_output_entities_from_inp(self, state: TrackedState):
-        """Register entity groups from INP file network data.
-
-        :param state: Tracked state for entity registration
-        """
-        dataset_name = self.config.get("dataset", "water_network")
-        wn = self.network.wn
-
-        # Map entity names to WNTR name list attributes
-        name_list_attrs = {
-            "junctions": "junction_name_list",
-            "pipes": "pipe_name_list",
-            "reservoirs": "reservoir_name_list",
-            "tanks": "tank_name_list",
-            "pumps": "pump_name_list",
-            "valves": "valve_name_list",
-        }
-
-        for name, name_list_attr in name_list_attrs.items():
-            if getattr(wn, name_list_attr):
-                entity = _ENTITY_CLASSES[name]()
-                setattr(self, name, entity)
-                state.register_entity_group(dataset_name, entity)
-
-        # Build entity data from WNTR network
-        entity_data = self._extract_entities_from_wntr()
-        state.receive_update({dataset_name: entity_data}, is_initial=True)
-
-    def _register_id(self, name: str, movici_id: int, entity_type: str):
-        """Register a single ID mapping."""
-        self.network.id_mapper.wntr_to_movici[name] = movici_id
-        self.network.id_mapper.movici_to_wntr[movici_id] = name
-        self.network.id_mapper.entity_types[name] = entity_type
-
-    def _extract_node_entities(
-        self,
-        wn,
-        names: t.List[str],
-        entity_type: str,
-        entity_key: str,
-        id_offset: int,
-        property_extractors: t.Dict[str, t.Callable],
-    ) -> t.Tuple[dict, int]:
-        """Extract node entities with given property extractors.
-
-        :param wn: WNTR network
-        :param names: List of node names
-        :param entity_type: Type name for ID registration
-        :param entity_key: Key for entity data dict
-        :param id_offset: Starting ID offset
-        :param property_extractors: Dict mapping attr name to extractor function
-        :return: Tuple of (entity_data dict or empty, new id_offset)
-        """
-        if not names:
-            return {}, id_offset
-
-        ids, x_coords, y_coords = [], [], []
-        prop_values = {key: [] for key in property_extractors}
-
-        for i, name in enumerate(names):
-            node = wn.get_node(name)
-            movici_id = id_offset + i
-            self._register_id(name, movici_id, entity_type)
-
-            ids.append(movici_id)
-            x, y = node.coordinates if node.coordinates else (0.0, 0.0)
-            x_coords.append(x)
-            y_coords.append(y)
-
-            for key, extractor in property_extractors.items():
-                prop_values[key].append(extractor(node))
-
-        entity_data = {
-            "id": {"data": np.array(ids, dtype=np.int32)},
-            "geometry.x": {"data": np.array(x_coords, dtype=np.float64)},
-            "geometry.y": {"data": np.array(y_coords, dtype=np.float64)},
-        }
-        for key, values in prop_values.items():
-            dtype = np.float64 if isinstance(values[0], (int, float)) else None
-            entity_data[key] = {"data": np.array(values, dtype=dtype)}
-
-        return {entity_key: entity_data}, id_offset + len(names)
-
-    def _extract_link_entities(
-        self,
-        wn,
-        names: t.List[str],
-        entity_type: str,
-        entity_key: str,
-        id_offset: int,
-        property_extractors: t.Dict[str, t.Callable],
-    ) -> t.Tuple[dict, int]:
-        """Extract link entities with given property extractors.
-
-        :param wn: WNTR network
-        :param names: List of link names
-        :param entity_type: Type name for ID registration
-        :param entity_key: Key for entity data dict
-        :param id_offset: Starting ID offset
-        :param property_extractors: Dict mapping attr name to extractor function
-        :return: Tuple of (entity_data dict or empty, new id_offset)
-        """
-        if not names:
-            return {}, id_offset
-
-        ids, from_node_ids, to_node_ids = [], [], []
-        prop_values = {key: [] for key in property_extractors}
-
-        for i, name in enumerate(names):
-            link = wn.get_link(name)
-            movici_id = id_offset + i
-            self._register_id(name, movici_id, entity_type)
-
-            ids.append(movici_id)
-            from_node_ids.append(self.network.id_mapper.wntr_to_movici[link.start_node_name])
-            to_node_ids.append(self.network.id_mapper.wntr_to_movici[link.end_node_name])
-
-            for key, extractor in property_extractors.items():
-                prop_values[key].append(extractor(link))
-
-        entity_data = {
-            "id": {"data": np.array(ids, dtype=np.int32)},
-            "topology.from_node_id": {"data": np.array(from_node_ids, dtype=np.int32)},
-            "topology.to_node_id": {"data": np.array(to_node_ids, dtype=np.int32)},
-        }
-        for key, values in prop_values.items():
-            if values and isinstance(values[0], str):
-                entity_data[key] = {"data": values}
-            else:
-                entity_data[key] = {"data": np.array(values, dtype=np.float64)}
-
-        return {entity_key: entity_data}, id_offset + len(names)
-
-    def _extract_entities_from_wntr(self) -> dict:
-        """Extract entity data from WNTR network in Movici format.
-
-        :return: Dictionary of entity data for state initialization
-        """
-        wn = self.network.wn
-        entity_data = {}
-        id_offset = 1
-
-        # Node extraction specs: (name_list_attr, entity_type, entity_key, property_extractors)
-        node_specs = [
-            (
-                "junction_name_list",
-                "junction",
-                "water_junction_entities",
-                {
-                    "geometry.z": lambda n: n.elevation,
-                    "drinking_water.base_demand": lambda n: n.base_demand,
-                },
-            ),
-            (
-                "reservoir_name_list",
-                "reservoir",
-                "water_reservoir_entities",
-                {"drinking_water.base_head": lambda n: n.base_head},
-            ),
-            (
-                "tank_name_list",
-                "tank",
-                "water_tank_entities",
-                {
-                    "geometry.z": lambda n: n.elevation,
-                    "drinking_water.level": lambda n: n.init_level,
-                    "drinking_water.min_level": lambda n: n.min_level,
-                    "drinking_water.max_level": lambda n: n.max_level,
-                    "shape.diameter": lambda n: n.diameter,
-                },
-            ),
-        ]
-
-        for name_list_attr, entity_type, entity_key, extractors in node_specs:
-            names = list(getattr(wn, name_list_attr))
-            data, id_offset = self._extract_node_entities(
-                wn, names, entity_type, entity_key, id_offset, extractors
-            )
-            entity_data.update(data)
-
-        # Link extraction specs
-        link_specs = [
-            (
-                "pipe_name_list",
-                "pipe",
-                "water_pipe_entities",
-                {
-                    "shape.diameter": lambda lnk: lnk.diameter,
-                    "drinking_water.roughness": lambda lnk: lnk.roughness,
-                    "drinking_water.minor_loss": lambda lnk: lnk.minor_loss,
-                },
-            ),
-            (
-                "pump_name_list",
-                "pump",
-                "water_pump_entities",
-                {"type": lambda lnk: str(lnk.pump_type).lower()},
-            ),
-            (
-                "valve_name_list",
-                "valve",
-                "water_valve_entities",
-                {
-                    "type": lambda lnk: lnk.valve_type,
-                    "shape.diameter": lambda lnk: lnk.diameter,
-                },
-            ),
-        ]
-
-        for name_list_attr, entity_type, entity_key, extractors in link_specs:
-            names = list(getattr(wn, name_list_attr))
-            data, id_offset = self._extract_link_entities(
-                wn, names, entity_type, entity_key, id_offset, extractors
-            )
-            entity_data.update(data)
-
-        return entity_data
-
     def initialize(self, state: TrackedState):
         """Initialize model and run first simulation.
 
         :param state: Tracked state
         """
-        if self.mode == "movici_network":
-            self._build_network_from_state(state)
+        self._build_network_from_state(state)
 
         # Run initial simulation
         duration = self.config.get("simulation_duration")
@@ -426,8 +179,7 @@ class Model(TrackedModel, name="water_network_simulation"):
         :return: Next update time or None
         """
         # Update dynamic attributes (status changes from Rules Model)
-        if self.mode == "movici_network":
-            self._update_dynamic_attributes(state)
+        self._update_dynamic_attributes(state)
 
         # Run simulation
         hydraulic_timestep = self.config.get("hydraulic_timestep", 3600)

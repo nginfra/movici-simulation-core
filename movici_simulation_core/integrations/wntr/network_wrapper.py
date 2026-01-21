@@ -7,7 +7,6 @@ data model and WNTR's water network simulation engine.
 from __future__ import annotations
 
 import typing as t
-from pathlib import Path
 
 import numpy as np
 import wntr
@@ -29,23 +28,12 @@ class NetworkWrapper:
 
     This class provides a clean interface between Movici's entity-based
     data model and WNTR's water network simulation engine.
-
-    :param mode: Either ``"inp_file"`` or ``"movici_network"``
-    :param inp_file: Path to INP file (required if mode is ``"inp_file"``)
     """
 
-    def __init__(self, mode: str = "movici_network", inp_file: t.Optional[Path] = None):
-        self.mode = mode
+    def __init__(self):
         self.wntr = wntr
         self._curve_counter = 0
-
-        if mode == "inp_file":
-            if inp_file is None:
-                raise ValueError("inp_file required when mode='inp_file'")
-            self.wn = wntr.network.WaterNetworkModel(str(inp_file))
-        else:
-            self.wn = wntr.network.WaterNetworkModel()
-
+        self.wn = wntr.network.WaterNetworkModel()
         self.id_mapper = IdMapper()
 
     @staticmethod
