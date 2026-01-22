@@ -32,6 +32,7 @@ class TrackedState:
     attributes: t.Dict[str, t.Dict[str, AttributeDict]]
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
+    general: dict[str, dict]
 
     def __init__(
         self,
@@ -50,6 +51,7 @@ class TrackedState:
         self.index = {}
         self.logger = logger
         self.schema = schema
+        self.general = defaultdict(dict)
 
         if isinstance(track_unknown, bool):
             track_unknown = track_unknown * OPT
@@ -202,8 +204,9 @@ class TrackedState:
             self.process_general_section(dataset_name, general_section)
 
     def process_general_section(self, dataset_name: str, general_section: dict):
-        enums = general_section.get("enum", {})
+        enums = general_section.pop("enum", {})
         specials = parse_special_values(general_section)
+        self.general[dataset_name].update(general_section)
         for current_dataset, entity_name, name, attr in self.iter_attributes():
             if current_dataset != dataset_name:
                 continue
@@ -253,15 +256,15 @@ class TrackedState:
 
 
 def parse_special_values(
-    general_section: dict, special_keys: t.Iterable = ("special", "no_data")
+    general_section: dict, special_keys: t.Iterable = ("no_data", "special")
 ) -> t.Dict[str, t.Dict[str, ValueType]]:
-    special_section: t.Dict[str, t.Any] = {}
+    all_specials: t.Dict[str, t.Any] = {}
     for key in special_keys:
-        if special_section := general_section.get(key, special_section):
-            break
+        if special_section := general_section.pop(key, None):
+            all_specials.update(special_section)
 
     rv = defaultdict(dict)
-    for k, v in special_section.items():
+    for k, v in all_specials.items():
         entity_type, attribute = k.split(".", maxsplit=1)
         rv[entity_type][attribute] = v
 
