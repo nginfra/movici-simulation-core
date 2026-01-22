@@ -99,7 +99,7 @@ class DatasetCreator:
         )
 
 
-def pipe(operations: t.Sequence[callable], initial, **kwargs):
+def pipe(operations: t.Iterable[t.Callable], initial, **kwargs):
     return functools.reduce(lambda obj, op: op(obj, **kwargs), operations, initial)
 
 
@@ -381,7 +381,7 @@ class EnumConversion(DatasetOperation):
             general = dataset.setdefault("general", {})
             general["enum"] = {k: info.to_list() for k, info in self.enums.items()}
 
-    def iter_enum_attributes(self, dataset) -> t.Tuple[str, list]:
+    def iter_enum_attributes(self, dataset) -> t.Generator[t.Tuple[str, list]]:
         for entity_type, entity_dict in self.config["data"].items():
             for attr, attr_conf in entity_dict.items():
                 if attr == "__meta__":
@@ -481,7 +481,9 @@ class IDGeneration(DatasetOperation):
             entity_data["id"] = [next(ctr) for _ in range(size)]
         return dataset
 
-    def get_entity_count_from_meta(self, entity_meta: dict, sources: dict) -> int:
+    def get_entity_count_from_meta(
+        self, entity_meta: dict, sources: t.MutableMapping[str, t.Sized]
+    ) -> int:
         if source := entity_meta.get("source"):
             return len(sources[source])
         if count := entity_meta.get("count"):
