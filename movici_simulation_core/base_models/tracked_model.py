@@ -84,6 +84,8 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def close(self, message: QuitMessage):
         self.model.shutdown(state=self.state)
+        if message.due_to_failure:
+            return
         if not (self.model_initialized and self.model_ready_for_update):
             raise RuntimeError(
                 "Model called with shutdown while\n"

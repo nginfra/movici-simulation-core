@@ -563,7 +563,7 @@ def test_sends_quit_after_failed_model(run_orchestrator):
     )
 
     assert results == [
-        ("model_a", QuitMessage()),
+        ("model_a", QuitMessage(due_to_failure=True)),
     ]
 
 
