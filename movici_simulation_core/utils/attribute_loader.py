@@ -21,10 +21,6 @@ def load_attributes(json_path: Path) -> List[AttributeSpec]:
     :rtype: List[AttributeSpec]
     :raises FileNotFoundError: If the attributes file does not exist
     """
-    if json_path is None:
-        # Default to attributes.json in project base directory
-        json_path = Path(__file__).parent.parent.parent / "attributes.json"
-
     if not json_path.exists():
         raise FileNotFoundError(f"Attributes file not found: {json_path}")
 
@@ -47,7 +43,7 @@ def create_attribute_spec(name: str, config: Dict[str, Any]) -> AttributeSpec:
                    - data_type: Type of the attribute (float, int, str, bool, object)
                    - csr: Whether the attribute uses CSR (Compressed Sparse Row) format
                    - shape: Unit shape of the attribute
-                   - enum_name: Name of the enumeration for integer attributes
+                   - enum_name: Name of the enumeration for (certain) integer attributes
     :type config: Dict[str, Any]
     :returns: AttributeSpec object
     :rtype: AttributeSpec

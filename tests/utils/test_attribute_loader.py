@@ -29,7 +29,7 @@ class TestCreateAttributeSpec:
 
         assert isinstance(spec, AttributeSpec)
         assert spec.name == "test_attr"
-        assert spec.data_type.py_type == expected_py_type
+        assert spec.data_type.py_type is expected_py_type
         assert spec.data_type.unit_shape == ()
         assert spec.data_type.csr is False
 
@@ -39,7 +39,7 @@ class TestCreateAttributeSpec:
         spec = create_attribute_spec("default_attr", config)
 
         assert spec.name == "default_attr"
-        assert spec.data_type.py_type == float
+        assert spec.data_type.py_type is float
 
     def test_create_attribute_with_invalid_type(self):
         """Test creating attribute with invalid type falls back to float."""
@@ -77,9 +77,23 @@ class TestCreateAttributeSpec:
         spec = create_attribute_spec("full_attr", config)
 
         assert spec.name == "full_attr"
-        assert spec.data_type.py_type == float
+        assert spec.data_type.py_type is float
         assert spec.data_type.unit_shape == (2, 2)
         assert spec.data_type.csr is True
+
+    def test_create_attribute_without_enum_name(self):
+        """Test that omitting enum_name results in None."""
+        config = {"data_type": "int"}
+        spec = create_attribute_spec("status", config)
+
+        assert spec.enum_name is None
+
+    def test_create_attribute_with_enum_name(self):
+        """Test that providing enum_name sets it on the AttributeSpec."""
+        config = {"data_type": "int", "enum_name": "StatusType"}
+        spec = create_attribute_spec("status", config)
+
+        assert spec.enum_name == "StatusType"
 
 
 class TestLoadAttributes:
@@ -114,19 +128,19 @@ class TestLoadAttributes:
 
         # Check specific attributes
         velocity = next(s for s in specs if s.name == "velocity")
-        assert velocity.data_type.py_type == float
+        assert velocity.data_type.py_type is float
         assert velocity.data_type.unit_shape == (2,)
         assert velocity.data_type.csr is False
         assert velocity.name == "velocity"
 
         node_id = next(s for s in specs if s.name == "node_id")
-        assert node_id.data_type.py_type == int
+        assert node_id.data_type.py_type is int
 
         name = next(s for s in specs if s.name == "name")
-        assert name.data_type.py_type == str
+        assert name.data_type.py_type is str
 
         is_active = next(s for s in specs if s.name == "is_active")
-        assert is_active.data_type.py_type == bool
+        assert is_active.data_type.py_type is bool
 
     def test_load_attributes_from_empty_file(self, empty_attributes_json):
         """Test loading from an empty JSON file returns empty list."""
@@ -159,16 +173,16 @@ class TestLoadAttributes:
         assert len(specs) == 3
 
         matrix_attr = next(s for s in specs if s.name == "matrix_attr")
-        assert matrix_attr.data_type.py_type == float
+        assert matrix_attr.data_type.py_type is float
         assert matrix_attr.data_type.unit_shape == (3, 3)
         assert matrix_attr.data_type.csr is True
 
         vector_attr = next(s for s in specs if s.name == "vector_attr")
-        assert vector_attr.data_type.py_type == int
+        assert vector_attr.data_type.py_type is int
         assert vector_attr.data_type.unit_shape == (4,)
 
         simple_attr = next(s for s in specs if s.name == "simple_attr")
-        assert simple_attr.data_type.py_type == float
+        assert simple_attr.data_type.py_type is float
         assert simple_attr.data_type.unit_shape == ()
 
     def test_load_attributes_handles_pathlib_path(self, tmp_path):
