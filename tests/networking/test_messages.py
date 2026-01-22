@@ -34,6 +34,7 @@ from movici_simulation_core.messages import (
         NewTimeMessage(1),
         AcknowledgeMessage(),
         QuitMessage(),
+        QuitMessage(due_to_failure=True),
         GetDataMessage("key", {"some": "filter"}),
         PutDataMessage("key", b"some_data"),
         ClearDataMessage("key"),

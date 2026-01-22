@@ -1502,7 +1502,7 @@ class TestNetCDFConversion:
         assert source.get_timestamps() == [0, 10, 20]
 
     def test_get_bounding_box(self, source: NetCDFGridSource):
-        assert source.get_bounding_box() == [0, 2, 4, 4]
+        assert source.get_bounding_box() == (0, 2, 4, 4)
 
     def test_create_dataset(self, netcdf_file):
         dc = {

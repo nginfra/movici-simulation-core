@@ -180,6 +180,10 @@ def test_shutdown_raises_when_not_ready_for_updates(adapter):
         adapter.close(QuitMessage())
 
 
+def test_shutdown_doesnt_raise_when_quitting_due_to_failure(adapter):
+    adapter.close(QuitMessage(due_to_failure=True))  # should not raise
+
+
 def test_new_time_accepted_when_ready_for_updates(adapter, init_data_handler, update, model):
     adapter.new_time(NewTimeMessage(0))
     adapter.initialize(init_data_handler)

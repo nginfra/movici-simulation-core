@@ -321,7 +321,7 @@ class Runner:
     ctx = multiprocessing.get_context()
 
     def __init__(
-        self, strategies: t.List[type], schema: t.Optional[AttributeSchema] = None
+        self, strategies: list[type] | None, schema: t.Optional[AttributeSchema] = None
     ) -> None:
         self.strategies = strategies
         self.schema = schema
@@ -364,7 +364,7 @@ class ServiceRunner(Runner):
         self,
         service: ServiceInfo,
         settings: Settings,
-        strategies: t.List[type] = None,
+        strategies: list[type] | None = None,
         schema: t.Optional[AttributeSchema] = None,
     ):
         super().__init__(strategies=strategies, schema=schema)
@@ -436,7 +436,7 @@ class ModelRunner(Runner):
         self,
         model_info: ModelInfo,
         settings: Settings,
-        strategies: t.Optional[t.List[type]] = None,
+        strategies: list[type] | None = None,
         schema: t.Optional[AttributeSchema] = None,
     ):
         super().__init__(strategies=strategies, schema=schema)
