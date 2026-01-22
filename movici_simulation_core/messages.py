@@ -116,7 +116,7 @@ class AcknowledgeMessage(Message):
 
 @dataclasses.dataclass
 class QuitMessage(Message):
-    pass
+    due_to_failure: bool = False
 
 
 @dataclasses.dataclass

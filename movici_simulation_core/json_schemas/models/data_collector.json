@@ -19,8 +19,18 @@
     "aggregate_updates": {
       "type": "boolean"
     },
+    "storage": {
+      "type": "string",
+      "enum": ["api", "file", "sqlite"],
+      "description": "Override the default storage strategy for this data_collector instance. The model may fail if the specified strategy is not available"
+    },
     "storage_dir": {
-      "type": "string"
+      "type": "string",
+      "description": "Directory for file-based storage or fallback for SQLite database path"
+    },
+    "database_path": {
+      "type": "string",
+      "description": "Path to SQLite database file (for sqlite backend). If not specified, uses storage_dir/simulation_results_<timestamp>.db"
     }
   }
 }

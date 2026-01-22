@@ -55,7 +55,7 @@ def test_calls_on_enter_when_starting():
 
     fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
     fsm.start()
-    StateA.on_enter.call_count == 1
+    assert StateA.on_enter.call_count == 1
 
 
 def test_fsm_runs_a_state():

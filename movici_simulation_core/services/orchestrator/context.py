@@ -152,7 +152,7 @@ class ConnectedModel:
 
     def __post_init__(self):
         self.timer = self.timer or ReportingStopwatch(
-            on_stop=lambda s: self.logger.info(
+            on_stop=lambda s: self.logger.debug(
                 f"Model '{self.name}' returned in {s:.1f} seconds "
             ),
             on_reset=lambda s: self.logger.info(

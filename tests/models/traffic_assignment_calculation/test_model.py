@@ -309,7 +309,6 @@ class TestRoadLinksChanges:
         road_network_for_traffic,
         road_network_name,
     ):
-
         return [
             {"name": road_network_name, "data": road_network_for_traffic},
         ]
@@ -327,27 +326,28 @@ class TestRoadLinksChanges:
     @pytest.fixture
     def tester_with_base_result(self, init_data, model_config, global_schema, road_network_name):
         inst = Model(model_config)
-        tester = ModelTester(inst, schema=global_schema)
-        for dataset in init_data:
-            tester.add_init_data(dataset["name"], dataset["data"])
-        tester.initialize()
-        result, _ = tester.update(
-            0,
-            {
-                road_network_name: {
-                    "virtual_node_entities": {
-                        "id": [10, 11, 12],
-                        "transport.passenger_demand": [[0, 20, 0], [5, 0, 0], [0, 100, 0]],
-                        "transport.cargo_demand": [
-                            [0, 10, 10],
-                            [10, 0, 10],
-                            [10, 10, 0],
-                        ],
-                    },
-                }
-            },
-        )
-        return tester, result
+
+        with ModelTester(inst, schema=global_schema) as tester:
+            for dataset in init_data:
+                tester.add_init_data(dataset["name"], dataset["data"])
+            tester.initialize()
+            result, _ = tester.update(
+                0,
+                {
+                    road_network_name: {
+                        "virtual_node_entities": {
+                            "id": [10, 11, 12],
+                            "transport.passenger_demand": [[0, 20, 0], [5, 0, 0], [0, 100, 0]],
+                            "transport.cargo_demand": [
+                                [0, 10, 10],
+                                [10, 0, 10],
+                                [10, 10, 0],
+                            ],
+                        },
+                    }
+                },
+            )
+        yield tester, result
 
     @pytest.fixture
     def tester(self, tester_with_base_result):
@@ -474,7 +474,6 @@ class TestRoadLinksChanges:
 class BaseTestTrafficAssignmentRailways:
     @pytest.fixture()
     def init_data(self, railway_network_name, railway_network_for_traffic):
-
         return [
             {"name": railway_network_name, "data": railway_network_for_traffic},
         ]
@@ -492,10 +491,11 @@ class BaseTestTrafficAssignmentRailways:
     @pytest.fixture
     def tester(self, init_data, model_config, global_schema):
         inst = Model(model_config)
-        rv = ModelTester(inst, schema=global_schema)
-        for dataset in init_data:
-            rv.add_init_data(dataset["name"], dataset["data"])
-        return rv
+
+        with ModelTester(inst, schema=global_schema) as tester:
+            for dataset in init_data:
+                tester.add_init_data(dataset["name"], dataset["data"])
+            yield tester
 
 
 class TestRailwayAssignment(BaseTestTrafficAssignmentRailways):

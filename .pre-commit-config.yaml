@@ -1,33 +1,25 @@
 repos:
-- repo: https://github.com/ambv/black
-  rev: 22.1.0
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.14.5
   hooks:
-  - id: black
-    language_version: python3.8
+    - id: ruff-format
+      name: Ruff format
 
-- repo: https://gitlab.com/pycqa/flake8
-  rev: 3.8.3
-  hooks:
-  - id: flake8
-    language_version: python3.8
+    - id: ruff-check
+      name: Ruff lint
+      args: [ --fix ]
 
-- repo: https://github.com/pycqa/isort
-  rev: 5.10.1
+- repo: https://github.com/ComPWA/taplo-pre-commit
+  rev: v0.9.3
   hooks:
-    - id: isort
-      name: isort (python)
+    - id: taplo-format
+      name: Taplo format (TOML)
 
 - repo: local
   hooks:
-  - id: bandit
-    name: Bandit
-    files: '.+\.py'
-    exclude: 'tests/.*'
-    entry: bandit
-    language: python
   - id: python-safety-dependencies-check
     entry: bash
     name: Safety
-    args: [-c, "pip freeze | safety check --stdin --full-report"]
+    args: [-c, "pip freeze | safety scan --stdin --full-report"]
     language: system
     pass_filenames: false

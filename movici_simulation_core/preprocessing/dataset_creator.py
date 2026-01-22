@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import itertools
 import typing as t
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -98,7 +99,7 @@ class DatasetCreator:
         )
 
 
-def pipe(operations: t.Sequence[callable], initial, **kwargs):
+def pipe(operations: t.Iterable[t.Callable], initial, **kwargs):
     return functools.reduce(lambda obj, op: op(obj, **kwargs), operations, initial)
 
 
@@ -122,7 +123,7 @@ class SourcesSetup(DatasetOperation):
                 try:
                     source = self.make_source(source_info)
                 except ValueError as e:
-                    raise ValueError(f"Error for source '{key}': {str(e)}")
+                    raise ValueError(f"Error for source '{key}': {str(e)}") from None
                 sources[key] = source
         return dataset
 
@@ -162,8 +163,15 @@ class CRSTransformation(DatasetOperation):
         crs_code = deep_get(self.config, "__meta__", "crs", default=self.default_crs)
         target_crs = pyproj.CRS.from_user_input(crs_code)
         dataset["epsg_code"] = target_crs.to_epsg()
-        for source in sources.values():
-            source.to_crs(target_crs)
+        # numpy issues a deprecation warning when pyproj tries to convert the crs. This
+        # issue will unfortunately not be solved until the next major release of pyproj
+        # See: https://github.com/pyproj4/pyproj/issues/1309
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="Conversion of an array with ndim > 0 to a scalar is deprecated"
+            )
+            for source in sources.values():
+                source.to_crs(target_crs)
         return dataset
 
 
@@ -309,7 +317,7 @@ class AttributeDataLoading(DatasetOperation):
         try:
             return source.get_geometry(geom_type)
         except ValueError as e:
-            raise ValueError(f"Error for source '{source_name}': {str(e)}")
+            raise ValueError(f"Error for source '{source_name}': {str(e)}") from None
 
     def get_attribute_data(self, attr_config: dict, primary_source_name: str):
         source = self.get_source(primary_source_name)
@@ -330,14 +338,14 @@ class AttributeDataLoading(DatasetOperation):
         try:
             return self.sources[source_name]
         except KeyError:
-            raise ValueError(f"Source '{source_name}' not available")
+            raise ValueError(f"Source '{source_name}' not available") from None
 
     def get_loaders(self, attr_config):
         def skip_none(loader):
             return lambda v: v if v is None else loader(v)
 
         loaders = (self.loaders[key] for key in attr_config.get("loaders", []))
-        return [self.nan_loader, *(skip_none(l) for l in loaders)]
+        return [self.nan_loader, *(skip_none(loader) for loader in loaders)]
 
     @staticmethod
     def nan_loader(val):
@@ -373,7 +381,7 @@ class EnumConversion(DatasetOperation):
             general = dataset.setdefault("general", {})
             general["enum"] = {k: info.to_list() for k, info in self.enums.items()}
 
-    def iter_enum_attributes(self, dataset) -> t.Tuple[str, list]:
+    def iter_enum_attributes(self, dataset) -> t.Generator[t.Tuple[str, list]]:
         for entity_type, entity_dict in self.config["data"].items():
             for attr, attr_conf in entity_dict.items():
                 if attr == "__meta__":
@@ -473,7 +481,9 @@ class IDGeneration(DatasetOperation):
             entity_data["id"] = [next(ctr) for _ in range(size)]
         return dataset
 
-    def get_entity_count_from_meta(self, entity_meta: dict, sources: dict) -> int:
+    def get_entity_count_from_meta(
+        self, entity_meta: dict, sources: t.MutableMapping[str, t.Sized]
+    ) -> int:
         if source := entity_meta.get("source"):
             return len(sources[source])
         if count := entity_meta.get("count"):
@@ -582,7 +592,7 @@ class IDLinking(DatasetOperation):
         try:
             ids = dataset["data"][entity_type]["id"]
         except KeyError:
-            raise ValueError(f"ids not found for '{entity_type}'")
+            raise ValueError(f"ids not found for '{entity_type}'") from None
 
         key = (entity_type, prop)
         if key not in self.index:
@@ -597,7 +607,7 @@ class IDLinking(DatasetOperation):
         try:
             return dataset["data"][entity_type]["id"]
         except KeyError:
-            raise ValueError(f"ids not found for '{entity_type}'")
+            raise ValueError(f"ids not found for '{entity_type}'") from None
 
     @classmethod
     def get_indexed_values_or_raise(cls, values, indexers):

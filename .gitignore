@@ -27,9 +27,6 @@ __pycache__/
 .coverage
 coverage.xml
 
-# pylint
-pylint.txt
-
 # bandit
 bandit-report.json
 
@@ -41,3 +38,6 @@ ae_project
 
 #sphinx
 /docs/build
+
+# examples temporary files
+**/.movici-benchmark.db*

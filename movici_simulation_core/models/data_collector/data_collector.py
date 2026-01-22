@@ -17,6 +17,7 @@ from movici_simulation_core.models.data_collector.concurrent import (
     LimitedThreadPoolExecutor,
     MultipleFutures,
 )
+from movici_simulation_core.models.data_collector.strategy import StorageStrategy
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.types import (
     DataMask,
@@ -26,6 +27,12 @@ from movici_simulation_core.types import (
 )
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.validate import ensure_valid_config
+
+# Optional SQLite storage support
+try:
+    from .sqlite_strategy import SQLiteStorageStrategy
+except ImportError:
+    SQLiteStorageStrategy = None
 
 
 @dataclasses.dataclass
@@ -63,6 +70,7 @@ class DataCollector(SimpleModel, name="data_collector"):
     def initialize(self, settings: Settings, logger: logging.Logger, **_) -> DataMask:
         self.strategy = self.get_storage_strategy(settings, logger)
         self.strategy.initialize()
+
         self.state = TrackedState(track_unknown=SUB)
         self.aggregate = self.config.get("aggregate_updates", self.aggregate)
         return self._get_mask()
@@ -91,6 +99,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.maybe_flush(self.current_time, origin=None, trigger=self.aggregate)
         self.futures.wait()
         self.pool.shutdown()
+        self.strategy.close()
 
     def maybe_flush(self, moment: Moment, origin, trigger):
         if exc := self.futures.exception():
@@ -115,10 +124,11 @@ class DataCollector(SimpleModel, name="data_collector"):
         self.futures.add(fut)
 
     def get_storage_strategy(self, settings: Settings, logger: logging.Logger):
+        storage = self.config.get("storage", settings.storage)
         try:
-            strategy_cls = self.strategies[settings.storage]
-        except KeyError:
-            raise ValueError(f"Unsupported storage method '{settings.storage}'")
+            strategy_cls = self.strategies[storage]
+        except KeyError as e:
+            raise ValueError(f"Unsupported storage method '{storage}'") from e
         return strategy_cls.choose(model_config=self.config, settings=settings, logger=logger)
 
     @classmethod
@@ -126,24 +136,7 @@ class DataCollector(SimpleModel, name="data_collector"):
         cls.strategies[name] = strategy
 
 
-class StorageStrategy:
-    @classmethod
-    def choose(
-        cls, model_config: dict, settings: Settings, logger: logging.Logger
-    ) -> StorageStrategy:
-        raise NotImplementedError
-
-    def initialize(self):
-        pass
-
-    def store(self, info: UpdateInfo):
-        raise NotImplementedError
-
-    def reset_iterations(self, model: DataCollector):
-        pass
-
-
-class LocalStorageStrategy(StorageStrategy):
+class FileStorageStrategy(StorageStrategy):
     def __init__(self, directory: Path, filename_template="t{timestamp}_{iteration}_{name}"):
         self.directory = Path(directory)
         self.filename_template = filename_template
@@ -154,7 +147,7 @@ class LocalStorageStrategy(StorageStrategy):
         directory = model_config.get("storage_dir") or settings.storage_dir
         if directory is None:
             raise ValueError("No storage_dir set")
-        return LocalStorageStrategy(directory)
+        return FileStorageStrategy(directory)
 
     def initialize(self):
         self._ensure_empty_directory()
@@ -175,6 +168,10 @@ class LocalStorageStrategy(StorageStrategy):
         self.directory.mkdir(parents=True, exist_ok=True)
 
 
-DataCollector.add_storage_strategy("disk", LocalStorageStrategy)
+DataCollector.add_storage_strategy("file", FileStorageStrategy)
+
+# Register SQLite storage strategy if available
+if SQLiteStorageStrategy is not None:
+    DataCollector.add_storage_strategy("sqlite", SQLiteStorageStrategy)
 
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"

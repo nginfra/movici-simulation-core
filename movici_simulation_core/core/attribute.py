@@ -8,7 +8,7 @@ import typing as t
 
 import numpy as np
 
-from movici_simulation_core.csr import generate_update, isclose, remove_undefined_csr
+from movici_simulation_core.csr import generate_update, remove_undefined_csr
 from movici_simulation_core.types import CSRAttributeData, NumpyAttributeData, UniformAttributeData
 from movici_simulation_core.utils.unicode import determine_new_unicode_dtype
 
@@ -381,8 +381,7 @@ class CSRAttribute(Attribute):
     def strip_undefined(
         self, value: TrackedCSRArray, indices: np.ndarray
     ) -> t.Tuple[TrackedCSRArray, np.ndarray]:
-
-        is_undefined = isclose(value.data, self.data_type.undefined, equal_nan=True)
+        is_undefined = self.data_type.is_undefined(value.data)
         if len(is_undefined.shape) > 1:
             num_undefined = np.sum(np.all(is_undefined, axis=-1))
             new_data_shape = (value.data.shape[0] - num_undefined, *value.data.shape[1:])
@@ -400,6 +399,7 @@ class CSRAttribute(Attribute):
             self.data_type.undefined,
             num_undefined,
             new_data_shape,
+            compare=self.csr.get_comparator(equal_nan=True, to_scalar=True),
         )
 
         return TrackedCSRArray(new_data, new_row_ptr), new_indices
@@ -551,7 +551,6 @@ def ensure_csr_data(
     value: t.Union[dict, TrackedCSRArray, t.Tuple[np.ndarray, np.ndarray], t.List[list]],
     data_type: t.Optional[DataType] = None,
 ) -> TrackedCSRArray:
-
     if isinstance(value, TrackedCSRArray):
         return value
 

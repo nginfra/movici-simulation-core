@@ -2,7 +2,7 @@ import functools
 import inspect
 import warnings
 
-deprecation_warning = functools.partial(warnings.warn, category=DeprecationWarning, stacklevel=2)
+deprecation_warning = functools.partial(warnings.warn, category=FutureWarning, stacklevel=2)
 
 
 def deprecated(obj=None, alternative: str = None):

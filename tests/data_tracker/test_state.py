@@ -1,4 +1,4 @@
-from logging import WARN
+from logging import WARNING
 from unittest.mock import Mock, call
 
 import numpy as np
@@ -475,11 +475,11 @@ def test_logs_on_double_general_section_assignment_conflict(state, entity, datas
 
     assert state.logger.log.call_args_list == [
         call(
-            WARN,
+            WARNING,
             f"Special value already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
         call(
-            WARN,
+            WARNING,
             f"Enum already set for {dataset_name}/{entity.__entity_name__}/attr",
         ),
     ]
@@ -505,6 +505,30 @@ def test_does_not_log_when_double_general_section_assignment_equal_values(
     )
 
     assert state.logger.log.call_count == 0
+
+
+def test_exposes_general_section_once_received(state, dataset_name):
+    state.receive_update(
+        {
+            "general": {"my": "data"},
+            dataset_name: {},
+        }
+    )
+    assert state.general[dataset_name] == {"my": "data"}
+
+
+def test_strips_special_and_enum_from_general_section(state, dataset_name):
+    state.receive_update(
+        {
+            "general": {
+                "special": {"my_entities.attr": -100},
+                "enum": {"bla": ["a", "b"]},
+                "my": "data",
+            },
+            dataset_name: {},
+        }
+    )
+    assert state.general[dataset_name] == {"my": "data"}
 
 
 @pytest.mark.parametrize(

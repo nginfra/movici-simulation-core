@@ -97,7 +97,7 @@ class Model(TrackedModel, name="overlap_status"):
 
     @staticmethod
     def ensure_uniform_attribute(ds, entity, spec: AttributeSpec):
-        if spec.data_type.py_type == str:
+        if spec.data_type.py_type is str:
             raise ValueError(f"Attribute {ds}/{entity}/{spec.name} can't have string type")
         if spec.data_type.csr is True:
             raise ValueError(f"attribute {ds}/{entity}/{spec.name} should be of uniform data type")

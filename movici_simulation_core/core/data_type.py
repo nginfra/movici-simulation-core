@@ -3,6 +3,8 @@ import typing as t
 
 import numpy as np
 
+from movici_simulation_core.csr import compare_array, compare_scalar, float_compare
+
 T = t.TypeVar("T", bool, int, float, str)
 
 
@@ -26,6 +28,13 @@ class DataType(t.Generic[T]):
         if not isinstance(undefined, str) and np.isnan(undefined):
             return result | np.isnan(val)
         return result
+
+    def get_comparator(self, rtol=1e-5, atol=1e-8, equal_nan=False, to_scalar=False):
+        if self.py_type is float:
+            return float_compare(rtol, atol, equal_nan)
+        if to_scalar:
+            return compare_scalar
+        return compare_array
 
 
 UNDEFINED = {

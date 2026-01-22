@@ -2,7 +2,6 @@ import shutil
 import tempfile
 import typing as t
 import uuid
-from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
@@ -55,7 +54,6 @@ class ProjectWrapper:
         project_name: t.Optional[str] = None,
         delete_on_close: bool = True,
     ) -> None:
-
         self._delete_on_close = delete_on_close
 
         if project_path is None:
@@ -73,7 +71,6 @@ class ProjectWrapper:
         try:
             self._project = Project()
             self._project.new(str(self.project_dir))
-            self._db = self._project.conn
 
             self._node_id_to_point: t.Dict[int, t.Tuple[float, float]] = {}
 
@@ -113,28 +110,25 @@ class ProjectWrapper:
         lats, lons = self.transformer.transform(nodes.geometries[:, 0], nodes.geometries[:, 1])
         lats = np.round(lats, decimals=GEOM_ACC)
         lons = np.round(lons, decimals=GEOM_ACC)
-        for node_id, xy, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
+        for node_id, _, lat, lon in zip(new_node_ids, nodes.geometries, lats, lons):
             point_strs.append(f"POINT({lon:.{GEOM_ACC}f} {lat:.{GEOM_ACC}f})")
             self._node_id_to_point[node_id] = (lat, lon)
 
         sql = (
-            "INSERT INTO nodes "  # nosec
+            "INSERT INTO nodes "  # noqa: S608
             "(node_id, is_centroid, modes, link_types, geometry)  VALUES "
             f"(?, ?, '{TransportMode.CAR}', 'y', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
+        with self._project.db_connection_spatial as conn:
+            conn.executemany(
                 sql,
                 zip(new_node_ids.tolist(), nodes.is_centroids.tolist(), point_strs),
             )
 
-            self._db.commit()
-
     def get_nodes(self) -> NodeCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT node_id, is_centroid FROM nodes")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute("SELECT node_id, is_centroid FROM nodes").fetchall()
         if not results:
             return NodeCollection()
         node_id, is_centroids = zip(*results)
@@ -144,13 +138,13 @@ class ProjectWrapper:
     def add_links(self, links: LinkCollection, raise_on_geometry_mismatch: bool = True) -> None:
         try:
             new_from_nodes = self._node_id_generator.query_new_ids(links.from_nodes)
-        except ValueError:
-            raise ValueError(f"From nodes {links.from_nodes} does not exist in node ids")
+        except ValueError as e:
+            raise ValueError(f"From nodes {links.from_nodes} does not exist in node ids") from e
 
         try:
             new_to_nodes = self._node_id_generator.query_new_ids(links.to_nodes)
-        except ValueError:
-            raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids")
+        except ValueError as e:
+            raise ValueError(f"To nodes {links.to_nodes} does not exist in node ids") from e
 
         linestring_strs = []
         geometries = np.round(
@@ -174,14 +168,14 @@ class ProjectWrapper:
         capacities = links.capacities.tolist()
 
         sql = (
-            "INSERT INTO links "  # nosec
+            "INSERT INTO links "  # noqa: S608
             "(link_id, a_node, b_node, direction, speed_ab, speed_ba, "
             "capacity_ab, capacity_ba, modes, link_type, geometry)  VALUES "
             f"(?, ?, ?, ?, ?, ?, ?, ?, '{TransportMode.CAR}', 'default', GeomFromText(?, 4326))"
         )
 
-        with closing(self._db.cursor()) as cursor:
-            cursor.executemany(
+        with self._project.db_connection_spatial as conn:
+            conn.executemany(
                 sql,
                 zip(
                     new_link_ids.tolist(),
@@ -196,12 +190,11 @@ class ProjectWrapper:
                 ),
             )
 
-            self._db.commit()
-
     def get_links(self) -> LinkCollection:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, a_node, b_node, direction FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute(
+                "SELECT link_id, a_node, b_node, direction FROM links"
+            ).fetchall()
         if not results:
             return LinkCollection()
         link_id, a_node, b_node, direction = zip(*results)
@@ -249,9 +242,8 @@ class ProjectWrapper:
         Aequilibrae calculates distances automatically but does not compute free flow time, so we
         have to calculate them manually
         """
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id, distance, speed_ab FROM links")
-            results = cursor.fetchall()
+        with self._project.db_connection_spatial as conn:
+            results = conn.execute("SELECT link_id, distance, speed_ab FROM links").fetchall()
         free_flow_times = []
         ids = []
         for link_id, distance, speed in results:
@@ -262,25 +254,24 @@ class ProjectWrapper:
         return np.array(free_flow_times)
 
     def add_column(self, column_name: str, values: t.Optional[t.Sequence] = None) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
+        with self._project.db_connection_spatial as conn:
+            conn.execute(f"ALTER TABLE links ADD COLUMN {column_name} REAL(32) DEFAULT 0")
 
         if values is not None:
             self.update_column(column_name, values)
 
     def update_column(self, column_name: str, values: t.Sequence) -> None:
-        with closing(self._db.cursor()) as cursor:
-            cursor.execute("SELECT link_id FROM links")
-            ids = (row[0] for row in cursor.fetchall())
+        with self._project.db_connection_spatial as conn:
+            result = conn.execute("SELECT link_id FROM links").fetchall()
+            ids = (row[0] for row in result)
 
             if isinstance(values, np.ndarray):
                 values = values.tolist()
 
-            cursor.executemany(
-                f"UPDATE links SET {column_name}=? WHERE link_id=?", zip(values, ids)  # nosec
+            conn.executemany(
+                f"UPDATE links SET {column_name}=? WHERE link_id=?",  # noqa: S608
+                zip(values, ids),
             )
-
-            self._db.commit()
 
     @property
     def _graph(self) -> Graph:
@@ -415,7 +406,7 @@ class ProjectWrapper:
     ) -> t.List[t.Optional[GraphPath]]:
         results: t.List[t.Optional[GraphPath]] = []
         path_results: t.Optional[PathResults] = None
-        for i, to_node in enumerate(to_nodes):
+        for to_node in to_nodes:
             if not path_results:
                 result = self.get_shortest_path(from_node, to_node)
                 if result:

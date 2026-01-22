@@ -4,11 +4,13 @@ import numpy as np
 import pytest
 
 from movici_simulation_core.core import DataType
+from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.data_format import (
     EntityInitDataFormat,
     create_array,
     data_keys,
     infer_data_type_from_list,
+    is_undefined_csr,
     parse_list,
 )
 from movici_simulation_core.core.data_type import UNDEFINED
@@ -245,3 +247,26 @@ def test_serialization_round_trip(data):
 def test_data_keys(data, ignored, expected):
     result = data_keys(data, ignored) if ignored is not None else data_keys(data)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "data, row_ptr, data_type, expected",
+    [
+        (np.array([1, UNDEFINED[int], 1]), np.array([0, 2, 3]), DataType(int), [True, False]),
+        (
+            np.array([1.0, UNDEFINED[float], 1.0]),
+            np.array([0, 2, 3]),
+            DataType(float),
+            [True, False],
+        ),
+        (
+            np.array([[1.0, UNDEFINED[float], 1.0]]),
+            np.array([0, 1, 1]),
+            DataType(float, (3,)),
+            [True, False],
+        ),
+    ],
+)
+def test_csr_undefined(data, row_ptr, data_type, expected):
+    array = TrackedCSRArray(data, row_ptr)
+    np.testing.assert_array_equal(is_undefined_csr(array, data_type), expected)

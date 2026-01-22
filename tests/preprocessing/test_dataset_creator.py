@@ -86,7 +86,10 @@ class Polygon(LineString):
         return "Polygon"
 
     def get_coordinates(self):
-        return [[list(point) for point in self.geometry]]
+        ring = [list(point) for point in self.geometry]
+        if ring[0] != ring[-1]:  # TODO: should do a floating point comparison here
+            ring.append(ring[0])
+        return [ring]
 
 
 def create_feature_collection(features: t.List[Feature]):
@@ -332,7 +335,7 @@ class TestGeopandasDataSource:
             ([10, None], [10.0, float("NaN")]),
             ([10.1, None], [10.1, float("NaN")]),
             ([True, None], [True, float("NaN")]),
-            (["bla", None], ["bla", float("NaN")]),
+            (["bla", None], ["bla", None]),
         ],
     )
     def test_undefined_property(self, input, expected, create_gdf):
@@ -1075,7 +1078,6 @@ class TestIDLinking:
     @pytest.fixture
     def prepare_dataset(self, sources):
         def _prepare_dataset(config):
-
             return DatasetCreator(
                 [
                     AttributeDataLoading,
@@ -1500,7 +1502,7 @@ class TestNetCDFConversion:
         assert source.get_timestamps() == [0, 10, 20]
 
     def test_get_bounding_box(self, source: NetCDFGridSource):
-        assert source.get_bounding_box() == [0, 2, 4, 4]
+        assert source.get_bounding_box() == (0, 2, 4, 4)
 
     def test_create_dataset(self, netcdf_file):
         dc = {

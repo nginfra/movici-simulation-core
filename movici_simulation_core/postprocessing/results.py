@@ -432,12 +432,11 @@ class SingleAttributeSlicingStrategy(SlicingStrategy):
                 self.state.move_to(timestamp)
                 timestamps.append(timestamp)
                 data.append(prop.to_dict())
-        finally:
-            return {
-                "timestamps": timestamps,
-                "id": ids,
-                "data": data,
-            }
+        return {
+            "timestamps": timestamps,
+            "id": ids,
+            "data": data,
+        }
 
 
 class SingleEntitySlicingStrategy(SlicingStrategy):

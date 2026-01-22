@@ -57,10 +57,10 @@ def get_transport_info(model_config: t.Dict[str, t.Optional[t.List[str]]]) -> t.
 def try_get_geometry_type(geometry_type):
     try:
         return supported_geometry_types[geometry_type]
-    except KeyError:
+    except KeyError as e:
         raise ValueError(
             f"models geometry_type must be one of {[k for k in supported_geometry_types.keys()]}"
-        )
+        ) from e
 
 
 def find_y_in_x(x: np.ndarray, y: np.ndarray):
