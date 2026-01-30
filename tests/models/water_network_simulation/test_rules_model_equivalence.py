@@ -144,7 +144,6 @@ class TestPipeStatusEquivalence:
     def test_initial_network_matches_wntr(self, create_model_tester, init_data):
         """Test that Movici network produces same results as pure WNTR."""
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
             "entity_groups": ["junctions", "pipes", "reservoirs"],
             "hydraulic_timestep": 3600,
@@ -209,7 +208,6 @@ class TestPipeStatusEquivalence:
         - Compare results with WNTR network where PIPE2 is initially closed
         """
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
             "entity_groups": ["junctions", "pipes", "reservoirs"],
             "hydraulic_timestep": 3600,
@@ -327,7 +325,6 @@ class TestBranchedNetworkControl:
     def test_branch_isolation(self, create_model_tester, init_data):
         """Test that closing a branch pipe isolates that branch correctly."""
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
             "entity_groups": ["junctions", "pipes", "reservoirs"],
             "hydraulic_timestep": 3600,
@@ -1037,7 +1034,6 @@ class TestWNTRConditionalControlEquivalence:
         We compare against WNTR ValueCondition control on pressure.
         """
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
             "entity_groups": ["junctions", "pipes", "reservoirs"],
             "hydraulic_timestep": 3600,

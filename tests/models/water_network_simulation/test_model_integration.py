@@ -110,6 +110,9 @@ class TestAttributeNaming:
 
         # Check OPT attributes
         assert self._has_attribute(WaterJunctionEntity, "demand_factor")
+        assert self._has_attribute(WaterJunctionEntity, "minimum_pressure")
+        assert self._has_attribute(WaterJunctionEntity, "required_pressure")
+        assert self._has_attribute(WaterJunctionEntity, "pressure_exponent")
 
         # Check PUB attributes
         assert self._has_attribute(WaterJunctionEntity, "demand")
@@ -230,7 +233,6 @@ class TestHydraulicOptionsFromDataset:
     @pytest.fixture
     def model_config(self):
         return {
-            "mode": "movici_network",
             "dataset": "water_network",
             "entity_groups": ["junctions", "pipes", "reservoirs"],
             "hydraulic_timestep": 3600,
@@ -248,13 +250,12 @@ class TestHydraulicOptionsFromDataset:
         return tester.model.model.model.network.wn
 
     def test_options_applied_from_general_section(self, create_model_tester, model_config):
-        """Test that hydraulic options from dataset general section are applied."""
+        """Test that data options from dataset general section are applied."""
         network = self._make_network_data(
             general={
                 "hydraulic": {
                     "viscosity": 1.5,
                     "specific_gravity": 0.98,
-                    "trials": 100,
                 }
             },
         )
@@ -266,7 +267,6 @@ class TestHydraulicOptionsFromDataset:
         wn = self._get_wn(tester)
         assert wn.options.hydraulic.viscosity == 1.5
         assert wn.options.hydraulic.specific_gravity == 0.98
-        assert wn.options.hydraulic.trials == 100
 
     def test_defaults_when_no_general_section(self, create_model_tester, model_config):
         """Test that WNTR defaults are used when no general section."""
@@ -280,3 +280,52 @@ class TestHydraulicOptionsFromDataset:
         assert wn.options.hydraulic.headloss == "H-W"
         assert wn.options.hydraulic.viscosity == 1.0
         assert wn.options.hydraulic.specific_gravity == 1.0
+
+    def test_solver_options_from_model_config(self, create_model_tester):
+        """Test that solver options from model config 'options' key are applied."""
+        config = {
+            "dataset": "water_network",
+            "entity_groups": ["junctions", "pipes", "reservoirs"],
+            "hydraulic_timestep": 3600,
+            "simulation_duration": 3600,
+            "options": {
+                "hydraulic": {
+                    "trials": 100,
+                    "accuracy": 0.01,
+                }
+            },
+        }
+        network = self._make_network_data()
+
+        tester = create_model_tester(Model, config)
+        tester.add_init_data("water_network", network)
+        tester.initialize()
+
+        wn = self._get_wn(tester)
+        assert wn.options.hydraulic.trials == 100
+        assert wn.options.hydraulic.accuracy == 0.01
+
+    def test_config_and_general_combined(self, create_model_tester):
+        """Test that model config and dataset general are combined."""
+        config = {
+            "dataset": "water_network",
+            "entity_groups": ["junctions", "pipes", "reservoirs"],
+            "hydraulic_timestep": 3600,
+            "simulation_duration": 3600,
+            "options": {
+                "hydraulic": {
+                    "trials": 100,
+                    "accuracy": 0.01,
+                }
+            },
+        }
+        network = self._make_network_data(general={"hydraulic": {"viscosity": 1.5}})
+
+        tester = create_model_tester(Model, config)
+        tester.add_init_data("water_network", network)
+        tester.initialize()
+
+        wn = self._get_wn(tester)
+        assert wn.options.hydraulic.viscosity == 1.5
+        assert wn.options.hydraulic.trials == 100
+        assert wn.options.hydraulic.accuracy == 0.01

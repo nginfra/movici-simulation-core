@@ -323,655 +323,159 @@ In the Movici integration, these are NOT implemented in the WNTR wrapper. Instea
 
 Analysis comparing `drinking_water_model.rst` specification with the current implementation in `movici_simulation_core/models/water_network_simulation/`.
 
-### 1. Attribute Naming Convention
+> **Status:** Most items below have been resolved. This section is kept for historical reference.
 
-| Aspect | Documentation | Implementation |
-|--------|---------------|----------------|
-| Prefix | `drinking_water.*` | `water.*` |
-| Shape prefix | `shape.*` (diameter, length) | `water.*` |
-| Elevation | `geometry.z` | `water.elevation` |
+### 1. Attribute Naming Convention — RESOLVED
 
-**Impact:** All attributes need renaming to match documentation.
+All attributes now use `drinking_water.*` prefix, `shape.*` for shape attributes, and
+`geometry.z` for elevation. The old `water.*` prefix has been removed.
 
-### 2. Missing Attributes in Implementation
+### 2. Missing Attributes — RESOLVED
 
-#### Junctions
-- `drinking_water.demand` (effective demand = base_demand × demand_factor) - **MISSING**
+All previously missing attributes have been implemented:
+- Junction: `drinking_water.demand`, PDD attributes (`minimum_pressure`, `required_pressure`, `pressure_exponent`)
+- Tank: `drinking_water.overflow`
+- Pipe: `drinking_water.check_valve`
+- Pump: `drinking_water.head_curve` as CSR data
+- Valve: type-specific setting attributes and `drinking_water.valve_curve` for GPV
 
-#### Tanks
-- `drinking_water.overflow` (boolean for overflow behavior) - **MISSING**
+### 3. Removed Legacy Attributes — RESOLVED
 
-#### Pipes
-- `drinking_water.check_valve` (boolean for flow restriction) - **MISSING**
+The following legacy attributes have been removed:
+- `water.demand_pattern`, `water.actual_demand`, `water.demand_deficit`
+- `water.flow_direction`, `water.bulk_coeff`, `water.wall_coeff`
+- `water.head_pattern`, `water.initial_level`
 
-#### Pumps
-- `drinking_water.head_curve` as CSR data - current impl uses string reference to named curve
+### 4. Attribute Flag Differences — RESOLVED
 
-#### Valves
-- `drinking_water.valve_curve` for GPV (as CSR data) - **MISSING**
-- Valve-specific setting attributes:
-  - `drinking_water.valve_pressure` (PRV/PSV/PBV)
-  - `drinking_water.valve_flow` (FCV)
-  - `drinking_water.valve_loss_coefficient` (TCV)
-  - `drinking_water.valve_open_factor` (PCV) - Note: PCV not in EPANET standard
+Attribute flags now match the documentation specification.
 
-### 3. Extra Attributes in Implementation (not in docs)
+### 5. Structural Differences — RESOLVED
 
-| Entity | Attribute | Notes |
-|--------|-----------|-------|
-| Junction | `water.demand_pattern` | String pattern reference |
-| Junction | `water.actual_demand` | Renamed to `drinking_water.demand`? |
-| Junction | `water.demand_deficit` | Not standard WNTR - should be calculated |
-| Pipe | `water.flow_direction` | Extra output |
-| Pipe | `water.bulk_coeff` | Water quality coefficient |
-| Pipe | `water.wall_coeff` | Water quality coefficient |
-| Reservoir | `water.head_pattern` | String pattern reference |
-| Tank | `water.initial_level` | Doc combines with `level` as INIT|PUB |
-| Valve | `water.velocity` | Extra output |
-| Valve | `water.headloss` | Extra output |
+- Curves are stored as CSR data directly in attributes
+- Valve settings use separate type-specific attributes
+- Tank level uses a single `level` attribute with `INIT|PUB` flags
 
-### 4. Attribute Flag Differences
+### 6. Model Configuration Options — RESOLVED
 
-| Entity | Attribute | Doc Flags | Impl Flags |
-|--------|-----------|-----------|------------|
-| Tank | diameter | OPT | INIT |
-| Tank | min_level | OPT | INIT |
-| Tank | max_level | OPT | INIT |
-| Tank | level | INIT\|PUB | PUB only (separate init_level) |
-| Reservoir | head | INIT (base) + PUB (calculated) | INIT only |
+Options are now split between two sources:
+- **Data options** in dataset `"general"` section: `headloss`, `viscosity`, `specific_gravity`,
+  `demand_model`, `demand_multiplier`, `minimum_pressure`, `required_pressure`, `pressure_exponent`
+- **Solver options** in model config `"options"` key: `trials`, `accuracy`, `headerror`,
+  `flowchange`, `damplimit`, `checkfreq`, `maxcheck`, `unbalanced`, `unbalanced_value`
 
-### 5. Structural Differences
+Both are merged at initialization via `_deep_merge()` and applied through
+`NetworkWrapper.configure_options()`.
 
-#### Curves as Data vs References
-- **Documentation:** Curves stored as CSR data directly in attributes (e.g., `(2,)-csr` for pump curves, volume curves)
-- **Implementation:** Curves referenced by name string, actual curve data stored elsewhere
+### 7. Controls Implementation — RESOLVED
 
-#### Valve Settings
-- **Documentation:** Separate attributes per valve type (`valve_pressure`, `valve_flow`, `valve_loss_coefficient`)
-- **Implementation:** Single `valve_setting` attribute with meaning derived from valve type
-
-#### Tank Level
-- **Documentation:** Single `level` attribute with `INIT|PUB` flags
-- **Implementation:** Split into `initial_level` (INIT) and `level` (PUB)
-
-### 6. Missing Model Configuration Options
-
-| Option | Documentation | Implementation |
-|--------|---------------|----------------|
-| Viscosity | Yes (default 1) | **MISSING** |
-| Specific gravity | Yes (default 1) | **MISSING** |
-| rtol | Yes (default 1e-3) | **MISSING** |
-| headloss_method | From dataset general section | **MISSING** |
-
-### 7. Controls Implementation
-
-- **Documentation:** Controls handled by Rules Model (external)
-- **Implementation:** Has internal `ControlManager` + supports `control_rules` in model config
-
-This is a design decision - both approaches work, but documentation suggests decoupling.
+`ControlManager` has been removed. Controls are handled externally by the Movici Rules Model.
+See `test_rules_model_equivalence.py` for verification tests.
 
 ### 8. Pause/Restart Capability
 
-- **Documentation:** Questions about WNTR pause/restart support
-- **Implementation:** Not implemented - runs fresh simulation each update
+- **Documentation:** WNTR supports pause/restart via `reset_initial_values()`
+- **Implementation:** Uses `reset_initial_values()` before each simulation run
 
-### 9. demand_deficit Handling
+### 9. demand_deficit Handling — RESOLVED
 
-- **Documentation:** Questions where this comes from (answer: NOT a WNTR attribute)
-- **Implementation:** Tries to read from WNTR results (will be None)
-  ```python
-  # network_wrapper.py:244-245
-  if "demand_deficit" in results.node:
-      node_demand_deficits = results.node["demand_deficit"].loc[last_time].values
-  ```
-- **Fix needed:** Calculate as `expected_demand - actual_demand` for PDD simulations
+`demand_deficit` has been removed from the implementation. It was not a standard WNTR attribute.
+If needed, it can be calculated externally as `expected_demand - actual_demand` for PDD simulations.
 
-### 10. Entity Group Names
+### 10. Entity Group Names — No Changes Needed
 
-| Documentation | Implementation | Match |
-|---------------|----------------|-------|
-| `water_junction_entities` | `water_junction_entities` | ✓ |
-| `water_tank_entities` | `water_tank_entities` | ✓ |
-| `water_reservoir_entities` | `water_reservoir_entities` | ✓ |
-| `water_pipe_entities` | `water_pipe_entities` | ✓ |
-| `water_pump_entities` | `water_pump_entities` | ✓ |
-| `water_valve_entities` | `water_valve_entities` | ✓ |
+All entity group names match between documentation and implementation.
 
 ---
 
 ## Summary of Required Changes
 
-### High Priority (Breaking Changes)
-1. Rename all `water.*` attributes to `drinking_water.*`
-2. Rename `shape.*` attributes appropriately
-3. Use `geometry.z` for elevation
-4. Add missing `overflow` attribute to tanks
-5. Add missing `check_valve` attribute to pipes
-6. Calculate `demand_deficit` instead of reading from WNTR
+> **Status:** All items below have been completed.
 
-### Medium Priority (Functional Gaps)
-7. Add model config options: viscosity, specific gravity, rtol
-8. Implement headloss_method from dataset general section
-9. Consider implementing pause/restart for transient simulation
-10. Add valve-specific setting attributes or document unified approach
+### High Priority (Breaking Changes) — DONE
+1. ~~Rename all `water.*` attributes to `drinking_water.*`~~
+2. ~~Rename `shape.*` attributes appropriately~~
+3. ~~Use `geometry.z` for elevation~~
+4. ~~Add missing `overflow` attribute to tanks~~
+5. ~~Add missing `check_valve` attribute to pipes~~
+6. ~~Remove `demand_deficit` (not a standard WNTR attribute)~~
 
-### Low Priority (Enhancements)
-11. Support curves as embedded CSR data (alternative to named references)
-12. Align tank level handling (single INIT|PUB vs split attributes)
-13. Consider moving controls to Rules Model for decoupling
+### Medium Priority (Functional Gaps) — DONE
+7. ~~Split options: data options in dataset general, solver options in model config~~
+8. ~~Implement headloss from dataset general section~~
+9. ~~Implement pause/restart via `reset_initial_values()`~~
+10. ~~Add valve-specific setting attributes~~
+
+### Low Priority (Enhancements) — DONE
+11. ~~Support curves as embedded CSR data~~
+12. ~~Align tank level handling (single INIT|PUB)~~
+13. ~~Move controls to Rules Model (ControlManager removed)~~
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Attribute Renaming (Breaking Changes)
-
-#### 1.1 Create New Attribute Specifications
-
-**File:** `movici_simulation_core/models/water_network_simulation/attributes.py`
-
-Replace all `water.*` attributes with `drinking_water.*`:
-
-```python
-# OLD                                    # NEW
-Water_Elevation                       -> # Use geometry.z from PointEntity
-Water_BaseDemand                      -> DrinkingWater_BaseDemand
-Water_DemandMultiplier                -> DrinkingWater_DemandFactor
-Water_Pressure                        -> DrinkingWater_Pressure
-Water_Head                            -> DrinkingWater_Head
-Water_ActualDemand                    -> DrinkingWater_Demand (effective demand)
-Water_DemandDeficit                   -> # Calculate, don't store as attribute
-Water_Diameter                        -> Shape_Diameter
-Water_Roughness                       -> DrinkingWater_Roughness
-Water_MinorLoss                       -> DrinkingWater_MinorLoss
-Water_LinkStatus                      -> Operational_Status (boolean)
-Water_Flow                            -> DrinkingWater_Flow
-Water_Velocity                        -> DrinkingWater_Velocity
-Water_Headloss                        -> DrinkingWater_Headloss
-Water_PumpCurve                       -> DrinkingWater_HeadCurve (CSR data)
-Water_PumpSpeed                       -> DrinkingWater_Speed
-Water_Power                           -> DrinkingWater_Power
-Water_PumpType                        -> Type (enum: power, head)
-Water_ValveType                       -> Type (enum: PRV, PSV, PBV, FCV, TCV, GPV)
-Water_ValveSetting                    -> Split into type-specific attributes
-Water_InitialLevel                    -> DrinkingWater_Level (INIT|PUB)
-Water_MinLevel                        -> DrinkingWater_MinLevel
-Water_MaxLevel                        -> DrinkingWater_MaxLevel
-Water_TankDiameter                    -> Shape_Diameter
-Water_Level                           -> DrinkingWater_Level (combined)
-Water_MinVolume                       -> DrinkingWater_MinVolume
-Water_VolumeCurve                     -> Shape_VolumeCurve (CSR data)
-Water_HeadMultiplier                  -> DrinkingWater_HeadFactor
-```
-
-#### 1.2 New Attribute Definitions
-
-```python
-# attributes.py - New attributes to add
-
-# Geometry (reuse existing or define)
-Geometry_Z = AttributeSpec("geometry.z", data_type=DataType(float))
-
-# Shape attributes
-Shape_Diameter = AttributeSpec("shape.diameter", data_type=DataType(float))
-Shape_Length = AttributeSpec("shape.length", data_type=DataType(float))
-Shape_VolumeCurve = AttributeSpec("shape.volume_curve", data_type=DataType(float, (2,), csr=True))
-
-# Drinking water attributes
-DrinkingWater_BaseDemand = AttributeSpec("drinking_water.base_demand", data_type=DataType(float))
-DrinkingWater_DemandFactor = AttributeSpec("drinking_water.demand_factor", data_type=DataType(float))
-DrinkingWater_Demand = AttributeSpec("drinking_water.demand", data_type=DataType(float))
-DrinkingWater_Pressure = AttributeSpec("drinking_water.pressure", data_type=DataType(float))
-DrinkingWater_Head = AttributeSpec("drinking_water.head", data_type=DataType(float))
-DrinkingWater_Roughness = AttributeSpec("drinking_water.roughness", data_type=DataType(float))
-DrinkingWater_MinorLoss = AttributeSpec("drinking_water.minor_loss", data_type=DataType(float))
-DrinkingWater_CheckValve = AttributeSpec("drinking_water.check_valve", data_type=DataType(bool))
-DrinkingWater_Flow = AttributeSpec("drinking_water.flow", data_type=DataType(float))
-DrinkingWater_Velocity = AttributeSpec("drinking_water.velocity", data_type=DataType(float))
-DrinkingWater_Headloss = AttributeSpec("drinking_water.headloss", data_type=DataType(float))
-DrinkingWater_Speed = AttributeSpec("drinking_water.speed", data_type=DataType(float))
-DrinkingWater_Power = AttributeSpec("drinking_water.power", data_type=DataType(float))
-DrinkingWater_HeadCurve = AttributeSpec("drinking_water.head_curve", data_type=DataType(float, (2,), csr=True))
-DrinkingWater_Level = AttributeSpec("drinking_water.level", data_type=DataType(float))
-DrinkingWater_MinLevel = AttributeSpec("drinking_water.min_level", data_type=DataType(float))
-DrinkingWater_MaxLevel = AttributeSpec("drinking_water.max_level", data_type=DataType(float))
-DrinkingWater_MinVolume = AttributeSpec("drinking_water.min_volume", data_type=DataType(float))
-DrinkingWater_Overflow = AttributeSpec("drinking_water.overflow", data_type=DataType(bool))
-DrinkingWater_BaseHead = AttributeSpec("drinking_water.base_head", data_type=DataType(float))
-DrinkingWater_HeadFactor = AttributeSpec("drinking_water.head_factor", data_type=DataType(float))
-
-# Valve-specific attributes
-DrinkingWater_ValvePressure = AttributeSpec("drinking_water.valve_pressure", data_type=DataType(float))
-DrinkingWater_ValveFlow = AttributeSpec("drinking_water.valve_flow", data_type=DataType(float))
-DrinkingWater_ValveLossCoefficient = AttributeSpec("drinking_water.valve_loss_coefficient", data_type=DataType(float))
-DrinkingWater_ValveCurve = AttributeSpec("drinking_water.valve_curve", data_type=DataType(float, (2,), csr=True))
-
-# Operational attributes
-Operational_Status = AttributeSpec("operational.status", data_type=DataType(bool))
-
-# Type attributes (string values per design decision)
-Type_PumpType = AttributeSpec("type", data_type=DataType(str))  # "power" or "head"
-Type_ValveType = AttributeSpec("type", data_type=DataType(str))  # "PRV", "PSV", "PBV", "FCV", "TCV", "GPV"
-```
-
-### Phase 2: Entity Definition Updates
-
-**File:** `movici_simulation_core/models/water_network_simulation/dataset.py`
-
-#### 2.1 WaterJunctionEntity
-
-```python
-class WaterJunctionEntity(PointEntity):
-    __entity_name__ = "water_junction_entities"
-
-    # INIT attributes
-    # geometry.x, geometry.y inherited from PointEntity
-    elevation = field(Geometry_Z, flags=INIT)  # Was water.elevation
-    base_demand = field(DrinkingWater_BaseDemand, flags=INIT)
-
-    # OPT attributes
-    demand_factor = field(DrinkingWater_DemandFactor, flags=OPT)  # Was demand_multiplier
-
-    # PUB attributes
-    demand = field(DrinkingWater_Demand, flags=PUB)  # Effective demand (NEW)
-    pressure = field(DrinkingWater_Pressure, flags=PUB)
-    head = field(DrinkingWater_Head, flags=PUB)
-```
-
-#### 2.2 WaterTankEntity
-
-```python
-class WaterTankEntity(PointEntity):
-    __entity_name__ = "water_tank_entities"
-
-    # INIT attributes
-    elevation = field(Geometry_Z, flags=INIT)
-
-    # OPT attributes (either diameter group OR volume_curve group)
-    diameter = field(Shape_Diameter, flags=OPT)
-    min_level = field(DrinkingWater_MinLevel, flags=OPT)
-    max_level = field(DrinkingWater_MaxLevel, flags=OPT)
-    volume_curve = field(Shape_VolumeCurve, flags=OPT)  # CSR data
-    min_volume = field(DrinkingWater_MinVolume, flags=OPT)
-    overflow = field(DrinkingWater_Overflow, flags=OPT)  # NEW
-
-    # INIT|PUB attributes
-    level = field(DrinkingWater_Level, flags=INIT|PUB)  # Combined init + output
-
-    # PUB attributes
-    pressure = field(DrinkingWater_Pressure, flags=PUB)
-    head = field(DrinkingWater_Head, flags=PUB)
-```
-
-#### 2.3 WaterReservoirEntity
-
-```python
-class WaterReservoirEntity(PointEntity):
-    __entity_name__ = "water_reservoir_entities"
-
-    # INIT attributes
-    base_head = field(DrinkingWater_BaseHead, flags=INIT)  # Was head
-
-    # OPT attributes
-    head_factor = field(DrinkingWater_HeadFactor, flags=OPT)  # Was head_multiplier
-
-    # PUB attributes
-    head = field(DrinkingWater_Head, flags=PUB)  # Calculated: base_head * head_factor
-    flow = field(DrinkingWater_Flow, flags=PUB)
-```
-
-#### 2.4 WaterPipeEntity
-
-```python
-class WaterPipeEntity(LinkEntity, LineEntity):
-    __entity_name__ = "water_pipe_entities"
-
-    # INIT attributes (from LinkEntity: from_node_id, to_node_id)
-    # OPT: linestring_2d or linestring_3d from LineEntity
-    length = field(Shape_Length, flags=OPT)  # Or calculated from geometry
-    diameter = field(Shape_Diameter, flags=INIT)
-    roughness = field(DrinkingWater_Roughness, flags=INIT)
-
-    # OPT attributes
-    minor_loss = field(DrinkingWater_MinorLoss, flags=OPT)
-    check_valve = field(DrinkingWater_CheckValve, flags=OPT)  # NEW
-
-    # OPT|PUB attributes
-    status = field(Operational_Status, flags=OPT|PUB)
-
-    # PUB attributes
-    flow = field(DrinkingWater_Flow, flags=PUB)
-    velocity = field(DrinkingWater_Velocity, flags=PUB)
-    headloss = field(DrinkingWater_Headloss, flags=PUB)
-```
-
-#### 2.5 WaterPumpEntity
-
-```python
-class WaterPumpEntity(LinkEntity):
-    __entity_name__ = "water_pump_entities"
-
-    # INIT attributes
-    pump_type = field(Type_PumpType, flags=INIT)  # enum: power, head
-
-    # OPT attributes (depends on pump_type)
-    power = field(DrinkingWater_Power, flags=OPT)  # For power pumps
-    head_curve = field(DrinkingWater_HeadCurve, flags=OPT)  # CSR data for head pumps
-    speed = field(DrinkingWater_Speed, flags=OPT)  # Default 1.0
-
-    # OPT|PUB attributes
-    status = field(Operational_Status, flags=OPT|PUB)
-
-    # PUB attributes
-    flow = field(DrinkingWater_Flow, flags=PUB)
-```
-
-#### 2.6 WaterValveEntity
-
-```python
-class WaterValveEntity(LinkEntity):
-    __entity_name__ = "water_valve_entities"
-
-    # INIT attributes
-    valve_type = field(Type_ValveType, flags=INIT)  # enum: PRV, PSV, PBV, FCV, TCV, GPV
-    diameter = field(Shape_Diameter, flags=INIT)
-
-    # OPT attributes (depends on valve_type)
-    valve_pressure = field(DrinkingWater_ValvePressure, flags=OPT)  # PRV, PSV, PBV
-    valve_flow = field(DrinkingWater_ValveFlow, flags=OPT)  # FCV
-    valve_loss_coefficient = field(DrinkingWater_ValveLossCoefficient, flags=OPT)  # TCV
-    valve_curve = field(DrinkingWater_ValveCurve, flags=OPT)  # GPV (CSR data)
-    minor_loss = field(DrinkingWater_MinorLoss, flags=OPT)
-
-    # PUB attributes
-    flow = field(DrinkingWater_Flow, flags=PUB)
-```
-
-### Phase 3: Model Logic Updates
-
-**File:** `movici_simulation_core/models/water_network_simulation/model.py`
-
-#### 3.1 Add Configuration Options
-
-```python
-class Model(TrackedModel, name="water_network_simulation"):
-    def __init__(self, model_config: dict):
-        super().__init__(model_config)
-        # ... existing init ...
-
-        # NEW: Simulation options
-        self.viscosity = model_config.get("viscosity", 1.0)
-        self.specific_gravity = model_config.get("specific_gravity", 1.0)
-        self.rtol = model_config.get("rtol", 1e-3)
-```
-
-#### 3.2 Update run_simulation to Use Options
-
-```python
-def run_simulation(self, ...):
-    # Set hydraulic options
-    self.wn.options.hydraulic.viscosity = self.viscosity
-    self.wn.options.hydraulic.specific_gravity = self.specific_gravity
-    # Note: rtol may need WNTRSimulator-specific handling
-```
-
-#### 3.3 Calculate demand_deficit
-
-```python
-def _publish_results(self, state: TrackedState, results):
-    # For junctions, calculate demand_deficit if using PDD
-    if self.junctions:
-        # Get expected demand (base_demand * demand_factor)
-        expected = self.junctions.base_demand.array.copy()
-        if self.junctions.demand_factor.has_data():
-            expected *= self.junctions.demand_factor.array
-
-        # Actual demand from results
-        actual = np.array(demands)
-
-        # Effective demand = actual (what was delivered)
-        self.junctions.demand.array[junction_indices] = actual
-
-        # Note: demand_deficit removed from entity, calculate on-demand if needed
-```
-
-#### 3.4 Handle Check Valve
-
-```python
-def add_pipes(self, pipes: PipeCollection):
-    for i, name in enumerate(pipes.link_names):
-        # ... existing code ...
-
-        # Set check valve if specified
-        if pipes.check_valves is not None and pipes.check_valves[i]:
-            pipe = self.wn.get_link(name)
-            pipe.check_valve = True
-```
-
-#### 3.5 Handle Tank Overflow
-
-```python
-def add_tanks(self, tanks: TankCollection):
-    for i, name in enumerate(tanks.node_names):
-        # ... existing code ...
-
-        # Set overflow flag
-        if tanks.overflows is not None:
-            tank = self.wn.get_node(name)
-            tank.overflow = bool(tanks.overflows[i])
-```
-
-### Phase 4: Collection Updates
-
-**File:** `movici_simulation_core/integrations/wntr/collections.py`
-
-#### 4.1 Update PipeCollection
-
-```python
-@dataclasses.dataclass
-class PipeCollection:
-    # ... existing fields ...
-    check_valves: t.Optional[np.ndarray] = None  # NEW: boolean array
-```
-
-#### 4.2 Update TankCollection
-
-```python
-@dataclasses.dataclass
-class TankCollection:
-    # ... existing fields ...
-    overflows: t.Optional[np.ndarray] = None  # NEW: boolean array
-```
-
-#### 4.3 Update ValveCollection for Type-Specific Settings
-
-```python
-@dataclasses.dataclass
-class ValveCollection:
-    link_names: t.List[str]
-    from_nodes: t.List[str]
-    to_nodes: t.List[str]
-    valve_types: t.List[str]
-    diameters: np.ndarray
-
-    # Type-specific settings (only one will be used per valve)
-    valve_pressures: t.Optional[np.ndarray] = None  # PRV, PSV, PBV
-    valve_flows: t.Optional[np.ndarray] = None  # FCV
-    valve_loss_coefficients: t.Optional[np.ndarray] = None  # TCV
-    valve_curves: t.Optional[t.List] = None  # GPV (list of curve data)
-
-    minor_losses: t.Optional[np.ndarray] = None
-```
-
-### Phase 5: Utility Function Updates
-
-**File:** `movici_simulation_core/models/common/wntr_util.py`
-
-Update all `get_*` functions to use new attribute names and handle new attributes.
-
-### Phase 6: Configuration Schema Update
-
-**File:** `movici_simulation_core/json_schemas/models/water_network_simulation.json`
-
-Add new configuration options:
-
-```json
-{
-  "properties": {
-    "viscosity": {
-      "type": "number",
-      "default": 1.0,
-      "description": "Kinematic viscosity"
-    },
-    "specific_gravity": {
-      "type": "number",
-      "default": 1.0,
-      "description": "Specific gravity of fluid"
-    },
-    "rtol": {
-      "type": "number",
-      "default": 0.001,
-      "description": "Relative tolerance for convergence"
-    }
-  }
-}
-```
-
-### Phase 7: Remove ControlManager
-
-**Files to modify/remove:**
-- `movici_simulation_core/integrations/wntr/control_manager.py` - **DELETE**
-- `movici_simulation_core/integrations/wntr/__init__.py` - Remove ControlManager export
-- `movici_simulation_core/models/water_network_simulation/model.py` - Remove:
-  - `self.pending_control_rules` initialization
-  - `control_rules` config handling
-  - `_add_control_from_config` method
-  - Control rule application in `initialize`
-
-### Phase 8: Verify Rules Model Equivalence
-
-Create test scenarios comparing WNTR internal controls vs Rules Model external controls:
-
-#### Test Case 1: Time-Based Control
-```
-Scenario: Close pump at t=2h
-WNTR Control: TimeOfDayControl that closes pump at 2:00:00
-Rules Model: Rule with "<simtime> == 2h" -> operational.status = false
-Expected: Same pump flow becomes 0 at t=2h
-```
-
-#### Test Case 2: Conditional Control (Tank Level)
-```
-Scenario: Start pump when tank level drops below 3m
-WNTR Control: ConditionalControl on tank level
-Rules Model: Rule with "drinking_water.level < 3" -> operational.status = true
-Expected: Same pump activation timing
-```
-
-#### Test Case 3: Combined Conditions
-```
-Scenario: Close valve when tank full AND time > 6h
-WNTR Control: Rule-based control with AND condition
-Rules Model: Rule with {"and": ["drinking_water.level >= max_level", "<simtime> > 6h"]}
-Expected: Same valve closure behavior
-```
-
-**Key Difference to Verify:**
-- WNTR applies controls within simulation timestep
-- Rules Model applies between timesteps (at Movici update boundaries)
-- For most scenarios this should be equivalent, but edge cases may differ
-
-### Phase 9: Testing
-
-1. Update existing tests for attribute name changes
-2. Add tests for new attributes (overflow, check_valve)
-3. Add tests for CSR curve handling
-4. Add tests for new config options
-5. Integration test with sample INP file
-6. **Rules Model equivalence tests** (Phase 8 scenarios)
+> **Status:** All phases have been completed. This section is kept for historical reference.
+
+### Phase 1: Attribute Renaming — DONE
+All `water.*` attributes renamed to `drinking_water.*`, `shape.*`, `geometry.z` as appropriate.
+See `attributes.py` for the current attribute definitions.
+
+### Phase 2: Entity Definition Updates — DONE
+All entity classes updated in `dataset.py` with correct attribute names, flags, and new attributes
+(PDD support, overflow, check_valve, valve-specific settings, CSR curves).
+
+### Phase 3: Model Logic Updates — DONE
+- Options split implemented: data options from dataset general, solver options from model config
+- `_deep_merge()` combines both sources
+- `NetworkWrapper.configure_options()` applies all options
+- `demand_deficit` removed (not a standard WNTR attribute)
+- Check valve, tank overflow, and per-junction PDD attributes supported
+
+### Phase 4: Collection Updates — DONE
+All collections updated with new fields (check_valves, overflows, PDD arrays, valve-specific
+settings, CSR curve data).
+
+### Phase 5: Utility Function Updates — DONE
+All `get_*` functions in `wntr_util.py` updated for new attribute names and new attributes.
+
+### Phase 6: Configuration Schema Update — DONE
+`water_network_simulation.json` updated:
+- Removed `mode` and `inp_file` (INP file mode no longer supported)
+- Added `options` key for solver settings
+- `dataset` is now required
+
+### Phase 7: Remove ControlManager — DONE
+`ControlManager` removed. Controls handled externally by the Movici Rules Model.
+
+### Phase 8: Rules Model Equivalence — DONE
+Test scenarios implemented in `test_rules_model_equivalence.py` verifying that the Movici Rules
+Model produces equivalent results to WNTR internal controls for time-based, conditional, and
+combined control scenarios.
+
+### Phase 9: Testing — DONE
+All tests updated and passing.
 
 ### Migration Guide
 
-For existing users:
+For existing users migrating from the old `water.*` attribute naming:
 
-1. **Attribute Migration Script:** Create script to rename attributes in existing datasets
-2. **Deprecation Warnings:** Add warnings for old attribute names (optional transition period)
-3. **Documentation:** Update all examples and documentation
-
----
-
-## Implementation Order
-
-### Sprint 1: Core Attribute Changes
-1. Define new attributes in `attributes.py` (with CSR data types for curves)
-2. Update entity definitions in `dataset.py` (string type enums, no demand_deficit)
-3. Update utility functions in `wntr_util.py`
-4. Update collections in `collections.py`
-
-### Sprint 2: Model Logic & ControlManager Removal
-5. Update model.py for new attribute access
-6. Add config options (viscosity, specific_gravity, rtol)
-7. Implement CSR curve handling (convert to WNTR curve objects)
-8. Add check_valve and overflow handling
-9. **Remove ControlManager** - delete control_manager.py, remove from model
-
-### Sprint 3: Rules Model Verification
-10. Create test scenarios for WNTR controls vs Rules Model
-11. Verify equivalence for time-based controls
-12. Verify equivalence for conditional controls
-13. Document any behavioral differences
-
-### Sprint 4: Testing & Documentation
-14. Update/add unit tests
-15. Integration testing with sample INP file
-16. Update JSON schema
-17. Create migration script for existing datasets
-18. Update documentation
+1. Rename all `water.*` attributes to `drinking_water.*` in existing datasets
+2. Rename `water.elevation` to `geometry.z`
+3. Rename shape-related attributes to `shape.*` prefix
+4. Remove `mode` and `inp_file` from model configurations
+5. Move data-related options to the dataset `"general"` section
+6. Move solver-related options to the model config `"options"` key
 
 ---
 
-## Design Decisions (Resolved)
+## Design Decisions (Resolved and Implemented)
 
-1. **Backward Compatibility:** ❌ **No** - Clean break, do not support old attribute names
-
-2. **Curves as CSR vs References:** ✅ **CSR data only** - Follow documentation, embed curve data directly in attributes
-
-3. **Controls:** ✅ **Drop ControlManager, use Rules Model** - Movici applies rules externally rather than WNTR internally. Need to verify this produces equivalent results.
-
-4. **Type Enums:** ✅ **String values** - Use `"power"`, `"head"` for pumps; `"PRV"`, `"PSV"`, etc. for valves
-
-5. **demand_deficit:** ❌ **Remove entirely** - Do not include as attribute
-
----
-
-## Impact of Design Decisions
-
-### Decision 1: No Backward Compatibility
-- Simpler implementation (no deprecation logic)
-- Existing datasets must be migrated before use
-- Create migration script/tool for users
-
-### Decision 2: CSR Data for Curves
-- Remove `pump_curve`, `volume_curve` as string references
-- Implement CSR data handling for:
-  - `drinking_water.head_curve` (pump curves)
-  - `shape.volume_curve` (tank volume curves)
-  - `drinking_water.valve_curve` (GPV curves)
-- Need to update WNTR wrapper to convert CSR data to WNTR curve objects
-
-### Decision 3: Rules Model for Controls
-- **Remove:** `ControlManager` class and `control_rules` config option
-- **Remove:** `control_manager.py` integration file
-- **Verify:** Test that Rules Model produces equivalent behavior to WNTR internal controls
-- **Document:** How to configure rules for common control scenarios
-
-### Decision 4: String Type Values
-- `pump_type`: `"power"` or `"head"`
-- `valve_type`: `"PRV"`, `"PSV"`, `"PBV"`, `"FCV"`, `"TCV"`, `"GPV"`
-- Use `DataType(str)` instead of `DataType(int)` for type attributes
-
-### Decision 5: Remove demand_deficit
-- Remove `Water_DemandDeficit` attribute spec
-- Remove from `WaterJunctionEntity`
-- Remove from `SimulationResults` dataclass
-- Remove collection logic in `_publish_results`
+1. **Backward Compatibility:** ❌ No — Clean break, old `water.*` attribute names not supported
+2. **Curves as CSR vs References:** ✅ CSR data only — Curve data embedded directly in attributes
+3. **Controls:** ✅ Rules Model only — `ControlManager` removed, controls handled externally
+4. **Type Enums:** ✅ String values — `"power"`/`"head"` for pumps, `"PRV"`/`"PSV"`/etc. for valves
+5. **demand_deficit:** ❌ Removed — Not a standard WNTR attribute
+6. **Options Split:** ✅ Data options in dataset general section, solver options in model config `"options"` key
+7. **Per-junction PDD:** ✅ Supported — `minimum_pressure`, `required_pressure`, `pressure_exponent` as OPT junction attributes with NaN fallback to global
+8. **INP file mode:** ❌ Removed — Only Movici dataset mode supported

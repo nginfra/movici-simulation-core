@@ -9,23 +9,22 @@ simulations using the WNTR model:
 
 - The model can process a network containing: Pipes, Junctions, Tanks, Reservoirs, Valves and Pumps
 - The data model is as much as possible described in terms of entities and attributes
-- The model config may contain global parameters, such as a specific density or which headloss
-  equation to use
+- Data-related options (headloss formula, viscosity, etc.) are stored in the dataset's
+  ``"general"`` section
+- Solver-related options (trials, accuracy, etc.) are stored in the model config under
+  ``"options"``
 - It is a nice-to-have if the data model is compatible with other movici network tooling, such
   as the ``shortest_path`` model
-- While WNTR has more features than are supported by EPANET ``.inp`` files, we focus on those
-  features that can be described in ``.inp`` files
 
 Limitations
 ###########
 
 - The initial implementation does not have support for chemical reactions
-- We don't support epanet ``.inp`` files directly, but we can provide tooling to convert an
-  ``.inp`` file to a movici dataset
-- Patterns are not included in the model. Patterns values that change over time in a predictable
-  manner, eg a pump rate goes to 70% at t=x. These changes should be produced by one or morejkk
-  different models, such as a tape player. We can provide tooling to create tapefile datasets from
-  ``.inp`` files
+- EPANET ``.inp`` files are not supported directly. External tooling can convert ``.inp`` files
+  to Movici datasets
+- Patterns are not included in the model. Values that change over time in a predictable
+  manner (e.g. a pump rate goes to 70% at t=x) should be produced by one or more
+  different models, such as a tape player
 
 Model Characteristics
 #####################
@@ -92,6 +91,15 @@ nodes. Junctions derive from ``PointEntity`` and contain the following attribute
 - ``drinking_water.base_demand`` (``INIT``): The base demand on this node, this may be multiplied
   by the  demand factor to obtain the total/actual demand
 - ``drinking_water.demand_factor`` (``OPT``): a scaling factor for the demand
+- ``drinking_water.minimum_pressure`` (``OPT``): Per-junction minimum pressure for PDD analysis.
+  Overrides the global ``minimum_pressure`` from the dataset's ``"general"`` section. NaN values
+  fall back to the global setting.
+- ``drinking_water.required_pressure`` (``OPT``): Per-junction required (nominal) pressure for
+  PDD analysis. Overrides the global ``required_pressure`` from the dataset's ``"general"``
+  section. NaN values fall back to the global setting.
+- ``drinking_water.pressure_exponent`` (``OPT``): Per-junction pressure exponent for PDD
+  analysis. Overrides the global ``pressure_exponent`` from the dataset's ``"general"`` section.
+  NaN values fall back to the global setting.
 - ``drinking_water.demand`` (``INIT``): The effective demand (ie. base_demand * demand_factor)
 - ``drinking_water.pressure`` (``PUB``): The dynamic pressure at the node.
 - ``drinking_water.head`` (``PUB``): The static (total) head at the node (elevation + pressure)
@@ -203,8 +211,8 @@ derive from ``LinkEntity`` and ``LineEntity`` and contain the following attribut
 - ``topology.to_node_id`` (``INIT``): Node id on the to side (pipe end). From ``LinkEntity``
 - ``shape.diameter`` (``INIT``): Pipe diameter
 - ``drinking_water.roughness`` (``INIT``): Pipe roughness factor. These values are tied to the
-  headloss calculation method used. The specific method will be stored in the dataset ``"general"``
-  section under the ``"headloss_method"`` key
+  headloss calculation method used. The headloss formula is stored in the dataset ``"general"``
+  section under ``"hydraulic"`` → ``"headloss"`` (e.g. ``"H-W"``, ``"D-W"``, ``"C-M"``)
 - ``drinking_water.minor_loss`` (``OPT``): Minor loss coefficient (Default 0). When a pipe has 
   curves and bends, addtional head loss may occur, these losses are bundled into a single
   coefficient and are proportional to the flow velocity squared
@@ -218,12 +226,11 @@ derive from ``LinkEntity`` and ``LineEntity`` and contain the following attribut
   indicates the directionality)
 - ``drinking_water.headloss`` (``PUB``): calculated headloss in the pipe
 
-.. note:: A dataset's "general" section may be used to add keys specific to datasets of a given
-   type. We can there specify that for a dataset of type ``"drinking_water_network"`` we require
-   a ``"headloss_method"`` key that specifies which headloss calculation method should be used.
-   However, we need to implement retrieving the general section from ``TrackedState``. This is
-   currently not yet possible, but very doable to implement. Also we do not have logic that can
-   validate the ``"general"`` section, so we must be careful when using this part of the dataset
+.. note:: The dataset's ``"general"`` section stores data-related WNTR hydraulic options
+   (headloss formula, viscosity, specific gravity, demand model, etc.). These are read from
+   ``TrackedState`` during initialization and applied to the WNTR network via
+   ``NetworkWrapper.configure_options()``. See the Options section below for the full split
+   between dataset general and model config.
 
 .. note:: Check Valve Direction
 
@@ -335,14 +342,67 @@ an entity does not have a ``reference``) there is a risk of collisions.
 Options
 -------
 
-The model has the following configuration options:
+WNTR options are split between two sources:
 
-- Viscosity: optional set the viscosity (default 1)
-- Specific gravity: optional set the specific gravity (default 1)
-- timestep: if we have transient behaviour, this is the interval that will govern our "next_time"
-- rtol: relative tolerance for convergence (default 1e-3, see WNTR HydraulicOptions)
+**Data options** — stored in the dataset's ``"general"`` section. These describe physical
+properties of the water network:
 
-Let's keep the other options at their default vdalue
+- ``headloss``: Headloss formula (``"H-W"``, ``"D-W"``, ``"C-M"``). Default: ``"H-W"``
+- ``viscosity``: Kinematic viscosity. Default: 1.0
+- ``specific_gravity``: Specific gravity of the fluid. Default: 1.0
+- ``demand_model``: Demand model (``"DDA"`` or ``"PDA"``). Default: ``"DDA"``
+- ``demand_multiplier``: Global demand multiplier. Default: 1.0
+- ``minimum_pressure``: Global minimum pressure for PDD analysis
+- ``required_pressure``: Global required (nominal) pressure for PDD analysis
+- ``pressure_exponent``: Global pressure exponent for PDD analysis
+
+Example dataset general section::
+
+    "general": {
+        "hydraulic": {
+            "headloss": "H-W",
+            "viscosity": 1.0,
+            "specific_gravity": 1.0,
+            "demand_model": "PDA",
+            "minimum_pressure": 0.0,
+            "required_pressure": 20.0,
+            "pressure_exponent": 0.5
+        }
+    }
+
+**Solver options** — stored in the model config under the ``"options"`` key. These control the
+WNTR solver behavior:
+
+- ``trials``: Maximum number of solver trials. Default: 200
+- ``accuracy``: Convergence accuracy. Default: 0.001
+- ``headerror``: Maximum head error for convergence
+- ``flowchange``: Maximum flow change for convergence
+- ``damplimit``: Accuracy limit for damping
+- ``checkfreq``: Frequency of status checks
+- ``maxcheck``: Maximum number of status checks
+- ``unbalanced``: Action if simulation is unbalanced
+- ``unbalanced_value``: Value for unbalanced option
+
+Example model config::
+
+    {
+        "dataset": "water_network",
+        "hydraulic_timestep": 3600,
+        "simulation_duration": 3600,
+        "options": {
+            "hydraulic": {
+                "trials": 200,
+                "accuracy": 0.001
+            }
+        }
+    }
+
+Both sources are merged at initialization and applied to the WNTR network via
+``NetworkWrapper.configure_options()``. They contribute disjoint keys to the same WNTR options
+structure.
+
+.. note:: The WNTRSimulator only supports the Hazen-Williams (``"H-W"``) headloss formula.
+   The EpanetSimulator also supports Chezy-Manning (``"C-M"``).
 
 Units
 -----
@@ -356,5 +416,5 @@ Units must be in SI or SI-derived. Suggested values:
 
 see `WNTR Units <https://usepa.github.io/WNTR/units.html>`_
 
-When creating dataset from inp files, the units must be converted properly. 
+When converting data from EPANET sources, units must be converted to SI properly.
 

@@ -28,6 +28,9 @@ class JunctionCollection:
     elevations: np.ndarray
     base_demands: np.ndarray
     demand_factors: t.Optional[np.ndarray] = None
+    minimum_pressures: t.Optional[np.ndarray] = None
+    required_pressures: t.Optional[np.ndarray] = None
+    pressure_exponents: t.Optional[np.ndarray] = None
     coordinates: t.Optional[np.ndarray] = None
 
     def __len__(self):

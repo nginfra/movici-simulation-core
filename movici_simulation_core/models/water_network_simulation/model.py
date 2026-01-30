@@ -60,6 +60,22 @@ _ENTITY_CONVERTERS = [
 ]
 
 
+def _deep_merge(a: dict, b: dict) -> dict:
+    """Deep-merge two dicts. Values in *b* take precedence.
+
+    :param a: Base dictionary
+    :param b: Override dictionary
+    :return: New merged dictionary
+    """
+    result = dict(a)
+    for key, value in b.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
 class Model(TrackedModel, name="water_network_simulation"):
     """Water network simulation model using WNTRSimulator.
 
@@ -136,12 +152,19 @@ class Model(TrackedModel, name="water_network_simulation"):
                 state.register_entity_group(dataset_name, entity)
 
     def _get_options(self, state: TrackedState) -> dict:
-        """Get WNTR options from the dataset's general section.
+        """Get WNTR options from model config and dataset general section.
+
+        Solver-tuning options (trials, accuracy, etc.) come from the model
+        config ``"options"`` key.  Physical/data options (headloss, viscosity,
+        etc.) come from the dataset's general section.  Both contribute
+        disjoint keys to the same WNTR options structure.
 
         :param state: Tracked state
         :return: Dict of section_name -> {key: value} mappings
         """
-        return dict(state.general.get(self.dataset_name, {}))
+        config_options = dict(self.config.get("options", {}))
+        dataset_options = dict(state.general.get(self.dataset_name, {}))
+        return _deep_merge(config_options, dataset_options)
 
     def initialize(self, state: TrackedState):
         """Initialize model and run first simulation.
@@ -198,7 +221,9 @@ class Model(TrackedModel, name="water_network_simulation"):
     def _update_dynamic_attributes(self, state: TrackedState):
         """Update dynamic network attributes from state changes.
 
-        Called when the Rules Model may have modified entity attributes.
+        Called when the Rules Model or Tape Player may have modified entity
+        attributes.  Handles link statuses, junction demand factors, and
+        reservoir head factors.
 
         :param state: Tracked state
         """
@@ -208,6 +233,36 @@ class Model(TrackedModel, name="water_network_simulation"):
                     self.network.id_mapper.get_wntr_name(int(mid)) for mid in entity.index.ids
                 ]
                 self.network.update_link_status(link_names, entity.status.array)
+
+        # Update junction demands when demand_factor changes
+        if (
+            self.junctions
+            and self.junctions.demand_factor.has_data()
+            and np.any(self.junctions.demand_factor.changed)
+        ):
+            junction_names = [
+                self.network.id_mapper.get_wntr_name(int(mid)) for mid in self.junctions.index.ids
+            ]
+            self.network.update_junction_demands(
+                junction_names,
+                self.junctions.base_demand.array,
+                self.junctions.demand_factor.array,
+            )
+
+        # Update reservoir heads when head_factor changes
+        if (
+            self.reservoirs
+            and self.reservoirs.head_factor.has_data()
+            and np.any(self.reservoirs.head_factor.changed)
+        ):
+            reservoir_names = [
+                self.network.id_mapper.get_wntr_name(int(mid)) for mid in self.reservoirs.index.ids
+            ]
+            self.network.update_reservoir_heads(
+                reservoir_names,
+                self.reservoirs.base_head.array,
+                self.reservoirs.head_factor.array,
+            )
 
     def _publish_node_results(
         self,

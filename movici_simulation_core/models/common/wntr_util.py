@@ -66,11 +66,26 @@ def get_junctions(junctions: "WaterJunctionEntity", id_mapper: IdMapper) -> Junc
         junctions.demand_factor.array if junctions.demand_factor.is_initialized() else None
     )
 
+    # PDD attributes: use has_data() since partial specification is valid
+    # (some junctions override the global, others use NaN to fall back)
+    minimum_pressures = (
+        junctions.minimum_pressure.array if junctions.minimum_pressure.has_data() else None
+    )
+    required_pressures = (
+        junctions.required_pressure.array if junctions.required_pressure.has_data() else None
+    )
+    pressure_exponents = (
+        junctions.pressure_exponent.array if junctions.pressure_exponent.has_data() else None
+    )
+
     return JunctionCollection(
         node_names=node_names,
         elevations=junctions.elevation.array,
         base_demands=junctions.base_demand.array,
         demand_factors=demand_factors,
+        minimum_pressures=minimum_pressures,
+        required_pressures=required_pressures,
+        pressure_exponents=pressure_exponents,
         coordinates=_get_coordinates(junctions),
     )
 

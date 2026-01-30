@@ -27,12 +27,15 @@ from .attributes import (
     DrinkingWater_Headloss,
     DrinkingWater_Level,
     DrinkingWater_MaxLevel,
+    DrinkingWater_MinimumPressure,
     DrinkingWater_MinLevel,
     DrinkingWater_MinorLoss,
     DrinkingWater_MinVolume,
     DrinkingWater_Overflow,
     DrinkingWater_Power,
     DrinkingWater_Pressure,
+    DrinkingWater_PressureExponent,
+    DrinkingWater_RequiredPressure,
     DrinkingWater_Roughness,
     DrinkingWater_Speed,
     DrinkingWater_ValveCurve,
@@ -70,6 +73,9 @@ class WaterJunctionEntity(PointEntity):
 
     # OPT attributes
     demand_factor = field(DrinkingWater_DemandFactor, flags=OPT)
+    minimum_pressure = field(DrinkingWater_MinimumPressure, flags=OPT)
+    required_pressure = field(DrinkingWater_RequiredPressure, flags=OPT)
+    pressure_exponent = field(DrinkingWater_PressureExponent, flags=OPT)
 
     # PUB attributes
     demand = field(DrinkingWater_Demand, flags=PUB)

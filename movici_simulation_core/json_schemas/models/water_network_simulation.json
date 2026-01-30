@@ -2,22 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "/water_network_simulation/1.0.0",
   "type": "object",
-  "required": ["mode"],
+  "required": ["dataset"],
   "properties": {
-    "mode": {
-      "type": "string",
-      "enum": ["inp_file", "movici_network"],
-      "default": "movici_network",
-      "description": "Network loading mode: 'inp_file' loads from EPANET INP, 'movici_network' builds from Movici datasets"
-    },
-    "inp_file": {
-      "type": "string",
-      "description": "Path to EPANET INP file (required if mode='inp_file')"
-    },
     "dataset": {
       "type": "string",
       "movici.type": "dataset",
-      "description": "Water network dataset name (required if mode='movici_network')"
+      "description": "Water network dataset name"
     },
     "entity_groups": {
       "type": "array",
@@ -30,43 +20,24 @@
     },
     "simulation_duration": {
       "type": "number",
-      "description": "Total simulation duration in seconds (if not specified, uses model default or Movici timeline)"
+      "description": "Total simulation duration in seconds"
     },
     "hydraulic_timestep": {
       "type": "number",
       "default": 3600,
-      "description": "Hydraulic timestep in seconds (default: 3600 = 1 hour)"
+      "description": "Hydraulic timestep in seconds (default: 3600)"
     },
     "report_timestep": {
       "type": "number",
       "description": "Report timestep in seconds (default: same as hydraulic_timestep)"
     },
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "mode": {
-            "const": "inp_file"
-          }
-        }
-      },
-      "then": {
-        "required": ["inp_file"]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "mode": {
-            "const": "movici_network"
-          }
-        }
-      },
-      "then": {
-        "required": ["dataset"]
+    "options": {
+      "type": "object",
+      "description": "WNTR solver options, keyed by section name (e.g. 'hydraulic')",
+      "additionalProperties": {
+        "type": "object"
       }
     }
-  ],
+  },
   "additionalProperties": false
 }

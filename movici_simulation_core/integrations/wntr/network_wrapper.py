@@ -53,6 +53,24 @@ class NetworkWrapper:
             return None
         return (float(coordinates[index, 0]), float(coordinates[index, 1]))
 
+    @staticmethod
+    def _set_optional_junction_attr(
+        junction, attr_name: str, values: t.Optional[np.ndarray], index: int
+    ):
+        """Set an optional per-junction attribute if the value is defined.
+
+        Skips setting if *values* is ``None`` or the value at *index* is NaN
+        (the Movici undefined sentinel for floats), leaving the WNTR default
+        (``None`` = use global option) in place.
+
+        :param junction: WNTR junction node object
+        :param attr_name: Name of the junction attribute to set
+        :param values: Optional numpy array of values
+        :param index: Index of the junction in the array
+        """
+        if values is not None and not np.isnan(values[index]):
+            setattr(junction, attr_name, float(values[index]))
+
     def add_junctions(self, junctions: JunctionCollection):
         """Add junctions to the network.
 
@@ -69,6 +87,19 @@ class NetworkWrapper:
                 demand_pattern=None,
                 elevation=float(junctions.elevations[i]),
                 coordinates=self._get_coords(junctions.coordinates, i),
+            )
+
+            # Set per-junction PDD attributes (only for defined values).
+            # WNTR junction attributes default to None (= use global option).
+            junction = self.wn.get_node(name)
+            self._set_optional_junction_attr(
+                junction, "minimum_pressure", junctions.minimum_pressures, i
+            )
+            self._set_optional_junction_attr(
+                junction, "required_pressure", junctions.required_pressures, i
+            )
+            self._set_optional_junction_attr(
+                junction, "pressure_exponent", junctions.pressure_exponents, i
             )
 
     def add_tanks(self, tanks: TankCollection):
@@ -371,6 +402,50 @@ class NetworkWrapper:
             link_headlosses=link_headlosses,
             link_statuses=link_statuses,
         )
+
+    def update_junction_demands(
+        self,
+        junction_names: t.List[str],
+        base_demands: np.ndarray,
+        demand_factors: t.Optional[np.ndarray] = None,
+    ):
+        """Update junction base demands (and optional demand factors).
+
+        Called when demand_factor changes during simulation. Sets the
+        effective demand (base_demand * demand_factor) on each WNTR junction.
+
+        :param junction_names: List of WNTR junction names
+        :param base_demands: Array of base demand values
+        :param demand_factors: Optional array of demand factor multipliers
+        """
+        for i, name in enumerate(junction_names):
+            demand = float(base_demands[i])
+            if demand_factors is not None:
+                demand *= float(demand_factors[i])
+            junction = self.wn.get_node(name)
+            junction.demand_timeseries_list[0].base_value = demand
+
+    def update_reservoir_heads(
+        self,
+        reservoir_names: t.List[str],
+        base_heads: np.ndarray,
+        head_factors: t.Optional[np.ndarray] = None,
+    ):
+        """Update reservoir base heads (and optional head factors).
+
+        Called when head_factor changes during simulation. Sets the
+        effective head (base_head * head_factor) on each WNTR reservoir.
+
+        :param reservoir_names: List of WNTR reservoir names
+        :param base_heads: Array of base head values
+        :param head_factors: Optional array of head factor multipliers
+        """
+        for i, name in enumerate(reservoir_names):
+            head = float(base_heads[i])
+            if head_factors is not None:
+                head *= float(head_factors[i])
+            reservoir = self.wn.get_node(name)
+            reservoir.base_head = head
 
     def update_link_status(self, link_names: t.List[str], statuses: np.ndarray):
         """Update link status (open/closed).

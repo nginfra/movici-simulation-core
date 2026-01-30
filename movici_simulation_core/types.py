@@ -39,7 +39,6 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
-    INP = (".inp",)  # EPANET input files for water network simulation
     OTHER = ()
 
     @classmethod

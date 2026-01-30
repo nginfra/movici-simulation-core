@@ -1,33 +1,41 @@
 """Example: Water Network Simulation using WNTR
 
 This example demonstrates how to use the WNTR integration for water network
-simulation. It shows four approaches:
+simulation. It shows three approaches:
 
 1. Direct NetworkWrapper usage - for standalone hydraulic simulations
 2. Movici Simulation framework - for integration with other Movici models
-3. Movici Simulation with controls - time-based control rules
-4. Movici Simulation with INP file - load EPANET network files
+3. Tape file factors - using TapePlayerModel to drive time-varying
+   demand_factor and head_factor through the Movici Simulation framework
 
 The water network is a simple example with:
 - 3 junctions with demands
 - 1 reservoir as water source
 - 3 pipes connecting the network
+
+.. note::
+   Controls (time-based or conditional) are handled externally by the
+   Movici Rules Model, not internally by this simulation model.
 """
 
 import json
-import shutil
 from pathlib import Path
 from tempfile import mkdtemp
 
 import numpy as np
 
+from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.integrations.wntr import (
     JunctionCollection,
     NetworkWrapper,
     PipeCollection,
     ReservoirCollection,
 )
-from movici_simulation_core.models import DataCollectorModel, WaterNetworkSimulationModel
+from movici_simulation_core.models import (
+    DataCollectorModel,
+    TapePlayerModel,
+    WaterNetworkSimulationModel,
+)
 from movici_simulation_core.models.water_network_simulation.attributes import (
     DrinkingWaterNetworkAttributes,
 )
@@ -37,11 +45,13 @@ from movici_simulation_core.simulation import Simulation
 def create_simple_water_network_data():
     """Create a simple water network in Movici JSON format.
 
-    Network topology:
+    Network topology::
+
         R1 (reservoir) --P1--> J1 --P2--> J2 --P3--> J3
 
     Where:
-    - R1: Reservoir with head = 100m
+
+    - R1: Reservoir with base head = 100m
     - J1, J2, J3: Junctions with varying elevations and demands
     - P1, P2, P3: Pipes connecting the network
     """
@@ -50,99 +60,77 @@ def create_simple_water_network_data():
         "display_name": "Simple Water Network",
         "type": "water_network",
         "version": 4,
+        "general": {
+            "hydraulic": {
+                "headloss": "H-W",
+                "viscosity": 1.0,
+                "specific_gravity": 1.0,
+            }
+        },
         "data": {
             "water_junction_entities": {
                 "id": [1, 2, 3],
                 "geometry.x": [100.0, 200.0, 300.0],
                 "geometry.y": [100.0, 100.0, 100.0],
-                "water.elevation": [50.0, 45.0, 40.0],
-                "water.base_demand": [0.01, 0.02, 0.015],
+                "geometry.z": [50.0, 45.0, 40.0],
+                "drinking_water.base_demand": [0.01, 0.02, 0.015],
             },
             "water_reservoir_entities": {
                 "id": [10],
                 "geometry.x": [0.0],
                 "geometry.y": [100.0],
-                "water.head": [100.0],
+                "drinking_water.base_head": [100.0],
             },
             "water_pipe_entities": {
                 "id": [101, 102, 103],
                 "topology.from_node_id": [10, 1, 2],
                 "topology.to_node_id": [1, 2, 3],
-                "geometry.linestring_2d": [
-                    [[0.0, 100.0], [100.0, 100.0]],
-                    [[100.0, 100.0], [200.0, 100.0]],
-                    [[200.0, 100.0], [300.0, 100.0]],
-                ],
-                "water.diameter": [0.3, 0.25, 0.2],
-                "water.roughness": [100.0, 100.0, 100.0],
-                "water.minor_loss": [0.0, 0.0, 0.0],
-                "water.initial_status": [1, 1, 1],
+                "shape.diameter": [0.3, 0.25, 0.2],
+                "shape.length": [100.0, 100.0, 100.0],
+                "drinking_water.roughness": [100.0, 100.0, 100.0],
             },
         },
     }
 
 
 def example_direct_wntr():
-    """Example using NetworkWrapper directly with Movici data format.
+    """Example using NetworkWrapper directly.
 
-    This approach builds a WNTR network from Movici-formatted data
+    This approach builds a WNTR network from collection objects
     and runs a hydraulic simulation.
     """
     print("=" * 60)
     print("Water Network Simulation - Direct NetworkWrapper")
     print("=" * 60)
 
-    # Get the Movici dataset
-    dataset = create_simple_water_network_data()
-    data = dataset["data"]
-
     # Create network wrapper
-    network = NetworkWrapper(mode="movici_network")
+    network = NetworkWrapper()
 
-    # Build junction collection from Movici data
-    junction_data = data["water_junction_entities"]
+    # Build junction collection
     junctions = JunctionCollection(
-        node_names=[f"J{i}" for i in junction_data["id"]],
-        elevations=np.array(junction_data["water.elevation"]),
-        base_demands=np.array(junction_data["water.base_demand"]),
-        coordinates=np.column_stack([junction_data["geometry.x"], junction_data["geometry.y"]]),
+        node_names=["J1", "J2", "J3"],
+        elevations=np.array([50.0, 45.0, 40.0]),
+        base_demands=np.array([0.01, 0.02, 0.015]),
+        coordinates=np.array([[100.0, 100.0], [200.0, 100.0], [300.0, 100.0]]),
     )
     network.add_junctions(junctions)
 
     # Build reservoir collection
-    reservoir_data = data["water_reservoir_entities"]
     reservoirs = ReservoirCollection(
-        node_names=[f"R{i}" for i in reservoir_data["id"]],
-        heads=np.array(reservoir_data["water.head"]),
-        coordinates=np.column_stack([reservoir_data["geometry.x"], reservoir_data["geometry.y"]]),
+        node_names=["R10"],
+        base_heads=np.array([100.0]),
+        coordinates=np.array([[0.0, 100.0]]),
     )
     network.add_reservoirs(reservoirs)
 
     # Build pipe collection
-    pipe_data = data["water_pipe_entities"]
-    # Calculate pipe lengths from geometry
-    lengths = []
-    for geom in pipe_data["geometry.linestring_2d"]:
-        dx = geom[1][0] - geom[0][0]
-        dy = geom[1][1] - geom[0][1]
-        lengths.append(np.sqrt(dx**2 + dy**2))
-
-    # Map node IDs to names
-    node_id_to_name = {}
-    for nid in junction_data["id"]:
-        node_id_to_name[nid] = f"J{nid}"
-    for nid in reservoir_data["id"]:
-        node_id_to_name[nid] = f"R{nid}"
-
     pipes = PipeCollection(
-        link_names=[f"P{i}" for i in pipe_data["id"]],
-        from_nodes=[node_id_to_name[nid] for nid in pipe_data["topology.from_node_id"]],
-        to_nodes=[node_id_to_name[nid] for nid in pipe_data["topology.to_node_id"]],
-        lengths=np.array(lengths),
-        diameters=np.array(pipe_data["water.diameter"]),
-        roughnesses=np.array(pipe_data["water.roughness"]),
-        minor_losses=np.array(pipe_data["water.minor_loss"]),
-        statuses=["OPEN" if s == 1 else "CLOSED" for s in pipe_data["water.initial_status"]],
+        link_names=["P101", "P102", "P103"],
+        from_nodes=["R10", "J1", "J2"],
+        to_nodes=["J1", "J2", "J3"],
+        lengths=np.array([100.0, 100.0, 100.0]),
+        diameters=np.array([0.3, 0.25, 0.2]),
+        roughnesses=np.array([100.0, 100.0, 100.0]),
     )
     network.add_pipes(pipes)
 
@@ -162,7 +150,7 @@ def example_direct_wntr():
     # Display results
     print("\nSimulation Results:")
     print("\nJunctions:")
-    print(f"  {'Node':<10} {'Pressure (m)':<15} {'Head (m)':<15} {'Demand (m³/s)':<15}")
+    print(f"  {'Node':<10} {'Pressure (m)':<15} {'Head (m)':<15} {'Demand (m3/s)':<15}")
     print("  " + "-" * 55)
 
     for i, name in enumerate(results.node_names):
@@ -173,7 +161,7 @@ def example_direct_wntr():
             print(f"  {name:<10} {pressure:>14.2f} {head:>14.2f} {demand:>14.6f}")
 
     print("\nPipes:")
-    print(f"  {'Link':<10} {'Flow (m³/s)':<15} {'Velocity (m/s)':<15} {'Headloss (m)':<15}")
+    print(f"  {'Link':<10} {'Flow (m3/s)':<15} {'Velocity (m/s)':<15} {'Headloss (m)':<15}")
     print("  " + "-" * 55)
 
     for i, name in enumerate(results.link_names):
@@ -217,15 +205,23 @@ def example_simulation_framework():
     sim.use(DrinkingWaterNetworkAttributes)
 
     # Add the water network simulation model
+    # Solver options go in the model config under "options".
+    # Data options (headloss, viscosity, etc.) go in the dataset's
+    # general section (see create_simple_water_network_data above).
     sim.add_model(
         "water_network",
         WaterNetworkSimulationModel(
             {
                 "dataset": "simple_water_network",
-                "mode": "movici_network",
                 "entity_groups": ["junctions", "pipes", "reservoirs"],
                 "simulation_duration": 3600,  # 1 hour
                 "hydraulic_timestep": 3600,
+                "options": {
+                    "hydraulic": {
+                        "trials": 200,
+                        "accuracy": 0.001,
+                    }
+                },
             }
         ),
     )
@@ -240,145 +236,6 @@ def example_simulation_framework():
     print(f"\nSimulation completed! Results stored in: {output_dir}")
 
     # Read and display results
-    results_dir = Path(output_dir)
-    results_files = list(results_dir.glob("*.json"))
-    if results_files:
-        print("\nOutput files:")
-        for f in results_files:
-            print(f"  - {f.name}")
-
-
-def example_simulation_with_controls():
-    """Example using Simulation() with control rules.
-
-    This shows how to configure time-based and conditional controls
-    within the Simulation() framework.
-    """
-    print("\n" + "=" * 60)
-    print("Water Network Simulation with Controls")
-    print("=" * 60)
-
-    # Create temporary directories
-    input_dir = mkdtemp(prefix="movici-water-ctrl-input-")
-    output_dir = mkdtemp(prefix="movici-water-ctrl-output-")
-
-    # Save the water network dataset
-    dataset = create_simple_water_network_data()
-    dataset_path = Path(input_dir) / "simple_water_network.json"
-    dataset_path.write_text(json.dumps(dataset, indent=2))
-
-    # Create and configure the simulation with controls
-    sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
-    sim.use(DrinkingWaterNetworkAttributes)
-
-    # Add the water network simulation model with control rules
-    sim.add_model(
-        "water_network",
-        WaterNetworkSimulationModel(
-            {
-                "dataset": "simple_water_network",
-                "mode": "movici_network",
-                "entity_groups": ["junctions", "pipes", "reservoirs"],
-                "simulation_duration": 7200,  # 2 hours
-                "hydraulic_timestep": 3600,
-                # Control rules configuration
-                # Note: WNTR names use format 'l{id}' for links, 'n{id}' for nodes
-                "control_rules": [
-                    {
-                        "type": "time",
-                        "name": "close_pipe_at_1h",
-                        "target": "l103",  # Close pipe with ID 103 after 1 hour
-                        "attribute": "status",
-                        "value": "CLOSED",
-                        "time": 3600,
-                        "time_type": "sim_time",
-                    }
-                ],
-            }
-        ),
-    )
-
-    sim.add_model("data_collector", DataCollectorModel({}))
-
-    print("\nRunning simulation with controls...")
-    print("  - Pipe l103 (Movici ID 103) will be closed at t=3600s")
-    sim.run()
-
-    print(f"\nSimulation completed! Results stored in: {output_dir}")
-
-
-def example_simulation_with_inp_file():
-    """Example using Simulation() with an EPANET INP file.
-
-    This demonstrates how to load an existing EPANET network file
-    and run a hydraulic simulation using the Movici framework.
-
-    The INP file format is the standard format for EPANET models,
-    widely used in the water industry. This allows importing existing
-    network models directly.
-    """
-    print("\n" + "=" * 60)
-    print("Water Network Simulation - INP File Loading")
-    print("=" * 60)
-
-    # Use the example INP file included in the repo
-    # In practice, this could be any valid EPANET INP file
-    examples_dir = Path(__file__).parent
-    inp_file = examples_dir / "simple_water_network.inp"
-
-    if not inp_file.exists():
-        print(f"\nINP file not found: {inp_file}")
-        print("Skipping INP file example.")
-        return
-
-    print(f"\nLoading INP file: {inp_file.name}")
-
-    # Create temporary directories
-    input_dir = mkdtemp(prefix="movici-water-inp-input-")
-    output_dir = mkdtemp(prefix="movici-water-inp-output-")
-
-    # Copy INP file to input directory (required for init_data_handler)
-    shutil.copy(inp_file, Path(input_dir) / inp_file.name)
-
-    print(f"Input directory: {input_dir}")
-    print(f"Output directory: {output_dir}")
-
-    # Create and configure the simulation
-    sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
-
-    # Register water network attributes
-    sim.use(DrinkingWaterNetworkAttributes)
-
-    # Add the water network simulation model in inp_file mode
-    sim.add_model(
-        "water_network",
-        WaterNetworkSimulationModel(
-            {
-                "mode": "inp_file",
-                "inp_file": inp_file.name,  # Reference the INP file
-                "dataset": "water_network_from_inp",  # Output dataset name
-            }
-        ),
-    )
-
-    # Add data collector to save results
-    sim.add_model("data_collector", DataCollectorModel({}))
-
-    print("\nRunning simulation from INP file...")
-    print("  Network contains:")
-    print("    - Junctions: J1, J2, J3")
-    print("    - Reservoir: R1")
-    print("    - Tank: T1")
-    print("    - Pipes: P1, P2, P3, P4")
-    print("    - Pump: PU1")
-    print("  Duration: 24 hours")
-    print("  Hydraulic timestep: 1 hour")
-
-    sim.run()
-
-    print(f"\nSimulation completed! Results stored in: {output_dir}")
-
-    # List output files
     results_dir = Path(output_dir)
     results_files = list(results_dir.glob("*.json"))
     if results_files:
@@ -414,6 +271,158 @@ def example_save_movici_dataset():
         print(f"  - {group_name}: {num_entities} entities")
 
 
+def create_demand_tapefile():
+    """Create a tape file that varies demand_factor and head_factor over time.
+
+    The tape file targets the ``simple_water_network`` dataset and updates:
+
+    - ``drinking_water.demand_factor`` on junctions (ids 1, 2, 3)
+    - ``drinking_water.head_factor`` on the reservoir (id 10)
+
+    Timeline (3 timesteps at 1-hour intervals)::
+
+        t=0s:    demand_factor=1.0  head_factor=1.0  (normal operation)
+        t=3600s: demand_factor=1.5  head_factor=0.95 (morning peak)
+        t=7200s: demand_factor=0.5  head_factor=1.0  (low demand)
+    """
+    return {
+        "name": "water_patterns",
+        "type": "tabular",
+        "format": "unstructured",
+        "data": {
+            "tabular_data_name": "simple_water_network",
+            "time_series": [0, 3600, 7200],
+            "data_series": [
+                # t=0s: normal operation
+                {
+                    "water_junction_entities": {
+                        "id": [1, 2, 3],
+                        "drinking_water.demand_factor": [1.0, 1.0, 1.0],
+                    },
+                    "water_reservoir_entities": {
+                        "id": [10],
+                        "drinking_water.head_factor": [1.0],
+                    },
+                },
+                # t=3600s: morning peak — demand up, head dips
+                {
+                    "water_junction_entities": {
+                        "id": [1, 2, 3],
+                        "drinking_water.demand_factor": [1.5, 1.5, 1.5],
+                    },
+                    "water_reservoir_entities": {
+                        "id": [10],
+                        "drinking_water.head_factor": [0.95],
+                    },
+                },
+                # t=7200s: low demand period — demand down, head recovers
+                {
+                    "water_junction_entities": {
+                        "id": [1, 2, 3],
+                        "drinking_water.demand_factor": [0.5, 0.5, 0.5],
+                    },
+                    "water_reservoir_entities": {
+                        "id": [10],
+                        "drinking_water.head_factor": [1.0],
+                    },
+                },
+            ],
+        },
+    }
+
+
+def example_tape_file_factors():
+    """Example using TapePlayerModel to drive time-varying demand and head.
+
+    This approach uses the Movici Simulation framework with two models
+    working together:
+
+    1. **TapePlayerModel** — reads a tape file (tabular dataset) and publishes
+       ``demand_factor`` and ``head_factor`` updates at scheduled timestamps
+    2. **WaterNetworkSimulationModel** — re-runs hydraulics whenever these
+       factors change
+
+    The tape file updates ``drinking_water.demand_factor`` on junctions and
+    ``drinking_water.head_factor`` on the reservoir. The water network model
+    multiplies these factors with the base values::
+
+        effective_demand = base_demand * demand_factor
+        effective_head = base_head * head_factor
+
+    No additional attributes are needed — ``demand_factor`` and ``head_factor``
+    already exist as optional attributes on junctions and reservoirs.
+    """
+    print("\n" + "=" * 60)
+    print("Water Network Simulation - Tape File Patterns")
+    print("=" * 60)
+
+    # Create temporary directories
+    input_dir = mkdtemp(prefix="movici-water-tape-input-")
+    output_dir = mkdtemp(prefix="movici-water-tape-output-")
+
+    # Save the water network dataset
+    dataset = create_simple_water_network_data()
+    dataset_path = Path(input_dir) / "simple_water_network.json"
+    dataset_path.write_text(json.dumps(dataset, indent=2))
+
+    # Save the tape file (tabular dataset with time-varying factors)
+    tapefile = create_demand_tapefile()
+    tapefile_path = Path(input_dir) / "water_patterns.json"
+    tapefile_path.write_text(json.dumps(tapefile, indent=2))
+
+    print(f"\nInput directory: {input_dir}")
+    print(f"Output directory: {output_dir}")
+    print("\nTape file schedule:")
+    print("  t=0s:    demand_factor=1.0  head_factor=1.0  (normal)")
+    print("  t=3600s: demand_factor=1.5  head_factor=0.95 (peak)")
+    print("  t=7200s: demand_factor=0.5  head_factor=1.0  (low)")
+
+    # Create and configure the simulation
+    sim = Simulation(data_dir=input_dir, storage_dir=output_dir)
+    sim.use(DrinkingWaterNetworkAttributes)
+
+    # TapePlayerModel reads the tape file and publishes demand_factor
+    # and head_factor updates at scheduled timestamps.
+    sim.add_model(
+        "tape_player",
+        TapePlayerModel({"tabular": ["water_patterns"]}),
+    )
+
+    # WaterNetworkSimulationModel picks up factor changes and re-runs
+    # hydraulics. The model multiplies base_demand * demand_factor and
+    # base_head * head_factor internally.
+    sim.add_model(
+        "water_network",
+        WaterNetworkSimulationModel(
+            {
+                "dataset": "simple_water_network",
+                "entity_groups": ["junctions", "pipes", "reservoirs"],
+                "hydraulic_timestep": 3600,
+            }
+        ),
+    )
+
+    # DataCollectorModel saves results at each timestep
+    sim.add_model("data_collector", DataCollectorModel({}))
+
+    # Set timeline: 2 hours, time_scale=1 (1 timestamp unit = 1 second)
+    sim.set_timeline_info(TimelineInfo(reference=0, time_scale=1, start_time=0, duration=7200))
+
+    # Run the simulation
+    print("\nRunning simulation with tape-driven patterns...")
+    sim.run()
+
+    print(f"\nSimulation completed! Results stored in: {output_dir}")
+
+    # List output files
+    results_dir = Path(output_dir)
+    results_files = sorted(results_dir.glob("*.json"))
+    if results_files:
+        print("\nOutput files:")
+        for f in results_files:
+            print(f"  - {f.name}")
+
+
 def main():
     """Run water network examples."""
     print("\n" + "=" * 60)
@@ -426,11 +435,8 @@ def main():
     # Run the Simulation() framework example
     example_simulation_framework()
 
-    # Run the Simulation() with controls example
-    example_simulation_with_controls()
-
-    # Run the Simulation() with INP file example
-    example_simulation_with_inp_file()
+    # Run the tape file + Simulation framework example
+    example_tape_file_factors()
 
     # Save a Movici dataset for visualization
     example_save_movici_dataset()

@@ -30,6 +30,19 @@ DrinkingWater_DemandFactor = AttributeSpec(
 DrinkingWater_Demand = AttributeSpec("drinking_water.demand", data_type=DataType(float))
 
 # =============================================================================
+# Drinking water attributes - PDD (per-junction pressure-dependent demand)
+# =============================================================================
+DrinkingWater_MinimumPressure = AttributeSpec(
+    "drinking_water.minimum_pressure", data_type=DataType(float)
+)
+DrinkingWater_RequiredPressure = AttributeSpec(
+    "drinking_water.required_pressure", data_type=DataType(float)
+)
+DrinkingWater_PressureExponent = AttributeSpec(
+    "drinking_water.pressure_exponent", data_type=DataType(float)
+)
+
+# =============================================================================
 # Drinking water attributes - Common node outputs
 # =============================================================================
 DrinkingWater_Pressure = AttributeSpec("drinking_water.pressure", data_type=DataType(float))
