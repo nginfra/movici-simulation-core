@@ -6,6 +6,7 @@ data model and WNTR's water network simulation engine.
 
 from __future__ import annotations
 
+import logging
 import typing as t
 
 import numpy as np
@@ -21,6 +22,8 @@ from .collections import (
     ValveCollection,
 )
 from .id_mapper import IdMapper
+
+logger = logging.getLogger(__name__)
 
 
 class NetworkWrapper:
@@ -262,21 +265,41 @@ class NetworkWrapper:
         self.wn.add_curve(curve_name, curve_type, curve_points)
         return curve_name
 
+    def configure_options(self, options: dict):
+        """Configure WNTR options from a dict of section_name -> {key: value} mappings.
+
+        Section names correspond to attributes on ``wn.options`` (e.g. ``"hydraulic"``,
+        ``"time"``, ``"quality"``). Unknown sections or keys are logged as warnings
+        and skipped.
+
+        :param options: Dict mapping section names to dicts of option key/value pairs
+        """
+        for section_name, section_options in options.items():
+            if not isinstance(section_options, dict):
+                continue
+            section = getattr(self.wn.options, section_name, None)
+            if section is None:
+                logger.warning(f"Unknown WNTR options section '{section_name}', ignoring")
+                continue
+            for key, value in section_options.items():
+                if value is None:
+                    continue
+                if not hasattr(section, key):
+                    logger.warning(f"Unknown option '{key}' in section '{section_name}', ignoring")
+                    continue
+                setattr(section, key, value)
+
     def run_simulation(
         self,
         duration: t.Optional[float] = None,
         hydraulic_timestep: float = 3600,
         report_timestep: t.Optional[float] = None,
-        viscosity: float = 1.0,
-        specific_gravity: float = 1.0,
     ) -> SimulationResults:
         """Run WNTR simulation.
 
         :param duration: Simulation duration in seconds (None uses model setting)
         :param hydraulic_timestep: Hydraulic timestep in seconds
         :param report_timestep: Report timestep in seconds (None = same as hydraulic)
-        :param viscosity: Kinematic viscosity (default 1.0)
-        :param specific_gravity: Specific gravity of fluid (default 1.0)
         :return: SimulationResults object with results
         """
         # Set simulation options
@@ -289,10 +312,6 @@ class NetworkWrapper:
             self.wn.options.time.report_timestep = int(report_timestep)
         else:
             self.wn.options.time.report_timestep = int(hydraulic_timestep)
-
-        # Set hydraulic options
-        self.wn.options.hydraulic.viscosity = viscosity
-        self.wn.options.hydraulic.specific_gravity = specific_gravity
 
         # Reset network to apply initial_status changes from update_link_status
         self.wn.reset_initial_values()

@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("wntr")  # Skip all tests if WNTR not installed
 
-
+from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.models.water_network_simulation.model import Model
@@ -48,32 +48,17 @@ class TestConfigSchema:
         model = Model(config)
         assert model.config["dataset"] == "water_network"
 
-    def test_viscosity_config(self):
-        """Test viscosity configuration option."""
+    def test_dataset_name_stored(self):
+        """Test that dataset_name is stored during setup."""
         config = {
             "dataset": "water_network",
-            "viscosity": 1.5,
         }
 
         model = Model(config)
-        assert model.viscosity == 1.5
-
-    def test_specific_gravity_config(self):
-        """Test specific gravity configuration option."""
-        config = {
-            "dataset": "water_network",
-            "specific_gravity": 0.98,
-        }
-
-        model = Model(config)
-        assert model.specific_gravity == 0.98
-
-    def test_default_viscosity_and_specific_gravity(self):
-        """Test default viscosity and specific gravity values."""
-        model = Model({})
-
-        assert model.viscosity == 1.0
-        assert model.specific_gravity == 1.0
+        state = TrackedState()
+        schema = AttributeSchema()
+        model.setup(state, schema)
+        assert model.dataset_name == "water_network"
 
 
 class TestEntityGroups:
@@ -193,3 +178,105 @@ class TestAttributeNaming:
         assert self._has_attribute(WaterValveEntity, "valve_loss_coefficient")
         assert self._has_attribute(WaterValveEntity, "valve_curve")
         assert self._has_attribute(WaterValveEntity, "flow")
+
+
+class TestHydraulicOptionsFromDataset:
+    """Test that WNTR options are read from the dataset general section."""
+
+    @pytest.fixture
+    def additional_attributes(self):
+        return Model.get_schema_attributes()
+
+    @pytest.fixture
+    def global_timeline_info(self):
+        return TimelineInfo(reference=0, time_scale=1, start_time=0)
+
+    def _make_network_data(self, general=None, roughness=100.0):
+        data = {
+            "version": 4,
+            "name": "water_network",
+            "type": "water_network",
+            "data": {
+                "water_reservoir_entities": {
+                    "id": [1],
+                    "reference": ["R1"],
+                    "geometry.x": [0.0],
+                    "geometry.y": [0.0],
+                    "drinking_water.base_head": [50.0],
+                },
+                "water_junction_entities": {
+                    "id": [2],
+                    "reference": ["J1"],
+                    "geometry.x": [100.0],
+                    "geometry.y": [0.0],
+                    "geometry.z": [10.0],
+                    "drinking_water.base_demand": [0.001],
+                },
+                "water_pipe_entities": {
+                    "id": [101],
+                    "reference": ["PIPE1"],
+                    "topology.from_node_id": [1],
+                    "topology.to_node_id": [2],
+                    "shape.diameter": [0.3],
+                    "shape.length": [100.0],
+                    "drinking_water.roughness": [roughness],
+                },
+            },
+        }
+        if general is not None:
+            data["general"] = general
+        return data
+
+    @pytest.fixture
+    def model_config(self):
+        return {
+            "mode": "movici_network",
+            "dataset": "water_network",
+            "entity_groups": ["junctions", "pipes", "reservoirs"],
+            "hydraulic_timestep": 3600,
+            "simulation_duration": 3600,
+        }
+
+    def _get_wn(self, tester):
+        """Navigate the tester wrapper chain to get the WNTR WaterNetworkModel.
+
+        Chain: ModelTester.model (NumpyPreProcessor)
+               -> .model (TrackedModelAdapter)
+               -> .model (Model)
+               -> .network.wn
+        """
+        return tester.model.model.model.network.wn
+
+    def test_options_applied_from_general_section(self, create_model_tester, model_config):
+        """Test that hydraulic options from dataset general section are applied."""
+        network = self._make_network_data(
+            general={
+                "hydraulic": {
+                    "viscosity": 1.5,
+                    "specific_gravity": 0.98,
+                    "trials": 100,
+                }
+            },
+        )
+
+        tester = create_model_tester(Model, model_config)
+        tester.add_init_data("water_network", network)
+        tester.initialize()
+
+        wn = self._get_wn(tester)
+        assert wn.options.hydraulic.viscosity == 1.5
+        assert wn.options.hydraulic.specific_gravity == 0.98
+        assert wn.options.hydraulic.trials == 100
+
+    def test_defaults_when_no_general_section(self, create_model_tester, model_config):
+        """Test that WNTR defaults are used when no general section."""
+        network = self._make_network_data()
+
+        tester = create_model_tester(Model, model_config)
+        tester.add_init_data("water_network", network)
+        tester.initialize()
+
+        wn = self._get_wn(tester)
+        assert wn.options.hydraulic.headloss == "H-W"
+        assert wn.options.hydraulic.viscosity == 1.0
+        assert wn.options.hydraulic.specific_gravity == 1.0

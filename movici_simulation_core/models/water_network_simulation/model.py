@@ -92,10 +92,7 @@ class Model(TrackedModel, name="water_network_simulation"):
     def __init__(self, model_config: dict):
         super().__init__(model_config)
         self.network: t.Optional[NetworkWrapper] = None
-
-        # Simulation options
-        self.viscosity = model_config.get("viscosity", 1.0)
-        self.specific_gravity = model_config.get("specific_gravity", 1.0)
+        self.dataset_name: t.Optional[str] = None
 
         # Entity groups
         self.junctions: t.Optional[WaterJunctionEntity] = None
@@ -118,11 +115,11 @@ class Model(TrackedModel, name="water_network_simulation"):
         """
         self.network = NetworkWrapper()
 
-        dataset_name = self.config.get("dataset")
-        if not dataset_name:
+        self.dataset_name = self.config.get("dataset")
+        if not self.dataset_name:
             raise ValueError("dataset required in model config")
 
-        self._register_entities(state, dataset_name)
+        self._register_entities(state, self.dataset_name)
 
     def _register_entities(self, state: TrackedState, dataset_name: str):
         """Register entity groups.
@@ -138,12 +135,21 @@ class Model(TrackedModel, name="water_network_simulation"):
                 setattr(self, name, entity)
                 state.register_entity_group(dataset_name, entity)
 
+    def _get_options(self, state: TrackedState) -> dict:
+        """Get WNTR options from the dataset's general section.
+
+        :param state: Tracked state
+        :return: Dict of section_name -> {key: value} mappings
+        """
+        return dict(state.general.get(self.dataset_name, {}))
+
     def initialize(self, state: TrackedState):
         """Initialize model and run first simulation.
 
         :param state: Tracked state
         """
         self._build_network_from_state(state)
+        self.network.configure_options(self._get_options(state))
 
         # Run initial simulation
         duration = self.config.get("simulation_duration")
@@ -154,8 +160,6 @@ class Model(TrackedModel, name="water_network_simulation"):
             duration=duration,
             hydraulic_timestep=hydraulic_timestep,
             report_timestep=report_timestep,
-            viscosity=self.viscosity,
-            specific_gravity=self.specific_gravity,
         )
 
         self._publish_results(state, results)
@@ -186,8 +190,6 @@ class Model(TrackedModel, name="water_network_simulation"):
         results = self.network.run_simulation(
             duration=hydraulic_timestep,
             hydraulic_timestep=hydraulic_timestep,
-            viscosity=self.viscosity,
-            specific_gravity=self.specific_gravity,
         )
 
         self._publish_results(state, results)

@@ -41,16 +41,6 @@
       "type": "number",
       "description": "Report timestep in seconds (default: same as hydraulic_timestep)"
     },
-    "viscosity": {
-      "type": "number",
-      "default": 1.0,
-      "description": "Kinematic viscosity of water relative to standard (default: 1.0)"
-    },
-    "specific_gravity": {
-      "type": "number",
-      "default": 1.0,
-      "description": "Specific gravity of water relative to standard (default: 1.0)"
-    }
   },
   "allOf": [
     {
