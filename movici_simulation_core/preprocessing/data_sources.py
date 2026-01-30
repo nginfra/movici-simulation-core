@@ -4,6 +4,7 @@ from pathlib import Path
 import geopandas
 import netCDF4
 import numpy as np
+import pandas as pd
 from pyproj import CRS
 
 from movici_simulation_core.attributes import (
@@ -81,7 +82,7 @@ class NumpyDataSource(DataSource):
         names and the values being the property data array or a Pandas dataframe
     """
 
-    def __init__(self, data: t.Mapping[str, np.ndarray]) -> None:
+    def __init__(self, data: t.Mapping[str, np.ndarray] | pd.DataFrame) -> None:
         self.data = data
 
     def get_attribute(self, name: str):
@@ -242,12 +243,12 @@ class NetCDFGridSource(DataSource):
 
     def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
         self._ensure_grid()
-        return [
+        return (
             self.points[:, 0].min(),
             self.points[:, 1].min(),
             self.points[:, 0].max(),
             self.points[:, 1].max(),
-        ]
+        )
 
     def get_timestamps(self):
         return self._read_netcdf([self.time_var])[self.time_var].tolist()
@@ -280,4 +281,4 @@ class NetCDFGridSource(DataSource):
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
 
 
-SourcesDict = t.Dict[str, DataSource]
+SourcesDict = t.MutableMapping[str, DataSource]
