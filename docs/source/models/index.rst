@@ -6,5 +6,6 @@ Model Library
    :maxdepth: 2
 
    data_collector
+   drinking_water_model
    netcdf_player
    traffic_assignment

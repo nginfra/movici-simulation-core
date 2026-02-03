@@ -17,6 +17,7 @@ from .traffic_demand_calculation.model import (
 from .traffic_kpi.model import Model as TrafficKpiModel
 from .udf_model.udf_model import UDFModel
 from .unit_conversions.model import Model as UnitConversionsModel
+from .water_network_simulation.model import Model as WaterNetworkSimulationModel
 
 __all__ = [
     "AreaAggregationModel",
@@ -36,4 +37,5 @@ __all__ = [
     "TrafficKpiModel",
     "UDFModel",
     "UnitConversionsModel",
+    "WaterNetworkSimulationModel",
 ]
