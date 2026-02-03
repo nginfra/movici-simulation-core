@@ -18,6 +18,7 @@ from movici_simulation_core.core.attribute import (
 from movici_simulation_core.core.attribute_spec import AttributeSpec
 from movici_simulation_core.core.data_type import UNDEFINED, DataType
 from movici_simulation_core.core.entity_group import EntityGroup
+from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import (
     EntityDataHandler,
     StateProxy,
@@ -655,6 +656,34 @@ def test_can_add_new_entity_groups_and_attributes_in_update():
         state.get_attribute("dataset", "other_entities", "other_attr").array, [20]
     )
     assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
+
+
+def test_adds_enum_name_values_and_special_to_newly_tracked_attributes():
+    schema = AttributeSchema(
+        [
+            AttributeSpec("some_attr", DataType(int, (), False), enum_name="my_enum"),
+        ]
+    )
+    state = TrackedState(track_unknown=OPT, schema=schema)
+    state.receive_update(
+        {
+            "general": {
+                "enum": {"my_enum": ["a", "b"]},
+                "special": {"some_entities.some_attr": 1},
+            },
+            "dataset": {
+                "some_entities": {
+                    "id": {"data": np.array([2])},
+                    "some_attr": {"data": np.array([1])},
+                }
+            },
+        }
+    )
+    _, _, name, some_attr = next(state.iter_attributes())
+    assert name == "some_attr"
+    assert some_attr.options.enum_name == "my_enum"
+    assert some_attr.options.enum_values == ["a", "b"]
+    assert some_attr.options.special == 1
 
 
 def test_can_grow_entity_group():

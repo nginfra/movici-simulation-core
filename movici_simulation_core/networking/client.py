@@ -27,7 +27,7 @@ class Sockets:
 
 
 class RequestClient:
-    def __init__(self, name: str, sockets: Sockets = None):
+    def __init__(self, name: str, sockets: Sockets | None = None):
         self.name = name
         self.sockets = sockets or Sockets()
 

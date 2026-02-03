@@ -515,18 +515,19 @@ def get_undefined_array(
     return TrackedArray(data, rtol=rtol, atol=atol, equal_nan=True)
 
 
-def create_empty_attribute(data_type, length=None, rtol=1e-5, atol=1e-8, options=None):
+def create_empty_attribute(
+    data_type, length=None, rtol=1e-5, atol=1e-8, options: AttributeOptions | None = None
+):
     attr_t = CSRAttribute if data_type.csr else UniformAttribute
     arr = None if length is None else get_undefined_array(data_type, length, rtol=rtol, atol=atol)
     return attr_t(arr, data_type, rtol=rtol, atol=atol, options=options)
 
 
-def create_empty_attribute_for_data(data: NumpyAttributeData, length: int):
+def create_empty_attribute_for_data(
+    data: NumpyAttributeData, length: int, options: AttributeOptions | None = None
+):
     data_type = infer_data_type_from_array(data)
-    return create_empty_attribute(
-        data_type,
-        length=length,
-    )
+    return create_empty_attribute(data_type, length=length, options=options)
 
 
 def ensure_uniform_data(

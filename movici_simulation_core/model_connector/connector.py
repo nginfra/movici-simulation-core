@@ -70,7 +70,7 @@ class ModelConnector:
     model: ModelAdapterBase
     updates: UpdateDataClient
     init_data: InitDataHandler
-    data_mask: t.Optional[DataMask] = dataclasses.field(init=False, default=None)
+    data_mask: DataMask = dataclasses.field(init=False, default_factory=dict)
     name: t.Optional[str] = None
 
     def initialize(self) -> RegistrationMessage:
@@ -92,13 +92,13 @@ class ModelConnector:
         return self._process_result(result_data, next_time)
 
     def _get_update_data(self, update: UpdateMessage) -> t.Optional[bytes]:
-        if update.has_data:
+        if update.has_data and update.address and update.key:
             return self.updates.get(
                 address=update.address, key=update.key, mask=self.data_mask.get("sub")
             )
         return None
 
-    def _process_result(self, data: bytes, next_time: t.Optional[int]) -> ResultMessage:
+    def _process_result(self, data: bytes | None, next_time: t.Optional[int]) -> ResultMessage:
         address, key = self._send_update_data(data)
         return ResultMessage(key=key, address=address, next_time=next_time, origin=self.name)
 
@@ -118,7 +118,7 @@ class UpdateDataClient(RequestClient):
     home_address: str
     counter: t.Iterator[str]
 
-    def __init__(self, name: str, home_address: str, sockets: Sockets = None):
+    def __init__(self, name: str, home_address: str, sockets: Sockets | None = None):
         super().__init__(name, sockets)
         self.home_address = home_address
         self.reset_counter()
