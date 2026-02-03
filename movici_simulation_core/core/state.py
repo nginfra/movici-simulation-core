@@ -136,7 +136,7 @@ class TrackedState:
 
     def iter_attributes(
         self,
-    ) -> t.Iterable[t.Tuple[str, str, str, AttributeObject]]:
+    ) -> t.Generator[t.Tuple[str, str, str, AttributeObject]]:
         for datasetname, entity_type, attributes in self.iter_entities():
             yield from (
                 (datasetname, entity_type, name, attr) for name, attr in attributes.items()
@@ -182,14 +182,13 @@ class TrackedState:
         rv = defaultdict(dict)
         for dataset_name, entity_type, attributes in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
-            data = EntityDataHandler(attributes, index).generate_update(flags)
+            data = EntityDataHandler(attributes, index, schema=self.schema).generate_update(flags)
             if data:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
     def receive_update(self, update: t.Dict, is_initial=False, process_undefined=False):
         general_section = update.pop("general", None) or {}  # {"general": None} should yield {}
-
         for dataset_name, dataset_data in extract_dataset_data(update):
             for entity_name, entity_data in dataset_data.items():
                 if self.track_unknown != 0:
@@ -198,7 +197,11 @@ class TrackedState:
                     continue
                 index = self.get_index(dataset_name, entity_name)
                 handler = EntityDataHandler(
-                    entity_group, index, self.track_unknown, process_undefined=process_undefined
+                    entity_group,
+                    index,
+                    self.track_unknown,
+                    process_undefined=process_undefined,
+                    schema=self.schema,
                 )
                 handler.receive_update(entity_data, is_initial)
             self.process_general_section(dataset_name, general_section)
@@ -249,7 +252,7 @@ class TrackedState:
         rv = defaultdict(dict)
         for dataset_name, entity_type, attributes in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
-            data = EntityDataHandler(attributes, index).to_dict()
+            data = EntityDataHandler(attributes, index, schema=self.schema).to_dict()
             if data:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
@@ -278,11 +281,13 @@ class EntityDataHandler:
         index: index_.Index,
         track_unknown: t.Union[int, bool] = 0,
         process_undefined=False,
+        schema: AttributeSchema | None = None,
     ):
         self.attributes = attributes
         self.index = index
         self.track_unknown = track_unknown
         self.process_undefined = process_undefined
+        self.schema = schema
 
     def receive_update(self, entity_data: EntityData, is_initial=False):
         """Update the entity state with new external update data. The first time this is called,
@@ -325,7 +330,9 @@ class EntityDataHandler:
             attr.update(data, self.index[ids], process_undefined=self.process_undefined)
 
     def _register_new_attribute(self, name: str, data: NumpyAttributeData):
-        attr = create_empty_attribute_for_data(data, len(self.index))
+        spec = self.schema.get_spec(name) if self.schema is not None else None
+        options = AttributeOptions(enum_name=spec.enum_name if spec else None)
+        attr = create_empty_attribute_for_data(data, len(self.index), options=options)
         attr.index = self.index
         attr.flags |= self.track_unknown
         self.attributes[name] = attr
