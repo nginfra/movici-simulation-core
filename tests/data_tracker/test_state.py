@@ -658,31 +658,7 @@ def test_can_add_new_entity_groups_and_attributes_in_update():
     assert np.array_equal(state.index["dataset"]["other_entities"].ids, [1])
 
 
-def test_adds_enum_name_and_values_to_newly_tracked_attributes():
-    schema = AttributeSchema(
-        [
-            AttributeSpec("some_attr", DataType(int, (), False), enum_name="my_enum"),
-        ]
-    )
-    state = TrackedState(track_unknown=OPT, schema=schema)
-    state.receive_update(
-        {
-            "general": {"enum": {"my_enum": ["a", "b"]}},
-            "dataset": {
-                "some_entities": {
-                    "id": {"data": np.array([2])},
-                    "some_attr": {"data": np.array([1])},
-                }
-            },
-        }
-    )
-    _, _, name, some_attr = next(state.iter_attributes())
-    assert name == "some_attr"
-    assert some_attr.options.enum_name == "my_enum"
-    assert some_attr.options.enum_values == ["a", "b"]
-
-
-def test_adds_special_value_to_newly_tracked_attributes():
+def test_adds_enum_name_values_and_special_to_newly_tracked_attributes():
     schema = AttributeSchema(
         [
             AttributeSpec("some_attr", DataType(int, (), False), enum_name="my_enum"),
@@ -692,6 +668,7 @@ def test_adds_special_value_to_newly_tracked_attributes():
     state.receive_update(
         {
             "general": {
+                "enum": {"my_enum": ["a", "b"]},
                 "special": {"some_entities.some_attr": 1},
             },
             "dataset": {
@@ -704,6 +681,8 @@ def test_adds_special_value_to_newly_tracked_attributes():
     )
     _, _, name, some_attr = next(state.iter_attributes())
     assert name == "some_attr"
+    assert some_attr.options.enum_name == "my_enum"
+    assert some_attr.options.enum_values == ["a", "b"]
     assert some_attr.options.special == 1
 
 
