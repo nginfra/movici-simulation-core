@@ -23,6 +23,9 @@ from .attribute_spec import AttributeSpec
 from .data_format import extract_dataset_data
 from .schema import AttributeSchema
 
+if t.TYPE_CHECKING:
+    from .entity_group import EntityGroup
+
 AttributeDict = t.Dict[str, AttributeObject]
 
 NO_TRACK_UNKNOWN = 0
@@ -33,6 +36,8 @@ class TrackedState:
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
     general: dict[str, dict]
+    registered_entity_groups: list[EntityGroup]
+    registered_attributes: list[AttributeObject]
 
     def __init__(
         self,
@@ -51,7 +56,9 @@ class TrackedState:
         self.index = {}
         self.logger = logger
         self.schema = schema
-        self.general = defaultdict(dict)
+        self.general = {}
+        self.registered_entity_groups = []
+        self.registered_attributes = []
 
         if isinstance(track_unknown, bool):
             track_unknown = track_unknown * OPT
@@ -83,7 +90,7 @@ class TrackedState:
             raise ValueError("EntityGroup must have __entity_name__ defined")
         ensure_path(self.attributes, (dataset_name, entity.__entity_name__))
         for field in entity.all_attributes().values():
-            self.register_attribute(
+            self._register_attribute(
                 dataset_name=dataset_name,
                 entity_name=entity.__entity_name__,
                 spec=field.spec,
@@ -92,9 +99,30 @@ class TrackedState:
                 atol=field.atol,
             )
         entity.register(StateProxy(self, dataset_name, entity.__entity_name__))
+        self.registered_entity_groups.append(entity)
         return entity
 
     def register_attribute(
+        self,
+        dataset_name: str,
+        entity_name: str,
+        spec: AttributeSpec,
+        flags: int = 0,
+        rtol=1e-5,
+        atol=1e-8,
+    ) -> AttributeObject:
+        attribute = self._register_attribute(
+            dataset_name=dataset_name,
+            entity_name=entity_name,
+            spec=spec,
+            flags=flags,
+            rtol=rtol,
+            atol=atol,
+        )
+        self.registered_attributes.append(attribute)
+        return attribute
+
+    def _register_attribute(
         self,
         dataset_name: str,
         entity_name: str,
@@ -128,10 +156,12 @@ class TrackedState:
 
     def is_ready_for(self, flag: int):
         """
-        flag: one of SUB, INIT
+        flag: one of REQUIRED, INITIALIZE
         """
         return all(
-            attr.is_initialized() for _, _, _, attr in self.iter_attributes() if flag & attr.flags
+            attr.is_initialized() for attr in self.registered_attributes if flag & attr.flags
+        ) and all(
+            entity_group.is_ready_for(flag) for entity_group in self.registered_entity_groups
         )
 
     def iter_attributes(
@@ -209,7 +239,7 @@ class TrackedState:
     def process_general_section(self, dataset_name: str, general_section: dict):
         enums = general_section.pop("enum", {})
         specials = parse_special_values(general_section)
-        self.general[dataset_name].update(general_section)
+        self.general.setdefault(dataset_name, {}).update(general_section)
         for current_dataset, entity_name, name, attr in self.iter_attributes():
             if current_dataset != dataset_name:
                 continue
