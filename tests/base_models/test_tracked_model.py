@@ -190,7 +190,7 @@ def test_formats_error_message_from_entity_group_when_not_ready(adapter, entity_
     assert "dataset2/my_entities/init_attr" not in str(e.value)
 
 
-def test_not_ready_on_extra_optional_entity_group(adapter, entity_group, init_data_handler):
+def test_not_ready_on_extra_required_entity_group(adapter, entity_group, init_data_handler):
     adapter.state.register_entity_group("dataset2", entity_group)
     adapter.initialize(init_data_handler)
     assert not adapter.model_initialized

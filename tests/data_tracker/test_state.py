@@ -147,16 +147,16 @@ def test_returns_none_when_not_found(state, dataset, entity_type):
 
 def test_is_ready_for_check_initialized(state):
     class FakeEntity(EntityGroup):
-        init = get_attribute(name="init_attr", flags=INIT)
+        sub = get_attribute(name="sub_attr", flags=SUB)
         pub = get_attribute(name="pub_attr", flags=PUB)
 
     entity = FakeEntity(name="a")
     state.register_entity_group("some_dataset", entity)
-    entity.init.is_initialized = Mock()
+    entity.sub.is_initialized = Mock()
     entity.pub.is_initialized = Mock()
 
-    state.is_ready_for(INITIALIZE)
-    assert entity.init.is_initialized.call_count == 1
+    state.is_ready_for(REQUIRED)
+    assert entity.sub.is_initialized.call_count == 1
     assert entity.pub.is_initialized.call_count == 0
 
 
