@@ -38,7 +38,9 @@ class EntityGroup:
         return self._state
 
     def is_ready_for(self, flag: int):
-        """This method is called when TrackedState
+        """This method is called when TrackedState checks if this entity group is
+        ready for initialization (INITIALIZE) or updates (REQUIRED). Any optional
+        entity groups are ignored when checking for readiness.
 
         :param flag: one of INITIALIZE, REQUIRED
         """
