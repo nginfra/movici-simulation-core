@@ -8,6 +8,7 @@ import typing as t
 
 import numpy as np
 
+import movici_simulation_core
 from movici_simulation_core.csr import generate_update, remove_undefined_csr
 from movici_simulation_core.types import CSRAttributeData, NumpyAttributeData, UniformAttributeData
 from movici_simulation_core.utils.unicode import determine_new_unicode_dtype
@@ -24,9 +25,6 @@ from .schema import (
     has_rowptr_key,
     infer_data_type_from_array,
 )
-
-if t.TYPE_CHECKING:
-    from .entity_group import EntityGroup
 
 # Base attribute pub/sub flags
 # These are used internally when checking for attributes, model developers should use the combined
@@ -74,16 +72,16 @@ class AttributeField:
         self.atol = atol
 
     def __get__(
-        self, instance: t.Optional[EntityGroup], owner
+        self, instance: t.Optional[movici_simulation_core.EntityGroup], owner
     ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
         if instance is None:
             return self
         return self.get_for(instance)
 
-    def __set__(self, instance: EntityGroup, value):
+    def __set__(self, instance: movici_simulation_core.EntityGroup, value):
         raise TypeError("AttributeField is read only")
 
-    def get_for(self, instance: EntityGroup):
+    def get_for(self, instance: movici_simulation_core.EntityGroup):
         return instance.get_attribute(self.spec.name)
 
     @property

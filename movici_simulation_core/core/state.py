@@ -24,9 +24,6 @@ from .attribute_spec import AttributeSpec
 from .data_format import extract_dataset_data
 from .schema import AttributeSchema
 
-if t.TYPE_CHECKING:
-    from .entity_group import EntityGroup
-
 AttributeDict = t.Dict[str, AttributeObject]
 
 NO_TRACK_UNKNOWN = 0
@@ -37,7 +34,7 @@ class TrackedState:
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
     general: dict[str, dict]
-    registered_entity_groups: dict[str, list[EntityGroup]]
+    registered_entity_groups: dict[str, list[eg.EntityGroup]]
     registered_attributes: dict[tuple[str, str, str], AttributeObject]
 
     def __init__(
