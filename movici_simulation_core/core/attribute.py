@@ -78,12 +78,12 @@ class AttributeField:
     ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
         if instance is None:
             return self
-        return self.get(instance)
+        return self.get_for(instance)
 
     def __set__(self, instance: EntityGroup, value):
         raise TypeError("AttributeField is read only")
 
-    def get(self, instance: EntityGroup):
+    def get_for(self, instance: EntityGroup):
         return instance.get_attribute(self.spec.name)
 
     @property

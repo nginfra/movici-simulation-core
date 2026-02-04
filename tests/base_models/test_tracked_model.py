@@ -123,6 +123,8 @@ def init_data_handler(tmp_path):
 
     class FakeInitDataHandler:
         def get(self, key=None):
+            if key != "dataset":
+                return None, None
             return FileType.JSON, path
 
     return FakeInitDataHandler()
@@ -167,6 +169,37 @@ def test_new_time_raises_when_not_ready_for_updates(adapter):
     adapter.model_initialized = True
     with pytest.raises(RuntimeError):
         adapter.new_time(NewTimeMessage(1))
+
+
+def test_formats_error_message_when_not_ready(adapter):
+    adapter.state.register_attribute(
+        "dataset", "my_entities", AttributeSpec("init_attr", float), flags=INIT
+    )
+    with pytest.raises(RuntimeError) as e:
+        adapter.new_time(NewTimeMessage(1))
+    assert "dataset/my_entities/init_attr" in str(e.value)
+
+
+def test_formats_error_message_from_entity_group_when_not_ready(adapter, entity_group):
+    adapter.state.register_entity_group("dataset", entity_group)
+    adapter.state.register_entity_group("dataset2", entity_group(optional=True))
+    with pytest.raises(RuntimeError) as e:
+        adapter.new_time(NewTimeMessage(1))
+    assert "dataset/my_entities/init_attr" in str(e.value)
+    assert "dataset/my_entities/pub_attr" not in str(e.value)
+    assert "dataset2/my_entities/init_attr" not in str(e.value)
+
+
+def test_not_ready_on_extra_optional_entity_group(adapter, entity_group, init_data_handler):
+    adapter.state.register_entity_group("dataset2", entity_group)
+    adapter.initialize(init_data_handler)
+    assert not adapter.model_initialized
+
+
+def test_ready_on_optional_entity_group(adapter, entity_group, init_data_handler):
+    adapter.state.register_entity_group("dataset2", entity_group(optional=True))
+    adapter.initialize(init_data_handler)
+    assert adapter.model_initialized
 
 
 def test_shutdown_raises_when_not_initialized(adapter):

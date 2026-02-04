@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import typing as t
 from collections import defaultdict
@@ -36,8 +37,8 @@ class TrackedState:
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
     general: dict[str, dict]
-    registered_entity_groups: list[EntityGroup]
-    registered_attributes: list[AttributeObject]
+    registered_entity_groups: dict[str, list[EntityGroup]]
+    registered_attributes: dict[tuple[str, str, str], AttributeObject]
 
     def __init__(
         self,
@@ -57,8 +58,8 @@ class TrackedState:
         self.logger = logger
         self.schema = schema
         self.general = {}
-        self.registered_entity_groups = []
-        self.registered_attributes = []
+        self.registered_entity_groups = {}
+        self.registered_attributes = {}
 
         if isinstance(track_unknown, bool):
             track_unknown = track_unknown * OPT
@@ -99,7 +100,7 @@ class TrackedState:
                 atol=field.atol,
             )
         entity.register(StateProxy(self, dataset_name, entity.__entity_name__))
-        self.registered_entity_groups.append(entity)
+        self.registered_entity_groups.setdefault(dataset_name, []).append(entity)
         return entity
 
     def register_attribute(
@@ -119,7 +120,7 @@ class TrackedState:
             rtol=rtol,
             atol=atol,
         )
-        self.registered_attributes.append(attribute)
+        self.registered_attributes[(dataset_name, entity_name, spec.name)] = attribute
         return attribute
 
     def _register_attribute(
@@ -159,9 +160,14 @@ class TrackedState:
         flag: one of REQUIRED, INITIALIZE
         """
         return all(
-            attr.is_initialized() for attr in self.registered_attributes if flag & attr.flags
+            attr.is_initialized()
+            for attr in self.registered_attributes.values()
+            if flag & attr.flags
         ) and all(
-            entity_group.is_ready_for(flag) for entity_group in self.registered_entity_groups
+            entity_group.is_ready_for(flag)
+            for entity_group in itertools.chain.from_iterable(
+                self.registered_entity_groups.values()
+            )
         )
 
     def iter_attributes(

@@ -45,8 +45,8 @@ class EntityGroup:
         if self.__optional__:
             return True
         return all(
-            attr.get(self).is_initialized()
-            for attr in self.attributes.values()
+            attr.get_for(self).is_initialized()
+            for attr in self.all_attributes().values()
             if flag & attr.flags
         )
 
