@@ -48,6 +48,25 @@ class UpdateInfo:
 
 
 class DataCollector(SimpleModel, name="data_collector"):
+    """Collect and store simulation data updates during a run.
+
+    The data collector subscribes to attribute updates from other models and
+    stores them using a configurable storage strategy (file-based JSON or SQLite).
+    It can collect all updates or filter to specific datasets/attributes.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``storage`` (optional): Storage method, ``"file"`` or ``"sqlite"``
+        - ``storage_dir`` (optional): Directory for file-based storage
+        - ``database_path`` (optional): Path to SQLite database file
+        - ``gather_filter`` (optional): Filter for data collection, use ``"*"``
+          to collect all updates, or specify a dict with dataset/attribute filters
+        - ``aggregate_updates`` (optional): If ``True``, batch updates per timestamp
+
+    :param state: Internal tracked state for receiving updates
+    :param strategy: The storage strategy instance (file or SQLite)
+    """
+
     state: t.Optional[TrackedState] = None
     aggregate: bool = False
     strategy: StorageStrategy

@@ -1,69 +1,88 @@
 .. |required| replace:: (**required**)
 
+NetCDF Player
+=============
 
-NetCDFPlayer Model
-===================================================================================================
+The NetCDF player model (``"netcdf_player"``) replays multi-dimensional time-series
+data from NetCDF files during a simulation, publishing variable values to entity
+attributes at their designated timestamps.
 
-The ``NetCDFPlayerModel`` can read a (specifically organized) netCDF file and write variables
-inside this netCDF to attributes in an entity group. The netCDF file must adhere to the following
-specification:
+Use cases include:
 
-* There must be a ``time`` variable with a number of timestamps. The timestamps represent the number
-  of seconds sinces ``t=0``
-* There must be at least one other variable which has the length of ``time`` as the first dimension
-  and the length of the number of (target) entities as the second dimension
-* the variable data must be either 32 bit or 64 bit floating points
+* Playing back pre-computed flooding data (water heights over time)
+* Injecting spatial time-series datasets from external models
+* Replaying meteorological or environmental data
 
+How It Works
+------------
 
-After initialization the ``NetCDFPlayerModel`` reads the netCDF data and writes the source variable
-data per timestamp on the target attribute. The variable data is assigned to the target attribute
-on an "index" basis, not on an "id" basis.
+1. The NetCDF file is loaded at simulation setup
+2. The ``time`` variable defines when each data slice becomes active
+3. At each timestamp, the model publishes variable values to target attributes
+4. Values are assigned by index position (not by entity ID)
+
+NetCDF File Format
+------------------
+
+The NetCDF file must adhere to the following specification:
+
+* A ``time`` variable with timestamps (seconds since simulation start)
+* Additional variables with dimensions ``[time, entities]``
+* Variable data must be 32-bit or 64-bit floating point
 
 Example Configuration
----------------------------------------------------------------------------------------------------
+---------------------
 
-.. code-block::
+.. code-block:: json
 
-  {
-    "name": "my_player",
-    "type": "netcdf_player",
-    "netcdf_tape": "some_netcdf_tape",
-    "entity_group": ["target_dataset", "target_entities"],
-    "attributes": [
-      {
-        "source": "source_var",
-        "target": "target.attribute"
-      }
-    ]
-  }
+    {
+        "name": "flooding_player",
+        "type": "netcdf_player",
+        "netcdf_tape": "flooding_data_netcdf",
+        "entity_group": ["flooding_grid", "grid_cell_entities"],
+        "attributes": [
+            {
+                "source": "water_height",
+                "target": "flooding.water_height"
+            }
+        ]
+    }
 
-NetCDFPlayer Model Config Schema Reference
----------------------------------------------------------------------------------------------------
+Notes
+-----
+
+* Variable data is assigned to entities by index position, not by entity ID
+* The model closes the NetCDF file handle on shutdown
+* Multiple attributes can be mapped from the same NetCDF file
+* The model returns the next timestamp from the NetCDF, allowing the simulation
+  to advance efficiently
+
+Config Schema Reference
+-----------------------
 
 NetCDFPlayerConfig
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 | ``type``: ``object``
 
 ``properties``:
-  | ``netcdf_tape``: ``string`` the name of a NetCDF tape dataset |required|
+  | ``netcdf_tape``: ``string`` Name of the NetCDF tape dataset |required|
   | ``entity_group``: :ref:`NetCDFPlayerEntityGroup` |required|
   | ``attributes``: :ref:`NetCDFPlayerAttributes` |required|
-
 
 .. _NetCDFPlayerEntityGroup:
 
 NetCDFPlayerEntityGroup
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
 
 | ``type``: ``array``
 
-A Tuple-array of two strings representing the target entity group: ["target_dataset", "target_entity_group"]
+A tuple of two strings: ``[dataset_name, entity_group_name]``
 
 .. _NetCDFPlayerAttributes:
 
 NetCDFPlayerAttributes
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
 
 | ``type``: ``array``
 | ``items``: :ref:`NetCDFPlayerAttribute`
@@ -72,11 +91,11 @@ NetCDFPlayerAttributes
 .. _NetCDFPlayerAttribute:
 
 NetCDFPlayerAttribute
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 | ``type``: ``object``
 
 ``properties``:
-  | ``source``: ``string`` The variable name in the source (``netcdf_tape``) |required|
-  | ``target``: ``string`` The attribute name in the target entity group |required|
+  | ``source``: ``string`` Variable name in the NetCDF file |required|
+  | ``target``: ``string`` Attribute name to publish the value to |required|
 

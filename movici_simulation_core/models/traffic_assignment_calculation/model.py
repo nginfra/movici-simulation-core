@@ -23,8 +23,45 @@ from . import dataset as ds
 
 
 class Model(TrackedModel, name="traffic_assignment_calculation"):
-    """
-    Calculates traffic attributes on roads
+    """Assign traffic flows to transport network links using equilibrium assignment.
+
+    The traffic assignment model distributes origin-destination demand onto network
+    links using the Aequilibrae library. It implements user equilibrium assignment
+    with volume-delay functions (VDF) to model congestion effects.
+
+    The BPR (Bureau of Public Roads) volume-delay function is:
+
+    .. math::
+
+        t = t_0 \\cdot \\left(1 + \\alpha \\cdot \\left(\\frac{V}{C}\\right)^\\beta\\right)
+
+    where:
+
+    - :math:`t_0` is the free-flow travel time
+    - :math:`V` is the traffic volume
+    - :math:`C` is the link capacity
+    - :math:`\\alpha` and :math:`\\beta` are calibration parameters
+
+    Supports multiple transport modalities with mode-specific behavior:
+
+    - ``roads``: Standard car/truck traffic with configurable VDF parameters
+    - ``waterways``: Includes lock waiting time in free-flow calculation
+    - ``tracks``: Rail freight with no congestion (alpha=0)
+    - ``passenger_tracks``: Passenger rail assignment
+    - ``cargo_tracks``: Freight rail with cargo-allowed restrictions
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``modality``: Transport mode (see above)
+        - ``dataset``: Transport network dataset name
+        - ``vdf_alpha`` (optional): VDF alpha parameter (default: 0.15 for roads)
+        - ``vdf_beta`` (optional): VDF beta parameter (default: 4.0)
+        - ``cargo_pcu`` (optional): PCU factor for cargo vehicles (default: 2.0)
+
+    :param project: Aequilibrae project wrapper for traffic assignment
+    :param transport_segments: Entity group for network links
+    :param demand_nodes: Entity group for OD demand nodes
+    :param modality: Strategy object for mode-specific behavior
     """
 
     vdf_alpha: t.Union[float, str]

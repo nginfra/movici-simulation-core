@@ -29,13 +29,32 @@ DEFAULT_NOX_EMISSION_ATTR = "transport.nox_emission.hours"
 
 
 class Model(TrackedModel, name="traffic_kpi"):
-    """
-    Implementation of the traffic KPI model.
-    Reads a csv with coefficients.
-    Calculates segment CO2, NOx and energy consumption.
+    """Calculate environmental KPIs for transport segments.
 
-    Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
+    The traffic KPI model computes CO2 emissions, NOx emissions, and energy
+    consumption for each transport segment based on cargo and passenger flows.
+    Calculations use emission and consumption factors from a coefficients CSV file,
+    with support for different fuel types (diesel, electricity, hydrogen, petrol)
+    and transport modalities (roads, tracks, waterways).
+
+    Reference: Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``modality``: Transport mode (``"roads"``, ``"tracks"``, ``"waterways"``)
+        - ``dataset``: Transport network dataset name
+        - ``coefficients_dataset``: CSV dataset with emission/consumption factors
+        - ``scenario_parameters_dataset`` (optional): CSV with scenario multipliers
+        - ``cargo_scenario_parameters`` (optional): List of cargo multiplier columns
+        - ``passenger_scenario_parameters`` (optional): List of passenger multiplier columns
+        - ``energy_consumption_attribute`` (optional): Output attribute name
+        - ``co2_emission_attribute`` (optional): Output attribute name
+        - ``nox_emission_attribute`` (optional): Output attribute name
+
+    :param segments: Entity group for transport network segments
+    :param coefficients_tape: CSV tape reader for emission factors
+    :param scenario_parameters_tape: Optional CSV tape for scenario multipliers
     """
 
     segments: t.Optional[TransportSegments]

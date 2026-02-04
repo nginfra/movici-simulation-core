@@ -36,6 +36,34 @@ class RoadSegments(EntityGroup):
 
 
 class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution"):
+    """Map road segments to evacuation points based on routing data.
+
+    The evacuation point resolution model assigns evacuation point identifiers
+    to road segments based on pre-computed evacuation routes. When a road segment
+    receives a "last ID" update (indicating the last road in a route), the model
+    maps this to the corresponding evacuation point.
+
+    This is used in evacuation routing simulations to track which evacuation
+    destination each road segment is currently routing towards.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``dataset``: Dataset name containing both evacuation points and roads
+        - ``evacuation_points`` (optional): Configuration with:
+
+          - ``entity_group``: Entity group name for evacuation points
+          - ``attribute``: Attribute for point labels (default: ``"id"``)
+
+        - ``road_segments`` (optional): Configuration with:
+
+          - ``entity_group``: Entity group name for road segments
+          - ``attribute``: Output attribute for evacuation point ID
+
+    :param evac_points: Entity group for evacuation point definitions
+    :param roads: Entity group for road segments
+    :param label_mapping: Dictionary mapping road IDs to evacuation point labels
+    """
+
     evac_points: EvacuationPoints
     roads: RoadSegments
     label_mapping: t.Dict[int, int]

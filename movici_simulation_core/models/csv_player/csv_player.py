@@ -16,6 +16,28 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class CSVPlayer(TrackedModel, name="csv_player"):
+    """Replay time-series data from CSV files during a simulation.
+
+    The CSV player reads parameter values from a CSV file where each row
+    represents a different timestamp. It publishes column values to target
+    attributes at the corresponding simulation times.
+
+    The CSV file must have a ``time`` column containing timestamps in seconds,
+    and additional columns for each parameter to be published.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``csv_tape``: Name of the CSV dataset containing time-series data
+        - ``entity_group``: ``[dataset_name, entity_group_name]`` for target entities
+        - ``csv_parameters``: List of parameter mappings, each with:
+
+          - ``parameter``: Column name in the CSV file
+          - ``target_attribute``: Attribute name to publish the value to
+
+    :param csv_tape: The CSV tape reader instance
+    :param publishers: List of publisher instances for each parameter mapping
+    """
+
     targets: t.Dict[str, UniformAttribute]
     publishers: t.List[Publisher]
     csv_tape: CsvTape

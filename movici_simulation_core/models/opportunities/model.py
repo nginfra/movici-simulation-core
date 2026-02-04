@@ -14,12 +14,28 @@ from .dataset import LineEntity, OverlapEntity
 
 
 class Model(TrackedModel, name="opportunity"):
-    """
-    Implementation of the opportunities model
-    Takes in a line entity and a overlap status dataset
-    If input attribute A is on at the same time as the overlap is active,
-    the opportunity was taken.
-    If only the overlap was active, the opportunity was missed.
+    """Track opportunities taken or missed during infrastructure overlaps.
+
+    The opportunities model monitors spatial overlaps between infrastructure
+    entities and tracks whether opportunities for coordinated action were taken.
+    An opportunity is considered "taken" when a status attribute is active during
+    an overlap period, and "missed" when only the overlap was active.
+
+    This is useful for analyzing coordination between infrastructure works,
+    such as combining road maintenance with utility upgrades when excavation
+    is already planned.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``overlap_dataset``: ``[dataset_name]`` containing overlap records
+        - ``opportunity_entity``: ``[dataset_name, entity_group_name]`` for line entities
+        - ``opportunity_taken_property``: ``[attribute_name]`` boolean status attribute
+        - ``total_length_property``: ``[attribute_name]`` for publishing total length
+        - ``cost_per_meter``: Cost factor per meter of opportunity
+
+    :param overlap_entity: Entity group for overlap records
+    :param opportunity_entity: Entity group for infrastructure lines
+    :param cost_per_meter: Cost factor for calculating opportunity values
     """
 
     overlap_entity: t.Optional[OverlapEntity]
