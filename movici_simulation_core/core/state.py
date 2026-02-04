@@ -34,7 +34,21 @@ class TrackedState:
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
     general: dict[str, dict]
+    # registered_entity_groups contains all EntityGroup objects
+    # that have been registered through TrackedState.register_entity_groups.
+    # keys in this dictionary are dataset names
+    #
+    # Since entity_group name in a dataset (such as "area_entities") may
+    # be registered through multiple EntityGroup objects (although this is
+    # rare), the values in this dict are a list of EntityGroup
     registered_entity_groups: dict[str, list[eg.EntityGroup]]
+
+    # registered_attributes contain all AttributeObjects that have been
+    # explicitly registered through TrackedState.register_attribute. It
+    # does not contain attributes that have been registered through
+    # TrackedState.register_entity_group. On registration, we
+    # automatically deduplicate, so we have only one AttributeObject
+    # per dataset_name, entity_group_name, attribute_name combination
     registered_attributes: dict[tuple[str, str, str], AttributeObject]
 
     def __init__(
