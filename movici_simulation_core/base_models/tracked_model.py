@@ -10,7 +10,6 @@ from movici_simulation_core.core.attribute import (
     PUBLISH,
     REQUIRED,
     SUBSCRIBE,
-    AttributeObject,
 )
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.exceptions import NotReady
@@ -172,35 +171,19 @@ class TrackedModelAdapter(ModelAdapterBase):
         return data, next_time
 
     def format_uninitialized_attributes(self) -> str:
-        def required_attributes_as_string(
-            attributes: t.Iterable[tuple[str, str, str, AttributeObject]],
-        ):
-            for ds, entity, attr_name, attr in attributes:
-                if (attr.flags & REQUIRED) and not attr.is_initialized():
-                    yield "/".join((ds, entity, attr_name))
-
         def uninitialized_attributes():
             for ds, entity_groups in self.state.registered_entity_groups.items():
                 for entity_group in entity_groups:
                     if entity_group.__optional__:
                         continue
-                    yield from required_attributes_as_string(
-                        (
-                            (
-                                ds,
-                                t.cast(str, entity_group.__entity_name__),
-                                attribute.spec.name,
-                                attribute.get_for(entity_group),
-                            )
-                            for attribute in entity_group.all_attributes().values()
-                        )
-                    )
-            yield from required_attributes_as_string(
-                (
-                    (ds, entity, attr_name, attr)
-                    for (ds, entity, attr_name), attr in self.state.registered_attributes.items()
-                )
-            )
+                    for field in entity_group.all_attributes().values():
+                        attr = field.get_for(entity_group)
+                        if (attr.flags & REQUIRED) and not attr.is_initialized():
+                            yield f"{ds}/{entity_group.__entity_name__}/{field.spec.name}"
+
+            for (ds, entity, attr_name), attr in self.state.registered_attributes.items():
+                if (attr.flags & REQUIRED) and not attr.is_initialized():
+                    yield f"{ds}/{entity}/{attr_name}"
 
         return "\n".join(f"Uninitialized attribute: {attr}" for attr in uninitialized_attributes())
 
