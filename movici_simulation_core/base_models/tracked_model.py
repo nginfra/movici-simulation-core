@@ -5,12 +5,7 @@ import typing as t
 from abc import abstractmethod
 
 from movici_simulation_core.core import AttributeSchema, Model, ModelAdapterBase, TrackedState
-from movici_simulation_core.core.attribute import (
-    INITIALIZE,
-    PUBLISH,
-    REQUIRED,
-    SUBSCRIBE,
-)
+from movici_simulation_core.core.attribute import INITIALIZE, PUBLISH, REQUIRED, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.messages import (
