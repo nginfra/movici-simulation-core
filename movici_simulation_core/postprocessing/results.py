@@ -105,9 +105,7 @@ class ResultDataset:
         self.name = (
             init_data.get("name", None)
             or [
-                key
-                for key, val in init_data.items()
-                if isinstance(val, dict) and key not in ("general",)
+                key for key, val in init_data.items() if isinstance(val, dict) and key != "general"
             ][0]
         )
         self.metadata = {
