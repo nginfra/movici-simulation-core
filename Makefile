@@ -16,14 +16,10 @@ ruff:
 toml-check:
 	taplo format --check .
 
-safety:
-	@echo "Safety check: Skipping safety scan (requires authentication in CI)"
-	@echo "To run locally: pip freeze | safety scan --stdin --output screen"
-
 mypy:
 	- mypy $(MODULE_NAME)
 
-lint: ruff toml-check safety mypy
+lint: ruff toml-check mypy
 	
 test-all: coverage lint
 
