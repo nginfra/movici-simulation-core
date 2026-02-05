@@ -1,5 +1,19 @@
 version: 2
 updates:
+  # Enable version updates for pre-commit hooks
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "pre-commit"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
   # Enable version updates for Python dependencies
   - package-ecosystem: "pip"
     directory: "/"
@@ -20,9 +34,7 @@ updates:
       development:
         patterns:
           - "pytest*"
-          - "black*"
-          - "flake8*"
-          - "isort*"
+          - "ruff*"
           - "mypy*"
           - "pre-commit*"
           - "coverage*"
@@ -34,9 +46,7 @@ updates:
       production:
         exclude-patterns:
           - "pytest*"
-          - "black*"
-          - "flake8*"
-          - "isort*"
+          - "ruff*"
           - "mypy*"
           - "pre-commit*"
           - "coverage*"

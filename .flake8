@@ -1,9 +1,0 @@
-[flake8]
-max-line-length = 99
-ignore = E741, W503, E203, E701
-exclude =
-    .direnv,
-    .venv,
-    __pycache__,
-    env,
-    venv
