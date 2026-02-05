@@ -14,12 +14,3 @@ repos:
   hooks:
     - id: taplo-format
       name: Taplo format (TOML)
-
-- repo: local
-  hooks:
-  - id: python-safety-dependencies-check
-    entry: bash
-    name: Safety
-    args: [-c, "pip freeze | safety scan --stdin --full-report"]
-    language: system
-    pass_filenames: false

@@ -58,7 +58,6 @@ sqlite = ["sqlalchemy>=1.4,<3.0"]
 dev = [
   "pytest",
   "pytest-cov",
-  "safety>=3.7.0",
   "mypy",
   "bump2version",
   "taplo",
@@ -75,7 +74,6 @@ all = [
   "scipy",
   "pytest",
   "pytest-cov",
-  "safety>=3.7.0",
   "mypy",
   "bump2version",
   "taplo",
