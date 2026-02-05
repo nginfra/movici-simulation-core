@@ -697,10 +697,10 @@ class TestCargoDemandWithInvestment:
         scenario_parameters_csv,
         global_schema,
     ):
-        tester = ModelTester(model, schema=global_schema)
-        tester.add_init_data(road_network_name, road_network_for_traffic)
-        tester.add_init_data(scenario_parameters_csv_name, scenario_parameters_csv)
-        return tester
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(road_network_name, road_network_for_traffic)
+            tester.add_init_data(scenario_parameters_csv_name, scenario_parameters_csv)
+            yield tester
 
     @pytest.fixture
     def assert_demand_equals(self, road_network_name):
@@ -1110,26 +1110,26 @@ class TestMaxIterations:
 
     @pytest.fixture
     def tester(self, model_config, global_schema, init_data, road_network_name):
-        tester = ModelTester(TrafficDemandCalculation(model_config), schema=global_schema)
-        for item in init_data:
-            tester.add_init_data(item["name"], item["data"])
-        tester.initialize()
-        tester.update(
-            0,
-            {
-                road_network_name: {
-                    "virtual_node_entities": {
-                        "id": [10, 11, 12],
-                        "transport.cargo_demand": [
-                            [0, 0, 1],
-                            [2, 0, 0],
-                            [3, 0, 0],
-                        ],
-                    },
-                }
-            },
-        )
-        return tester
+        with ModelTester(TrafficDemandCalculation(model_config), schema=global_schema) as tester:
+            for item in init_data:
+                tester.add_init_data(item["name"], item["data"])
+            tester.initialize()
+            tester.update(
+                0,
+                {
+                    road_network_name: {
+                        "virtual_node_entities": {
+                            "id": [10, 11, 12],
+                            "transport.cargo_demand": [
+                                [0, 0, 1],
+                                [2, 0, 0],
+                                [3, 0, 0],
+                            ],
+                        },
+                    }
+                },
+            )
+            yield tester
 
     @pytest.fixture
     def average_time_update(self, road_network_name):

@@ -48,7 +48,6 @@ class SimpleModel(TrackedModel):
         )
 
     def initialize(self, state: TrackedState):
-
         state.receive_update(
             {
                 "dataset": {

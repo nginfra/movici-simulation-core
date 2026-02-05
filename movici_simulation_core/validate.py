@@ -129,23 +129,16 @@ def extract_reports(errors):
     return reports, real_errors
 
 
-class MoviciTypeLookup:
+class MoviciTypeLookup(t.Protocol):
     """class for looking up wether a specific dataset, entity_group, attribute exists or whether
     a dataset is of a specific type. Used alongside ``validate_and_process``. This class
     can be subclassed to provide custom logic for determining whether these objects exist
     """
 
-    def dataset(self, dataset_name) -> bool:
-        raise True
-
-    def entity_group(self, entity_type) -> bool:
-        raise True
-
-    def attribute(self, attribute_type) -> bool:
-        raise True
-
-    def dataset_type(self, dataset_name, required_type) -> bool:
-        raise True
+    def dataset(self, dataset_name) -> bool: ...
+    def entity_group(self, entity_type) -> bool: ...
+    def attribute(self, attribute_type) -> bool: ...
+    def dataset_type(self, dataset_name, required_type) -> bool: ...
 
 
 class FromDictLookup(MoviciTypeLookup):
@@ -156,7 +149,6 @@ class FromDictLookup(MoviciTypeLookup):
         attribute_types: t.Optional[list] = None,
         validate_dataset_types: bool = True,
     ) -> None:
-
         self.datasets = self.entity_types = self.attribute_types = None
         if datasets is not None:
             self.datasets = {
@@ -197,12 +189,18 @@ class AttributeSchemaLookup(MoviciTypeLookup):
     def dataset(self, dataset_name):
         return self.dataset_names is None or dataset_name in self.dataset_names
 
+    def entity_group(self, entity_type) -> bool:  # noqa: ARG002
+        return True
+
     def attribute(self, attribute_type):
         return self.schema is None or attribute_type in self.schema.attributes
 
+    def dataset_type(self, dataset_name, required_type) -> bool:  # noqa: ARG002
+        return True
+
 
 def validate_and_process(
-    instance: t.Any, schema: dict, lookup: MoviciTypeLookup = FromDictLookup(), return_errors=False
+    instance: t.Any, schema: dict, lookup: MoviciTypeLookup | None = None, return_errors=False
 ) -> t.Union[
     t.List[MoviciDataRefInfo],
     t.Tuple[t.List[MoviciDataRefInfo], t.List[exceptions.ValidationError]],
@@ -211,6 +209,7 @@ def validate_and_process(
     ``MoviciTypeReport``\s
     """
 
+    lookup = lookup if lookup is not None else FromDictLookup()
     cls = movici_validator(schema, lookup=lookup)
     cls.check_schema(schema)
     validator = cls(schema)
@@ -266,7 +265,8 @@ def _extract_reports_from_error(
     return reports, error
 
 
-def movici_validator(schema, lookup: MoviciTypeLookup = FromDictLookup()):
+def movici_validator(schema, lookup: MoviciTypeLookup | None = None):
+    lookup = lookup if lookup is not None else FromDictLookup()
     Validator = validators.extend(
         validators.validator_for(schema, default=validators.Draft7Validator),
         {
@@ -354,7 +354,7 @@ def ensure_valid_config(
     try:
         config = json.loads(json.dumps(config))
     except (TypeError, json.JSONDecodeError):
-        raise TypeError(f"config {config} is not a valid JSON-encodable object")
+        raise TypeError(f"config {config} is not a valid JSON-encodable object") from None
 
     version = versions[target_version]
     schema = ensure_schema(version["schema"], add_name_and_type)

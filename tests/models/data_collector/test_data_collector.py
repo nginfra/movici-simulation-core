@@ -8,7 +8,7 @@ from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import AttributeSpec, DataType
 from movici_simulation_core.models.data_collector.data_collector import (
     DataCollector,
-    LocalStorageStrategy,
+    FileStorageStrategy,
     UpdateInfo,
 )
 from movici_simulation_core.settings import Settings
@@ -54,12 +54,12 @@ def additional_attributes():
 
 
 def test_picks_strategy(model, logger):
-    settings = Settings(storage="disk")
-    assert isinstance(model.get_storage_strategy(settings, logger), LocalStorageStrategy)
+    settings = Settings(storage="file")
+    assert isinstance(model.get_storage_strategy(settings, logger), FileStorageStrategy)
 
 
 def test_local_storage_strategy_stores_update(tmp_path, global_schema):
-    strat = LocalStorageStrategy(tmp_path)
+    strat = FileStorageStrategy(tmp_path)
     upd = {"dataset": {"entity_group": {"id": [1, 2, 3]}}}
     info = UpdateInfo(
         "dataset", 1, 2, EntityInitDataFormat(schema=global_schema).load_json(upd)["dataset"]
@@ -86,11 +86,11 @@ def run_updates(global_schema):
         model,
         updates: t.Sequence[t.Tuple[int, UpdateData]],
     ):
-        tester = ModelTester(model, schema=global_schema)
-        tester.initialize()
-        for timestamp, data in updates:
-            tester.update(timestamp, data)
-        tester.close()
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.initialize()
+            for timestamp, data in updates:
+                tester.update(timestamp, data)
+            tester.close()
 
     return _run
 
@@ -146,14 +146,14 @@ def test_only_submits_on_changed_data(model, run_updates):
 
 def test_can_aggregate_updates_on_newtime(model, settings, storage_dir, global_schema):
     model.config["aggregate_updates"] = True
-    tester = ModelTester(model, settings, schema=global_schema)
-    tester.initialize()
-    tester.new_time(0)
-    tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})
-    tester.update(0, {"dataset": {"some_entities": {"id": [2], "attr": [21]}}})
-    assert "t0_0_dataset.json" not in list_dir(storage_dir)
-    tester.new_time(1)
-    tester.close()
+    with ModelTester(model, settings, schema=global_schema) as tester:
+        tester.initialize()
+        tester.new_time(0)
+        tester.update(0, {"dataset": {"some_entities": {"id": [1, 2], "attr": [10, 20]}}})
+        tester.update(0, {"dataset": {"some_entities": {"id": [2], "attr": [21]}}})
+        assert "t0_0_dataset.json" not in list_dir(storage_dir)
+        tester.new_time(1)
+        tester.close()
     assert "t0_0_dataset.json" in list_dir(storage_dir)
     assert "t0_1_dataset.json" not in list_dir(storage_dir)
     assert json.loads((storage_dir / "t0_0_dataset.json").read_text()) == {

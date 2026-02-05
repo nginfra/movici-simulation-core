@@ -6,45 +6,20 @@ unittest:
 coverage:
 	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
 
-flake8:
-	flake8
+test-numba:
+	pytest -v tests/
 
-bandit:
-	bandit --recursive $(MODULE_NAME) bin
-	bandit -f json -o bandit-report.json --recursive $(MODULE_NAME) bin
+ruff:
+	ruff format --check
+	ruff check
 
-safety:
-	@echo "Safety check: Skipping safety scan (requires authentication in CI)"
-	@echo "To run locally: pip freeze | safety scan --stdin --output screen"
+toml-check:
+	taplo format --check .
 
 mypy:
 	- mypy $(MODULE_NAME)
 
-clean:
-	rm -rf dist/
-
-docker:
-	docker build -t model-engine .
-
-benchmark:
-	pytest --benchmark-only tests/
-
-test-numba:
-	pytest -v tests/
-
-black-check:
-	black --check .
-
-taplo-check:
-	taplo format --check .
-
-isort:
-	isort .
-	
-isort-check:
-	isort -c .
-
-lint: flake8 black-check taplo-check isort-check bandit safety mypy
+lint: ruff toml-check mypy
 	
 test-all: coverage lint
 
@@ -62,3 +37,6 @@ docs:
 
 doctest:
 	cd docs/ && $(MAKE) doctest
+
+clean:
+	rm -rf dist/

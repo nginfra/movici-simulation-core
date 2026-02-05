@@ -94,7 +94,6 @@ def test_can_set_global_timeline_info(args, expected_seconds):
 
 @pytest.mark.no_global_timeline_info
 def test_can_temporarily_set_timeline_info():
-
     assert get_timeline_info() is None
     with set_timeline_info(TimelineInfo(0, 1, 0)):
         assert get_timeline_info() is not None
@@ -104,7 +103,7 @@ def test_can_temporarily_set_timeline_info():
 @pytest.mark.no_global_timeline_info
 def test_raises_when_no_timeline_info():
     with pytest.raises(ValueError):
-        Moment(1).seconds
+        Moment(1).seconds  # noqa: B018
 
 
 @pytest.mark.parametrize(

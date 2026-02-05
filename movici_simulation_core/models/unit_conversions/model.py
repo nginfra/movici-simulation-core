@@ -172,7 +172,6 @@ MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/unit_conversions.
 
 
 def convert_v1_v2(config):
-
     return {
         "parameters_dataset": config["parameters"][0],
         "conversions": [

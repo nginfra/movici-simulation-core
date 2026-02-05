@@ -84,6 +84,8 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def close(self, message: QuitMessage):
         self.model.shutdown(state=self.state)
+        if message.due_to_failure:
+            return
         if not (self.model_initialized and self.model_ready_for_update):
             raise RuntimeError(
                 "Model called with shutdown while\n"
@@ -93,7 +95,6 @@ class TrackedModelAdapter(ModelAdapterBase):
             )
 
     def download_init_data(self, init_data_handler: InitDataHandler):
-        init_data_handler.as_numpy_array = True
         for dataset_name, _ in self.state.iter_datasets():
             data_dtype, path = init_data_handler.get(dataset_name)
             if data_dtype is None:
@@ -166,9 +167,18 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def format_uninitialized_attributes(self) -> str:
         def uninitialized_attributes():
-            for ds, entity, attr_name, attr in self.state.iter_attributes():
+            for ds, entity_groups in self.state.registered_entity_groups.items():
+                for entity_group in entity_groups:
+                    if entity_group.__optional__ and len(entity_group) == 0:
+                        continue
+                    for field in entity_group.all_attributes().values():
+                        attr = field.get_for(entity_group)
+                        if (attr.flags & REQUIRED) and not attr.is_initialized():
+                            yield f"{ds}/{entity_group.__entity_name__}/{field.spec.name}"
+
+            for (ds, entity, attr_name), attr in self.state.registered_attributes.items():
                 if (attr.flags & REQUIRED) and not attr.is_initialized():
-                    yield "/".join((ds, entity, attr_name))
+                    yield f"{ds}/{entity}/{attr_name}"
 
         return "\n".join(f"Uninitialized attribute: {attr}" for attr in uninitialized_attributes())
 

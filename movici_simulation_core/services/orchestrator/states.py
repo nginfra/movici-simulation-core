@@ -96,7 +96,7 @@ class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Finalizing Phase")
-        self.context.models.queue_all(QuitMessage())
+        self.context.models.queue_all(QuitMessage(due_to_failure=bool(self.context.failed)))
 
     def transitions(self) -> TransitionsT:
         return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]

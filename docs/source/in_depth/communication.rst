@@ -82,7 +82,7 @@ Message               Payload                                            Associa
 ``ACK``               \-                                                 Orchestrator, Update
 ``CLEAR``             ``prefix``                                         Update
 ``DATA``              ``data``, ``size``                                 Update
-``END``               \-                                                 Orchestrator
+``END``               ``due_to_failure``                                 Orchestrator
 ``ERROR``             ``error``                                          Orchestrator, Update, InitData
 ``GET``               ``key``, ``mask``                                  Update, InitData
 ``NEW_TIME``          ``timestamp``                                      Orchestrator

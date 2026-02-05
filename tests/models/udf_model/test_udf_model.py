@@ -148,11 +148,11 @@ class TestConfigParsing:
 
 def test_model_data_mask(config):
     model = UDFModel(config)
-    tester = ModelTester(model)
-    assert data_mask_compare(tester.initialize()) == {
-        "sub": {"some_dataset": {"some_entities": {"in_a", "in_b", "in_c"}}},
-        "pub": {"some_dataset": {"some_entities": {"out_d", "out_e"}}},
-    }
+    with ModelTester(model) as tester:
+        assert data_mask_compare(tester.initialize()) == {
+            "sub": {"some_dataset": {"some_entities": {"in_a", "in_b", "in_c"}}},
+            "pub": {"some_dataset": {"some_entities": {"out_d", "out_e"}}},
+        }
 
 
 def test_detects_intermediate_attributes_as_pub():
@@ -174,11 +174,12 @@ def test_detects_intermediate_attributes_as_pub():
         ],
     }
     model = UDFModel(config)
-    tester = ModelTester(model)
-    assert data_mask_compare(tester.initialize()) == {
-        "sub": {"some_dataset": {"some_entities": {"in_a"}}},
-        "pub": {"some_dataset": {"some_entities": {"in_out_b", "out_d"}}},
-    }
+
+    with ModelTester(model) as tester:
+        assert data_mask_compare(tester.initialize()) == {
+            "sub": {"some_dataset": {"some_entities": {"in_a"}}},
+            "pub": {"some_dataset": {"some_entities": {"in_out_b", "out_d"}}},
+        }
 
 
 @pytest.fixture
@@ -200,6 +201,7 @@ def create_model_tester(tmp_path_factory, init_data, global_schema):
 
     for tester in testers:
         tester.close()
+        tester.cleanup()
 
 
 def test_model_with_one_function(create_model_tester):
@@ -390,7 +392,6 @@ def test_default_csr_to_csr(create_model_tester):
 
 
 def test_multi_arg_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -416,7 +417,6 @@ def test_multi_arg_min(create_model_tester):
 
 
 def test_csr_uniform_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],
@@ -443,7 +443,6 @@ def test_csr_uniform_min(create_model_tester):
 
 
 def test_csr_uniform_if(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": ["some_dataset", "some_entities"],
@@ -470,7 +469,6 @@ def test_csr_uniform_if(create_model_tester):
 
 
 def test_csr_uniform_if_2(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": ["some_dataset", "some_entities"],
@@ -497,7 +495,6 @@ def test_csr_uniform_if_2(create_model_tester):
 
 
 def test_csr_scalar_min(create_model_tester):
-
     tester: ModelTester = create_model_tester(
         {
             "entity_group": [["some_dataset", "some_entities"]],

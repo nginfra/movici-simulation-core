@@ -43,7 +43,6 @@ class CoefficientsTape(CsvTape):
             if key not in self.coefficients:
                 self.coefficients[key] = []
             for coeff in coefficients:
-
                 columns = []
                 for item in coeff:
                     self.assert_parameter(item)

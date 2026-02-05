@@ -4,6 +4,8 @@ from pathlib import Path
 import geopandas
 import netCDF4
 import numpy as np
+import pandas as pd
+from pyproj import CRS
 
 from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
@@ -33,7 +35,7 @@ class DataSource:
         """
         raise NotImplementedError
 
-    def to_crs(self, crs: t.Union[str, int]) -> None:
+    def to_crs(self, crs: t.Union[str, int, CRS]) -> None:
         """Convert the source geometry data the coordinate reference system specified in the
         ``crs`` argument
 
@@ -80,14 +82,14 @@ class NumpyDataSource(DataSource):
         names and the values being the property data array or a Pandas dataframe
     """
 
-    def __init__(self, data: t.Mapping[str, np.ndarray]) -> None:
+    def __init__(self, data: t.Mapping[str, np.ndarray] | pd.DataFrame) -> None:
         self.data = data
 
     def get_attribute(self, name: str):
         try:
             return self.data[name].tolist()
-        except KeyError:
-            raise ValueError(f"'{name}' was not found as a property")
+        except KeyError as e:
+            raise ValueError(f"'{name}' was not found as a property") from e
 
     def __len__(self):
         # this ensures compatibility with both a dictionary of numpy arrays an pandas.DataFrame
@@ -108,7 +110,7 @@ class GeopandasSource(DataSource):
         gdf = geopandas.read_file(source_info["path"])
         return cls(gdf)
 
-    def to_crs(self, crs: t.Union[str, int]):
+    def to_crs(self, crs: t.Union[str, int, CRS]):
         self.gdf = self.gdf.to_crs(crs)
 
     def get_geometry(self, geometry_type: GeometryType):
@@ -241,12 +243,12 @@ class NetCDFGridSource(DataSource):
 
     def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
         self._ensure_grid()
-        return [
+        return (
             self.points[:, 0].min(),
             self.points[:, 1].min(),
             self.points[:, 0].max(),
             self.points[:, 1].max(),
-        ]
+        )
 
     def get_timestamps(self):
         return self._read_netcdf([self.time_var])[self.time_var].tolist()
@@ -279,4 +281,4 @@ class NetCDFGridSource(DataSource):
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
 
 
-SourcesDict = t.Dict[str, DataSource]
+SourcesDict = t.MutableMapping[str, DataSource]

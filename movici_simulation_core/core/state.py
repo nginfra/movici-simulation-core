@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import itertools
 import logging
 import typing as t
 from collections import defaultdict
 from dataclasses import dataclass
-from logging import WARN
 
 import numpy as np
 
@@ -33,6 +33,23 @@ class TrackedState:
     attributes: t.Dict[str, t.Dict[str, AttributeDict]]
     index: t.Dict[str, t.Dict[str, index_.Index]]
     track_unknown: int
+    general: dict[str, dict]
+    # registered_entity_groups contains all EntityGroup objects
+    # that have been registered through TrackedState.register_entity_groups.
+    # keys in this dictionary are dataset names
+    #
+    # Since entity_group name in a dataset (such as "area_entities") may
+    # be registered through multiple EntityGroup objects (although this is
+    # rare), the values in this dict are a list of EntityGroup
+    registered_entity_groups: dict[str, list[eg.EntityGroup]]
+
+    # registered_attributes contain all AttributeObjects that have been
+    # explicitly registered through TrackedState.register_attribute. It
+    # does not contain attributes that have been registered through
+    # TrackedState.register_entity_group. On registration, we
+    # automatically deduplicate, so we have only one AttributeObject
+    # per dataset_name, entity_group_name, attribute_name combination
+    registered_attributes: dict[tuple[str, str, str], AttributeObject]
 
     def __init__(
         self,
@@ -51,6 +68,9 @@ class TrackedState:
         self.index = {}
         self.logger = logger
         self.schema = schema
+        self.general = {}
+        self.registered_entity_groups = {}
+        self.registered_attributes = {}
 
         if isinstance(track_unknown, bool):
             track_unknown = track_unknown * OPT
@@ -82,7 +102,7 @@ class TrackedState:
             raise ValueError("EntityGroup must have __entity_name__ defined")
         ensure_path(self.attributes, (dataset_name, entity.__entity_name__))
         for field in entity.all_attributes().values():
-            self.register_attribute(
+            self._register_attribute(
                 dataset_name=dataset_name,
                 entity_name=entity.__entity_name__,
                 spec=field.spec,
@@ -91,9 +111,30 @@ class TrackedState:
                 atol=field.atol,
             )
         entity.register(StateProxy(self, dataset_name, entity.__entity_name__))
+        self.registered_entity_groups.setdefault(dataset_name, []).append(entity)
         return entity
 
     def register_attribute(
+        self,
+        dataset_name: str,
+        entity_name: str,
+        spec: AttributeSpec,
+        flags: int = 0,
+        rtol=1e-5,
+        atol=1e-8,
+    ) -> AttributeObject:
+        attribute = self._register_attribute(
+            dataset_name=dataset_name,
+            entity_name=entity_name,
+            spec=spec,
+            flags=flags,
+            rtol=rtol,
+            atol=atol,
+        )
+        self.registered_attributes[(dataset_name, entity_name, spec.name)] = attribute
+        return attribute
+
+    def _register_attribute(
         self,
         dataset_name: str,
         entity_name: str,
@@ -127,15 +168,22 @@ class TrackedState:
 
     def is_ready_for(self, flag: int):
         """
-        flag: one of SUB, INIT
+        flag: one of REQUIRED, INITIALIZE
         """
         return all(
-            attr.is_initialized() for _, _, _, attr in self.iter_attributes() if flag & attr.flags
+            attr.is_initialized()
+            for attr in self.registered_attributes.values()
+            if flag & attr.flags
+        ) and all(
+            entity_group.is_ready_for(flag)
+            for entity_group in itertools.chain.from_iterable(
+                self.registered_entity_groups.values()
+            )
         )
 
     def iter_attributes(
         self,
-    ) -> t.Iterable[t.Tuple[str, str, str, AttributeObject]]:
+    ) -> t.Generator[t.Tuple[str, str, str, AttributeObject]]:
         for datasetname, entity_type, attributes in self.iter_entities():
             yield from (
                 (datasetname, entity_type, name, attr) for name, attr in attributes.items()
@@ -181,14 +229,13 @@ class TrackedState:
         rv = defaultdict(dict)
         for dataset_name, entity_type, attributes in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
-            data = EntityDataHandler(attributes, index).generate_update(flags)
+            data = EntityDataHandler(attributes, index, schema=self.schema).generate_update(flags)
             if data:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
     def receive_update(self, update: t.Dict, is_initial=False, process_undefined=False):
         general_section = update.pop("general", None) or {}  # {"general": None} should yield {}
-
         for dataset_name, dataset_data in extract_dataset_data(update):
             for entity_name, entity_data in dataset_data.items():
                 if self.track_unknown != 0:
@@ -197,22 +244,27 @@ class TrackedState:
                     continue
                 index = self.get_index(dataset_name, entity_name)
                 handler = EntityDataHandler(
-                    entity_group, index, self.track_unknown, process_undefined=process_undefined
+                    entity_group,
+                    index,
+                    self.track_unknown,
+                    process_undefined=process_undefined,
+                    schema=self.schema,
                 )
                 handler.receive_update(entity_data, is_initial)
             self.process_general_section(dataset_name, general_section)
 
     def process_general_section(self, dataset_name: str, general_section: dict):
-        enums = general_section.get("enum", {})
+        enums = general_section.pop("enum", {})
         specials = parse_special_values(general_section)
+        self.general.setdefault(dataset_name, {}).update(general_section)
         for current_dataset, entity_name, name, attr in self.iter_attributes():
             if current_dataset != dataset_name:
                 continue
             if (special_value := specials.get(entity_name, {}).get(name)) is not None:
                 if attr.options.special not in (None, special_value):
                     self.log(
-                        WARN,
-                        f"Special value already set for " f"{dataset_name}/{entity_name}/{name}",
+                        logging.WARNING,
+                        f"Special value already set for {dataset_name}/{entity_name}/{name}",
                     )
                 else:
                     attr.options.special = special_value
@@ -220,8 +272,8 @@ class TrackedState:
             if (enum := enums.get(attr.options.enum_name)) is not None:
                 if attr.options.enum_values not in (None, enum):
                     self.log(
-                        WARN,
-                        f"Enum already set for " f"{dataset_name}/{entity_name}/{name}",
+                        logging.WARNING,
+                        f"Enum already set for {dataset_name}/{entity_name}/{name}",
                     )
                 attr.options.enum_values = enum
 
@@ -247,23 +299,22 @@ class TrackedState:
         rv = defaultdict(dict)
         for dataset_name, entity_type, attributes in self.iter_entities():
             index = self.get_index(dataset_name, entity_type)
-            data = EntityDataHandler(attributes, index).to_dict()
+            data = EntityDataHandler(attributes, index, schema=self.schema).to_dict()
             if data:
                 rv[dataset_name][entity_type] = data
         return dict(rv)
 
 
 def parse_special_values(
-    general_section: dict, special_keys: t.Iterable = ("special", "no_data")
+    general_section: dict, special_keys: t.Iterable = ("no_data", "special")
 ) -> t.Dict[str, t.Dict[str, ValueType]]:
-
-    special_section: t.Dict[str, t.Any] = {}
+    all_specials: t.Dict[str, t.Any] = {}
     for key in special_keys:
-        if special_section := general_section.get(key, special_section):
-            break
+        if special_section := general_section.pop(key, None):
+            all_specials.update(special_section)
 
     rv = defaultdict(dict)
-    for k, v in special_section.items():
+    for k, v in all_specials.items():
         entity_type, attribute = k.split(".", maxsplit=1)
         rv[entity_type][attribute] = v
 
@@ -277,11 +328,13 @@ class EntityDataHandler:
         index: index_.Index,
         track_unknown: t.Union[int, bool] = 0,
         process_undefined=False,
+        schema: AttributeSchema | None = None,
     ):
         self.attributes = attributes
         self.index = index
         self.track_unknown = track_unknown
         self.process_undefined = process_undefined
+        self.schema = schema
 
     def receive_update(self, entity_data: EntityData, is_initial=False):
         """Update the entity state with new external update data. The first time this is called,
@@ -324,7 +377,9 @@ class EntityDataHandler:
             attr.update(data, self.index[ids], process_undefined=self.process_undefined)
 
     def _register_new_attribute(self, name: str, data: NumpyAttributeData):
-        attr = create_empty_attribute_for_data(data, len(self.index))
+        spec = self.schema.get_spec(name) if self.schema is not None else None
+        options = AttributeOptions(enum_name=spec.enum_name if spec else None)
+        attr = create_empty_attribute_for_data(data, len(self.index), options=options)
         attr.index = self.index
         attr.flags |= self.track_unknown
         self.attributes[name] = attr

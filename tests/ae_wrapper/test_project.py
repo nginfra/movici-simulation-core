@@ -395,7 +395,6 @@ class TestTrafficAssignment:
     def test_assign_traffic_with_different_parameters(
         self, project: ProjectWrapper, od_passenger, od_cargo, parameters
     ):
-
         results = project.assign_traffic(od_passenger, od_cargo, parameters)
 
         assert np.array_equal(results.ids, [1, 102, 103, 104])

@@ -38,3 +38,6 @@ ae_project
 
 #sphinx
 /docs/build
+
+# examples temporary files
+**/.movici-benchmark.db*

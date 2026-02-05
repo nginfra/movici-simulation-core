@@ -104,7 +104,7 @@ class InterpolatingTapefile:
             tapefile["data"]["data_series"].append(
                 self.create_update(
                     {
-                        name: ip.interpolate(year).values.tolist()
+                        name: ip.interpolate(year).to_numpy().tolist()
                         for name, ip in interpolators.items()
                     },
                 )
@@ -151,7 +151,9 @@ class InterpolatingTapefile:
             }
 
         """
-        return {self.entity_group_name: {**{"id": self.init_data["id"].values.tolist()}, **values}}
+        return {
+            self.entity_group_name: {**{"id": self.init_data["id"].to_numpy().tolist()}, **values}
+        }
 
 
 @dataclasses.dataclass
