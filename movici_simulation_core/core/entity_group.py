@@ -12,13 +12,16 @@ from .index import Index
 
 
 class EntityGroup:
-    state: state_.StateProxy = None
+    _state: state_.StateProxy | None = None
     attributes: t.Dict[str, attribute.AttributeField] = {}
     __entity_name__: t.Optional[str] = None
+    __optional__: bool = False
 
-    def __init__(self, name: str = None):
+    def __init__(self, name: str | None = None, optional: bool | None = None):
         if name is not None:
             self.__entity_name__ = name
+        if optional is not None:
+            self.__optional__ = optional
 
     def __init_subclass__(cls, **kwargs):
         cls.__entity_name__ = kwargs.get("name", cls.__entity_name__)
@@ -27,6 +30,28 @@ class EntityGroup:
             for key, value in vars(cls).items()
             if isinstance(value, attribute.AttributeField)
         }
+
+    @property
+    def state(self):
+        if self._state is None:
+            raise RuntimeError("EntityGroup must be registered to a TrackedState first")
+        return self._state
+
+    def is_ready_for(self, flag: int):
+        """This method is called when TrackedState checks if this entity group is
+        ready for initialization (INITIALIZE) or updates (REQUIRED). An optional
+        entity group is ignored if it has no entities. When an optional entity group
+        has entities, it's required attributes must be initialized (filled with data)
+
+        :param flag: one of INITIALIZE, REQUIRED
+        """
+        if self.__optional__ and len(self) == 0:
+            return True
+        return all(
+            attr.get_for(self).is_initialized()
+            for attr in self.all_attributes().values()
+            if flag & attr.flags
+        )
 
     def __len__(self):
         return len(self.index)
@@ -40,11 +65,7 @@ class EntityGroup:
         return hash(self._eq_key())
 
     def _eq_key(self):
-        return type(self), self.state, self.__entity_name__
-
-    def _assert_state(self):
-        if self.state is None:
-            raise RuntimeError("EntityGroup must be registered to a TrackedState first")
+        return type(self), self._state, self.__entity_name__
 
     def is_similiar(self, other: EntityGroup):
         return (self.dataset_name, self.__entity_name__) == (
@@ -58,7 +79,7 @@ class EntityGroup:
         return self.index[ids]
 
     def register(self, state: state_.StateProxy):
-        self.state = state
+        self._state = state
 
     def get_attribute(self, identifier: str):
         return self.state.get_attribute(identifier)
@@ -73,12 +94,10 @@ class EntityGroup:
 
     @property
     def index(self) -> Index:
-        self._assert_state()
         return self.state.get_index()
 
     @property
     def dataset_name(self):
-        self._assert_state()
         return self.state.dataset_name
 
 
