@@ -2,13 +2,11 @@
 
 import logging
 
-import numpy as np
 import pytest
 
 pytest.importorskip("wntr")
 
-from movici_simulation_core.integrations.wntr.collections import JunctionCollection
-from movici_simulation_core.integrations.wntr.network_wrapper import NetworkWrapper
+from movici_simulation_core.models.drinking_water.network_wrapper import NetworkWrapper
 
 
 class TestConfigureOptions:
@@ -96,62 +94,3 @@ class TestConfigureOptions:
         assert wrapper.wn.options.hydraulic.specific_gravity == 1.0
 
 
-class TestAddJunctionsWithPDD:
-    """Test per-junction PDD attributes in add_junctions."""
-
-    @pytest.fixture
-    def wrapper(self):
-        return NetworkWrapper()
-
-    def _make_junctions(self, **kwargs):
-        defaults = dict(
-            node_names=["J1", "J2"],
-            elevations=np.array([10.0, 20.0]),
-            base_demands=np.array([0.001, 0.002]),
-        )
-        defaults.update(kwargs)
-        return JunctionCollection(**defaults)
-
-    def test_no_pdd_attributes(self, wrapper):
-        """Junctions without PDD arrays leave WNTR defaults (None)."""
-        wrapper.add_junctions(self._make_junctions())
-        j1 = wrapper.wn.get_node("J1")
-        assert j1.minimum_pressure is None
-        assert j1.required_pressure is None
-        assert j1.pressure_exponent is None
-
-    def test_minimum_pressure_set(self, wrapper):
-        wrapper.add_junctions(self._make_junctions(minimum_pressures=np.array([5.0, 10.0])))
-        assert wrapper.wn.get_node("J1").minimum_pressure == 5.0
-        assert wrapper.wn.get_node("J2").minimum_pressure == 10.0
-
-    def test_required_pressure_set(self, wrapper):
-        wrapper.add_junctions(self._make_junctions(required_pressures=np.array([20.0, 30.0])))
-        assert wrapper.wn.get_node("J1").required_pressure == 20.0
-        assert wrapper.wn.get_node("J2").required_pressure == 30.0
-
-    def test_pressure_exponent_set(self, wrapper):
-        wrapper.add_junctions(self._make_junctions(pressure_exponents=np.array([0.5, 1.0])))
-        assert wrapper.wn.get_node("J1").pressure_exponent == 0.5
-        assert wrapper.wn.get_node("J2").pressure_exponent == 1.0
-
-    def test_nan_values_leave_none(self, wrapper):
-        """NaN sentinel values leave WNTR junction attribute as None."""
-        wrapper.add_junctions(
-            self._make_junctions(
-                minimum_pressures=np.array([5.0, np.nan]),
-                required_pressures=np.array([np.nan, 30.0]),
-            )
-        )
-        j1 = wrapper.wn.get_node("J1")
-        j2 = wrapper.wn.get_node("J2")
-        assert j1.minimum_pressure == 5.0
-        assert j1.required_pressure is None
-        assert j2.minimum_pressure is None
-        assert j2.required_pressure == 30.0
-
-    def test_all_nan_leaves_all_none(self, wrapper):
-        """Array of all NaN leaves all junction attributes as None."""
-        wrapper.add_junctions(self._make_junctions(minimum_pressures=np.array([np.nan, np.nan])))
-        assert wrapper.wn.get_node("J1").minimum_pressure is None
-        assert wrapper.wn.get_node("J2").minimum_pressure is None

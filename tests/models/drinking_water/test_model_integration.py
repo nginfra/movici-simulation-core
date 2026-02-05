@@ -12,7 +12,7 @@ pytest.importorskip("wntr")  # Skip all tests if WNTR not installed
 from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.state import TrackedState
-from movici_simulation_core.models.water_network_simulation.model import Model
+from movici_simulation_core.models.drinking_water.model import Model
 
 
 class TestWaterNetworkSimulation:
@@ -20,7 +20,7 @@ class TestWaterNetworkSimulation:
         """Test model is registered with correct name."""
         model = Model({"dataset": "water_network"})
 
-        # Model should be registered as "water_network_simulation"
+        # Model should be registered as "drinking_water"
         assert hasattr(model, "__model_name__")
 
     def test_requires_dataset(self):
@@ -95,12 +95,12 @@ class TestAttributeNaming:
     """Test that attribute names match documentation spec."""
 
     def _has_attribute(self, entity_cls, name):
-        """Check if entity class has a field with given name."""
-        return name in entity_cls.attributes
+        """Check if entity class has a field with given name (including inherited)."""
+        return name in entity_cls.all_attributes()
 
     def test_junction_attributes(self):
         """Verify junction entity has correct attribute names."""
-        from movici_simulation_core.models.water_network_simulation.dataset import (
+        from movici_simulation_core.models.drinking_water.dataset import (
             WaterJunctionEntity,
         )
 
@@ -121,7 +121,7 @@ class TestAttributeNaming:
 
     def test_tank_attributes(self):
         """Verify tank entity has correct attribute names."""
-        from movici_simulation_core.models.water_network_simulation.dataset import (
+        from movici_simulation_core.models.drinking_water.dataset import (
             WaterTankEntity,
         )
 
@@ -138,7 +138,7 @@ class TestAttributeNaming:
 
     def test_pipe_attributes(self):
         """Verify pipe entity has correct attribute names."""
-        from movici_simulation_core.models.water_network_simulation.dataset import (
+        from movici_simulation_core.models.drinking_water.dataset import (
             WaterPipeEntity,
         )
 
@@ -155,7 +155,7 @@ class TestAttributeNaming:
 
     def test_pump_attributes(self):
         """Verify pump entity has correct attribute names."""
-        from movici_simulation_core.models.water_network_simulation.dataset import (
+        from movici_simulation_core.models.drinking_water.dataset import (
             WaterPumpEntity,
         )
 
@@ -169,7 +169,7 @@ class TestAttributeNaming:
 
     def test_valve_attributes(self):
         """Verify valve entity has correct attribute names."""
-        from movici_simulation_core.models.water_network_simulation.dataset import (
+        from movici_simulation_core.models.drinking_water.dataset import (
             WaterValveEntity,
         )
 
@@ -179,7 +179,6 @@ class TestAttributeNaming:
         assert self._has_attribute(WaterValveEntity, "valve_pressure")
         assert self._has_attribute(WaterValveEntity, "valve_flow")
         assert self._has_attribute(WaterValveEntity, "valve_loss_coefficient")
-        assert self._has_attribute(WaterValveEntity, "valve_curve")
         assert self._has_attribute(WaterValveEntity, "flow")
 
 
@@ -234,9 +233,9 @@ class TestHydraulicOptionsFromDataset:
     def model_config(self):
         return {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
+            "options": {
+                "hydraulic_timestep": 3600,
+            },
         }
 
     def _get_wn(self, tester):
@@ -285,14 +284,12 @@ class TestHydraulicOptionsFromDataset:
         """Test that solver options from model config 'options' key are applied."""
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
             "options": {
+                "hydraulic_timestep": 3600,
                 "hydraulic": {
                     "trials": 100,
                     "accuracy": 0.01,
-                }
+                },
             },
         }
         network = self._make_network_data()
@@ -309,14 +306,12 @@ class TestHydraulicOptionsFromDataset:
         """Test that model config and dataset general are combined."""
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
             "options": {
+                "hydraulic_timestep": 3600,
                 "hydraulic": {
                     "trials": 100,
                     "accuracy": 0.01,
-                }
+                },
             },
         }
         network = self._make_network_data(general={"hydraulic": {"viscosity": 1.5}})

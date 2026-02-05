@@ -276,37 +276,28 @@ each operate in their own way. Valves derive from ``LinkEntity`` and have the fo
 
 - ``topology.from_node_id`` (``INIT``): Node id on the from side (pipe start). From ``LinkEntity``
 - ``topology.to_node_id`` (``INIT``): Node id on the to side (pipe end). From ``LinkEntity``
-- ``type`` (``INIT``). Valve type as an enum. one of ``PRV``, ``PSV``, ``PBV``, ``FCV``, ``TCV`` or
-  ``GPV``
-- ``shape.diameter``. Valve diameter. 
-- ``drinking_water.valve_pressure`` (``OPT``): Pressure setting for a ``PRV``, ``PSV`` or ``PBV``.
+- ``type`` (``INIT``). Valve type as an enum. one of ``PRV``, ``PSV``, ``FCV``, or ``TCV``
+- ``shape.diameter``. Valve diameter.
+- ``drinking_water.valve_pressure`` (``OPT``): Pressure setting for a ``PRV`` or ``PSV``.
   Required when using one of these valve types
 - ``drinking_water.valve_flow`` (``OPT``): Flow setting for a ``FCV``. Required when using this
   type of valve
 - ``drinking_water.valve_loss_coefficient`` (``OPT``). Loss coefficient for a ``TCV``. Required
-  when using this type of valve. Must be higher than its minor loss 
-- ``drinking_water.valve_open_factor (``OPT``): open fraction for a ``PCV`` valve. Required
-  when using this type of valve
-- ``drinking_water.valve_curve`` (``OPT``). Valve curve for a ``GPV`` as (x,y) pairs. Required
-  when using this type of valve. Data shape can be (2,)-csr
+  when using this type of valve. Must be higher than its minor loss
 - ``drinking_water.minor_loss`` (``OPT``): Minor loss coefficient (Default 0). The headloss
   coefficient when a valve is fully open. The head loss scales with this coefficient and is
   proportional to the flow velocity squared
 
 .. note::
-   We have the option of grouping the setting attribute for ``PRV``, ``PSV``, ``PBV``, ``FCV``
-   and ``TCV`` into a single attribute called ``drinking_water.valve_setting`` and have the
-   meaning be derived from the valve type. We would still need a separate attribute for the ``GPV``
-   setting, since it's a curve and not a simple floating point number.
+   GPV (General Purpose Valve) and PBV (Pressure Breaker Valve) are not supported by the
+   WNTRSimulator.
 
 .. note:: Valve Types Explained
 
    - **PRV** (Pressure Reducing): Limits downstream pressure to the set value
    - **PSV** (Pressure Sustaining): Maintains upstream pressure at the set value
-   - **PBV** (Pressure Breaker): Reduces pressure by a fixed amount
    - **FCV** (Flow Control): Limits flow to the set value
    - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient
-   - **GPV** (General Purpose): Custom headloss-vs-flow relationship via curve
 
 .. note:: Valve Status
 

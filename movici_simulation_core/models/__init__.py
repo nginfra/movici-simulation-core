@@ -2,6 +2,7 @@ from .area_aggregation.model import Model as AreaAggregationModel
 from .corridor.model import Model as CorridorModel
 from .csv_player.csv_player import CSVPlayer as CSVPlayerModel
 from .data_collector.data_collector import DataCollector as DataCollectorModel
+from .drinking_water.model import Model as DrinkingWaterModel
 from .generalized_journey_time.gjt_model import GJTModel as GeneralizedJourneyTimeModel
 from .netcdf_player.netcdf_player import NetCDFPlayer as NetCDFPlayerModel
 from .operational_status.operational_status import OperationalStatus as OperationalStatusModel
@@ -17,7 +18,6 @@ from .traffic_demand_calculation.model import (
 from .traffic_kpi.model import Model as TrafficKpiModel
 from .udf_model.udf_model import UDFModel
 from .unit_conversions.model import Model as UnitConversionsModel
-from .water_network_simulation.model import Model as WaterNetworkSimulationModel
 
 __all__ = [
     "AreaAggregationModel",
@@ -37,5 +37,5 @@ __all__ = [
     "TrafficKpiModel",
     "UDFModel",
     "UnitConversionsModel",
-    "WaterNetworkSimulationModel",
+    "DrinkingWaterModel",
 ]

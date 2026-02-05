@@ -95,16 +95,21 @@ DrinkingWater_HeadCurve = AttributeSpec(
 # Valve-specific settings (used based on valve type)
 DrinkingWater_ValvePressure = AttributeSpec(
     "drinking_water.valve_pressure", data_type=DataType(float)
-)  # PRV, PSV, PBV
+)  # PRV, PSV
 DrinkingWater_ValveFlow = AttributeSpec(
     "drinking_water.valve_flow", data_type=DataType(float)
 )  # FCV
 DrinkingWater_ValveLossCoefficient = AttributeSpec(
     "drinking_water.valve_loss_coefficient", data_type=DataType(float)
 )  # TCV
-DrinkingWater_ValveCurve = AttributeSpec(
-    "drinking_water.valve_curve", data_type=DataType(float, (2,), csr=True)
-)  # GPV
+
+# =============================================================================
+# Drinking water attributes - Link status output
+# =============================================================================
+# WNTR LinkStatus: 0=Closed, 1=Open, 2=Active, 3=CV
+DrinkingWater_LinkStatus = AttributeSpec(
+    "drinking_water.link_status", data_type=DataType(int), enum_name="link_status"
+)
 
 # =============================================================================
 # Operational attributes
@@ -114,10 +119,10 @@ Operational_Status = AttributeSpec("operational.status", data_type=DataType(bool
 # =============================================================================
 # Type attributes (string enum values)
 # =============================================================================
-# Pump type: "power" or "head"
-Type_PumpType = AttributeSpec("type", data_type=DataType(str))
-# Valve type: "PRV", "PSV", "PBV", "FCV", "TCV", "GPV"
-Type_ValveType = AttributeSpec("type", data_type=DataType(str))
+# Pump type: 0="power", 1="head"
+Type_PumpType = AttributeSpec("pump_type", data_type=DataType(int), enum_name="pump_type")
+# Valve type: 0="PRV", 1="PSV", 2="FCV", 3="TCV"
+Type_ValveType = AttributeSpec("valve_type", data_type=DataType(int), enum_name="valve_type")
 
 # =============================================================================
 # Register all attributes as plugin

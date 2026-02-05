@@ -219,10 +219,10 @@ The "Active" state is effectively `status=True` + `speed != 1.0`
 |-------|-----------|---------|--------------|
 | **PRV** | Pressure Reducing Valve | Limits downstream pressure to setting | Pressure (m) |
 | **PSV** | Pressure Sustaining Valve | Maintains upstream pressure at setting | Pressure (m) |
-| **PBV** | Pressure Breaker Valve | Maintains constant pressure DROP across valve | Pressure drop (m) |
 | **FCV** | Flow Control Valve | Limits maximum flow to setting | Flow (m³/s) |
 | **TCV** | Throttle Control Valve | Uses minor loss coefficient to restrict flow | Loss coefficient |
-| **GPV** | General Purpose Valve | User-defined head loss vs flow curve | Curve ID |
+
+> **Note:** GPV (General Purpose Valve) and PBV (Pressure Breaker Valve) are not supported by the WNTRSimulator.
 
 ### Placement Rules
 - PRVs cannot share same output node or be daisy-chained
@@ -337,7 +337,7 @@ All previously missing attributes have been implemented:
 - Tank: `drinking_water.overflow`
 - Pipe: `drinking_water.check_valve`
 - Pump: `drinking_water.head_curve` as CSR data
-- Valve: type-specific setting attributes and `drinking_water.valve_curve` for GPV
+- Valve: type-specific setting attributes (GPV and PBV not supported by WNTRSimulator)
 
 ### 3. Removed Legacy Attributes — RESOLVED
 

@@ -13,7 +13,7 @@ import pytest
 import wntr
 
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.models.water_network_simulation.model import Model
+from movici_simulation_core.models.drinking_water.model import Model
 
 
 @pytest.fixture
@@ -145,9 +145,9 @@ class TestPipeStatusEquivalence:
         """Test that Movici network produces same results as pure WNTR."""
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
+            "options": {
+                "hydraulic_timestep": 3600,
+            },
         }
 
         # Run Movici simulation
@@ -209,9 +209,9 @@ class TestPipeStatusEquivalence:
         """
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
+            "options": {
+                "hydraulic_timestep": 3600,
+            },
         }
 
         # Run Movici simulation
@@ -326,9 +326,9 @@ class TestBranchedNetworkControl:
         """Test that closing a branch pipe isolates that branch correctly."""
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
+            "options": {
+                "hydraulic_timestep": 3600,
+            },
         }
 
         tester = create_model_tester(Model, config)
@@ -665,11 +665,10 @@ class TestWNTRTimeBasedControlEquivalence:
 
         # --- Run Movici with external updates ---
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": timestep,
-            "simulation_duration": timestep,  # Run one timestep at a time
+            "options": {
+                "hydraulic_timestep": timestep,
+            },
         }
 
         tester = create_model_tester(Model, config)
@@ -783,11 +782,10 @@ class TestWNTRTimeBasedControlEquivalence:
 
         # --- Run Movici with external updates ---
         config = {
-            "mode": "movici_network",
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": timestep,
-            "simulation_duration": timestep,
+            "options": {
+                "hydraulic_timestep": timestep,
+            },
         }
 
         tester = create_model_tester(Model, config)
@@ -1035,9 +1033,9 @@ class TestWNTRConditionalControlEquivalence:
         """
         config = {
             "dataset": "water_network",
-            "entity_groups": ["junctions", "pipes", "reservoirs"],
-            "hydraulic_timestep": 3600,
-            "simulation_duration": 3600,
+            "options": {
+                "hydraulic_timestep": 3600,
+            },
         }
 
         tester = create_model_tester(Model, config)

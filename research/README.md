@@ -70,7 +70,7 @@ The following valves are supported by WNTR:
  * FCV (Flow control valve)
  * TCV (Throttle control valve)
 
-The following valves are documented, but not yet implemented
+The following valves are not supported by the WNTRSimulator:
  * PBV (Pressure Breaking Valve)
  * GPV (General Purpose Valve)
 

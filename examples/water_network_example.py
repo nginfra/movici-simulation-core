@@ -1,11 +1,10 @@
 """Example: Water Network Simulation using WNTR
 
 This example demonstrates how to use the WNTR integration for water network
-simulation. It shows three approaches:
+simulation. It shows two approaches:
 
-1. Direct NetworkWrapper usage - for standalone hydraulic simulations
-2. Movici Simulation framework - for integration with other Movici models
-3. Tape file factors - using TapePlayerModel to drive time-varying
+1. Movici Simulation framework - for integration with other Movici models
+2. Tape file factors - using TapePlayerModel to drive time-varying
    demand_factor and head_factor through the Movici Simulation framework
 
 The water network is a simple example with:
@@ -22,21 +21,13 @@ import json
 from pathlib import Path
 from tempfile import mkdtemp
 
-import numpy as np
-
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.integrations.wntr import (
-    JunctionCollection,
-    NetworkWrapper,
-    PipeCollection,
-    ReservoirCollection,
-)
 from movici_simulation_core.models import (
     DataCollectorModel,
+    DrinkingWaterModel,
     TapePlayerModel,
-    WaterNetworkSimulationModel,
 )
-from movici_simulation_core.models.water_network_simulation.attributes import (
+from movici_simulation_core.models.drinking_water.attributes import (
     DrinkingWaterNetworkAttributes,
 )
 from movici_simulation_core.simulation import Simulation
@@ -93,88 +84,6 @@ def create_simple_water_network_data():
     }
 
 
-def example_direct_wntr():
-    """Example using NetworkWrapper directly.
-
-    This approach builds a WNTR network from collection objects
-    and runs a hydraulic simulation.
-    """
-    print("=" * 60)
-    print("Water Network Simulation - Direct NetworkWrapper")
-    print("=" * 60)
-
-    # Create network wrapper
-    network = NetworkWrapper()
-
-    # Build junction collection
-    junctions = JunctionCollection(
-        node_names=["J1", "J2", "J3"],
-        elevations=np.array([50.0, 45.0, 40.0]),
-        base_demands=np.array([0.01, 0.02, 0.015]),
-        coordinates=np.array([[100.0, 100.0], [200.0, 100.0], [300.0, 100.0]]),
-    )
-    network.add_junctions(junctions)
-
-    # Build reservoir collection
-    reservoirs = ReservoirCollection(
-        node_names=["R10"],
-        base_heads=np.array([100.0]),
-        coordinates=np.array([[0.0, 100.0]]),
-    )
-    network.add_reservoirs(reservoirs)
-
-    # Build pipe collection
-    pipes = PipeCollection(
-        link_names=["P101", "P102", "P103"],
-        from_nodes=["R10", "J1", "J2"],
-        to_nodes=["J1", "J2", "J3"],
-        lengths=np.array([100.0, 100.0, 100.0]),
-        diameters=np.array([0.3, 0.25, 0.2]),
-        roughnesses=np.array([100.0, 100.0, 100.0]),
-    )
-    network.add_pipes(pipes)
-
-    # Print network summary
-    print("\nNetwork Summary:")
-    summary = network.get_network_summary()
-    for key, value in summary.items():
-        print(f"  {key}: {value}")
-
-    # Run simulation
-    print("\nRunning hydraulic simulation...")
-    results = network.run_simulation(
-        duration=3600,  # 1 hour
-        hydraulic_timestep=3600,
-    )
-
-    # Display results
-    print("\nSimulation Results:")
-    print("\nJunctions:")
-    print(f"  {'Node':<10} {'Pressure (m)':<15} {'Head (m)':<15} {'Demand (m3/s)':<15}")
-    print("  " + "-" * 55)
-
-    for i, name in enumerate(results.node_names):
-        if name.startswith("J"):
-            pressure = results.node_pressures[i]
-            head = results.node_heads[i]
-            demand = results.node_demands[i]
-            print(f"  {name:<10} {pressure:>14.2f} {head:>14.2f} {demand:>14.6f}")
-
-    print("\nPipes:")
-    print(f"  {'Link':<10} {'Flow (m3/s)':<15} {'Velocity (m/s)':<15} {'Headloss (m)':<15}")
-    print("  " + "-" * 55)
-
-    for i, name in enumerate(results.link_names):
-        if name.startswith("P"):
-            flow = results.link_flows[i]
-            velocity = results.link_velocities[i]
-            headloss = results.link_headlosses[i]
-            print(f"  {name:<10} {flow:>14.6f} {velocity:>14.4f} {headloss:>14.4f}")
-
-    print("\nSimulation completed successfully!")
-    network.close()
-
-
 def example_simulation_framework():
     """Example using the Movici Simulation() framework.
 
@@ -210,17 +119,15 @@ def example_simulation_framework():
     # general section (see create_simple_water_network_data above).
     sim.add_model(
         "water_network",
-        WaterNetworkSimulationModel(
+        DrinkingWaterModel(
             {
                 "dataset": "simple_water_network",
-                "entity_groups": ["junctions", "pipes", "reservoirs"],
-                "simulation_duration": 3600,  # 1 hour
-                "hydraulic_timestep": 3600,
                 "options": {
+                    "hydraulic_timestep": 3600,
                     "hydraulic": {
                         "trials": 200,
                         "accuracy": 0.001,
-                    }
+                    },
                 },
             }
         ),
@@ -339,7 +246,7 @@ def example_tape_file_factors():
 
     1. **TapePlayerModel** — reads a tape file (tabular dataset) and publishes
        ``demand_factor`` and ``head_factor`` updates at scheduled timestamps
-    2. **WaterNetworkSimulationModel** — re-runs hydraulics whenever these
+    2. **DrinkingWaterModel** — re-runs hydraulics whenever these
        factors change
 
     The tape file updates ``drinking_water.demand_factor`` on junctions and
@@ -388,16 +295,17 @@ def example_tape_file_factors():
         TapePlayerModel({"tabular": ["water_patterns"]}),
     )
 
-    # WaterNetworkSimulationModel picks up factor changes and re-runs
+    # DrinkingWaterModel picks up factor changes and re-runs
     # hydraulics. The model multiplies base_demand * demand_factor and
     # base_head * head_factor internally.
     sim.add_model(
         "water_network",
-        WaterNetworkSimulationModel(
+        DrinkingWaterModel(
             {
                 "dataset": "simple_water_network",
-                "entity_groups": ["junctions", "pipes", "reservoirs"],
-                "hydraulic_timestep": 3600,
+                "options": {
+                    "hydraulic_timestep": 3600,
+                },
             }
         ),
     )
@@ -428,9 +336,6 @@ def main():
     print("\n" + "=" * 60)
     print("WNTR Water Network Simulation Examples")
     print("=" * 60)
-
-    # Run the direct NetworkWrapper example
-    example_direct_wntr()
 
     # Run the Simulation() framework example
     example_simulation_framework()
