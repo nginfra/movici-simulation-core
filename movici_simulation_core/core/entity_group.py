@@ -39,12 +39,13 @@ class EntityGroup:
 
     def is_ready_for(self, flag: int):
         """This method is called when TrackedState checks if this entity group is
-        ready for initialization (INITIALIZE) or updates (REQUIRED). Any optional
-        entity groups are ignored when checking for readiness.
+        ready for initialization (INITIALIZE) or updates (REQUIRED). An optional
+        entity group is ignored if it has no entities. When an optional entity group
+        has entities, it's required attributes must be initialized (filled with data)
 
         :param flag: one of INITIALIZE, REQUIRED
         """
-        if self.__optional__:
+        if self.__optional__ and len(self) == 0:
             return True
         return all(
             attr.get_for(self).is_initialized()

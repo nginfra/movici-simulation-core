@@ -169,7 +169,7 @@ class TrackedModelAdapter(ModelAdapterBase):
         def uninitialized_attributes():
             for ds, entity_groups in self.state.registered_entity_groups.items():
                 for entity_group in entity_groups:
-                    if entity_group.__optional__:
+                    if entity_group.__optional__ and len(entity_group) == 0:
                         continue
                     for field in entity_group.all_attributes().values():
                         attr = field.get_for(entity_group)
