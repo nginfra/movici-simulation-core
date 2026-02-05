@@ -11,6 +11,7 @@ including pressure, flow, and velocity calculations.
 
 from __future__ import annotations
 
+import dataclasses
 import typing as t
 
 import numpy as np
@@ -31,6 +32,7 @@ from movici_simulation_core.models.common.wntr_util import (
 
 from . import attributes
 from .dataset import (
+    DrinkingWaterNetwork,
     WaterJunctionEntity,
     WaterPipeEntity,
     WaterPumpEntity,
@@ -107,9 +109,11 @@ class Model(TrackedModel, name="water_network_simulation"):
 
     def __init__(self, model_config: dict):
         super().__init__(model_config)
-        self.network: t.Optional[NetworkWrapper] = None
-        self.dataset_name: t.Optional[str] = None
+        self.network = NetworkWrapper()
+        self.last_calculated: Moment | None = None
+        self.dataset: DrinkingWaterNetwork | None = None
 
+        self.dataset_name: t.Optional[str] = None
         # Entity groups
         self.junctions: t.Optional[WaterJunctionEntity] = None
         self.tanks: t.Optional[WaterTankEntity] = None
@@ -129,27 +133,26 @@ class Model(TrackedModel, name="water_network_simulation"):
         :param state: Tracked state for entity registration
         :param schema: Attribute schema
         """
-        self.network = NetworkWrapper()
-
         self.dataset_name = self.config.get("dataset")
         if not self.dataset_name:
             raise ValueError("dataset required in model config")
 
-        self._register_entities(state, self.dataset_name)
+        self._register_dataset(state, self.dataset_name)
 
-    def _register_entities(self, state: TrackedState, dataset_name: str):
+    def _register_dataset(self, state: TrackedState, dataset_name: str):
         """Register entity groups.
 
         :param state: Tracked state for entity registration
         :param dataset_name: Name of the dataset to register entities in
         """
-        entity_groups = self.config.get("entity_groups", ["junctions", "pipes", "reservoirs"])
-
-        for name in entity_groups:
-            if name in _ENTITY_CLASSES:
-                entity = _ENTITY_CLASSES[name]()
-                setattr(self, name, entity)
-                state.register_entity_group(dataset_name, entity)
+        self.dataset = DrinkingWaterNetwork(
+            junctions=state.register_entity_group(dataset_name, WaterJunctionEntity),
+            tanks=state.register_entity_group(dataset_name, WaterTankEntity),
+            reservoirs=state.register_entity_group(dataset_name, WaterReservoirEntity),
+            pipes=state.register_entity_group(dataset_name, WaterPipeEntity),
+            pumps=state.register_entity_group(dataset_name, WaterPumpEntity),
+            valves=state.register_entity_group(dataset_name, WaterValveEntity),
+        )
 
     def _get_options(self, state: TrackedState) -> dict:
         """Get WNTR options from model config and dataset general section.
@@ -171,10 +174,29 @@ class Model(TrackedModel, name="water_network_simulation"):
 
         :param state: Tracked state
         """
-        self._build_network_from_state(state)
+        if self.dataset is None:
+            raise RuntimeError("Model.setup() must be called before model.initiliaze()")
+
+        # TODO: validate that we have a valid network. eg
+        for entity_group in dataclasses.asdict(self.dataset).values():
+            # TODO: is_ready must be implemented. It can check whether all
+            # required data is available. Certain attributes may be OPT,
+            # but at least one value out of a collection of attributes must
+            # be set for each entity_group. is_ready may raise NotReady to
+            # indicate that we're still waiting for data
+            entity_group.is_ready()
+
+            # TODO: validate must be implemented. It can check whether the data
+            # that we have obtained actually makes sense. Perhaps this is more
+            # a responsibility of the network wrapper or element processors.
+            # Or maybe not. And maybe it may even be combined with the is_ready()
+            # method above.
+            entity_group.is_ready()
+
+        self.network.configure_network(self.dataset)
+
         self.network.configure_options(self._get_options(state))
 
-        # Run initial simulation
         duration = self.config.get("simulation_duration")
         hydraulic_timestep = self.config.get("hydraulic_timestep", 3600)
         report_timestep = self.config.get("report_timestep")
@@ -205,10 +227,39 @@ class Model(TrackedModel, name="water_network_simulation"):
         :param moment: Current simulation moment
         :return: Next update time or None
         """
-        # Update dynamic attributes (status changes from Rules Model)
-        self._update_dynamic_attributes(state)
+        # We're a stateful, time-dependent model. That means that we should
+        # update in the following way:
+        # - First calculate until the current time
+        # - Then process any changes to the data
+        # - If we are updated multiple times in the same timestep, we only
+        #   calculate once
+        # The reason for this is that the world state is valid, until something
+        # changes it. If we we have lastly calculated at t=x, and we now get a
+        # an update (cq. change) at t=x+1, then we must first calculate with the
+        # state from t=x, and then apply the changes. We then don't progress the
+        # model until we're asked to update to t>x+1
+        if self.last_calculated is None or self.last_calculated < moment:
+            # TODO: must verify the different supported timesteps and provide sane defaults
+            # We have (at least) three different timesteps:
+            # - wntr hydraulic timestep: the wntr internal solver timestep
+            # - wntr report timestep: the timestep between rows in the result dataframe
+            # - movici report timestep: How often we want to recalculate the model (and
+            #   output movici data). This is sometimes called update_interval in Movici
+            #
+            # We must be careful with setting the wntr report timestep to equal the
+            # movici report timestep. We may be asked to update before our next movici
+            # report timestep (for example if another model has changed our input state).
+            # In that case we need to immediately recalculate, and if the wntr report
+            # timestep is too large, we may not get any results from WNTR. Perhaps it's
+            # best to set the wntr report interval equal to the hydraulic timestep, or
+            # update it based on the diffence between the last_calculated and the
+            # current moment
+            results = self.network.run_simulation(moment.seconds)
+            self.network.write_results(results)
+            self.last_calculated = moment
 
-        # Run simulation
+        self.network.process_changes()
+
         hydraulic_timestep = self.config.get("hydraulic_timestep", 3600)
         results = self.network.run_simulation(
             duration=hydraulic_timestep,

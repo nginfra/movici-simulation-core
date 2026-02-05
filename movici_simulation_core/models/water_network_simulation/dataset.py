@@ -9,6 +9,8 @@ Entity groups follow the documentation specification with:
 - ``type`` attribute for pump/valve type enums
 """
 
+import dataclasses
+
 from movici_simulation_core.attributes import Geometry_Z, Shape_Length
 from movici_simulation_core.core.attribute import INIT, OPT, PUB, field
 from movici_simulation_core.models.common.entity_groups import LinkEntity, PointEntity
@@ -276,3 +278,13 @@ class WaterValveEntity(LinkEntity):
     # PUB attributes
     flow = field(DrinkingWater_Flow, flags=PUB)
     flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
+
+
+@dataclasses.dataclass
+class DrinkingWaterNetwork:
+    junctions: WaterJunctionEntity
+    tanks: WaterTankEntity
+    reservoirs: WaterReservoirEntity
+    pipes: WaterPipeEntity
+    pumps: WaterPumpEntity
+    valves: WaterValveEntity

@@ -11,19 +11,140 @@ import typing as t
 
 import numpy as np
 import wntr
+from wntr.sim.results import SimulationResults
+
+from movici_simulation_core.models.water_network_simulation.dataset import (
+    DrinkingWaterNetwork,
+    WaterJunctionEntity,
+    WaterPipeEntity,
+    WaterPumpEntity,
+    WaterReservoirEntity,
+    WaterTankEntity,
+    WaterValveEntity,
+)
 
 from .collections import (
     JunctionCollection,
     PipeCollection,
     PumpCollection,
     ReservoirCollection,
-    SimulationResults,
     TankCollection,
     ValveCollection,
 )
 from .id_mapper import IdMapper
 
 logger = logging.getLogger(__name__)
+
+T = t.TypeVar("T")
+
+
+class WNTRElementProcessor(t.Generic[T]):
+    def __init__(self, wn: wntr.network.WaterNetworkModel, entity_group: T):
+        self.wn = wn
+        self.entity_group = entity_group
+
+    def create_elements(self):
+        raise NotImplementedError
+
+    def update_elements(self):
+        raise NotImplementedError
+
+    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
+        """Write WNTR SimulationResults to self.entity_group
+
+        :param results: The simulation results
+        :param df_offset: The simulation results dataframe contains data about different
+            elements/entity groups. The df_offset is a numerical offset where the data
+            concerning this processor's entity group starts
+
+        :return: The offset for the next entity group to be processed
+        """
+        raise NotImplementedError
+
+
+class JunctionProcessor(WNTRElementProcessor[WaterJunctionEntity]):
+    PREFIX = "J"
+
+    def create_elements(self):
+        entity_group = self.entity_group
+        if not len(entity_group):
+            return
+
+        demand = entity_group.base_demand.array.copy()
+        demand_factor_defined = ~entity_group.demand_factor.is_undefined()
+        demand[~demand_factor_defined] = (
+            demand[~demand_factor_defined]
+            * entity_group.demand_factor.array[demand_factor_defined]
+        )
+
+        minimum_pressure_defined = ~entity_group.minimum_pressure.is_undefined()
+        required_pressure_defined = ~entity_group.minimum_pressure.is_undefined()
+        pressure_exponent_defined = ~entity_group.minimum_pressure.is_undefined()
+
+        for idx, entity_id in enumerate(entity_group.index.ids):
+            name = self.PREFIX + str(entity_id)
+
+            self.wn.add_junction(
+                name=name,
+                base_demand=float(demand[idx]),
+                elevation=float(entity_group.elevation.array[idx]),
+            )
+
+            # Set per-junction PDD attributes (only for defined values).
+            # WNTR junction attributes default to None (= use global option).
+            junction = t.cast(wntr.network.Junction, self.wn.get_node(name))
+            if minimum_pressure_defined[idx]:
+                junction.minimum_pressure = entity_group.minimum_pressure.array[idx]
+
+            if required_pressure_defined[idx]:
+                junction.minimum_pressure = entity_group.required_pressure.array[idx]
+
+            if pressure_exponent_defined[idx]:
+                junction.pressure_exponent = entity_group.pressure_exponent.array[idx]
+
+    def update_elements(self):
+        entity_group = self.entity_group
+        any_changed = entity_group.base_demand.changed | entity_group.demand_factor.changed
+        for idx in any_changed.flatnonzero():
+            junction = t.cast(
+                wntr.network.Junction,
+                self.wn.get_node(self.PREFIX + str(entity_group.index.ids[idx])),
+            )
+            junction.demand_timeseries_list[0].base_value = (
+                entity_group.base_demand.array[idx] * entity_group.demand_factor.array[idx]
+            )
+
+    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
+        entity_group = self.entity_group
+        if size := len(entity_group):
+            # the slicing assignment ([:]) is needed to maintain change tracking
+            entity_group.head.array[:] = results.node["head"].iloc[-1][df_offset:size].to_numpy()
+            entity_group.pressure.array[:] = (
+                results.node["pressure"].iloc[-1][df_offset:size].to_numpy()
+            )
+            entity_group.demand.array[:] = (
+                results.node["demand"].iloc[-1][df_offset:size].to_numpy()
+            )
+
+
+class TankProcessor(WNTRElementProcessor[WaterTankEntity]):
+    def create_elements(self): ...
+
+
+class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
+    def create_elements(self): ...
+
+
+class PipeProcessor(WNTRElementProcessor[WaterPipeEntity]):
+    def create_elements(self): ...
+
+
+class PumpProcessor(WNTRElementProcessor[WaterPumpEntity]):
+    def create_elements(self): ...
+
+
+class ValveProcessor(WNTRElementProcessor[WaterValveEntity]):
+    def create_elements(self): ...
 
 
 class NetworkWrapper:
@@ -38,6 +159,30 @@ class NetworkWrapper:
         self._curve_counter = 0
         self.wn = wntr.network.WaterNetworkModel()
         self.id_mapper = IdMapper()
+        self.processors: dict[str, WNTRElementProcessor] = {}
+
+    def initialize(self, dataset: DrinkingWaterNetwork):
+        """Initialize the WNTR WaterNetworkModel.
+
+        :param dataset: A valid DrinkingWaterNetwork
+        """
+        self.configure_network(dataset)
+        for processor in self.processors.values():
+            processor.create_elements()
+
+    def configure_network(self, dataset: DrinkingWaterNetwork):
+        self.processors["junctions"] = JunctionProcessor(self.wn, dataset.junctions)
+        self.processors["tanks"] = TankProcessor(self.wn, dataset.tanks)
+        self.processors["reservoirs"] = ReservoirProcessor(self.wn, dataset.reservoirs)
+        self.processors["pipes"] = PipeProcessor(self.wn, dataset.pipes)
+        self.processors["pumps"] = PumpProcessor(self.wn, dataset.pumps)
+        self.processors["valves"] = ValveProcessor(self.wn, dataset.valves)
+
+    def process_changes(self):
+        """Process any changes to the DrinkingWaterNetwork that may have happened
+        and update the WTNR WaterNetworkModel"""
+        for processor in self.processors.values():
+            processor.update_elements()
 
     @staticmethod
     def _get_coords(
@@ -133,6 +278,8 @@ class NetworkWrapper:
                 diameter=diameter,
                 min_vol=min_vol,
                 vol_curve=vol_curve_name,
+                # TODO: we don't need coordinates in the WTNR model,
+                # that's only used for visualization
                 coordinates=self._get_coords(tanks.coordinates, i),
             )
 
@@ -251,6 +398,9 @@ class NetworkWrapper:
 
             # Get the appropriate setting based on valve type
             if valve_type == "GPV":
+                # TODO: Validation should be done at a previous stage. Perhaps introduce
+                # a validate() or is_ready() method on the different EntityGroups?
+
                 # GPV needs a curve
                 curve_name = None
                 if valves.valve_curves is not None and valves.valve_curves[i] is not None:
@@ -261,6 +411,7 @@ class NetworkWrapper:
 
                 setting = curve_name
             else:
+                # TODO: I think get_setting can become a member of ValveProcessor
                 # Get scalar setting from collection
                 setting = valves.get_setting(i)
 
@@ -283,6 +434,22 @@ class NetworkWrapper:
         :param curve_type: Type of curve (``"HEAD"``, ``"VOLUME"``, ``"HEADLOSS"``, etc.)
         :return: Name of the created curve
         """
+        # TODO: We need to provide this method to the processors. We have options
+        # 1) make this a method on the WNTRElementProcessor base class. This gives
+        #    this method a place close to where it's use (Locality of Behaviour), but
+        #    we need to make sure that we have unique curve names per element type since
+        #    we'll have multiple curve counters
+        # 2) keep this method here, and let the wrapper be an attribute of the Processor
+        #    classes. They can then call this method as self.wrapper.add_curve() whenever
+        #    needed. This does result in a circular dependency but that might be ok
+        # 3) Introduce a CurveProvider class that deals with managing curves and give
+        #    that to the processors. Benefit is that it is nicely encapsulated, but it
+        #    does introduce a new moving part, which may be considered more complex
+        #
+        # In any case, we should also consider deduplication of curves. But that may be
+        # premature optimization. If WNTR can deal with a single curve per element. That's
+        # also fine. We could check if there is a limit to the number of curves supported
+
         self._curve_counter += 1
         curve_name = f"curve_{self._curve_counter}"
 
@@ -325,7 +492,7 @@ class NetworkWrapper:
         duration: t.Optional[float] = None,
         hydraulic_timestep: float = 3600,
         report_timestep: t.Optional[float] = None,
-    ) -> SimulationResults:
+    ) -> wntr.sim.SimulationResults:
         """Run WNTR simulation.
 
         :param duration: Simulation duration in seconds (None uses model setting)
@@ -350,9 +517,29 @@ class NetworkWrapper:
         # Run simulation
         sim = self.wntr.sim.WNTRSimulator(self.wn)
         results = sim.run_sim()
+        return results
 
-        # Extract and package results
-        return self._extract_results(results)
+    def write_results(self, results: wntr.sim.SimulationResults):
+        # Note, the results dataframe are always ordered in a certain way.
+        # for nodes, the elements are first ordered by category: Junction, Tank, Reservoir
+        # and then by insertion order within a category
+        # for links, the elements are first ordered by category: Pipe, Pump, Valve
+        # and then by insertion order within a category
+        #
+        # When adding new element types, the correct order in the result dataframe must be
+        # determined to calculate the right offset for each element's data
+
+        df_offset = 0
+        for kind in ["junctions", "tanks", "reservoirs"]:
+            processor = self.processors[kind]
+            processor.write_results(results, df_offset=df_offset)
+            df_offset += len(processor.entity_group)
+
+        df_offset = 0
+        for kind in ["pipes", "pumps", "valves"]:
+            processor = self.processors[kind]
+            processor.write_results(results, df_offset=df_offset)
+            df_offset += len(processor.entity_group)
 
     def _extract_results(self, results) -> SimulationResults:
         """Extract results from WNTR simulation.

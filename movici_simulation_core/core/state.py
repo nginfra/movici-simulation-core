@@ -83,7 +83,7 @@ class TrackedState:
     def register_dataset(
         self,
         dataset_name: str,
-        entities: t.Sequence[t.Union[t.Type[eg.EntityGroup], eg.EntityGroup]],
+        entities: t.Iterable[t.Union[t.Type[eg.EntityGroup], eg.EntityGroup]],
     ) -> t.List[eg.EntityGroup]:
         if dataset_name in self.attributes:
             raise ValueError(f"dataset '{dataset_name}' already exists")
