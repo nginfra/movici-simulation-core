@@ -34,30 +34,30 @@ Where ``coefficient`` is the product of emission factor, fleet share, and
 Configuration Options
 ---------------------
 
-+-------------------------------+---------+-------------------------------------------+
-| Option                        | Type    | Description                               |
-+===============================+=========+===========================================+
-| modality                      | string  | ``"roads"``, ``"tracks"``, or ``"waterways"``|
-+-------------------------------+---------+-------------------------------------------+
-| dataset                       | string  | Transport network dataset name            |
-+-------------------------------+---------+-------------------------------------------+
-| coefficients_dataset          | string  | CSV with emission/consumption factors     |
-+-------------------------------+---------+-------------------------------------------+
-| scenario_parameters_dataset   | string  | Optional CSV with scenario multipliers    |
-+-------------------------------+---------+-------------------------------------------+
-| cargo_scenario_parameters     | array   | Column names for cargo multipliers        |
-+-------------------------------+---------+-------------------------------------------+
-| passenger_scenario_parameters | array   | Column names for passenger multipliers    |
-+-------------------------------+---------+-------------------------------------------+
-| energy_consumption_attribute  | string  | Output attribute (default:                |
-|                               |         | ``transport.energy_consumption.hours``)   |
-+-------------------------------+---------+-------------------------------------------+
-| co2_emission_attribute        | string  | Output attribute (default:                |
-|                               |         | ``transport.co2_emission.hours``)         |
-+-------------------------------+---------+-------------------------------------------+
-| nox_emission_attribute        | string  | Output attribute (default:                |
-|                               |         | ``transport.nox_emission.hours``)         |
-+-------------------------------+---------+-------------------------------------------+
++-------------------------------+---------+------------------------------------------------+
+| Option                        | Type    | Description                                    |
++===============================+=========+================================================+
+| modality                      | string  | ``"roads"``, ``"tracks"``, or ``"waterways"``  |
++-------------------------------+---------+------------------------------------------------+
+| dataset                       | string  | Transport network dataset name                 |
++-------------------------------+---------+------------------------------------------------+
+| coefficients_dataset          | string  | CSV with emission/consumption factors          |
++-------------------------------+---------+------------------------------------------------+
+| scenario_parameters_dataset   | string  | Optional CSV with scenario multipliers         |
++-------------------------------+---------+------------------------------------------------+
+| cargo_scenario_parameters     | array   | Column names for cargo multipliers             |
++-------------------------------+---------+------------------------------------------------+
+| passenger_scenario_parameters | array   | Column names for passenger multipliers         |
++-------------------------------+---------+------------------------------------------------+
+| energy_consumption_attribute  | string  | Output attribute (default:                     |
+|                               |         | ``transport.energy_consumption.hours``)        |
++-------------------------------+---------+------------------------------------------------+
+| co2_emission_attribute        | string  | Output attribute (default:                     |
+|                               |         | ``transport.co2_emission.hours``)              |
++-------------------------------+---------+------------------------------------------------+
+| nox_emission_attribute        | string  | Output attribute (default:                     |
+|                               |         | ``transport.nox_emission.hours``)              |
++-------------------------------+---------+------------------------------------------------+
 
 Example Configuration
 ---------------------

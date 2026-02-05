@@ -66,15 +66,15 @@ Output Attributes
 
 The model publishes to the opportunity entity:
 
-+----------------------------------+---------------------------------------------+
-| Attribute                        | Description                                 |
-+==================================+=============================================+
-| ``coordination.opportunity``     | Value of taken opportunity (length * cost)  |
-+----------------------------------+---------------------------------------------+
-| ``coordination.missed_opportunity``| Value of missed opportunity (length * cost)|
-+----------------------------------+---------------------------------------------+
-| (total_length_property)          | Length of entities with taken opportunities |
-+----------------------------------+---------------------------------------------+
++------------------------------------+---------------------------------------------+
+| Attribute                          | Description                                 |
++====================================+=============================================+
+| ``coordination.opportunity``       | Value of taken opportunity (length * cost)  |
++------------------------------------+---------------------------------------------+
+| ``coordination.missed_opportunity``| Value of missed opportunity (length * cost) |
++------------------------------------+---------------------------------------------+
+| (total_length_property)            | Length of entities with taken opportunities |
++------------------------------------+---------------------------------------------+
 
 Prerequisites
 -------------
