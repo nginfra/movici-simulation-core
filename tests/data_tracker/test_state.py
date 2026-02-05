@@ -145,7 +145,7 @@ def test_returns_none_when_not_found(state, dataset, entity_type):
     assert state._get_entity_group(dataset, entity_type) is None
 
 
-def test_is_ready_for(state):
+def test_is_ready_for_check_initialized(state):
     class FakeEntity(EntityGroup):
         sub = get_attribute(name="sub_attr", flags=SUB)
         pub = get_attribute(name="pub_attr", flags=PUB)
@@ -155,7 +155,7 @@ def test_is_ready_for(state):
     entity.sub.is_initialized = Mock()
     entity.pub.is_initialized = Mock()
 
-    state.is_ready_for(SUB)
+    state.is_ready_for(REQUIRED)
     assert entity.sub.is_initialized.call_count == 1
     assert entity.pub.is_initialized.call_count == 0
 
@@ -164,7 +164,7 @@ def test_is_ready_for(state):
     ["attr_flag", "initial_data", "ready_flags", "expected"],
     [
         (INIT, None, INITIALIZE, False),
-        (INIT, None, SUBSCRIBE, False),  # can only be ready for SUB if also ready for INIT
+        (INIT, None, REQUIRED, False),  # can only be ready for SUB if also ready for INIT
         (SUB, None, INITIALIZE, True),
         (INIT, dataset_data_to_numpy({"id": [1], "attr": [1]}), INITIALIZE, True),
         (
@@ -173,11 +173,11 @@ def test_is_ready_for(state):
             INITIALIZE,
             False,
         ),
-        (SUB, dataset_data_to_numpy({"id": [1], "attr": [1]}), SUBSCRIBE, True),
+        (SUB, dataset_data_to_numpy({"id": [1], "attr": [1]}), REQUIRED, True),
         (INIT, dataset_data_to_numpy({"id": [1]}), INITIALIZE, False),
     ],
 )
-def test_is_ready_for2(
+def test_is_ready_for(
     dataset_name, state, attr_flag: int, initial_data: dict, ready_flags: int, expected: bool
 ):
     attr = state.register_attribute(
@@ -191,6 +191,34 @@ def test_is_ready_for2(
             state._get_entity_group(dataset_name, MyEntity.__entity_name__), attr.index
         ).receive_update(initial_data)
     assert state.is_ready_for(ready_flags) == expected
+
+
+@pytest.mark.parametrize(
+    ["initial_data", "optional", "expected"],
+    [
+        (None, True, True),
+        (None, False, False),
+        (dataset_data_to_numpy({"id": [1], "attr": [1]}), True, True),
+        (dataset_data_to_numpy({"id": [1]}), True, False),
+        (dataset_data_to_numpy({"id": []}), True, True),
+        (dataset_data_to_numpy({"id": [1]}), False, False),
+        (dataset_data_to_numpy({"id": [1], "attr": [1]}), False, True),
+    ],
+)
+def test_is_ready_for_with_optional_entity_group(initial_data, optional, expected):
+    state = TrackedState()
+
+    class FakeEntity(EntityGroup):
+        __optional__ = optional
+        attr = get_attribute(name="attr", flags=INIT)
+
+    entity = FakeEntity(name="a")
+    state.register_entity_group("some_dataset", entity)
+    if initial_data:
+        EntityDataHandler(
+            state._get_entity_group("some_dataset", entity.__entity_name__), entity.index
+        ).receive_update(initial_data)
+    assert state.is_ready_for(INITIALIZE) == expected
 
 
 def test_get_data_mask():
