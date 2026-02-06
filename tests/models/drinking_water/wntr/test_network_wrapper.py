@@ -92,5 +92,3 @@ class TestConfigureOptions:
         assert wrapper.wn.options.hydraulic.demand_model == "DDA"
         assert wrapper.wn.options.hydraulic.viscosity == 1.0
         assert wrapper.wn.options.hydraulic.specific_gravity == 1.0
-
-

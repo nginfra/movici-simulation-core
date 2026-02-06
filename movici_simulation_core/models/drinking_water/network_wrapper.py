@@ -165,9 +165,7 @@ class JunctionProcessor(NodeProcessor[WaterJunctionEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
 
             self.wn.add_junction(
                 name=name,
@@ -237,15 +235,11 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
 
             init_level = float(init_levels[idx])
             min_level = _opt_val(eg.min_level, idx, min_lvl_defined, 0.0)
-            max_level = _opt_val(
-                eg.max_level, idx, max_lvl_defined, init_level * 2
-            )
+            max_level = _opt_val(eg.max_level, idx, max_lvl_defined, init_level * 2)
             diameter = _opt_val(eg.diameter, idx, dia_defined, 0.0)
             min_vol = _opt_val(eg.min_volume, idx, min_vol_defined, 0.0)
 
@@ -301,9 +295,7 @@ class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
             self.wn.add_reservoir(
                 name=name,
                 base_head=float(heads[idx]),
@@ -360,9 +352,7 @@ class PipeProcessor(LinkProcessor[WaterPipeEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
             from_node, to_node = self._from_to(idx)
 
             status_str = "OPEN"
@@ -432,9 +422,7 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
             from_node, to_node = self._from_to(idx)
             pump_type = pump_types[idx]
 
@@ -528,9 +516,7 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(
-                np.array([entity_id]), prefix=self.PREFIX
-            )
+            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
             from_node, to_node = self._from_to(idx)
             valve_type = valve_types[idx]
             setting = self._get_setting(idx, valve_type, setting_masks)
