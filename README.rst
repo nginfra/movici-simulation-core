@@ -37,9 +37,10 @@ Due to some dependencies, the installation on MacOS is a bit more involved. Plea
 
 ..  code-block::bash
 
-  brew update
-  brew install spatialite-tools
-  brew install libspatialite
+    brew update
+    brew install spatialite-tools
+    brew install libspatialite
+
 
 2. Install the `llvm`` compiler suite:
 
@@ -103,7 +104,7 @@ If you want to develop on this package, you can following the same steps above d
 On Windows Linux
 #####################
 
-.. code-block::
+.. code-block:: bash
 
   git clone https://github.com/nginfra/movici-simulation-core.git
   pip install -e .[dev,models]
@@ -111,7 +112,7 @@ On Windows Linux
 On MacOS
 #####################
 
-.. code-block::
+.. code-block:: bash
 
   # After installing dependencies and configuring environment variables, the final step should be:
 
