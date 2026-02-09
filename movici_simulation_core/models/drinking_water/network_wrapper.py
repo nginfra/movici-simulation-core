@@ -114,14 +114,22 @@ class LinkProcessor(WNTRElementProcessor[T]):
     def _link_name(self, entity_id: int) -> str:
         return self.PREFIX + str(entity_id)
 
-    def _from_to(self, idx: int) -> tuple[str, str]:
+    def _from_to(self, idx: int, entity_id: int) -> tuple[str, str]:
         eg = self.entity_group
-        from_id = int(eg.from_node_id.array[idx])
-        to_id = int(eg.to_node_id.array[idx])
-        return (
-            self.wrapper.id_mapper.get_wntr_name(from_id),
-            self.wrapper.id_mapper.get_wntr_name(to_id),
-        )
+        from_id = eg.from_node_id.array[idx]
+        to_id = eg.to_node_id.array[idx]
+
+        try:
+            from_element = self.wrapper.id_mapper.get_wntr_name(eg.from_node_id.array[idx])
+        except KeyError:
+            raise ValueError(f"Invalid from_node_id {from_id} for link #{entity_id}") from None
+
+        try:
+            to_element = self.wrapper.id_mapper.get_wntr_name(eg.to_node_id.array[idx])
+        except KeyError:
+            raise ValueError(f"Invalid to_node_id {to_id} for link #{entity_id}") from None
+
+        return (from_element, to_element)
 
     def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
         eg = self.entity_group
@@ -165,7 +173,7 @@ class JunctionProcessor(NodeProcessor[WaterJunctionEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
+            self.wrapper.id_mapper.register(entity_id, name)
 
             self.wn.add_junction(
                 name=name,
@@ -235,7 +243,7 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
+            self.wrapper.id_mapper.register(entity_id, name)
 
             init_level = float(init_levels[idx])
             min_level = _opt_val(eg.min_level, idx, min_lvl_defined, 0.0)
@@ -295,7 +303,7 @@ class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
-            self.wrapper.id_mapper.register_nodes(np.array([entity_id]), prefix=self.PREFIX)
+            self.wrapper.id_mapper.register(entity_id, name)
             self.wn.add_reservoir(
                 name=name,
                 base_head=float(heads[idx]),
@@ -352,8 +360,8 @@ class PipeProcessor(LinkProcessor[WaterPipeEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
-            from_node, to_node = self._from_to(idx)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
 
             status_str = "OPEN"
             if status_defined is not None and status_defined[idx]:
@@ -422,8 +430,8 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
-            from_node, to_node = self._from_to(idx)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
             pump_type = pump_types[idx]
 
             if pump_type == "POWER":
@@ -516,8 +524,8 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
-            self.wrapper.id_mapper.register_links(np.array([entity_id]), prefix=self.PREFIX)
-            from_node, to_node = self._from_to(idx)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
             valve_type = valve_types[idx]
             setting = self._get_setting(idx, valve_type, setting_masks)
             minor_loss = _opt_val(eg.minor_loss, idx, ml_defined, 0.0)
@@ -533,6 +541,31 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
             )
 
 
+class IdMapper:
+    """Maps between Movici integer IDs and WNTR string names.
+
+    Each processor registers its entities with a type-specific prefix
+    (e.g. ``"J"`` for junctions, ``"P"`` for pipes), producing WNTR
+    names like ``"J5"`` or ``"P101"``.
+    """
+
+    def __init__(self):
+        self.elements_by_id: dict[int, str] = {}
+
+    def register(self, entity_id: int, wntr_name: str):
+        if entity_id in self.elements_by_id:
+            raise ValueError(f"Duplicate Entity ID {entity_id}")
+        self.elements_by_id[entity_id] = wntr_name
+
+    def get_wntr_name(self, entity_id: int) -> str:
+        """Get WNTR name for a Movici ID.
+
+        :param movici_id: Movici entity ID
+        :return: WNTR name string
+        """
+        return self.elements_by_id[int(entity_id)]
+
+
 class NetworkWrapper:
     """Wraps WNTR WaterNetworkModel with Movici-friendly API.
 
@@ -544,7 +577,7 @@ class NetworkWrapper:
         self.wntr = wntr
         self._curve_counter = 0
         self.wn = wntr.network.WaterNetworkModel()
-        self.id_mapper = None
+        self.id_mapper = IdMapper()
         self.processors: dict[str, WNTRElementProcessor] = {}
 
     def initialize(self, dataset: DrinkingWaterNetwork):
@@ -553,9 +586,6 @@ class NetworkWrapper:
         :param dataset: A valid DrinkingWaterNetwork whose entity groups
             have been loaded with init data.
         """
-        from .id_mapper import IdMapper
-
-        self.id_mapper = IdMapper()
         self.processors["junctions"] = JunctionProcessor(self, dataset.junctions)
         self.processors["tanks"] = TankProcessor(self, dataset.tanks)
         self.processors["reservoirs"] = ReservoirProcessor(self, dataset.reservoirs)
