@@ -54,7 +54,7 @@ Due to some dependencies, the installation on MacOS is a bit more involved. Plea
   export CC=/opt/homebrew/opt/llvm/bin/clang
   export CXX=/opt/homebrew/opt/llvm/bin/clang++
 
-4. Update the ``DYLD_LIBRARY_PATH`` to include :code:`libspatialite`.
+4. Update the ``DYLD_LIBRARY_PATH`` to include ``libspatialite``.
 
 .. code-block::bash
 
@@ -93,7 +93,6 @@ requires the ``mod_spatialite`` sqlite extension.
 - On Windows, please follow the 
 `official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
 - On MacOS, this can be done using Homebrew as described in the installation instructions above.
-
 
 Development
 -----------
