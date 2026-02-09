@@ -1,7 +1,7 @@
 Movici Simulation Core
 ======================
 
-Copyright 2020ff NGinfra
+Copyright 2026 NGinfra
 
 Movici is a set of tools and software for performing simulations on geospatial entities. 
 
