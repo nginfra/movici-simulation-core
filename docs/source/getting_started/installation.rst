@@ -70,6 +70,60 @@ Then you can install the extra python requirements throug pip:
   
   pip install movici-simulation-core[models]
 
+
+.. _installation_macos:
+
+MacOS
+------
+
+Due to some dependencies, the installation on MacOS is a bit more involved. 
+
+**Pre-requisites:**
+- Python 3.11 or higher (Lower versions produce conflicts wtith OpenMP at runtime.)
+- Homebrew package manager (https://brew.sh/)
+
+1. On a terminal. Install spatialite as bollows:
+
+..  code-block::bash
+
+  brew update
+  brew install spatialite-tools
+  brew install libspatialite
+
+2. Install the `llvm`` compiler suite:
+
+.. code-block::bash
+
+  brew install llvm
+
+3. Set the following environment variables to use the ``llvm`` C and C++ compilers:
+
+.. code-block::bash
+
+  export CC=/opt/homebrew/opt/llvm/bin/clang
+  export CXX=/opt/homebrew/opt/llvm/bin/clang++
+
+4. Update the ``DYLD_LIBRARY_PATH`` to include ``libspatialite``.
+
+.. code-block::bash
+
+  export DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH
+
+5. Clone ``aequilibrae`` repository and install it from source.
+
+.. code-block::bash
+
+  git clone https://github.com/AequilibraE/aequilibrae.git
+  cd aequilibrae
+  pip install .
+
+6. Finally, install ``movici-simulation-core`` from source.
+
+.. code-block::bash
+
+  git clone https://github.com/nginfra/movici-simulation-core.git
+  pip install .
+
 Alternative environments
 -------------------------
 
@@ -97,11 +151,3 @@ environment. See `Developing in WSL <https://code.visualstudio.com/docs/remote/w
 installation instructions. After installation of WSL, follow the installation instructuctions for
 :ref:`Linux<installation_linux>` for how to install Movici. 
 
-
-MacOS
-^^^^^
-
-Currently, MacOS is not a support operating system. You may be able to install and run Movici 
-succesfully, but it requires you to compile certain dependencies from source. If you want to 
-install Movici under MacOS, please open an issue on 
-`Github <https://github.com/nginfra/movici-simulation-core/issues>`_ 
