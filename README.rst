@@ -32,7 +32,7 @@ Due to some dependencies, the installation on MacOS is a bit more involved. Plea
 **Pre-requisites:**
 
 - Python 3.11 or higher (Lower versions produce conflicts with OpenMP at runtime.)
-- Homebrew package manager (https://brew.sh/)
+- `Homebrew <https://brew.sh/>`_ package manager 
 
 1. On a terminal. Install spatialite as follows:
 
