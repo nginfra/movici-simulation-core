@@ -108,7 +108,7 @@ On Windows Linux
   git clone https://github.com/nginfra/movici-simulation-core.git
   pip install -e .[dev,models]
 
-On McOS
+On MacOS
 #####################
 
 .. code-block::
