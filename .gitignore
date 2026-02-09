@@ -11,7 +11,7 @@ pip-wheel-metadata/
 /.project
 
 # virtualenv
-/venv*/
+/venv/
 /ENV/
 
 # pytest cache
