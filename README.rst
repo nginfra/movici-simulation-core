@@ -3,7 +3,7 @@ Movici Simulation Core
 
 Copyright 2020ff NGinfra
 
-Movici is a set of tools and software for performing simulations geospatial entities. 
+Movici is a set of tools and software for performing simulations on geospatial entities. 
 
 Movici Simulation Core is the main package needed to run Movici simulations. It contains
   
@@ -30,40 +30,41 @@ On MacOS
 Due to some dependencies, the installation on MacOS is a bit more involved. Please follow the instructions below.
 
 **Pre-requisites:**
-- Python 3.11 or higher (Lower versions produce conflicts wtith OpenMP at runtime.)
+
+- Python 3.11 or higher (Lower versions produce conflicts with OpenMP at runtime.)
 - Homebrew package manager (https://brew.sh/)
 
-1. On a terminal. Install spatialite as bollows:
+1. On a terminal. Install spatialite as follows:
 
-..  code-block::bash
+.. code-block:: bash
 
     brew update
     brew install spatialite-tools
     brew install libspatialite
 
 
-2. Install the `llvm`` compiler suite:
+2. Install the ``llvm`` compiler suite:
 
-.. code-block::bash
+.. code-block:: bash
 
   brew install llvm
 
 3. Set the following environment variables to use the ``llvm`` C and C++ compilers:
 
-.. code-block::bash
+.. code-block:: bash
 
   export CC=/opt/homebrew/opt/llvm/bin/clang
   export CXX=/opt/homebrew/opt/llvm/bin/clang++
 
 4. Update the ``DYLD_LIBRARY_PATH`` to include ``libspatialite``.
 
-.. code-block::bash
+.. code-block:: bash
 
   export DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH
 
 5. Clone ``aequilibrae`` repository and install it from source.
 
-.. code-block::bash
+.. code-block:: bash
 
   git clone https://github.com/AequilibraE/aequilibrae.git
   cd aequilibrae
@@ -71,7 +72,7 @@ Due to some dependencies, the installation on MacOS is a bit more involved. Plea
 
 6. Finally, install ``movici-simulation-core`` from source.
 
-.. code-block::bash
+.. code-block:: bash
 
   git clone https://github.com/nginfra/movici-simulation-core.git
   pip install .
@@ -101,7 +102,7 @@ Development
 If you want to develop on this package, you can following the same steps above depending of your operating system with one exception, **install** ``movici-simulation-core`` **package in editable mode.** This allows you to make changes to the code and have them reflected immediately without needing to reinstall the package.
 
 
-On Windows Linux
+On Windows and Linux
 #####################
 
 .. code-block:: bash
@@ -123,7 +124,7 @@ On MacOS
 Using Pre-commit Hooks
 ######################
 
-To install the pre-commit hooks, first install ``pre-commit`` using your favorite installer, eg: `pipx` or `uv tool`. Then, install the precommit hooks by running 
+To install the pre-commit hooks, first install ``pre-commit`` using your favorite installer, eg: ``pipx`` or ``uv tool``. Then, install the precommit hooks by running 
 
 .. code-block::
 
