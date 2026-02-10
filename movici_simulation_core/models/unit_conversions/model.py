@@ -9,11 +9,38 @@ from movici_simulation_core.core.schema import AttributeSpec, attributes_from_di
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CsvTape
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from ...model_connector.init_data import FileType, InitDataHandler
 from . import attributes
 from .entities import FlowEntityGroup, ODEntityGroup
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/unit_conversions.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/unit_conversions.json"
+
+
+def convert_v1_v2(config):
+    return {
+        "parameters_dataset": config["parameters"][0],
+        "conversions": [
+            *[
+                {
+                    "class": "od",
+                    "modality": config["od_types"][i],
+                    "entity_group": config["od_entities"][i],
+                }
+                for i in range(len(config["od_types"]))
+            ],
+            *[
+                {
+                    "class": "flow",
+                    "modality": config["flow_types"][i],
+                    "entity_group": config["flow_entities"][i],
+                }
+                for i in range(len(config["flow_types"]))
+            ],
+        ],
+    }
 
 
 class Model(TrackedModel, name="unit_conversions"):
@@ -26,6 +53,10 @@ class Model(TrackedModel, name="unit_conversions"):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     flow_entities: t.List[FlowEntityGroup]
     flow_types: t.List[str]
     od_entities: t.List[ODEntityGroup]
@@ -33,14 +64,6 @@ class Model(TrackedModel, name="unit_conversions"):
     coefficients_tape: t.Optional[CsvTape]
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(model_config)
         self.flow_entities = []
         self.flow_types = []
@@ -165,31 +188,3 @@ class Model(TrackedModel, name="unit_conversions"):
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/unit_conversions.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/unit_conversions.json"
-
-
-def convert_v1_v2(config):
-    return {
-        "parameters_dataset": config["parameters"][0],
-        "conversions": [
-            *[
-                {
-                    "class": "od",
-                    "modality": config["od_types"][i],
-                    "entity_group": config["od_entities"][i],
-                }
-                for i in range(len(config["od_types"]))
-            ],
-            *[
-                {
-                    "class": "flow",
-                    "modality": config["flow_types"][i],
-                    "entity_group": config["flow_entities"][i],
-                }
-                for i in range(len(config["flow_types"]))
-            ],
-        ],
-    }

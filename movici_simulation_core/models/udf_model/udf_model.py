@@ -18,22 +18,36 @@ from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.udf_model import compiler
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/udf.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/udf.json"
+
+
+def convert_v1_v2(config):
+    return {
+        **config,
+        "entity_group": config["entity_group"][0],
+        "functions": [
+            {
+                **func,
+                "output": func["output"][1],
+            }
+            for func in config["functions"]
+        ],
+        "inputs": {name: attr[1] for name, attr in config["inputs"].items()},
+    }
 
 
 class UDFModel(TrackedModel, name="udf"):
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     inputs: t.Dict[str, AttributeObject]
     udfs: t.List[UDF]
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
@@ -116,22 +130,3 @@ def get_udf_infos(config):
             expression=func["expression"],
             output_attribute=func["output"],
         )
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/udf.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/udf.json"
-
-
-def convert_v1_v2(config):
-    return {
-        **config,
-        "entity_group": config["entity_group"][0],
-        "functions": [
-            {
-                **func,
-                "output": func["output"][1],
-            }
-            for func in config["functions"]
-        ],
-        "inputs": {name: attr[1] for name, attr in config["inputs"].items()},
-    }
