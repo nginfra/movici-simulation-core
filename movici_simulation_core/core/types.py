@@ -3,6 +3,9 @@ from __future__ import annotations
 import abc
 import logging
 import typing as t
+from pathlib import Path
+
+from movici_simulation_core.validate import ModelConfigSchema, validate_and_migrate_config
 
 from ..messages import NewTimeMessage, QuitMessage, UpdateMessage, UpdateSeriesMessage
 from ..networking.stream import MessageRouterSocket, Stream
@@ -47,8 +50,18 @@ class Service(Plugin):
 
 class Model(Plugin):
     __model_name__: t.ClassVar[t.Optional[str]] = None
+    __model_config_schema__: (
+        t.ClassVar[Path | ModelConfigSchema] | list[ModelConfigSchema] | None
+    ) = None
 
     def __init__(self, model_config: dict):
+        versions = self.__model_config_schema__
+        if versions is not None:
+            if isinstance(versions, Path):
+                versions = [ModelConfigSchema(schema=versions)]
+            if isinstance(versions, ModelConfigSchema):
+                versions = [versions]
+            model_config = validate_and_migrate_config(model_config, versions)
         self.config = model_config
 
     def get_adapter(self) -> t.Type[ModelAdapterBase]:
