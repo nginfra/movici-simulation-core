@@ -138,40 +138,60 @@ class TestParseConditionSimple:
     def test_simtime_equals(self):
         cond = parse_condition("<simtime> == 34h")
         assert isinstance(cond, Comparison)
-        assert cond.expr_type == ExpressionType.SIMTIME
+        assert cond.left.expr_type == ExpressionType.SIMTIME
         assert cond.operator == ComparisonOperator.EQ
-        assert cond.value == 34 * 3600
+        assert cond.right.value == 34 * 3600
 
     def test_clocktime_equals(self):
         cond = parse_condition("<clocktime> == 12h30m")
         assert isinstance(cond, Comparison)
-        assert cond.expr_type == ExpressionType.CLOCKTIME
-        assert cond.value == 12 * 3600 + 30 * 60
+        assert cond.left.expr_type == ExpressionType.CLOCKTIME
+        assert cond.right.value == 12 * 3600 + 30 * 60
 
     def test_attribute_comparison(self):
         cond = parse_condition("drinking_water.level >= 23")
         assert isinstance(cond, Comparison)
-        assert cond.expr_type == ExpressionType.ATTRIBUTE
-        assert cond.attribute_name == "drinking_water.level"
+        assert cond.left.expr_type == ExpressionType.ATTRIBUTE
+        assert cond.left.attribute_name == "drinking_water.level"
         assert cond.operator == ComparisonOperator.GE
-        assert cond.value == 23
+        assert cond.right.value == 23
 
     def test_simple_attribute_name(self):
         cond = parse_condition("diameter > 89")
-        assert cond.expr_type == ExpressionType.ATTRIBUTE
-        assert cond.attribute_name == "diameter"
+        assert cond.left.expr_type == ExpressionType.ATTRIBUTE
+        assert cond.left.attribute_name == "diameter"
 
     def test_boolean_value_true(self):
         cond = parse_condition("status == true")
-        assert cond.value is True
+        assert cond.right.value is True
 
     def test_boolean_value_false(self):
         cond = parse_condition("status == false")
-        assert cond.value is False
+        assert cond.right.value is False
 
     def test_float_value(self):
         cond = parse_condition("level > 23.5")
-        assert cond.value == 23.5
+        assert cond.right.value == 23.5
+
+    def test_attribute_vs_attribute(self):
+        cond = parse_condition("a > b")
+        assert isinstance(cond, Comparison)
+        assert cond.left.expr_type == ExpressionType.ATTRIBUTE
+        assert cond.left.attribute_name == "a"
+        assert cond.right.expr_type == ExpressionType.ATTRIBUTE
+        assert cond.right.attribute_name == "b"
+
+    def test_dotted_attributes_both_sides(self):
+        cond = parse_condition("a.x >= b.y")
+        assert cond.left.attribute_name == "a.x"
+        assert cond.right.attribute_name == "b.y"
+
+    def test_literal_lhs(self):
+        cond = parse_condition("23 > level")
+        assert cond.left.expr_type == ExpressionType.LITERAL
+        assert cond.left.value == 23
+        assert cond.right.expr_type == ExpressionType.ATTRIBUTE
+        assert cond.right.attribute_name == "level"
 
 
 class TestParseConditionBoolean:
@@ -277,6 +297,16 @@ class TestComparisonEvaluate:
         assert not cond.evaluate(attributes={})
         assert not cond.evaluate(attributes=None)
 
+    def test_evaluate_attribute_vs_attribute(self):
+        cond = parse_condition("a > b")
+        assert cond.evaluate(attributes={"a": 10, "b": 5})
+        assert not cond.evaluate(attributes={"a": 3, "b": 5})
+
+    def test_evaluate_literal_lhs(self):
+        cond = parse_condition("23 >= level")
+        assert cond.evaluate(attributes={"level": 20})
+        assert not cond.evaluate(attributes={"level": 30})
+
 
 class TestBooleanExpressionEvaluate:
     """Tests for evaluating BooleanExpression objects."""
@@ -349,6 +379,18 @@ class TestGetAttributeNames:
         cond = parse_condition("(level < 10 || flow > 5) && status == true")
         assert cond.get_attribute_names() == {"level", "flow", "status"}
 
+    def test_attributes_both_sides(self):
+        cond = parse_condition("a > b")
+        assert cond.get_attribute_names() == {"a", "b"}
+
+    def test_literal_lhs_only_rhs_attribute(self):
+        cond = parse_condition("23 > level")
+        assert cond.get_attribute_names() == {"level"}
+
+    def test_compound_with_both_side_attrs(self):
+        cond = parse_condition("a > b && c == true")
+        assert cond.get_attribute_names() == {"a", "b", "c"}
+
 
 class TestMultiDotAttributeNames:
     """Tests for attribute names with multiple dots."""
@@ -364,7 +406,7 @@ class TestMultiDotAttributeNames:
     )
     def test_multi_dot_attribute_parsing(self, expr, expected_name):
         cond = parse_condition(expr)
-        assert cond.attribute_name == expected_name
+        assert cond.left.attribute_name == expected_name
 
     def test_multi_dot_in_boolean_expression(self):
         cond = parse_condition("a.b.c >= 10 && x.y.z <= 20")
@@ -395,15 +437,107 @@ class TestInvalidExpressions:
             parse_condition(expr)
 
 
+class TestNoSpaceExpressions:
+    """Tests for expressions without spaces between tokens."""
+
+    @pytest.mark.parametrize(
+        "expr,expected_attr,expected_op,expected_value",
+        [
+            ("attribute>3", "attribute", ComparisonOperator.GT, 3),
+            ("level>=23", "level", ComparisonOperator.GE, 23),
+            ("status==true", "status", ComparisonOperator.EQ, True),
+        ],
+    )
+    def test_no_space_attribute_comparison(self, expr, expected_attr, expected_op, expected_value):
+        cond = parse_condition(expr)
+        assert isinstance(cond, Comparison)
+        assert cond.left.attribute_name == expected_attr
+        assert cond.operator == expected_op
+        assert cond.right.value == expected_value
+
+    def test_no_space_simtime(self):
+        cond = parse_condition("<simtime>==34h")
+        assert cond.left.expr_type == ExpressionType.SIMTIME
+        assert cond.operator == ComparisonOperator.EQ
+        assert cond.right.value == 34 * 3600
+
+    def test_no_space_clocktime(self):
+        cond = parse_condition("<clocktime>>=12:00")
+        assert cond.left.expr_type == ExpressionType.CLOCKTIME
+        assert cond.operator == ComparisonOperator.GE
+        assert cond.right.value == 12 * 3600
+
+
 class TestClockTimeInConditions:
     """Tests for clock time expressions in conditions."""
 
     def test_clock_time_format_in_condition(self):
         """Clock time with HH:MM format should be parsed correctly."""
         cond = parse_condition("<clocktime> == 12:30")
-        assert cond.value == 12 * 3600 + 30 * 60
+        assert cond.right.value == 12 * 3600 + 30 * 60
 
     def test_clock_time_format_hms_in_condition(self):
         """Clock time with HH:MM:SS format should be parsed correctly."""
         cond = parse_condition("<clocktime> >= 08:30:00")
-        assert cond.value == 8 * 3600 + 30 * 60
+        assert cond.right.value == 8 * 3600 + 30 * 60
+
+
+class TestGetTimeThresholds:
+    """Tests for extracting time thresholds from expressions."""
+
+    def test_simtime_comparison(self):
+        cond = parse_condition("<simtime> >= 3600")
+        result = cond.get_time_thresholds()
+        assert result == [(ExpressionType.SIMTIME, 3600)]
+
+    def test_simtime_duration(self):
+        cond = parse_condition("<simtime> == 1h30m")
+        result = cond.get_time_thresholds()
+        assert result == [(ExpressionType.SIMTIME, 5400)]
+
+    def test_clocktime_comparison(self):
+        cond = parse_condition("<clocktime> >= 12:30")
+        result = cond.get_time_thresholds()
+        assert result == [(ExpressionType.CLOCKTIME, 12 * 3600 + 30 * 60)]
+
+    def test_attribute_comparison_returns_empty(self):
+        cond = parse_condition("level >= 23")
+        assert cond.get_time_thresholds() == []
+
+    def test_attribute_vs_attribute_returns_empty(self):
+        cond = parse_condition("a > b")
+        assert cond.get_time_thresholds() == []
+
+    def test_literal_vs_literal_returns_empty(self):
+        """Two literals: no time variable, so no thresholds."""
+        cond = parse_condition("23 >= 10")
+        assert cond.get_time_thresholds() == []
+
+    def test_boolean_and_collects_all(self):
+        cond = parse_condition("<simtime> >= 3600 && <clocktime> >= 12:00")
+        result = cond.get_time_thresholds()
+        assert (ExpressionType.SIMTIME, 3600) in result
+        assert (ExpressionType.CLOCKTIME, 12 * 3600) in result
+        assert len(result) == 2
+
+    def test_boolean_or_collects_all(self):
+        cond = parse_condition("<simtime> >= 100 || <simtime> >= 200")
+        result = cond.get_time_thresholds()
+        assert (ExpressionType.SIMTIME, 100) in result
+        assert (ExpressionType.SIMTIME, 200) in result
+
+    def test_nested_boolean_collects_all(self):
+        cond = parse_condition("(<simtime> >= 3600 && level > 10) || <clocktime> >= 8:00")
+        result = cond.get_time_thresholds()
+        assert (ExpressionType.SIMTIME, 3600) in result
+        assert (ExpressionType.CLOCKTIME, 8 * 3600) in result
+
+    def test_not_expression_collects(self):
+        cond = parse_condition("NOT <simtime> >= 3600")
+        result = cond.get_time_thresholds()
+        assert result == [(ExpressionType.SIMTIME, 3600)]
+
+    def test_mixed_time_and_attribute_only_time(self):
+        cond = parse_condition("<simtime> >= 3600 && level > 10")
+        result = cond.get_time_thresholds()
+        assert result == [(ExpressionType.SIMTIME, 3600)]

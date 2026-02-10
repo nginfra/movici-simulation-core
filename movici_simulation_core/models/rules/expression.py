@@ -5,27 +5,33 @@ Parses condition expressions including compound boolean expressions like:
 - ``"<simtime> == 34h"``
 - ``"<clocktime> == 12:00"``
 - ``"drinking_water.level >= 23"``
-- ``"drinking_water.level <= 21 & drinking_water.level >= 23"``
-- ``"(level < 10 | level > 90) & status == true"``
+- ``"drinking_water.level <= 21 && drinking_water.level >= 23"``
+- ``"(level < 10 || level > 90) && status == true"``
+- ``"a > b"`` (attribute vs attribute)
+- ``"23 >= level"`` (literal vs attribute)
+
+Both sides of a comparison can be an attribute name, a literal value, or a time variable.
 
 Uses pyparsing with infixNotation for proper operator precedence.
 """
 
+import operator
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Optional, Protocol, Union
+from typing import Any, Optional, Union
 
 import pyparsing as pp
 
 
 class ExpressionType(Enum):
-    """Type of the left-hand side of a condition expression."""
+    """Type of one side of a condition expression."""
 
     SIMTIME = "simtime"
     CLOCKTIME = "clocktime"
     ATTRIBUTE = "attribute"
+    LITERAL = "literal"
 
 
 class ComparisonOperator(Enum):
@@ -48,16 +54,17 @@ class ComparisonOperator(Enum):
         """
         if left is None or right is None:
             return False
+        return _COMPARISON_OPERATORS[self.value](left, right)
 
-        evaluators: dict[ComparisonOperator, Callable[[Any, Any], bool]] = {
-            ComparisonOperator.EQ: lambda a, b: a == b,
-            ComparisonOperator.NE: lambda a, b: a != b,
-            ComparisonOperator.LT: lambda a, b: a < b,
-            ComparisonOperator.LE: lambda a, b: a <= b,
-            ComparisonOperator.GT: lambda a, b: a > b,
-            ComparisonOperator.GE: lambda a, b: a >= b,
-        }
-        return evaluators[self](left, right)
+
+_COMPARISON_OPERATORS = {
+    "==": operator.eq,
+    "!=": operator.ne,
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+}
 
 
 # Time unit multipliers in seconds
@@ -131,13 +138,37 @@ def parse_clock_time(expr: str) -> float:
 
 
 @dataclass
+class ComparisonSide:
+    """One side of a comparison expression."""
+
+    expr_type: ExpressionType
+    attribute_name: Optional[str] = None
+    value: Any = None
+
+
+@dataclass
 class Comparison:
     """A single comparison expression (e.g., ``level >= 23``)."""
 
-    expr_type: ExpressionType
+    left: ComparisonSide
     operator: ComparisonOperator
-    value: Union[float, bool]
-    attribute_name: Optional[str] = None
+    right: ComparisonSide
+
+    def _resolve(
+        self,
+        side: ComparisonSide,
+        simtime: Optional[float],
+        clocktime: Optional[float],
+        attributes: Optional[dict[str, Any]],
+    ) -> Any:
+        if side.expr_type == ExpressionType.SIMTIME:
+            return simtime
+        elif side.expr_type == ExpressionType.CLOCKTIME:
+            return clocktime
+        elif side.expr_type == ExpressionType.LITERAL:
+            return side.value
+        else:
+            return (attributes or {}).get(side.attribute_name)
 
     def evaluate(
         self,
@@ -153,25 +184,43 @@ class Comparison:
         :returns: True if comparison is satisfied
         :rtype: bool
         """
-        if self.expr_type == ExpressionType.SIMTIME:
-            left_value = simtime
-        elif self.expr_type == ExpressionType.CLOCKTIME:
-            left_value = clocktime
-        else:
-            attributes = attributes or {}
-            left_value = attributes.get(self.attribute_name)
-
-        return self.operator.evaluate(left_value, self.value)
+        left_value = self._resolve(self.left, simtime, clocktime, attributes)
+        right_value = self._resolve(self.right, simtime, clocktime, attributes)
+        return self.operator.evaluate(left_value, right_value)
 
     def get_attribute_names(self) -> set[str]:
         """Return set of attribute names referenced by this comparison.
 
-        :returns: Set of attribute names (empty if simtime/clocktime)
+        :returns: Set of attribute names (empty if simtime/clocktime/literal only)
         :rtype: set[str]
         """
-        if self.expr_type == ExpressionType.ATTRIBUTE and self.attribute_name:
-            return {self.attribute_name}
-        return set()
+        names: set[str] = set()
+        for side in (self.left, self.right):
+            if side.expr_type == ExpressionType.ATTRIBUTE and side.attribute_name:
+                names.add(side.attribute_name)
+        return names
+
+    def get_time_thresholds(self) -> list[tuple[ExpressionType, float]]:
+        """Return time thresholds from this comparison.
+
+        If one side is SIMTIME/CLOCKTIME and the other is LITERAL, returns
+        the literal value tagged with the time type.
+
+        :returns: List of (ExpressionType, threshold_value) tuples
+        :rtype: list[tuple[ExpressionType, float]]
+        """
+        result: list[tuple[ExpressionType, float]] = []
+        for time_side, value_side in [(self.left, self.right), (self.right, self.left)]:
+            if (
+                time_side.expr_type
+                in (
+                    ExpressionType.SIMTIME,
+                    ExpressionType.CLOCKTIME,
+                )
+                and value_side.expr_type == ExpressionType.LITERAL
+            ):
+                result.append((time_side.expr_type, value_side.value))
+        return result
 
 
 @dataclass
@@ -214,33 +263,19 @@ class BooleanExpression:
             names.update(operand.get_attribute_names())
         return names
 
+    def get_time_thresholds(self) -> list[tuple[ExpressionType, float]]:
+        """Return time thresholds from all operands recursively.
 
-class Evaluable(Protocol):
-    """Protocol for objects that can be evaluated as conditions."""
-
-    def evaluate(
-        self,
-        simtime: Optional[float] = None,
-        clocktime: Optional[float] = None,
-        attributes: Optional[dict[str, Any]] = None,
-    ) -> bool:
-        """Evaluate this expression."""
-        ...
-
-    def get_attribute_names(self) -> set[str]:
-        """Return set of attribute names referenced by this expression."""
-        ...
+        :returns: List of (ExpressionType, threshold_value) tuples
+        :rtype: list[tuple[ExpressionType, float]]
+        """
+        result: list[tuple[ExpressionType, float]] = []
+        for operand in self.operands:
+            result.extend(operand.get_time_thresholds())
+        return result
 
 
 ParsedCondition = Union[Comparison, BooleanExpression]
-
-
-class _ExprWrapper(Protocol):
-    """Protocol for intermediate expression wrappers used during parsing."""
-
-    def to_expr(self) -> ParsedCondition:
-        """Convert to a ParsedCondition."""
-        ...
 
 
 def _unwrap_expr(token: Any) -> ParsedCondition:
@@ -347,20 +382,17 @@ def _build_grammar() -> pp.ParserElement:
     identifier = pp.Word(pp.alphas + "_", pp.alphanums + "_")
     attribute_name = pp.Combine(identifier + pp.ZeroOrMore("." + identifier))
 
-    lhs = simtime_var | clocktime_var | attribute_name
+    operand = simtime_var | clocktime_var | value | attribute_name
+
+    def _make_side(token: Any) -> ComparisonSide:
+        if isinstance(token, ExpressionType):
+            return ComparisonSide(expr_type=token)
+        elif isinstance(token, str):
+            return ComparisonSide(expr_type=ExpressionType.ATTRIBUTE, attribute_name=token)
+        else:
+            return ComparisonSide(expr_type=ExpressionType.LITERAL, value=token)
 
     def make_comparison(tokens: pp.ParseResults) -> Comparison:
-        lhs_val = tokens[0]
-        op_str = tokens[1]
-        rhs_val = tokens[2]
-
-        if isinstance(lhs_val, ExpressionType):
-            expr_type = lhs_val
-            attr_name = None
-        else:
-            expr_type = ExpressionType.ATTRIBUTE
-            attr_name = lhs_val
-
         op_map = {
             "==": ComparisonOperator.EQ,
             "!=": ComparisonOperator.NE,
@@ -371,13 +403,12 @@ def _build_grammar() -> pp.ParserElement:
         }
 
         return Comparison(
-            expr_type=expr_type,
-            operator=op_map[op_str],
-            value=rhs_val,
-            attribute_name=attr_name,
+            left=_make_side(tokens[0]),
+            operator=op_map[tokens[1]],
+            right=_make_side(tokens[2]),
         )
 
-    comparison = (lhs + comparison_op + value).setParseAction(make_comparison)
+    comparison = (operand + comparison_op + operand).setParseAction(make_comparison)
 
     # Boolean operators (support both single and double symbols)
     NOT = pp.CaselessKeyword("NOT") | pp.Literal("!")
@@ -406,12 +437,15 @@ _GRAMMAR = _build_grammar()
 def parse_condition(expr_string: str) -> ParsedCondition:
     """Parse a condition expression string.
 
-    Supports simple comparisons and compound boolean expressions:
+    Supports simple comparisons and compound boolean expressions.
+    Both sides of a comparison can be an attribute, literal, or time variable:
 
     - ``"<simtime> == 34h"``
     - ``"level >= 23"``
-    - ``"level <= 21 & level >= 23"``
-    - ``"(level < 10 | level > 90) & status == true"``
+    - ``"a > b"`` (attribute vs attribute)
+    - ``"23 >= level"`` (literal vs attribute)
+    - ``"level <= 21 && level >= 23"``
+    - ``"(level < 10 || level > 90) && status == true"``
     - ``"NOT status == true"``
 
     :param expr_string: Condition expression string

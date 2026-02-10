@@ -7,11 +7,9 @@ rules datasets or model configuration.
 import logging
 import typing as t
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import OPT, PUB, SUB
-from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.core.state import TrackedState
@@ -20,7 +18,7 @@ from movici_simulation_core.model_connector import InitDataHandler
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.validate import ensure_valid_config
 
-from .expression import ParsedCondition, parse_condition
+from .expression import ExpressionType, ParsedCondition, parse_condition
 
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models" / "rules.json"
 
@@ -43,8 +41,6 @@ class Rule:
     # Resolved during setup
     from_entity_idx: t.Optional[int] = None
     to_entity_idx: t.Optional[int] = None
-    from_entity_group: t.Optional[str] = None
-    to_entity_group: t.Optional[str] = None
     output_array: t.Any = None
     source_attributes: dict = field(default_factory=dict)
 
@@ -56,7 +52,11 @@ class RuleValidationError(ValueError):
 
 
 def validate_rule_spec(rule_spec: dict, defaults: t.Optional[dict] = None) -> None:
-    """Validate a rule specification has all required fields.
+    """Validate a rule specification for fields that depend on runtime defaults.
+
+    Basic structural validation (required fields, to_id/to_reference exclusivity)
+    is handled by the JSON schema. This function checks constraints that depend on
+    merged defaults.
 
     :param rule_spec: Rule specification dict
     :param defaults: Default values for from_dataset, to_dataset
@@ -64,27 +64,10 @@ def validate_rule_spec(rule_spec: dict, defaults: t.Optional[dict] = None) -> No
     """
     defaults = defaults or {}
 
-    # Required fields
-    if "if" not in rule_spec:
-        raise RuleValidationError("Rule must have an 'if' condition")
-    if "output" not in rule_spec:
-        raise RuleValidationError("Rule must have an 'output' attribute")
-    if "value" not in rule_spec:
-        raise RuleValidationError("Rule must have a 'value'")
-
     # Must have to_dataset (from spec or defaults)
     to_dataset = rule_spec.get("to_dataset", defaults.get("to_dataset"))
     if not to_dataset:
         raise RuleValidationError("Rule must have a 'to_dataset' (or default)")
-
-    # Must have exactly one of to_id or to_reference
-    has_to_id = "to_id" in rule_spec
-    has_to_ref = "to_reference" in rule_spec
-    if not (has_to_id ^ has_to_ref):
-        raise RuleValidationError("Rule must have exactly one of 'to_id' or 'to_reference'")
-
-    # If condition references attributes, must have from_dataset and from entity
-    # (This is checked during attribute registration)
 
 
 def parse_rule(rule_spec: dict, defaults: t.Optional[dict] = None) -> Rule:
@@ -160,8 +143,9 @@ class Model(TrackedModel, name="rules"):
         )
         super().__init__(config)
         self.rules: list[Rule] = []
-        self.logger: t.Optional[logging.Logger] = None
         self.timeline_info: t.Optional[t.Any] = None
+        self._simtime_thresholds: list[float] = []
+        self._clocktime_thresholds: list[float] = []
         # Cache for loaded dataset data to avoid repeated reads
         self._dataset_cache: dict[str, dict] = {}
 
@@ -182,7 +166,6 @@ class Model(TrackedModel, name="rules"):
         :param init_data_handler: Handler for initial data loading
         :param logger: Logger instance
         """
-        self.logger = logger
         self.timeline_info = settings.timeline_info
 
         # Parse rules from config or load from rules dataset
@@ -192,6 +175,14 @@ class Model(TrackedModel, name="rules"):
         for rule_spec in rules_spec.get("rules", []):
             rule = parse_rule(rule_spec, defaults)
             self.rules.append(rule)
+
+        # Pre-compute time thresholds from all rule conditions
+        for rule in self.rules:
+            for expr_type, value in rule.condition.get_time_thresholds():
+                if expr_type == ExpressionType.SIMTIME:
+                    self._simtime_thresholds.append(value)
+                elif expr_type == ExpressionType.CLOCKTIME:
+                    self._clocktime_thresholds.append(value)
 
         # Register attributes for each rule
         self._register_rule_attributes(state, schema, init_data_handler)
@@ -256,20 +247,17 @@ class Model(TrackedModel, name="rules"):
         :param schema: AttributeSchema for attribute specs
         :param init_data_handler: Handler for loading entity data
         """
-        # Track registered datasets/entity groups
-        registered: dict[tuple[str, str], t.Any] = {}
-
         for rule in self.rules:
             # Register source attributes if needed
             attr_names = rule.condition.get_attribute_names()
             if attr_names and rule.from_dataset:
                 self._register_source_attributes(
-                    rule, attr_names, state, schema, init_data_handler, registered
+                    rule, attr_names, state, schema, init_data_handler
                 )
 
             # Register target attribute
             if rule.to_dataset and rule.output:
-                self._register_target_attribute(rule, state, schema, init_data_handler, registered)
+                self._register_target_attribute(rule, state, schema, init_data_handler)
 
     def _register_source_attributes(
         self,
@@ -278,7 +266,6 @@ class Model(TrackedModel, name="rules"):
         state: TrackedState,
         schema: AttributeSchema,
         init_data_handler: InitDataHandler,
-        registered: dict,
     ) -> None:
         """Register source attributes for a rule's condition.
 
@@ -287,7 +274,6 @@ class Model(TrackedModel, name="rules"):
         :param state: TrackedState instance
         :param schema: AttributeSchema
         :param init_data_handler: Handler for loading entity data
-        :param registered: Dict tracking registered entity groups
         """
         # Find which entity group contains the source entity
         entity_group_name, entity_idx = self._find_entity_group(
@@ -299,40 +285,22 @@ class Model(TrackedModel, name="rules"):
 
         if entity_group_name is None:
             entity_desc = f"id={rule.from_id}" if rule.from_id else f"ref='{rule.from_reference}'"
-            if self.logger:
-                self.logger.warning(
-                    f"Could not find entity group for source entity ({entity_desc}) "
-                    f"in dataset '{rule.from_dataset}'"
-                )
-            return
+            raise RuleValidationError(
+                f"Could not find source entity ({entity_desc}) in dataset '{rule.from_dataset}'"
+            )
 
-        rule.from_entity_group = entity_group_name
         rule.from_entity_idx = entity_idx
-        key = (rule.from_dataset, entity_group_name)
 
-        # Register entity group if not already done
-        if key not in registered:
-            eg = EntityGroup(entity_group_name)
-            state.register_entity_group(rule.from_dataset, eg)
-            registered[key] = eg
-
-        # Register each attribute
+        # Register each attribute (register_attribute auto-creates the entity group entry)
         for attr_name in attr_names:
-            try:
-                attr_spec = schema.get_spec(attr_name, DataType(float))
-                attr = state.register_attribute(
-                    rule.from_dataset,
-                    entity_group_name,
-                    attr_spec,
-                    flags=SUB | OPT,
-                )
-                rule.source_attributes[attr_name] = attr
-            except Exception as e:
-                if self.logger:
-                    self.logger.warning(
-                        f"Could not register attribute '{attr_name}' in dataset "
-                        f"'{rule.from_dataset}', entity group '{entity_group_name}': {e}"
-                    )
+            attr_spec = schema.get_spec(attr_name, DataType(float))
+            attr = state.register_attribute(
+                rule.from_dataset,
+                entity_group_name,
+                attr_spec,
+                flags=SUB | OPT,
+            )
+            rule.source_attributes[attr_name] = attr
 
     def _register_target_attribute(
         self,
@@ -340,7 +308,6 @@ class Model(TrackedModel, name="rules"):
         state: TrackedState,
         schema: AttributeSchema,
         init_data_handler: InitDataHandler,
-        registered: dict,
     ) -> None:
         """Register target attribute for a rule's output.
 
@@ -348,7 +315,6 @@ class Model(TrackedModel, name="rules"):
         :param state: TrackedState instance
         :param schema: AttributeSchema
         :param init_data_handler: Handler for loading entity data
-        :param registered: Dict tracking registered entity groups
         """
         entity_group_name, entity_idx = self._find_entity_group(
             rule.to_dataset,
@@ -359,21 +325,11 @@ class Model(TrackedModel, name="rules"):
 
         if entity_group_name is None:
             entity_desc = f"id={rule.to_id}" if rule.to_id else f"ref='{rule.to_reference}'"
-            if self.logger:
-                self.logger.warning(
-                    f"Could not find entity group for target entity ({entity_desc}) "
-                    f"in dataset '{rule.to_dataset}'"
-                )
-            return
+            raise RuleValidationError(
+                f"Could not find target entity ({entity_desc}) in dataset '{rule.to_dataset}'"
+            )
 
-        rule.to_entity_group = entity_group_name
         rule.to_entity_idx = entity_idx
-        key = (rule.to_dataset, entity_group_name)
-
-        if key not in registered:
-            eg = EntityGroup(entity_group_name)
-            state.register_entity_group(rule.to_dataset, eg)
-            registered[key] = eg
 
         # Determine output attribute type from value
         # Note: Check bool first since bool is subclass of int in Python
@@ -386,20 +342,13 @@ class Model(TrackedModel, name="rules"):
         else:
             dtype = DataType(float)
 
-        try:
-            attr_spec = schema.get_spec(rule.output, dtype)
-            rule.output_array = state.register_attribute(
-                rule.to_dataset,
-                entity_group_name,
-                attr_spec,
-                flags=PUB,
-            )
-        except Exception as e:
-            if self.logger:
-                self.logger.warning(
-                    f"Could not register output attribute '{rule.output}' in dataset "
-                    f"'{rule.to_dataset}', entity group '{entity_group_name}': {e}"
-                )
+        attr_spec = schema.get_spec(rule.output, dtype)
+        rule.output_array = state.register_attribute(
+            rule.to_dataset,
+            entity_group_name,
+            attr_spec,
+            flags=PUB,
+        )
 
     def _find_entity_group(
         self,
@@ -434,25 +383,26 @@ class Model(TrackedModel, name="rules"):
                     return None, None
                 data = path.read_dict()
                 self._dataset_cache[dataset] = data
-            except Exception:
+            except (KeyError, OSError, ValueError, TypeError):
                 return None, None
 
         # Search through entity groups in the dataset
         for key, value in data.get("data", {}).items():
-            if not isinstance(value, dict):
-                continue
-
             # Check if this entity group contains the entity
             ids = value.get("id", {}).get("data", [])
             references = value.get("reference", {}).get("data", [])
 
             if entity_id is not None:
-                if entity_id in ids:
-                    idx = ids.index(entity_id)
+                ids_list = ids.tolist() if hasattr(ids, "tolist") else list(ids)
+                if entity_id in ids_list:
+                    idx = ids_list.index(entity_id)
                     return key, idx
             elif reference is not None:
-                if reference in references:
-                    idx = references.index(reference)
+                refs_list = (
+                    references.tolist() if hasattr(references, "tolist") else list(references)
+                )
+                if reference in refs_list:
+                    idx = refs_list.index(reference)
                     return key, idx
 
         return None, None
@@ -474,57 +424,36 @@ class Model(TrackedModel, name="rules"):
         :returns: Next moment when an update is needed, or None
         :rtype: Optional[Moment]
         """
-        # Use Moment.seconds property for simulation time
         simtime = moment.seconds
 
-        # Calculate clocktime (seconds since midnight) from world_time
         clocktime: t.Optional[float] = None
-        try:
-            # world_time is unix timestamp, convert to datetime
-            world_time = moment.world_time
-            if world_time is not None:
-                dt = datetime.fromtimestamp(world_time, tz=timezone.utc)
-                clocktime = float(dt.hour * 3600 + dt.minute * 60 + dt.second)
-        except (AttributeError, TypeError, OSError):
-            # If world_time not available or invalid, clocktime remains None
-            pass
+        dt = moment.datetime
+        if dt is not None:
+            clocktime = float(dt.hour * 3600 + dt.minute * 60 + dt.second)
 
         for rule in self.rules:
-            self._evaluate_rule(rule, state, simtime, clocktime)
+            self._evaluate_rule(rule, simtime, clocktime)
 
-        return None
+        return self._next_trigger(simtime, clocktime)
 
     def _evaluate_rule(
         self,
         rule: Rule,
-        state: TrackedState,
         simtime: float,
         clocktime: t.Optional[float],
     ) -> None:
         """Evaluate a single rule and apply its output.
 
         :param rule: Rule to evaluate
-        :param state: TrackedState instance
         :param simtime: Simulation time in seconds
         :param clocktime: Clock time in seconds since midnight
         """
-        if rule.output_array is None:
-            return
-
-        # Gather source attribute values
+        # Gather source attribute values; skip rule if any are undefined
         attributes: dict[str, t.Any] = {}
         for attr_name, attr in rule.source_attributes.items():
-            if attr is not None and attr.is_initialized():
-                data = attr.array
-                if rule.from_entity_idx is None:
-                    # Entity index should have been resolved during setup
-                    if self.logger:
-                        self.logger.warning(
-                            f"Source entity index not resolved for attribute '{attr_name}'"
-                        )
-                    continue
-                if rule.from_entity_idx < len(data):
-                    attributes[attr_name] = data[rule.from_entity_idx]
+            if not attr.has_data():
+                return
+            attributes[attr_name] = attr.array[rule.from_entity_idx]
 
         # Evaluate condition
         result = rule.condition.evaluate(
@@ -534,25 +463,41 @@ class Model(TrackedModel, name="rules"):
         )
 
         # Apply output value
-        if not rule.output_array.is_initialized():
-            return
-
-        if rule.to_entity_idx is None:
-            # Entity index should have been resolved during setup
-            if self.logger:
-                self.logger.warning(f"Target entity index not resolved for output '{rule.output}'")
-            return
-
         output_data = rule.output_array.array
-        if rule.to_entity_idx >= len(output_data):
-            if self.logger:
-                self.logger.warning(
-                    f"Target entity index {rule.to_entity_idx} out of bounds "
-                    f"for output '{rule.output}' (array length: {len(output_data)})"
-                )
-            return
-
         if result:
             output_data[rule.to_entity_idx] = rule.value
         elif rule.else_value is not None:
             output_data[rule.to_entity_idx] = rule.else_value
+
+    def _next_trigger(
+        self,
+        simtime: float,
+        clocktime: t.Optional[float],
+    ) -> t.Optional[Moment]:
+        """Compute the next Moment when a time-based condition would trigger.
+
+        :param simtime: Current simulation time in seconds
+        :param clocktime: Current clock time in seconds since midnight
+        :returns: Next trigger Moment, or None if no time thresholds
+        :rtype: Optional[Moment]
+        """
+        candidates: list[float] = []
+
+        # Next simtime threshold strictly greater than current simtime
+        future_simtimes = [th for th in self._simtime_thresholds if th > simtime]
+        if future_simtimes:
+            candidates.append(min(future_simtimes))
+
+        # Next clocktime threshold, converted to simtime
+        if clocktime is not None and self._clocktime_thresholds:
+            future_clocks = [th for th in self._clocktime_thresholds if th > clocktime]
+            if future_clocks:
+                delta = min(future_clocks) - clocktime
+            else:
+                # Wrap to next day
+                delta = (86400 - clocktime) + min(self._clocktime_thresholds)
+            candidates.append(simtime + delta)
+
+        if not candidates:
+            return None
+        return Moment.from_seconds(min(candidates), self.timeline_info)

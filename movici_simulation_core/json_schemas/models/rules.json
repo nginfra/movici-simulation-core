@@ -36,10 +36,14 @@
     "rule": {
       "type": "object",
       "required": ["if", "output", "value"],
+      "oneOf": [
+        {"required": ["to_id"]},
+        {"required": ["to_reference"]}
+      ],
       "properties": {
         "if": {
           "type": "string",
-          "description": "Condition expression that triggers the rule (e.g. '<simtime> >= 1h', 'level > 10 & status == true')"
+          "description": "Condition expression that triggers the rule (e.g. '<simtime> >= 1h', 'level > 10 && status == true')"
         },
         "from_dataset": {
           "type": "string",
@@ -75,7 +79,7 @@
           "description": "Value to set when condition is true"
         },
         "else_value": {
-          "description": "Value to set when condition is false"
+          "description": "Value to set when condition is false (if omitted, value is unchanged when condition is false)"
         }
       },
       "additionalProperties": false
