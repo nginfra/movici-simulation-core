@@ -78,7 +78,6 @@ DrinkingWater_FlowRate_Magnitude = AttributeSpec(
     "drinking_water.flow_rate.magnitude", data_type=DataType(float)
 )
 DrinkingWater_Velocity = AttributeSpec("drinking_water.velocity", data_type=DataType(float))
-DrinkingWater_Headloss = AttributeSpec("drinking_water.headloss", data_type=DataType(float))
 
 # =============================================================================
 # Drinking water attributes - Pumps

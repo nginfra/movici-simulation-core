@@ -26,7 +26,6 @@ from .attributes import (
     DrinkingWater_Head,
     DrinkingWater_HeadCurve,
     DrinkingWater_HeadFactor,
-    DrinkingWater_Headloss,
     DrinkingWater_Level,
     DrinkingWater_LinkStatus,
     DrinkingWater_MaxLevel,
@@ -170,7 +169,6 @@ class WaterPipeEntity(WaterLinkEntity):
 
     # PUB attributes
     velocity = field(DrinkingWater_Velocity, flags=PUB)
-    headloss = field(DrinkingWater_Headloss, flags=PUB)
 
 
 class WaterPumpEntity(WaterLinkEntity):
