@@ -89,23 +89,10 @@ requires the ``mod_spatialite`` sqlite extension.
 Development
 -----------
 
-If you want to develop on this package, you can following the same steps above depending of your operating system with one exception, **install** ``movici-simulation-core`` **package in editable mode.** This allows you to make changes to the code and have them reflected immediately without needing to reinstall the package.
-
-
-On Windows and Linux
-#####################
+If you want to develop on this package, you can following the steps above for your operating system. Then,
+clone the repository and install it in editable mode with the following command:
 
 .. code-block:: bash
-
-  git clone https://github.com/nginfra/movici-simulation-core.git
-  pip install -e .[dev,models]
-
-On MacOS
-#####################
-
-.. code-block:: bash
-
-  # After installing dependencies and configuring environment variables, the final step should be:
 
   git clone https://github.com/nginfra/movici-simulation-core.git
   pip install -e .[dev,models]
