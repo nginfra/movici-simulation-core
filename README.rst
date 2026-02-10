@@ -61,8 +61,7 @@ The traffic assignment model uses ``aequilibrae`` to perform traffic assignment.
 requires the ``mod_spatialite`` sqlite extension. 
 
 - On Debian based Linux (eg. Ubuntu) this can be done using ``apt-get install libsqlite3-mod-spatialite``. 
-- On Windows, please follow the 
-`official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
+- On Windows, please follow the `official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
 - On MacOS, this can be done using the ``llvm`` compiler. Please follow the instructions below:
 
   1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
