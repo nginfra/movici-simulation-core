@@ -111,6 +111,17 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
         ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
     ]
 
+    # This model has as PUB|INIT attribute (the demand_attribute). On initialization it reads
+    # the initial demand matrix, and on update it publishes on that attribute. This means that
+    # at t=0 the demand attribute has changes (coming from the init data), but the model may not
+    # produce any changes. With the default behaviour, the changes from the init data are
+    # reset after the TrackedModelAdapter reads the TrackedState, so the init data changes
+    # are included in the update. For this model, this is not the desired behaviour. In order
+    # to catch this, the model needs to be in control when the SUBSCRIBE changes are reset,
+    # namely after we have entered the update method, but before the update method produces
+    # any changes.
+    #
+    # We only want to automatically reset PUBLISH changes
     auto_reset = PUBLISH
 
     demand_estimation: DemandEstimation
@@ -273,8 +284,10 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             demand_matrix, self.update_count == 0, moment=moment
         )
 
-        # Reset SUBSCRIBE before we publish results, so that all tracked changes are attributed to
-        # our model's calculation
+        # Reset SUBSCRIBE before we publish results, so that if we don't have any changes
+        # the demand_attribute is reset and no changes are published, but if we do have changes
+        # those changes are the only ones that will end up in the update produced by
+        # TrackedModelAdapter
         state.reset_tracked_changes(SUBSCRIBE)
 
         self._demand_attribute.csr.update_from_matrix(updated)
