@@ -104,7 +104,7 @@ update method:
       def setup(self, state):
           self.attr = state.register_attribute(
                 dataset_name="mydataset",
-                entity_name="my_entity_group,
+                entity_name="my_entity_group",
                 spec=AttributeSpec("my.attribute", data_type=float),
                 flags=PUB|INIT,
             )
