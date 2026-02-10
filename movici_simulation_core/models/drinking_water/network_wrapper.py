@@ -12,9 +12,13 @@ import typing as t
 import numpy as np
 import wntr
 
+from movici_simulation_core.core.entity_group import EntityGroup
+
 from .dataset import (
     DrinkingWaterNetwork,
     WaterJunctionEntity,
+    WaterLinkEntity,
+    WaterNodeEntity,
     WaterPipeEntity,
     WaterPumpEntity,
     WaterReservoirEntity,
@@ -24,7 +28,9 @@ from .dataset import (
 
 logger = logging.getLogger(__name__)
 
-T = t.TypeVar("T")
+T = t.TypeVar("T", bound=EntityGroup)
+N = t.TypeVar("N", bound=WaterNodeEntity)
+L = t.TypeVar("L", bound=WaterLinkEntity)
 
 
 def _extract_csr_curve(csr_attribute, idx: int) -> t.Optional[np.ndarray]:
@@ -81,7 +87,7 @@ class WNTRElementProcessor(t.Generic[T]):
         pass
 
 
-class NodeProcessor(WNTRElementProcessor[T]):
+class NodeProcessor(WNTRElementProcessor[N]):
     """Base for node processors that write head & pressure.
 
     Subclasses must define ``PREFIX`` (e.g. ``"J"`` for junctions).
@@ -98,12 +104,24 @@ class NodeProcessor(WNTRElementProcessor[T]):
         if not size:
             return
         end = df_offset + size
+
+        self._write_common_results(results, df_begin=df_offset, df_end=end)
+        self._write_results(results, df_begin=df_offset, df_end=end)
+
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        eg = self.entity_group
         # the slicing assignment ([:]) is needed to maintain change tracking
-        eg.head.array[:] = results.node["head"].iloc[-1].values[df_offset:end]
-        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_offset:end]
+        eg.head.array[:] = results.node["head"].iloc[-1].values[df_begin:df_end]
+        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_begin:df_end]
+        eg.demand.array[:] = results.node["demand"].iloc[-1].values[df_begin:df_end]
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        pass
 
 
-class LinkProcessor(WNTRElementProcessor[T]):
+class LinkProcessor(WNTRElementProcessor[L]):
     """Base for link processors that write flow, flow_rate_magnitude, link_status.
 
     Subclasses must define ``PREFIX`` (e.g. ``"P"`` for pipes).
@@ -137,14 +155,22 @@ class LinkProcessor(WNTRElementProcessor[T]):
         if not size:
             return
         end = df_offset + size
+        self._write_common_results(results, df_begin=df_offset, df_end=end)
+        self._write_results(results, df_begin=df_offset, df_end=end)
+
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
         # the slicing assignment ([:]) is needed to maintain change tracking
-        flows = results.link["flowrate"].iloc[-1].values[df_offset:end]
-        eg.flow.array[:] = flows
-        eg.flow_rate_magnitude.array[:] = np.abs(flows)
-        if "status" in results.link:
-            eg.link_status.array[:] = (
-                results.link["status"].iloc[-1].values[df_offset:end].astype(int)
-            )
+        flows = results.link["flowrate"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.flow.array[:] = flows
+        self.entity_group.flow_rate_magnitude.array[:] = np.abs(flows)
+        self.entity_group.link_status.array[:] = (
+            results.link["status"].iloc[-1].values[df_begin:df_end].astype(int)
+        )
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -209,16 +235,6 @@ class JunctionProcessor(NodeProcessor[WaterJunctionEntity]):
                 demand *= float(eg.demand_factor.array[idx])
             junction.demand_timeseries_list[0].base_value = demand
 
-    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
-        eg = self.entity_group
-        size = len(eg)
-        if not size:
-            return
-        end = df_offset + size
-        eg.head.array[:] = results.node["head"].iloc[-1].values[df_offset:end]
-        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_offset:end]
-        eg.demand.array[:] = results.node["demand"].iloc[-1].values[df_offset:end]
-
 
 class TankProcessor(NodeProcessor[WaterTankEntity]):
     PREFIX = "T"
@@ -271,17 +287,9 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
             if overflow_defined is not None and overflow_defined[idx]:
                 self.wn.get_node(name).overflow = bool(eg.overflow.array[idx])
 
-    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
-        eg = self.entity_group
-        size = len(eg)
-        if not size:
-            return
-        end = df_offset + size
-        heads = results.node["head"].iloc[-1].values[df_offset:end]
-        eg.head.array[:] = heads
-        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_offset:end]
-        eg.demand.array[:] = results.node["demand"].iloc[-1].values[df_offset:end]
-        eg.level.array[:] = heads - eg.elevation.array
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        heads = results.node["head"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.level.array[:] = heads - self.entity_group.elevation.array
 
 
 class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
@@ -326,17 +334,11 @@ class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
                 head *= float(eg.head_factor.array[idx])
             reservoir.base_head = head
 
-    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
-        eg = self.entity_group
-        size = len(eg)
-        if not size:
-            return
-        end = df_offset + size
-        eg.head.array[:] = results.node["head"].iloc[-1].values[df_offset:end]
-        demands = results.node["demand"].iloc[-1].values[df_offset:end]
-        eg.demand.array[:] = demands
-        eg.flow.array[:] = -demands
-        eg.flow_rate_magnitude.array[:] = np.abs(demands)
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        demands = results.node["demand"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.demand.array[:] = demands
+        self.entity_group.flow.array[:] = -demands
+        self.entity_group.flow_rate_magnitude.array[:] = np.abs(demands)
 
 
 # ---------------------------------------------------------------------------
@@ -400,17 +402,9 @@ class PipeProcessor(LinkProcessor[WaterPipeEntity]):
                 else wntr.network.LinkStatus.Closed
             )
 
-    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
-        super().write_results(results, df_offset)
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
         eg = self.entity_group
-        size = len(eg)
-        if not size:
-            return
-        end = df_offset + size
-        if "velocity" in results.link:
-            eg.velocity.array[:] = results.link["velocity"].iloc[-1].values[df_offset:end]
-        if "headloss" in results.link:
-            eg.headloss.array[:] = results.link["headloss"].iloc[-1].values[df_offset:end]
+        eg.velocity.array[:] = results.link["velocity"].iloc[-1].values[df_begin:df_end]
 
 
 class PumpProcessor(LinkProcessor[WaterPumpEntity]):

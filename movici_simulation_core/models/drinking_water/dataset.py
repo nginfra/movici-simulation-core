@@ -56,9 +56,9 @@ from .attributes import (
 class WaterNodeEntity(PointEntity):
     """Base class for water network node entities with common output attributes."""
 
-    elevation = field(Geometry_Z, flags=INIT)
     pressure = field(DrinkingWater_Pressure, flags=PUB)
     head = field(DrinkingWater_Head, flags=PUB)
+    demand = field(DrinkingWater_Demand, flags=PUB)
 
 
 class WaterLinkEntity(LinkEntity):
@@ -69,7 +69,9 @@ class WaterLinkEntity(LinkEntity):
     link_status = field(DrinkingWater_LinkStatus, flags=PUB)
 
 
-class WaterJunctionEntity(WaterNodeEntity):
+class WaterJunctionEntity(
+    WaterNodeEntity,
+):
     """Water network junctions (demand nodes).
 
     Junctions are nodes in the drinking water network. They connect pipes
@@ -80,15 +82,13 @@ class WaterJunctionEntity(WaterNodeEntity):
 
     # INIT attributes
     base_demand = field(DrinkingWater_BaseDemand, flags=INIT)
+    elevation = field(Geometry_Z, flags=INIT)
 
     # OPT attributes
     demand_factor = field(DrinkingWater_DemandFactor, flags=OPT)
     minimum_pressure = field(DrinkingWater_MinimumPressure, flags=OPT)
     required_pressure = field(DrinkingWater_RequiredPressure, flags=OPT)
     pressure_exponent = field(DrinkingWater_PressureExponent, flags=OPT)
-
-    # PUB attributes
-    demand = field(DrinkingWater_Demand, flags=PUB)
 
 
 class WaterTankEntity(WaterNodeEntity):
@@ -104,6 +104,8 @@ class WaterTankEntity(WaterNodeEntity):
     """
 
     __entity_name__ = "water_tank_entities"
+
+    elevation = field(Geometry_Z, flags=INIT)
 
     # OPT attributes - either diameter group OR volume_curve group
     # Cylindrical tank attributes
@@ -121,11 +123,8 @@ class WaterTankEntity(WaterNodeEntity):
     # INIT|PUB attributes - initial value required, then published
     level = field(DrinkingWater_Level, flags=INIT | PUB)
 
-    # PUB attributes
-    demand = field(DrinkingWater_Demand, flags=PUB)
 
-
-class WaterReservoirEntity(PointEntity):
+class WaterReservoirEntity(WaterNodeEntity):
     """Water reservoirs (infinite head sources).
 
     A reservoir is a tank that never empties. It has a fixed head which
@@ -146,7 +145,6 @@ class WaterReservoirEntity(PointEntity):
 
     # PUB attributes
     head = field(DrinkingWater_Head, flags=PUB)
-    demand = field(DrinkingWater_Demand, flags=PUB)
     flow = field(DrinkingWater_Flow, flags=PUB)
     flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
 
