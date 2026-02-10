@@ -25,7 +25,34 @@ from .entities import CorridorEntity, CorridorTransportSegmentEntity, DemandNode
 
 
 class Model(TrackedModel, name="corridor"):
-    """Implementation of the corridor model"""
+    """Aggregate transport KPIs for defined corridor routes.
+
+    The corridor model computes aggregated transport indicators along predefined
+    routes (corridors) connecting origin and destination nodes. For each corridor,
+    it calculates shortest paths and aggregates flow, emissions, and congestion
+    metrics weighted by demand.
+
+    Computed metrics include:
+
+    - Passenger and cargo flow (in passengers/tons)
+    - Passenger car units (PCU)
+    - CO2 and NOx emissions
+    - Energy consumption
+    - Travel time (demand-weighted average)
+    - Maximum delay factor and volume-to-capacity ratio
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``corridors``: Dataset name containing corridor definitions
+        - ``modality``: Transport mode (``"roads"``, ``"waterways"``, ``"tracks"``)
+        - ``dataset``: Transport network dataset name
+        - ``cargo_pcu`` (optional): PCU factor for cargo vehicles (default: 2.0)
+        - ``publish_corridor_geometry`` (optional): Publish route geometry
+
+    :param _corridor_entity: Entity group for corridor definitions
+    :param _transport_segments: Entity group for transport network links
+    :param _project: Aequilibrae project wrapper for path calculations
+    """
 
     epsilon = 1e-12
 

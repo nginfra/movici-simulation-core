@@ -17,13 +17,30 @@ from .entities import FlowEntityGroup, ODEntityGroup
 
 
 class Model(TrackedModel, name="unit_conversions"):
-    """
-    Implementation of the unit conversions model.
-    Reads a csv with coefficients.
-    Turns values in _vehicles into tons or passengers.
+    """Convert vehicle counts to cargo tonnage and passenger numbers.
 
-    Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
+    The unit conversions model transforms vehicle-based flow measurements into
+    meaningful physical quantities (tons for cargo, persons for passengers) using
+    time-varying coefficients from a CSV parameter file.
+
+    Conversion factors include vehicle load capacities, fleet composition shares,
+    and effective load factors for different transport modalities (roads, waterways).
+
+    Reference: Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``parameters_dataset``: CSV dataset with conversion coefficients
+        - ``conversions``: List of conversion specifications, each with:
+
+          - ``class``: Conversion type (``"flow"`` or ``"od"``)
+          - ``modality``: Transport mode (``"roads"`` or ``"waterways"``)
+          - ``entity_group``: ``[dataset_name, entity_group_name]``
+
+    :param flow_entities: List of entity groups for flow conversions
+    :param od_entities: List of entity groups for OD conversions
+    :param coefficients_tape: CSV tape reader for conversion coefficients
     """
 
     flow_entities: t.List[FlowEntityGroup]

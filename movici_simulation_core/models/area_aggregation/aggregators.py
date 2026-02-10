@@ -69,6 +69,17 @@ def func_integral_days(previous_source, weights, dt, previous_target, **_) -> np
 
 
 class AttributeAggregator:
+    """Aggregates values from source entities to target areas.
+
+    :param source: Source attribute to aggregate
+    :param target: Target attribute to store aggregated values
+    :param func: Name of the aggregation function
+    :param mapping: Query result mapping source to target indices
+    :param default_special_value: Value to use when no special value is defined
+    :param weights: Array of weights for each source entity
+    :param previous_source: Previous source values for time-history functions
+    """
+
     def __init__(
         self,
         source: UniformAttribute,

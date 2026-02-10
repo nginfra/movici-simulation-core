@@ -15,8 +15,28 @@ from .time_window_status import TimeWindowStatus
 
 
 class Model(TrackedModel, name="time_window_status"):
-    """
-    Implementation of the time window status model
+    """Set boolean status attributes based on time windows.
+
+    This model activates/deactivates target entities based on time windows
+    defined in source entities. Time windows are specified using begin and
+    end timestamp attributes (ISO 8601 formatted strings).
+
+    When the simulation time enters a time window, the target status becomes
+    ``True``. When the time exits, the status becomes ``False``.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``source``: ``[dataset_name, entity_group_name]`` for source entities
+        - ``time_window_begin``: Attribute name for window start time
+        - ``time_window_end``: Attribute name for window end time
+        - ``targets``: List of target configurations, each with:
+
+          - ``entity_group``: ``[dataset_name, entity_group_name]``
+          - ``attribute``: Boolean attribute to set on target entities
+
+    :param time_window_status: The time window status calculator
+    :param source_entity_group: Source entity group with time window definitions
+    :param target_entity_groups: List of target entity groups
     """
 
     time_window_status: TimeWindowStatus

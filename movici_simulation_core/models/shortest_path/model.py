@@ -24,6 +24,35 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class ShortestPathModel(TrackedModel, name="shortest_path"):
+    """Compute aggregated values along shortest paths in a transport network.
+
+    This model calculates the sum or weighted average of link attributes along
+    shortest paths between origin-destination pairs. It supports both all-pairs
+    computation (N×N matrix output) and single-source computation (1D array output).
+
+    :param model_config: Model configuration dictionary with the following keys:
+
+        - ``transport_segments``: ``[dataset_name, entity_group_name]`` specifying
+          the transport segments to use for pathfinding
+        - ``cost_factor``: Attribute name used as edge weights for pathfinding
+        - ``calculations``: List of calculation configurations, each with:
+
+          - ``type``: ``"sum"`` or ``"weighted_average"``
+          - ``input``: Source attribute to aggregate along paths
+          - ``output``: Target attribute for results
+          - ``single_source_entity_id`` (optional): Entity ID for single-source mode
+          - ``single_source_entity_reference`` (optional): Entity reference for
+            single-source mode
+
+        - ``no_update_shortest_path`` (optional): If True, paths are computed once
+          and reused (default: False)
+
+    :param cost_factor: The attribute used as edge weights for shortest path computation
+    :param network: The network object used for pathfinding
+    :param calculators: List of calculator objects performing the aggregations
+    :param no_update_shortest_path: Whether to skip recomputing paths on updates
+    """
+
     cost_factor: UniformAttribute
     entity_groups: NetworkEntities
     network: t.Optional[Network] = None
@@ -136,6 +165,16 @@ class ShortestPathModel(TrackedModel, name="shortest_path"):
 
 @dataclasses.dataclass
 class NetworkCalculator:
+    """Base class for shortest path aggregation calculators.
+
+    :param input_attribute: Source attribute to aggregate along paths
+    :param output_attribute: Target attribute for storing results
+    :param single_source_entity_resolver: Optional callable to resolve single-source entity
+    :param network: The network object used for pathfinding
+    :param source_entity: Resolved source entity ID for single-source mode
+    :param no_path_found: Value to use when no path exists between nodes
+    """
+
     input_attribute: UniformAttribute
     output_attribute: t.Union[CSRAttribute, UniformAttribute]
     single_source_entity_resolver: t.Optional[t.Callable[[], int]] = None
@@ -144,6 +183,10 @@ class NetworkCalculator:
     no_path_found: t.Optional[int] = dataclasses.field(init=False, default=None)
 
     def initialize(self, network: Network):
+        """Initialize the calculator with a network.
+
+        :param network: The network object to use for pathfinding
+        """
         self.network = network
         if self.single_source_entity_resolver is not None:
             self.source_entity = self.single_source_entity_resolver()
@@ -156,6 +199,8 @@ class NetworkCalculator:
 
 
 class SumCalculator(NetworkCalculator):
+    """Calculator that sums input attribute values along shortest paths."""
+
     def update(self, weights=None):
         if self.source_entity is None:
             return self.update_for_all_sources()
@@ -175,6 +220,11 @@ class SumCalculator(NetworkCalculator):
 
 
 class WeightedAverageCalculator(NetworkCalculator):
+    """Calculator that computes weighted average of input values along shortest paths.
+
+    The weights are determined by the cost factor attribute used for pathfinding.
+    """
+
     def update(self, weights=None):
         if self.source_entity is None:
             return self.update_for_all_sources(weights)

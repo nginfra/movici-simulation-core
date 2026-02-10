@@ -32,7 +32,38 @@ class AggregatorConfig(t.TypedDict):
 
 
 class Model(TrackedModel, name="area_aggregation"):
-    """Implementation of the area aggregation model"""
+    """Aggregate attribute values from source entities to target polygon areas.
+
+    This model aggregates values from source entities (points, lines, or polygons)
+    to target polygon areas using spatial intersection. Source entities that fall
+    within or intersect target polygons contribute to the aggregated value.
+
+    Supported aggregation functions:
+
+    - ``min``, ``max``: Minimum/maximum value within each target area
+    - ``average``: Weighted average (weights based on entity overlap)
+    - ``sum``: Weighted sum of source values
+    - ``integral``, ``integral_seconds/minutes/hours/days``: Time-cumulative values
+
+    :param config: Model configuration dictionary with the following keys:
+
+        - ``target_entity_group``: ``[dataset_name, entity_group_name]`` for target
+          polygon entities
+        - ``aggregations``: List of aggregation configurations, each with:
+
+          - ``source_entity_group``: ``[dataset_name, entity_group_name]``
+          - ``source_attribute``: Attribute to aggregate from source entities
+          - ``target_attribute``: Attribute to store results
+          - ``function``: Aggregation function name
+          - ``source_geometry``: One of ``"point"``, ``"line"``, ``"polygon"``
+
+        - ``output_interval`` (optional): Interval in seconds between outputs
+
+    :param output_interval: Time interval between model outputs in seconds
+    :param aggregators: List of AttributeAggregator instances
+    :param target_entity: The target polygon entity group
+    :param src_entities: List of source entity groups
+    """
 
     output_interval: t.Optional[int]
     aggregators: t.List[AttributeAggregator]

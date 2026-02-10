@@ -63,6 +63,30 @@ class GJTTrackSegmentEntity(TransportSegmentEntity):
 
 
 class GJTModel(TrackedModel, name="generalized_journey_time"):
+    """Calculate generalized journey time for railway passenger transport.
+
+    The generalized journey time (GJT) model computes the perceived travel time
+    for rail passengers, accounting for in-vehicle time, waiting time, and
+    crowdedness penalties. The GJT formula is:
+
+    .. math:: GJT = w \\cdot TT + \\frac{f}{2 \\cdot freq}
+
+    where:
+
+    - ``w`` is the crowdedness factor (increases with passenger load)
+    - ``TT`` is the in-vehicle travel time from shortest path calculation
+    - ``f`` is the waiting time penalty factor (default: 1.5)
+    - ``freq`` is the train frequency
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``transport_segments``: ``[dataset_name, entity_group_name]`` for tracks
+        - ``travel_time`` (optional): Attribute name for travel time input
+
+    :param _calculator: GJT calculator instance
+    :param _network_entities: Registered network entity groups
+    """
+
     _transport_nodes: t.Optional[PointEntity] = None
     _transport_segments: t.Optional[TransportSegmentEntity] = None
     _demand_nodes: t.Optional[TrackDemandNodeEntity] = None

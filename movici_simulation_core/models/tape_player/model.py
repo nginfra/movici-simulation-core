@@ -22,6 +22,25 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class Model(TrackedModel, name="tape_player"):
+    """Replay pre-recorded time-series data during a simulation.
+
+    The tape player reads data from tape files (JSON or msgpack format) and
+    publishes the recorded attribute values at their designated timestamps.
+
+    Tape files must contain a ``data`` section with:
+
+    - ``tabular_data_name``: Name of the target dataset
+    - ``time_series``: List of timestamps in seconds
+    - ``data_series``: List of data updates, one per timestamp
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``tabular``: Name of the tape file dataset, or a list of tape file names
+
+    :param timeline: Time series of scheduled data updates
+    :param pub_attributes: Set of attributes that will be published
+    """
+
     timeline: t.Optional[TimeSeries[dict]] = None
 
     def __init__(self, model_config: dict):

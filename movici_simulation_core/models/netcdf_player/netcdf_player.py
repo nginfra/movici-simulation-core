@@ -17,6 +17,29 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class NetCDFPlayer(TrackedModel, name="netcdf_player"):
+    """Replay time-series data from NetCDF files during a simulation.
+
+    The NetCDF player reads multi-dimensional scientific data from NetCDF files
+    and publishes variable values to entity attributes at each timestep. This is
+    commonly used for playing back pre-computed flooding data or other spatial
+    time-series datasets.
+
+    The NetCDF file must have a ``time`` variable containing timestamps, and
+    additional variables with data indexed by time.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``netcdf_tape``: Name of the NetCDF dataset
+        - ``entity_group``: ``[dataset_name, entity_group_name]`` for target entities
+        - ``attributes``: List of attribute mappings, each with:
+
+          - ``source``: Variable name in the NetCDF file
+          - ``target``: Attribute name to publish the value to
+
+    :param netcdf_tape: The NetCDF tape reader instance
+    :param publishers: List of publisher instances for each attribute mapping
+    """
+
     publishers: t.List[Publisher]
     netcdf_tape: NetCDFTape
 

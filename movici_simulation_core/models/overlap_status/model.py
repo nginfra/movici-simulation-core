@@ -16,8 +16,26 @@ from .overlap_status import OverlapStatus
 
 
 class Model(TrackedModel, name="overlap_status"):
-    """
-    Implementation of the overlap status model
+    """Detect spatial proximity between source and target entities.
+
+    This model finds entity pairs within a specified distance threshold and
+    publishes overlap records to a dedicated output dataset. Overlap status
+    is updated based on optional status attributes on source and target entities.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``output_dataset``: Dataset name for overlap records
+        - ``source``: Source entity configuration with:
+
+          - ``entity_group``: ``[dataset_name, entity_group_name]``
+          - ``geometry``: ``"point"``, ``"line"``, or ``"polygon"``
+          - ``status_attribute`` (optional): Boolean attribute for active status
+
+        - ``targets``: List of target configurations (same structure as source)
+        - ``distance_threshold`` (optional): Maximum distance for overlap detection
+        - ``display_name_template`` (optional): Template for overlap display names
+
+    :param overlap_status: The overlap status calculator
     """
 
     overlap_status: t.Union[OverlapStatus, None] = None

@@ -45,13 +45,48 @@ DEFAULT_CSR_DATA_TYPE = DataType(float, (), True)
 
 
 class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
-    """
-    Implementation of the demand estimation model.
-    Reads a csv with scenario parameters.
-    Calculates changes in the od matrices based on change of scenario parameters in time.
+    """Calculate dynamic origin-destination demand matrices.
 
-    Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
+    The traffic demand calculation model estimates how transport demand changes
+    over time based on global and local factors. It modifies OD matrices using
+    elasticity-based formulas that respond to changes in scenario parameters
+    (global effects) and spatial attributes (local effects).
+
+    **Global Effects**: Apply uniform multipliers across the entire demand matrix
+    based on scenario parameters (e.g., GDP, energy prices) with specified elasticities.
+
+    **Local Effects**: Apply spatially-varying multipliers based on:
+
+    - ``nearest``: Uses attribute values from the nearest entity to each demand node
+    - ``route``: Uses shortest-path accumulated values between OD pairs
+
+    The demand update formula for global parameters is:
+
+    .. math::
+
+        F = \\left(\\frac{P_n}{P_{n-1}}\\right)^{2\\eta}
+
+    where :math:`P` is the parameter value, :math:`n` is the timestep, and
+    :math:`\\eta` is the elasticity.
+
+    Reference: Asgarpour, S., Konstantinos, K., Hartmann, A., and Neef, R. (2021).
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``demand_path``: ``[dataset, entity_group, attribute]`` for demand matrix
+        - ``parameter_dataset`` (optional): CSV dataset with scenario parameters
+        - ``global_parameters`` (optional): List of global parameter configs
+        - ``local_parameters`` (optional): List of local parameter configs
+        - ``scenario_multipliers`` (optional): Direct multiplier parameter names
+        - ``investment_multipliers`` (optional): Time-triggered demand multipliers
+        - ``total_inward_demand_attribute`` (optional): Output for row sums
+        - ``total_outward_demand_attribute`` (optional): Output for column sums
+        - ``max_iterations`` (optional): Maximum updates per timestep
+        - ``rtol``, ``atol`` (optional): Convergence tolerances
+
+    :param demand_estimation: The demand estimation calculator
+    :param _demand_attribute: CSR attribute for the OD demand matrix
     """
 
     auto_reset = PUBLISH

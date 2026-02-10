@@ -34,6 +34,27 @@ MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/operational_status.json"
 
 
 class OperationalStatus(TrackedModel, name="operational_status"):
+    """Calculate operational status effects from external hazards.
+
+    The operational status model computes the impact of hazards (such as flooding)
+    on infrastructure entities. For flooding, it calculates water depth at each
+    entity location based on water height data from a flooding grid.
+
+    The model uses spatial queries to map flooding cells to target entity locations
+    and computes the maximum water depth considering entity elevation.
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``entity_group``: ``[dataset_name, entity_group_name]`` for target entities
+        - ``geometry``: Target geometry type (``"point"``, ``"line"``, ``"polygon"``)
+        - ``flooding`` (optional): Flooding configuration with:
+
+          - ``flooding_cells``: ``[dataset_name, entity_group_name]`` for grid cells
+          - ``flooding_points``: ``[dataset_name, entity_group_name]`` for grid points
+
+    :param modules: List of active status calculation modules
+    """
+
     def __init__(self, model_config: dict):
         model_config = ensure_valid_config(
             model_config,

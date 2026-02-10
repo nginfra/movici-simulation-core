@@ -22,6 +22,28 @@ from movici_simulation_core.validate import ensure_valid_config
 
 
 class UDFModel(TrackedModel, name="udf"):
+    """Apply user-defined functions to compute derived attributes.
+
+    The UDF model allows defining custom mathematical expressions that operate
+    on entity attributes. Expressions can use arithmetic operators (``+``, ``-``,
+    ``*``, ``/``), comparison operators (``==``, ``!=``, ``<``, ``>``, ``<=``,
+    ``>=``), and built-in functions (``sum``, ``min``, ``max``, ``default``, ``if``).
+
+    :param model_config: Configuration dictionary with the following keys:
+
+        - ``entity_group``: ``[dataset_name, entity_group_name]`` for the target
+        - ``inputs``: Dictionary mapping variable names to attribute names
+        - ``functions``: List of function definitions, each with:
+
+          - ``expression``: Mathematical expression using input variable names
+          - ``output``: Target attribute name for the computed result
+
+        - ``optional`` (optional): List of input variable names that are optional
+
+    :param inputs: Dictionary of registered input attributes
+    :param udfs: List of compiled UDF instances
+    """
+
     inputs: t.Dict[str, AttributeObject]
     udfs: t.List[UDF]
 
