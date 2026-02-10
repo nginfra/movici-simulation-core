@@ -135,7 +135,7 @@ def test_from_dict_lookup_dataset_type(lookup, dataset, type, expected):
     ],
 )
 def test_validate(schema, instance):
-    assert len(validate_and_process(instance, schema=schema)) == 1
+    assert len(validate_and_process(instance, schema=schema)[0]) == 1
 
 
 _valid_entries = [
@@ -171,7 +171,7 @@ def test_valid_movici_types(do_validate_and_process, entry):
     ),
 )
 def test_movici_type_path(do_validate_and_process, entry, expected):
-    instances = do_validate_and_process(entry)
+    instances = do_validate_and_process(entry)[0]
     assert instances == expected
 
 
@@ -258,9 +258,11 @@ def test_validate_and_migrate_config_converts_config():
         }
     )
 
-    newer_schema = {
-        "dataset_newer": {"type": "string"},
-    }
+    newer_schema = _simple_schema(
+        {
+            "dataset_newer": {"type": "string"},
+        }
+    )
 
     def convert_to_new(old_config: dict):
         return {"dataset_new": old_config["dataset"]}

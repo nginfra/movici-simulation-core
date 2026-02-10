@@ -308,39 +308,6 @@ class MoviciDataRefInfo:
         return tuple(rv)
 
 
-class ConfigVersion(t.TypedDict, total=False):
-    schema: dict
-    convert_from: t.Dict[str, t.Callable[[dict], dict]]
-
-
-def ensure_valid_config(
-    config: dict,
-    target_version: str,
-    versions: t.Dict[str, ConfigVersion],
-    add_name_and_type=True,
-):
-    try:
-        config = json.loads(json.dumps(config))
-    except (TypeError, json.JSONDecodeError):
-        raise TypeError(f"config {config} is not a valid JSON-encodable object") from None
-
-    version = versions[target_version]
-    schema = ensure_schema(version["schema"], add_name_and_type)
-    errors = get_validation_errors(config, schema)
-
-    if not errors:
-        return config
-
-    for ver, converter in version.get("convert_from", {}).items():
-        legacy_version = versions[ver]
-        schema = ensure_schema(legacy_version["schema"])
-        errs = get_validation_errors(config, schema)
-        if not errs:
-            return converter(config)
-
-    raise (exceptions.best_match(errors))
-
-
 def validate_and_migrate_config(
     config: dict,
     versions: t.Sequence[ModelConfigSchema],
