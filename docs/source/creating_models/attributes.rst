@@ -97,6 +97,7 @@ update method:
 .. testcode:: python
   
   from movici_simulation_core import TrackedModel, AttributeSpec, PUB, INIT
+  from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 
   class MyModel(TrackedModel, name="mymodel"):
       auto_reset = PUBLISH
