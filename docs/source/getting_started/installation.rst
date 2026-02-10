@@ -76,55 +76,49 @@ Then you can install the extra python requirements throug pip:
 MacOS
 ------
 
-Due to some dependencies, the installation on MacOS is a bit more involved. Please follow the instructions below.
+The installation on MacOS is a bit more involved. Python must be installed via `Homebrew <https://brew.sh/>`_  because the system's Python on MacOS does not support Spatialite.
 
 **Pre-requisites:**
 
-- Python 3.11 or higher (Lower versions produce conflicts with OpenMP at runtime.)
 - `Homebrew <https://brew.sh/>`_ package manager 
+- Python 3.11 or higher installed via Homebrew (Lower versions will raise conflicts with OpenMP, a requirement of Aequilibrae)
 
-1. On a terminal. Install spatialite as follows:
-
+1. On a terminal. Install the spatialite library as follows:
+  
 .. code-block:: bash
 
     brew update
-    brew install spatialite-tools
     brew install libspatialite
 
-
-2. Install the ``llvm`` compiler suite:
+2. Install ``movici-simulation-core`` to your Homebrew Python environment (below instructions assume Python 3.12):
 
 .. code-block:: bash
 
-  brew install llvm
+  python3.12 -m pip install movici-simulation-core
 
-3. Set the following environment variables to use the ``llvm`` C and C++ compilers:
+Installing the **models** requires additional steps. 
+
+1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
+
+.. code-block:: bash
+
+  brew install llvm 
+
+2. Set the following environment variables to point ``pip`` to use the ``llvm`` compiler and libraries:  
 
 .. code-block:: bash
 
   export CC=/opt/homebrew/opt/llvm/bin/clang
   export CXX=/opt/homebrew/opt/llvm/bin/clang++
+  export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+  export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
 
-4. Update the ``DYLD_LIBRARY_PATH`` to include ``libspatialite``.
 
-.. code-block:: bash
-
-  export DYLD_LIBRARY_PATH=/opt/homebrew/lib:$DYLD_LIBRARY_PATH
-
-5. Clone ``aequilibrae`` repository and install it from source.
+3. Install the movici models with the following command:
 
 .. code-block:: bash
 
-  git clone https://github.com/AequilibraE/aequilibrae.git
-  cd aequilibrae
-  pip install .
-
-6. Finally, install ``movici-simulation-core`` from source.
-
-.. code-block:: bash
-
-  git clone https://github.com/nginfra/movici-simulation-core.git
-  pip install .
+  pip install movici-simulation-core[models]
 
 
 Alternative environments
