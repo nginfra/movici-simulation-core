@@ -54,15 +54,22 @@ class Model(Plugin):
         t.ClassVar[Path | ModelConfigSchema] | list[ModelConfigSchema] | None
     ) = None
 
-    def __init__(self, model_config: dict):
-        versions = self.__model_config_schema__
-        if versions is not None:
-            if isinstance(versions, Path):
-                versions = [ModelConfigSchema(schema=versions)]
-            if isinstance(versions, ModelConfigSchema):
-                versions = [versions]
-            model_config = validate_and_migrate_config(model_config, versions)
+    def __init__(self, model_config: dict, validate_config=True):
+        if validate_config:
+            model_config = self._ensure_valid_model_config(model_config)
         self.config = model_config
+
+    @classmethod
+    def _ensure_valid_model_config(cls, config):
+        versions = cls.__model_config_schema__
+        if versions is None:
+            return config
+
+        if isinstance(versions, Path):
+            versions = [ModelConfigSchema(schema=versions)]
+        if isinstance(versions, ModelConfigSchema):
+            versions = [versions]
+        return validate_and_migrate_config(config, versions)
 
     def get_adapter(self) -> t.Type[ModelAdapterBase]:
         raise NotImplementedError

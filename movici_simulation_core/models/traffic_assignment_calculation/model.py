@@ -17,15 +17,35 @@ from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import ae_util, model_util
 from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from . import dataset as ds
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_assignment_calculation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_assignment_calculation.json"
+
+
+def convert_v1_v2(config):
+    modality, dataset = model_util.get_transport_info(config)
+    rv = {
+        "modality": modality,
+        "dataset": dataset,
+    }
+    for key in ("vdf_beta", "cargo_pcu", "vdf_alpha"):
+        if key in config:
+            rv[key] = config[key]
+    return rv
 
 
 class Model(TrackedModel, name="traffic_assignment_calculation"):
     """
     Calculates traffic attributes on roads
     """
+
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
 
     vdf_alpha: t.Union[float, str]
     vdf_beta: float
@@ -36,17 +56,6 @@ class Model(TrackedModel, name="traffic_assignment_calculation"):
     demand_nodes: t.Optional[ds.DemandNodeEntity] = None
     demand_links: t.Optional[VirtualLinkEntity] = None
     modality: ModalityStrategy
-
-    def __init__(self, model_config):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, settings: Settings, **_):
         transport_type, dataset_name = model_util.get_transport_info(self.config)
@@ -358,19 +367,3 @@ def get_matrix(csr_array: TrackedCSRArray):
     if len(csr_array.data) != csr_array.size**2:
         raise ValueError("Array is not a valid demand matrix")
     return csr_array.data.copy().reshape((csr_array.size, csr_array.size))
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_assignment_calculation.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_assignment_calculation.json"
-
-
-def convert_v1_v2(config):
-    modality, dataset = model_util.get_transport_info(config)
-    rv = {
-        "modality": modality,
-        "dataset": dataset,
-    }
-    for key in ("vdf_beta", "cargo_pcu", "vdf_alpha"):
-        if key in config:
-            rv[key] = config[key]
-    return rv
