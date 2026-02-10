@@ -14,8 +14,10 @@ Subpackages
    movici_simulation_core.models.corridor
    movici_simulation_core.models.csv_player
    movici_simulation_core.models.data_collector
+   movici_simulation_core.models.evacuation_point_resolution
    movici_simulation_core.models.generalized_journey_time
    movici_simulation_core.models.netcdf_player
+   movici_simulation_core.models.operational_status
    movici_simulation_core.models.opportunities
    movici_simulation_core.models.overlap_status
    movici_simulation_core.models.shortest_path
@@ -27,10 +29,3 @@ Subpackages
    movici_simulation_core.models.udf_model
    movici_simulation_core.models.unit_conversions
 
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.models
-   :members:
-   :undoc-members:
-   :show-inheritance:
