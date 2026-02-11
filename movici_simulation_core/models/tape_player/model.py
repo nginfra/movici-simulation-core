@@ -18,20 +18,15 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common.time_series import TimeSeries
-from movici_simulation_core.validate import ensure_valid_config
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/tape_player.json"
 
 
 class Model(TrackedModel, name="tape_player"):
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
     timeline: t.Optional[TimeSeries[dict]] = None
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "1",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_PATH},
-            },
-        )
         super().__init__(model_config)
         self.pub_attributes: t.Set[AttributeInfo] = set()
 
@@ -101,6 +96,3 @@ def iter_attribute_info(data: dict, dataset=None, entity_group=None, exclude=())
             yield from iter_attribute_info(val, dataset, entity_group=key, exclude=exclude)
         elif key not in exclude:
             yield AttributeInfo(dataset, entity_group, key, infer_data_type_from_array(val))
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/tape_player.json"

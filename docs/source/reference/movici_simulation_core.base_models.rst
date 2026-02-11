@@ -11,8 +11,8 @@ common
 
 .. automodule:: movici_simulation_core.base_models.common
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -21,8 +21,8 @@ simple\_model
 
 .. automodule:: movici_simulation_core.base_models.simple_model
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -31,13 +31,6 @@ tracked\_model
 
 .. automodule:: movici_simulation_core.base_models.tracked_model
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.base_models
-   :members:
    :undoc-members:
-   :show-inheritance:
+
