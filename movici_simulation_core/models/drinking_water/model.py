@@ -15,6 +15,7 @@ import dataclasses
 import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
@@ -60,6 +61,8 @@ class Model(TrackedModel, name="drinking_water"):
     .. note::
        Controls are handled by the Movici Rules Model, not internally.
     """
+
+    auto_reset = PUBLISH
 
     @classmethod
     def get_schema_attributes(cls):
@@ -126,8 +129,6 @@ class Model(TrackedModel, name="drinking_water"):
         receive data during init loading. They must be initialized before the
         framework checks their ``.changed`` property during ``generate_update``.
         """
-        from movici_simulation_core.core.attribute import PUBLISH
-
         for f in dataclasses.fields(self.dataset):
             entity = getattr(self.dataset, f.name)
             size = len(entity)
@@ -188,6 +189,12 @@ class Model(TrackedModel, name="drinking_water"):
             if self.last_calculated is not None:
                 self.network.process_changes()
 
+            # Reset SUBSCRIBE changes after process_changes() has consumed them
+            # but before write_results() sets new PUB changes. This prevents
+            # INIT data on PUB|INIT attributes (e.g. tank level) from leaking
+            # into the PUB update. See docs/source/creating_models/attributes.rst.
+            state.reset_tracked_changes(SUBSCRIBE)
+
             results = self.network.run_simulation(
                 duration=self.hydraulic_timestep,
                 hydraulic_timestep=self.hydraulic_timestep,
@@ -195,6 +202,8 @@ class Model(TrackedModel, name="drinking_water"):
             )
             self.network.write_results(results)
             self.last_calculated = moment
+        else:
+            state.reset_tracked_changes(SUBSCRIBE)
 
         return None
 

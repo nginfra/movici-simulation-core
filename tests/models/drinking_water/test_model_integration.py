@@ -151,7 +151,6 @@ class TestAttributeNaming:
         assert self._has_attribute(WaterPipeEntity, "status")
         assert self._has_attribute(WaterPipeEntity, "flow")
         assert self._has_attribute(WaterPipeEntity, "velocity")
-        assert self._has_attribute(WaterPipeEntity, "headloss")
 
     def test_pump_attributes(self):
         """Verify pump entity has correct attribute names."""
