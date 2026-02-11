@@ -89,7 +89,7 @@ requires the ``mod_spatialite`` sqlite extension.
 Development
 -----------
 
-If you want to develop on this package, you can following the steps above for your operating system. Then,
+If you want to develop on this package, you can follow the installation steps above for your choice of operating system. Then,
 clone the repository and install it in editable mode with the following command:
 
 .. code-block:: bash
