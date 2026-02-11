@@ -96,7 +96,7 @@ The installation on MacOS is a bit more involved. Python must be installed via `
 
   python3.12 -m pip install movici-simulation-core
 
-Installing the **models** requires additional steps. 
+Installing the **models** requires additional steps: 
 
 1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
 
@@ -118,7 +118,7 @@ Installing the **models** requires additional steps.
 
 .. code-block:: bash
 
-  pip install movici-simulation-core[models]
+  python3.12 -m pip install movici-simulation-core[models]
 
 
 Alternative environments
