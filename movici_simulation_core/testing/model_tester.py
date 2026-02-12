@@ -151,8 +151,14 @@ class ModelTester:
         self.settings = settings or Settings()
         self.schema = read_schema(schema)
         self._set_default_strategies()
-        self.model = self._try_wrap_model(model)
+        self._model = self._try_wrap_model(model)
         self.raise_on_premature_shutdown = raise_on_premature_shutdown
+
+    @property
+    def model(self):
+        """A convenience property to reach the underlying model under test"""
+        # The model has been wrapped by Adapter and the Preprocessor
+        return self._model.model.model
 
     def _set_default_strategies(self):
         strategies.set(UpdateDataFormat)
@@ -181,25 +187,25 @@ class ModelTester:
         shutil.copyfile(path, target)
 
     def initialize(self):
-        return self.model.initialize(self.init_data_handler)
+        return self._model.initialize(self.init_data_handler)
 
     def update(self, timestamp: int, data: UpdateData, **msg_kwargs):
         message = UpdateMessage(timestamp, **msg_kwargs)
-        return self.model.update(message, data)
+        return self._model.update(message, data)
 
     def update_series(self, timestamp: int, data_series: t.Sequence[UpdateData], **msg_kwargs):
         message = UpdateSeriesMessage(
             [UpdateMessage(timestamp, **msg_kwargs) for _ in data_series]
         )
-        return self.model.update_series(message, data_series)
+        return self._model.update_series(message, data_series)
 
     def new_time(self, timestamp: int):
         message = NewTimeMessage(timestamp)
-        self.model.new_time(message)
+        self._model.new_time(message)
 
     def close(self):
         try:
-            self.model.close(QuitMessage())
+            self._model.close(QuitMessage())
         except RuntimeError:
             if self.raise_on_premature_shutdown:
                 raise
