@@ -78,10 +78,11 @@ must incorporate those changes into its internal state and then calculate from t
 
 .. note:: Pause and Restart
 
-   WNTR supports pausing and restarting simulations using ``sim.run_sim(convergence_error=True)``
-   followed by ``sim.run_sim()`` with modified network state. When WNTR encounters non-convergence
-   or a control action time, it can pause and allow modifications before continuing. This allows
-   our model to integrate external changes between WNTR simulation steps.
+   The WNTR simulator instance is kept alive across timesteps. Each call to ``run_sim()`` advances
+   the simulation time cumulatively, preserving internal state such as tank levels. Between calls,
+   the model can modify the WNTR network (e.g. changing demands or closing valves) and the next
+   ``run_sim()`` picks up from where it left off. This allows external changes to be integrated
+   between WNTR simulation steps.
 
 How It Works
 ------------
@@ -90,9 +91,9 @@ How It Works
    (junctions, tanks, reservoirs, pipes, pumps, valves)
 2. Data options from the dataset's ``"general"`` section and solver options from the
    model config are merged and applied to the WNTR network
-3. At each simulation step, any external state changes (e.g. demand updates, valve
-   closures) are incorporated into the WNTR network
-4. WNTR runs a hydraulic simulation for the configured timestep
+3. At each simulation step, WNTR runs a hydraulic simulation with the current state
+4. Any external state changes received at this timestep (e.g. demand updates, valve
+   closures) are applied to the WNTR network for the next step
 5. Results (pressures, heads, flows, velocities, tank levels) are written back to
    the corresponding Movici entity attributes
 
@@ -137,7 +138,7 @@ nodes. Junctions derive from ``PointEntity``.
 |                                        |           | Overrides the global ``pressure_exponent``. NaN   |
 |                                        |           | values fall back to the global setting            |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.demand``              | INIT      | Effective demand (base_demand * demand_factor)    |
+| ``drinking_water.demand``              | PUB       | Effective demand (base_demand * demand_factor)    |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.pressure``            | PUB       | Dynamic pressure at the node                      |
 +----------------------------------------+-----------+---------------------------------------------------+
@@ -189,10 +190,7 @@ model — as a simulation progresses, tanks may fill up or empty over time. Tank
 
 The shape and volume of the tank can either be of constant diameter for cylindrical tanks, or the
 volume can be defined by a volume curve. Either is valid, so they must be ``OPT`` attributes.
-However, at runtime, we check if we have the required attributes for either (for each tank).
-If a tank does not have either a diameter or a volume curve defined, the model raises
-:class:`movici_simulation_core.exceptions.NotReady` in :meth:`TrackedModel.initialize` to indicate
-that it is still waiting for data.
+If neither a diameter nor a volume curve is provided, WNTR will use default values (diameter=0).
 
 .. note:: Tank Overflow Behavior
 
@@ -229,7 +227,13 @@ head factor). Reservoirs derive from ``PointEntity``.
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.head``                | PUB       | Calculated as base_head * head_factor             |
 +----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.pressure``            | PUB       | Dynamic pressure at the reservoir                 |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.demand``              | PUB       | Demand at the reservoir                           |
++----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow``                | PUB       | Total flow rate out of the reservoir              |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.flow_rate.magnitude`` | PUB       | Absolute flow rate                                |
 +----------------------------------------+-----------+---------------------------------------------------+
 
 .. note::
@@ -249,44 +253,42 @@ Pipes
 
 Pipes are links that transport water from one node (Junction, Tank, Reservoir) at a high head to
 another node at a lower head and experience a pressure drop (head loss) while doing so. Pipes
-derive from ``LinkEntity`` and ``LineEntity``.
+derive from ``LinkEntity``.
 
 +----------------------------------------+-----------+---------------------------------------------------+
 | Attribute                              | Flags     | Description                                       |
 +========================================+===========+===================================================+
-| ``geometry.linestring_2d``             | OPT       | 2D linestring geometry (from ``LineEntity``)      |
-+----------------------------------------+-----------+---------------------------------------------------+
-| ``geometry.linestring_3d``             | OPT       | 3D linestring geometry (from ``LineEntity``).     |
-|                                        |           | At least one linestring must be set               |
-+----------------------------------------+-----------+---------------------------------------------------+
-| ``shape.length``                       | OPT       | Pre-calculated line length. Computed from         |
-|                                        |           | linestring if not provided                        |
-+----------------------------------------+-----------+---------------------------------------------------+
 | ``topology.from_node_id``              | INIT      | Node id on the from side (from ``LinkEntity``)    |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``topology.to_node_id``                | INIT      | Node id on the to side (from ``LinkEntity``)      |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``shape.diameter``                     | INIT      | Pipe diameter                                     |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.roughness``           | INIT      | Pipe roughness factor. Values are tied to the     |
-|                                        |           | headloss formula (``"H-W"``, ``"D-W"``,           |
-|                                        |           | ``"C-M"``)                                        |
+| ``drinking_water.roughness``           | INIT      | Pipe roughness coefficient (Hazen-Williams        |
+|                                        |           | C-factor). Typical range 100-150. Higher values   |
+|                                        |           | indicate smoother pipes                           |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``shape.length``                       | OPT       | Pipe length (Default: 100 m)                      |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.minor_loss``          | OPT       | Minor loss coefficient (Default: 0). Additional   |
 |                                        |           | head loss from curves and bends, proportional to  |
 |                                        |           | flow velocity squared                             |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``operational.status``                 | OPT, PUB  | Whether the pipe is open (``True``) or closed     |
-|                                        |           | (``False``). Also published when controls change  |
-|                                        |           | the status                                        |
+| ``operational.status``                 | OPT       | Whether the pipe is open (``True``) or closed     |
+|                                        |           | (``False``)                                       |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.check_valve``         | OPT       | Restricts flow to from_node → to_node direction   |
 |                                        |           | only. Default: ``False``                          |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow``                | PUB       | Water flow rate through the pipe                  |
 +----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.flow_rate.magnitude`` | PUB       | Absolute flow rate                                |
++----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.velocity``            | PUB       | Water velocity (always positive, use flow sign    |
 |                                        |           | for direction)                                    |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+|                                        |           | 3=CV)                                             |
 +----------------------------------------+-----------+---------------------------------------------------+
 
 .. note:: The dataset's ``"general"`` section stores data-related WNTR hydraulic options
@@ -317,7 +319,7 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``topology.to_node_id``                | INIT      | Node id on the to side (from ``LinkEntity``)      |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``type``                               | INIT      | Pump type: ``power`` or ``head``                  |
+| ``pump_type``                          | INIT      | Pump type: ``power`` or ``head``                  |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.power``               | OPT       | Fixed power for a ``power`` pump. Required for    |
 |                                        |           | power pumps                                       |
@@ -328,10 +330,15 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 |                                        |           | pairs. Data type shape: (2,)-csr. Required for    |
 |                                        |           | head pumps                                        |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``operational.status``                 | OPT, PUB  | Whether the pump is open (``True``) or closed     |
+| ``operational.status``                 | OPT       | Whether the pump is open (``True``) or closed     |
 |                                        |           | (``False``). Default: ``True``                    |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow``                | PUB       | Pump flow rate                                    |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.flow_rate.magnitude`` | PUB       | Absolute flow rate                                |
++----------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+|                                        |           | 3=CV)                                             |
 +----------------------------------------+-----------+---------------------------------------------------+
 
 .. note:: Pump Status
@@ -361,7 +368,7 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``topology.to_node_id``                    | INIT      | Node id on the to side (from ``LinkEntity``)      |
 +--------------------------------------------+-----------+---------------------------------------------------+
-| ``type``                                   | INIT      | Valve type: ``PRV``, ``PSV``, ``FCV``, or ``TCV`` |
+| ``valve_type``                             | INIT      | Valve type: ``PRV``, ``PSV``, ``FCV``, or ``TCV`` |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``shape.diameter``                         | INIT      | Valve diameter                                    |
 +--------------------------------------------+-----------+---------------------------------------------------+
@@ -377,6 +384,13 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 | ``drinking_water.minor_loss``              | OPT       | Minor loss coefficient (Default: 0). Head loss    |
 |                                            |           | when the valve is fully open, proportional to     |
 |                                            |           | flow velocity squared                             |
++--------------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.flow``                    | PUB       | Valve flow rate                                   |
++--------------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.flow_rate.magnitude``     | PUB       | Absolute flow rate                                |
++--------------------------------------------+-----------+---------------------------------------------------+
+| ``drinking_water.link_status``             | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+|                                            |           | 3=CV)                                             |
 +--------------------------------------------+-----------+---------------------------------------------------+
 
 .. note::
@@ -418,7 +432,7 @@ network:
 +-------------------------+---------+-----------------------------------------------------------+
 | Option                  | Type    | Description                                               |
 +=========================+=========+===========================================================+
-| ``headloss``            | string  | Headloss formula: ``"H-W"``, ``"D-W"``, ``"C-M"``.        |
+| ``headloss``            | string  | Headloss formula: ``"H-W"`` (Hazen-Williams).             |
 |                         |         | Default: ``"H-W"``                                        |
 +-------------------------+---------+-----------------------------------------------------------+
 | ``viscosity``           | number  | Kinematic viscosity. Default: 1.0                         |
@@ -464,7 +478,6 @@ Stored in the model config under the ``"options"`` key. These control the WNTR s
 +-------------------------+---------+-----------------------------------------------------------+
 
 .. note:: The WNTRSimulator only supports the Hazen-Williams (``"H-W"``) headloss formula.
-   The EpanetSimulator also supports Chezy-Manning (``"C-M"``).
 
 Example Configuration
 ^^^^^^^^^^^^^^^^^^^^^
@@ -495,9 +508,8 @@ Model config with solver options:
         "name": "water_simulation",
         "type": "drinking_water",
         "dataset": "water_network",
-        "hydraulic_timestep": 3600,
-        "simulation_duration": 3600,
         "options": {
+            "hydraulic_timestep": 3600,
             "hydraulic": {
                 "trials": 200,
                 "accuracy": 0.001
@@ -538,7 +550,7 @@ Notes
 * Controls (rule-based or conditional operations) are delegated to the :ref:`rules-model` and
   not handled within this model.
 * The headloss formula is stored in the dataset ``"general"`` section under ``"hydraulic"`` →
-  ``"headloss"`` (e.g. ``"H-W"``, ``"D-W"``, ``"C-M"``).
+  ``"headloss"``. Only ``"H-W"`` (Hazen-Williams) is supported.
 
 Config Schema Reference
 -----------------------
@@ -550,9 +562,7 @@ DrinkingWaterConfig
 
 ``properties``:
   | ``dataset``: ``string`` Name of the drinking water network dataset |required|
-  | ``hydraulic_timestep``: ``integer`` Hydraulic simulation timestep in seconds |required|
-  | ``simulation_duration``: ``integer`` Duration per WNTR simulation run in seconds |required|
-  | ``options``: :ref:`DrinkingWaterOptions` Solver options for the WNTR simulator
+  | ``options``: :ref:`DrinkingWaterOptions` Solver and timing options for the WNTR simulator
 
 .. _DrinkingWaterOptions:
 
@@ -562,6 +572,8 @@ DrinkingWaterOptions
 | ``type``: ``object``
 
 ``properties``:
+  | ``hydraulic_timestep``: ``integer`` Hydraulic simulation timestep in seconds (default: 3600)
+  | ``report_timestep``: ``integer`` Report timestep in seconds (default: same as hydraulic_timestep)
   | ``hydraulic``: :ref:`DrinkingWaterHydraulicOptions` Hydraulic solver settings
 
 .. _DrinkingWaterHydraulicOptions:
