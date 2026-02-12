@@ -38,13 +38,16 @@ def _extract_csr_curve(csr_attribute, idx: int) -> t.Optional[np.ndarray]:
 
     :param csr_attribute: CSR attribute containing curve data
     :param idx: Index of the entity
-    :return: Numpy array of curve data, or None if empty
+    :return: Numpy array of curve data, or None if empty/undefined
     """
     csr = csr_attribute.csr
     start = csr.row_ptr[idx]
     end = csr.row_ptr[idx + 1]
     if end > start:
-        return csr.data[start:end]
+        data = csr.data[start:end]
+        if np.any(np.isnan(data)):
+            return None
+        return data
     return None
 
 
@@ -78,12 +81,6 @@ class WNTRElementProcessor(t.Generic[T]):
         pass
 
     def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
-        """Write WNTR SimulationResults to self.entity_group.
-
-        :param results: The simulation results
-        :param df_offset: Numerical offset where this processor's data starts
-            in the results dataframe
-        """
         pass
 
 
@@ -292,11 +289,8 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
         self.entity_group.level.array[:] = heads - self.entity_group.elevation.array
 
 
-class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
+class ReservoirProcessor(NodeProcessor[WaterReservoirEntity]):
     PREFIX = "R"
-
-    def _node_name(self, entity_id: int) -> str:
-        return self.PREFIX + str(entity_id)
 
     def create_elements(self):
         eg = self.entity_group
@@ -336,7 +330,6 @@ class ReservoirProcessor(WNTRElementProcessor[WaterReservoirEntity]):
 
     def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
         demands = results.node["demand"].iloc[-1].values[df_begin:df_end]
-        self.entity_group.demand.array[:] = demands
         self.entity_group.flow.array[:] = -demands
         self.entity_group.flow_rate_magnitude.array[:] = np.abs(demands)
 
@@ -573,6 +566,7 @@ class NetworkWrapper:
         self.wn = wntr.network.WaterNetworkModel()
         self.id_mapper = IdMapper()
         self.processors: dict[str, WNTRElementProcessor] = {}
+        self._sim: t.Optional[wntr.sim.WNTRSimulator] = None
 
     def initialize(self, dataset: DrinkingWaterNetwork):
         """Build the WNTR WaterNetworkModel from a DrinkingWaterNetwork.
@@ -639,16 +633,19 @@ class NetworkWrapper:
         hydraulic_timestep: float = 3600,
         report_timestep: t.Optional[float] = None,
     ) -> wntr.sim.SimulationResults:
-        """Run WNTR simulation and return the raw results.
+        """Run WNTR simulation for one step using pause/restart.
 
-        :param duration: Simulation duration in seconds (None uses model setting)
+        The simulator is kept alive across calls so that WNTR's internal
+        state (tank levels, solver state) carries forward between timesteps.
+        Duration is cumulative: each call advances ``sim_time`` by *step*.
+
+        :param duration: Step size in seconds (None uses *hydraulic_timestep*)
         :param hydraulic_timestep: Hydraulic timestep in seconds
         :param report_timestep: Report timestep in seconds (None = same as hydraulic)
         :return: WNTR SimulationResults object
         """
-        if duration is not None:
-            self.wn.options.time.duration = int(duration)
-
+        step = duration if duration is not None else hydraulic_timestep
+        self.wn.options.time.duration = int(self.wn.sim_time + step)
         self.wn.options.time.hydraulic_timestep = int(hydraulic_timestep)
 
         if report_timestep is not None:
@@ -656,10 +653,10 @@ class NetworkWrapper:
         else:
             self.wn.options.time.report_timestep = int(hydraulic_timestep)
 
-        self.wn.reset_initial_values()
+        if self._sim is None:
+            self._sim = self.wntr.sim.WNTRSimulator(self.wn)
 
-        sim = self.wntr.sim.WNTRSimulator(self.wn)
-        return sim.run_sim()
+        return self._sim.run_sim()
 
     def write_results(self, results: wntr.sim.SimulationResults):
         """Write WNTR results back into entity group arrays.
@@ -683,19 +680,6 @@ class NetworkWrapper:
             processor.write_results(results, df_offset=df_offset)
             df_offset += len(processor.entity_group)
 
-    def get_network_summary(self) -> dict:
-        """Get summary statistics of the network."""
-        return {
-            "num_junctions": self.wn.num_junctions,
-            "num_tanks": self.wn.num_tanks,
-            "num_reservoirs": self.wn.num_reservoirs,
-            "num_pipes": self.wn.num_pipes,
-            "num_pumps": self.wn.num_pumps,
-            "num_valves": self.wn.num_valves,
-            "num_patterns": len(self.wn.pattern_name_list),
-            "num_curves": len(self.wn.curve_name_list),
-        }
-
     def close(self):
         """Clean up resources."""
-        pass
+        self._sim = None

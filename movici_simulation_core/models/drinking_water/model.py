@@ -174,36 +174,45 @@ class Model(TrackedModel, name="drinking_water"):
         :param moment: Current simulation moment
         :return: Next update time or None
         """
-        # We're a stateful, time-dependent model. That means that we should
-        # update in the following way:
-        # - First calculate until the current time
-        # - Then process any changes to the data
-        # - If we are updated multiple times in the same timestep, we only
-        #   calculate once
-        # The reason for this is that the world state is valid, until something
-        # changes it. If we we have lastly calculated at t=x, and we now get a
-        # an update (cq. change) at t=x+1, then we must first calculate with the
-        # state from t=x, and then apply the changes. We then don't progress the
-        # model until we're asked to update to t>x+1
-        if self.last_calculated is None or self.last_calculated < moment:
-            if self.last_calculated is not None:
-                self.network.process_changes()
-
-            # Reset SUBSCRIBE changes after process_changes() has consumed them
-            # but before write_results() sets new PUB changes. This prevents
-            # INIT data on PUB|INIT attributes (e.g. tank level) from leaking
-            # into the PUB update. See docs/source/creating_models/attributes.rst.
+        # This is a stateful, time-dependent model.  The previous input state
+        # is valid until something changes it.  When we receive a change at
+        # t=x we first simulate up to t=x with the OLD state, then apply the
+        # change so it takes effect from t=x onward.
+        #
+        # If we are updated again at the same timestep we just accumulate the
+        # changes without recalculating — the simulation for this timestep
+        # already used the pre-change state.
+        #
+        # The WNTR simulator is kept alive across calls (pause/restart) so
+        # that internal state such as tank levels carries forward naturally.
+        if self.last_calculated is not None and self.last_calculated >= moment:
+            # Already calculated for this timestep — accumulate changes only
+            self.network.process_changes()
             state.reset_tracked_changes(SUBSCRIBE)
+            return None
 
-            results = self.network.run_simulation(
-                duration=self.hydraulic_timestep,
-                hydraulic_timestep=self.hydraulic_timestep,
-                report_timestep=self.report_timestep,
-            )
-            self.network.write_results(results)
-            self.last_calculated = moment
-        else:
-            state.reset_tracked_changes(SUBSCRIBE)
+        # 1. Simulate with the current (old) input state
+        results = self.network.run_simulation(
+            duration=self.hydraulic_timestep,
+            hydraulic_timestep=self.hydraulic_timestep,
+            report_timestep=self.report_timestep,
+        )
+
+        # 2. Apply incoming changes for the next timestep.
+        #    Skip on the very first call — init data was already consumed by
+        #    create_elements() during initialize().
+        if self.last_calculated is not None:
+            self.network.process_changes()
+
+        # 3. Reset SUBSCRIBE changes after process_changes() consumed them
+        #    but before write_results() sets new PUB changes.  This prevents
+        #    INIT data on PUB|INIT attributes (e.g. tank level) from leaking
+        #    into the PUB update.
+        state.reset_tracked_changes(SUBSCRIBE)
+
+        # 4. Publish simulation results
+        self.network.write_results(results)
+        self.last_calculated = moment
 
         return None
 

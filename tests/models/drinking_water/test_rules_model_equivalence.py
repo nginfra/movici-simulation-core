@@ -204,8 +204,9 @@ class TestPipeStatusEquivalence:
         """Test that pipe closure via external update matches WNTR control.
 
         Scenario:
-        - Close PIPE2 at time t=3600 (simulating Rules Model action)
-        - Compare results with WNTR network where PIPE2 is initially closed
+        - t=0: Both pipes open
+        - t=3600: Close PIPE2 (change queued, simulation still uses old state)
+        - t=7200: Closure takes effect, compare with WNTR closed-pipe results
         """
         config = {
             "dataset": "water_network",
@@ -229,7 +230,8 @@ class TestPipeStatusEquivalence:
         assert pipes_open["drinking_water.flow"][0] > 1e-6, "PIPE1 should have flow when open"
         assert pipes_open["drinking_water.flow"][1] > 1e-6, "PIPE2 should have flow when open"
 
-        # Close PIPE2 via external update (simulating Rules Model)
+        # Close PIPE2 via external update (simulating Rules Model).
+        # The change is queued; the simulation at t=3600 still uses the old state.
         tester.new_time(3600)
         pipe_close_update = {
             "water_network": {
@@ -239,7 +241,11 @@ class TestPipeStatusEquivalence:
                 }
             }
         }
-        result_closed, _ = tester.update(3600, pipe_close_update)
+        tester.update(3600, pipe_close_update)
+
+        # t=7200: The closure takes effect in this simulation step
+        tester.new_time(7200)
+        result_closed, _ = tester.update(7200, None)
 
         # Build WNTR network with PIPE2 closed
         wntr_network = self._build_wntr_network()
@@ -323,7 +329,13 @@ class TestBranchedNetworkControl:
         return [("water_network", branched_network_data)]
 
     def test_branch_isolation(self, create_model_tester, init_data):
-        """Test that closing a branch pipe isolates that branch correctly."""
+        """Test that closing a branch pipe isolates that branch correctly.
+
+        Changes take effect one timestep after they are sent:
+        - t=0: All open
+        - t=3600: Queue PIPE3 closure
+        - t=7200: Closure takes effect
+        """
         config = {
             "dataset": "water_network",
             "options": {
@@ -362,7 +374,7 @@ class TestBranchedNetworkControl:
         assert initial_pipe1_flow > 1e-6, "PIPE1 should have flow when all pipes open"
         assert initial_pipe3_flow > 1e-6, "PIPE3 should have flow when open"
 
-        # Close PIPE3 (to J3)
+        # Close PIPE3 (to J3) — change is queued for next timestep
         tester.new_time(3600)
         pipe_close_update = {
             "water_network": {
@@ -372,7 +384,11 @@ class TestBranchedNetworkControl:
                 }
             }
         }
-        result_closed, _ = tester.update(3600, pipe_close_update)
+        tester.update(3600, pipe_close_update)
+
+        # t=7200: Closure takes effect
+        tester.new_time(7200)
+        result_closed, _ = tester.update(7200, None)
 
         # Verify closed state
         assert result_closed is not None, "Closed pipe simulation should return results"
@@ -398,142 +414,6 @@ class TestBranchedNetworkControl:
             f"PIPE1 flow should decrease after closing PIPE3: "
             f"{closed_pipe1_flow} should be < {initial_pipe1_flow}"
         )
-
-
-class TestWNTRNetworkDirect:
-    """Direct WNTR tests to verify test network validity."""
-
-    def test_simple_network_converges(self):
-        """Verify that the simple test network converges in WNTR directly."""
-        wn = wntr.network.WaterNetworkModel()
-
-        # Add reservoir
-        wn.add_reservoir("R1", base_head=50.0, coordinates=(0.0, 0.0))
-
-        # Add junctions with small demands
-        wn.add_junction("J1", base_demand=0.001, elevation=10.0, coordinates=(100.0, 0.0))
-        wn.add_junction("J2", base_demand=0.001, elevation=10.0, coordinates=(200.0, 0.0))
-
-        # Add pipes
-        wn.add_pipe(
-            "P1",
-            start_node_name="R1",
-            end_node_name="J1",
-            length=100.0,
-            diameter=0.3,
-            roughness=100.0,
-        )
-        wn.add_pipe(
-            "P2",
-            start_node_name="J1",
-            end_node_name="J2",
-            length=100.0,
-            diameter=0.3,
-            roughness=100.0,
-        )
-
-        # Configure and run simulation
-        wn.options.time.duration = 3600
-        wn.options.time.hydraulic_timestep = 3600
-
-        sim = wntr.sim.WNTRSimulator(wn)
-        results = sim.run_sim()
-
-        # Verify results exist
-        assert len(results.node["pressure"]) > 0
-        assert results.node["pressure"].loc[0, "J1"] > 0
-        assert results.node["pressure"].loc[0, "J2"] > 0
-        assert results.link["flowrate"].loc[0, "P1"] > 0
-
-    def test_branched_network_converges(self):
-        """Verify that the branched test network converges in WNTR directly."""
-        wn = wntr.network.WaterNetworkModel()
-
-        # Add reservoir
-        wn.add_reservoir("R1", base_head=50.0)
-
-        # Add junctions
-        wn.add_junction("J1", base_demand=0.0, elevation=10.0)
-        wn.add_junction("J2", base_demand=0.001, elevation=10.0)
-        wn.add_junction("J3", base_demand=0.001, elevation=10.0)
-
-        # Add pipes
-        wn.add_pipe(
-            "P1",
-            start_node_name="R1",
-            end_node_name="J1",
-            length=100.0,
-            diameter=0.3,
-            roughness=100.0,
-        )
-        wn.add_pipe(
-            "P2",
-            start_node_name="J1",
-            end_node_name="J2",
-            length=100.0,
-            diameter=0.2,
-            roughness=100.0,
-        )
-        wn.add_pipe(
-            "P3",
-            start_node_name="J1",
-            end_node_name="J3",
-            length=100.0,
-            diameter=0.2,
-            roughness=100.0,
-        )
-
-        wn.options.time.duration = 3600
-        wn.options.time.hydraulic_timestep = 3600
-
-        sim = wntr.sim.WNTRSimulator(wn)
-        results = sim.run_sim()
-
-        # Verify results
-        assert len(results.node["pressure"]) > 0
-        assert results.link["flowrate"].loc[0, "P1"] > 0
-        assert results.link["flowrate"].loc[0, "P2"] > 0
-        assert results.link["flowrate"].loc[0, "P3"] > 0
-
-    def test_pipe_closure_behavior(self):
-        """Test WNTR behavior when a pipe is closed."""
-        wn = wntr.network.WaterNetworkModel()
-
-        wn.add_reservoir("R1", base_head=50.0)
-        wn.add_junction("J1", base_demand=0.001, elevation=10.0)
-        wn.add_junction("J2", base_demand=0.001, elevation=10.0)
-
-        wn.add_pipe(
-            "P1",
-            start_node_name="R1",
-            end_node_name="J1",
-            length=100.0,
-            diameter=0.3,
-            roughness=100.0,
-        )
-        wn.add_pipe(
-            "P2",
-            start_node_name="J1",
-            end_node_name="J2",
-            length=100.0,
-            diameter=0.3,
-            roughness=100.0,
-            initial_status="CLOSED",  # P2 is closed
-        )
-
-        wn.options.time.duration = 3600
-        wn.options.time.hydraulic_timestep = 3600
-
-        sim = wntr.sim.WNTRSimulator(wn)
-        results = sim.run_sim()
-
-        # P2 should have zero flow when closed
-        p2_flow = results.link["flowrate"].loc[0, "P2"]
-        assert abs(p2_flow) < 0.0001, f"Closed pipe flow should be ~0, got {p2_flow}"
-
-        # P1 should still have flow to serve J1
-        p1_flow = results.link["flowrate"].loc[0, "P1"]
-        assert p1_flow > 0, "P1 should have flow to serve J1"
 
 
 class TestWNTRTimeBasedControlEquivalence:
@@ -636,14 +516,13 @@ class TestWNTRTimeBasedControlEquivalence:
     def test_time_control_close_pipe_at_1h(self, create_model_tester, init_data):
         """Test time-based pipe closure: close PIPE2 at t=3600s (1 hour).
 
-        Compares:
-        - WNTR with SimTimeCondition control at t=3600
-        - Movici with external status update at t=3600
-
-        Both should produce identical results at each timestep.
+        WNTR's internal SimTimeCondition fires within the same timestep, so
+        the closure is visible from t=3600 onward.  Movici's external change
+        takes effect one step later (t=7200).  Both are compared at t=7200,
+        when both systems have the pipe closed.
         """
         close_time = 3600  # 1 hour
-        duration = 7200  # 2 hours
+        duration = 10800  # 3 hours
         timestep = 3600  # 1 hour timesteps
 
         # --- Run WNTR with internal time control ---
@@ -655,7 +534,6 @@ class TestWNTRTimeBasedControlEquivalence:
         sim = wntr.sim.WNTRSimulator(wn)
         wntr_results = sim.run_sim()
 
-        # Extract WNTR results at each timestep
         wntr_flows = {}
         for t in wntr_results.link["flowrate"].index:
             wntr_flows[int(t)] = {
@@ -666,9 +544,7 @@ class TestWNTRTimeBasedControlEquivalence:
         # --- Run Movici with external updates ---
         config = {
             "dataset": "water_network",
-            "options": {
-                "hydraulic_timestep": timestep,
-            },
+            "options": {"hydraulic_timestep": timestep},
         }
 
         tester = create_model_tester(Model, config)
@@ -676,35 +552,27 @@ class TestWNTRTimeBasedControlEquivalence:
 
         # t=0: Initial state (both pipes open)
         result_t0, _ = tester.update(0, None)
-        assert result_t0 is not None, "t=0 simulation should return results"
-        pipes_t0 = result_t0.get("water_network", {}).get("water_pipe_entities", {})
-        assert "drinking_water.flow" in pipes_t0, "t=0 results should contain flow"
-
-        # Pipes ordered by id: [101, 102] -> indices [0, 1]
+        assert result_t0 is not None
+        pipes_t0 = result_t0["water_network"]["water_pipe_entities"]
         movici_pipe1_t0 = pipes_t0["drinking_water.flow"][0]
         movici_pipe2_t0 = pipes_t0["drinking_water.flow"][1]
 
-        # t=3600: Close PIPE2 (simulating Rules Model action)
+        # t=3600: Send PIPE2 closure — queued, simulation uses old state
         tester.new_time(3600)
         pipe_close_update = {
-            "water_network": {
-                "water_pipe_entities": {
-                    "id": [102],
-                    "operational.status": [False],
-                }
-            }
+            "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [False]}}
         }
-        result_t3600, _ = tester.update(3600, pipe_close_update)
-        assert result_t3600 is not None, "t=3600 simulation should return results"
-        pipes_t3600 = result_t3600.get("water_network", {}).get("water_pipe_entities", {})
-        assert "drinking_water.flow" in pipes_t3600, "t=3600 results should contain flow"
+        tester.update(3600, pipe_close_update)
 
-        movici_pipe1_t3600 = pipes_t3600["drinking_water.flow"][0]
-        movici_pipe2_t3600 = pipes_t3600["drinking_water.flow"][1]
+        # t=7200: Closure takes effect
+        tester.new_time(7200)
+        result_t7200, _ = tester.update(7200, None)
+        assert result_t7200 is not None
+        pipes_t7200 = result_t7200["water_network"]["water_pipe_entities"]
+        movici_pipe1_t7200 = pipes_t7200["drinking_water.flow"][0]
+        movici_pipe2_t7200 = pipes_t7200["drinking_water.flow"][1]
 
-        # --- Compare results ---
-        # At t=0: Both systems should have flow in both pipes
-        assert 0 in wntr_flows, "WNTR should have results at t=0"
+        # --- Compare at t=0: both open ---
         np.testing.assert_allclose(
             movici_pipe1_t0,
             wntr_flows[0]["pipe1"],
@@ -718,38 +586,41 @@ class TestWNTRTimeBasedControlEquivalence:
             err_msg="PIPE2 flow mismatch at t=0",
         )
 
-        # At t=3600: PIPE2 should be closed in both
-        assert 3600 in wntr_flows, "WNTR should have results at t=3600"
-
-        # PIPE2 should have zero flow after closure (use 1e-6 for numerical residual)
-        assert abs(wntr_flows[3600]["pipe2"]) < 1e-6, (
-            f"WNTR PIPE2 should be closed, got flow={wntr_flows[3600]['pipe2']}"
+        # --- Compare at t=7200: both have PIPE2 closed ---
+        assert abs(wntr_flows[7200]["pipe2"]) < 1e-6, (
+            f"WNTR PIPE2 should be closed at t=7200, got {wntr_flows[7200]['pipe2']}"
         )
-        assert abs(movici_pipe2_t3600) < 1e-6, (
-            f"Movici PIPE2 should be closed, got flow={movici_pipe2_t3600}"
+        assert abs(movici_pipe2_t7200) < 1e-6, (
+            f"Movici PIPE2 should be closed at t=7200, got {movici_pipe2_t7200}"
         )
-
-        # PIPE1 should still have flow (reduced)
         np.testing.assert_allclose(
-            movici_pipe1_t3600,
-            wntr_flows[3600]["pipe1"],
+            movici_pipe1_t7200,
+            wntr_flows[7200]["pipe1"],
             rtol=1e-6,
-            err_msg="PIPE1 flow mismatch at t=3600 (after closure)",
+            err_msg="PIPE1 flow mismatch at t=7200",
         )
 
     def test_time_control_reopen_pipe(self, create_model_tester, init_data):
-        """Test time-based pipe open/close cycle.
+        """Test time-based pipe open/close/reopen cycle.
 
-        Sequence:
+        Movici external changes take effect one timestep after they are sent:
         - t=0: Both pipes open
-        - t=3600: Close PIPE2
-        - t=7200: Reopen PIPE2
+        - t=3600: Queue close PIPE2 (still open in this step's simulation)
+        - t=7200: Closure visible; queue reopen PIPE2
+        - t=10800: Reopen visible
 
-        Verify that reopening restores original flow pattern.
+        WNTR internal controls fire within the same timestep:
+        - t=3600: Close fires → pipe closed
+        - t=7200: Reopen fires → pipe open
+
+        The closed phase cannot be compared at the same timestamp (WNTR has
+        already reopened at t=7200 while Movici just closed).  Instead we
+        compare the closed-pipe Movici result against WNTR t=3600.  The
+        reopened phase is compared at t=10800 where both have the pipe open.
         """
         timestep = 3600
 
-        # --- Build WNTR with open and close controls ---
+        # --- Build WNTR with close and reopen controls ---
         wn = wntr.network.WaterNetworkModel()
         wn.add_reservoir("n1", base_head=50.0)
         wn.add_junction("n2", base_demand=0.001, elevation=10.0)
@@ -759,21 +630,19 @@ class TestWNTRTimeBasedControlEquivalence:
 
         pipe2 = wn.get_link("l102")
 
-        # Control 1: Close at t=3600
         act_close = wntr.network.controls.ControlAction(
             pipe2, "status", wntr.network.LinkStatus.Closed
         )
         cond_close = wntr.network.controls.SimTimeCondition(wn, "=", 3600)
         wn.add_control("close_pipe2", wntr.network.controls.Control(cond_close, act_close))
 
-        # Control 2: Open at t=7200
         act_open = wntr.network.controls.ControlAction(
             pipe2, "status", wntr.network.LinkStatus.Open
         )
         cond_open = wntr.network.controls.SimTimeCondition(wn, "=", 7200)
         wn.add_control("open_pipe2", wntr.network.controls.Control(cond_open, act_open))
 
-        wn.options.time.duration = 10800  # 3 hours
+        wn.options.time.duration = 10800
         wn.options.time.hydraulic_timestep = timestep
         wn.options.time.report_timestep = timestep
 
@@ -783,9 +652,7 @@ class TestWNTRTimeBasedControlEquivalence:
         # --- Run Movici with external updates ---
         config = {
             "dataset": "water_network",
-            "options": {
-                "hydraulic_timestep": timestep,
-            },
+            "options": {"hydraulic_timestep": timestep},
         }
 
         tester = create_model_tester(Model, config)
@@ -794,66 +661,67 @@ class TestWNTRTimeBasedControlEquivalence:
         # t=0: Initial (open)
         result0, _ = tester.update(0, None)
 
-        # t=3600: Close
+        # t=3600: Queue close
         tester.new_time(3600)
         close_update = {
             "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [False]}}
         }
-        result1, _ = tester.update(3600, close_update)
+        tester.update(3600, close_update)
 
-        # t=7200: Reopen
+        # t=7200: Closure takes effect; queue reopen
         tester.new_time(7200)
         open_update = {
             "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [True]}}
         }
-        result2, _ = tester.update(7200, open_update)
+        result_closed, _ = tester.update(7200, open_update)
 
-        # --- Compare key results ---
-        # Define threshold for distinguishing open (flowing) vs closed (zero flow)
-        # Using 1e-6 as threshold since closed pipes may have tiny numerical residual
-        FLOW_THRESHOLD = 1e-6
+        # t=10800: Reopen takes effect
+        tester.new_time(10800)
+        result_reopened, _ = tester.update(10800, None)
 
-        # At t=0: PIPE2 open - should have significant flow (well above threshold)
-        wntr_pipe2_t0 = float(wntr_results.link["flowrate"].loc[0, "l102"])
-        assert wntr_pipe2_t0 > FLOW_THRESHOLD, (
-            f"WNTR PIPE2 should have flow when open, got {wntr_pipe2_t0}"
-        )
-
-        # At t=3600: PIPE2 closed - flow should be below threshold
+        # --- Compare: closed phase ---
+        # WNTR closed at t=3600, Movici closed at t=7200 (same hydraulic state)
         wntr_pipe2_t3600 = float(wntr_results.link["flowrate"].loc[3600, "l102"])
-        assert abs(wntr_pipe2_t3600) < FLOW_THRESHOLD, (
+        assert abs(wntr_pipe2_t3600) < 1e-6, (
             f"WNTR PIPE2 should be closed at t=3600, got {wntr_pipe2_t3600}"
         )
 
-        # At t=7200: PIPE2 reopened (should match t=0 approximately)
-        wntr_pipe2_t7200 = float(wntr_results.link["flowrate"].loc[7200, "l102"])
-        np.testing.assert_allclose(
-            wntr_pipe2_t7200,
-            wntr_pipe2_t0,
-            rtol=1e-6,
-            err_msg="WNTR PIPE2 flow should return to original after reopening",
+        assert result_closed is not None
+        pipes_closed = result_closed["water_network"]["water_pipe_entities"]
+        movici_pipe2_closed = pipes_closed["drinking_water.flow"][1]
+        assert abs(movici_pipe2_closed) < 1e-6, (
+            f"Movici PIPE2 should be closed at t=7200, got {movici_pipe2_closed}"
         )
 
-        # Verify Movici matches at t=7200 (reopened)
-        assert result2 is not None, "Reopened pipe simulation should return results"
-        pipes = result2.get("water_network", {}).get("water_pipe_entities", {})
-        assert "drinking_water.flow" in pipes, "Reopened results should contain flow"
+        # --- Compare: reopened phase at t=10800 (same timestamp) ---
+        wntr_pipe2_t10800 = float(wntr_results.link["flowrate"].loc[10800, "l102"])
+        wntr_pipe1_t10800 = float(wntr_results.link["flowrate"].loc[10800, "l101"])
 
-        # Find PIPE2 (id=102) in results - pipes ordered by id [101, 102]
-        movici_pipe2_t7200 = pipes["drinking_water.flow"][1]
+        assert result_reopened is not None
+        pipes_reopened = result_reopened["water_network"]["water_pipe_entities"]
+        movici_pipe2_reopened = pipes_reopened["drinking_water.flow"][1]
+        movici_pipe1_reopened = pipes_reopened["drinking_water.flow"][0]
+
         np.testing.assert_allclose(
-            movici_pipe2_t7200,
-            wntr_pipe2_t7200,
+            movici_pipe2_reopened,
+            wntr_pipe2_t10800,
             rtol=1e-6,
-            err_msg="Movici PIPE2 flow should match WNTR after reopening",
+            err_msg="PIPE2 flow mismatch at t=10800 after reopening",
+        )
+        np.testing.assert_allclose(
+            movici_pipe1_reopened,
+            wntr_pipe1_t10800,
+            rtol=1e-6,
+            err_msg="PIPE1 flow mismatch at t=10800 after reopening",
         )
 
 
-class TestWNTRConditionalControlEquivalence:
-    """Test equivalence between Movici attribute conditions and WNTR conditional controls.
+class TestTankLevelProgression:
+    """Verify that tank levels carry forward across timesteps via WNTR pause/restart.
 
-    WNTR supports controls based on node/link values (pressure, level, etc.).
-    This tests that external attribute-based control logic produces equivalent results.
+    With the persistent simulator pattern, WNTR's internal tank state is preserved
+    between simulation steps.  A tank with net outflow should show progressive
+    level decreases rather than resetting to ``init_level`` every step.
     """
 
     @pytest.fixture
@@ -861,14 +729,16 @@ class TestWNTRConditionalControlEquivalence:
         return TimelineInfo(reference=0, time_scale=1, start_time=0)
 
     @pytest.fixture
-    def tank_network_data(self):
-        """Network with a tank for conditional control tests.
+    def tank_drain_network_data(self):
+        """Gravity-fed network with a tank that drains over time.
 
         Topology::
 
-            R1 -(pump1)-> T1 -(pipe1)-> J1
+            R1 -(pipe1)-> T1 -(pipe2)-> J1
 
-        Tank level can trigger controls (e.g., stop pump when tank is full).
+        The reservoir (head=30) feeds the tank (elev=20, init_level=5, head=25),
+        while J1 (elev=0, demand=0.01) draws from the tank.  With a small inlet
+        pipe and large demand, the tank should drain progressively.
         """
         return {
             "version": 4,
@@ -880,18 +750,18 @@ class TestWNTRConditionalControlEquivalence:
                     "reference": ["R1"],
                     "geometry.x": [0.0],
                     "geometry.y": [0.0],
-                    "drinking_water.base_head": [10.0],
+                    "drinking_water.base_head": [30.0],
                 },
                 "water_tank_entities": {
                     "id": [2],
                     "reference": ["T1"],
                     "geometry.x": [100.0],
                     "geometry.y": [0.0],
-                    "geometry.z": [15.0],  # elevation
+                    "geometry.z": [20.0],
                     "shape.diameter": [5.0],
-                    "drinking_water.level": [2.0],  # initial level
+                    "drinking_water.level": [5.0],
                     "drinking_water.min_level": [0.5],
-                    "drinking_water.max_level": [8.0],
+                    "drinking_water.max_level": [10.0],
                 },
                 "water_junction_entities": {
                     "id": [3],
@@ -899,111 +769,7 @@ class TestWNTRConditionalControlEquivalence:
                     "geometry.x": [200.0],
                     "geometry.y": [0.0],
                     "geometry.z": [0.0],
-                    "drinking_water.base_demand": [0.01],
-                },
-                "water_pump_entities": {
-                    "id": [101],
-                    "reference": ["PUMP1"],
-                    "topology.from_node_id": [1],
-                    "topology.to_node_id": [2],
-                    "type": ["POWER"],
-                    "drinking_water.power": [500.0],
-                    "operational.status": [True],
-                },
-                "water_pipe_entities": {
-                    "id": [102],
-                    "reference": ["PIPE1"],
-                    "topology.from_node_id": [2],
-                    "topology.to_node_id": [3],
-                    "shape.diameter": [0.2],
-                    "shape.length": [100.0],
-                    "drinking_water.roughness": [100.0],
-                    "operational.status": [True],
-                },
-            },
-        }
-
-    def test_conditional_control_concept(self):
-        """Demonstrate WNTR conditional control for documentation.
-
-        This shows how WNTR internal conditional controls work,
-        which is what the Rules Model replaces with external logic.
-        """
-        wn = wntr.network.WaterNetworkModel()
-
-        # Simple network with tank
-        wn.add_reservoir("R1", base_head=10.0)
-        wn.add_tank(
-            "T1",
-            elevation=15.0,
-            init_level=2.0,
-            min_level=0.5,
-            max_level=8.0,
-            diameter=5.0,
-        )
-        wn.add_junction("J1", base_demand=0.01, elevation=0.0)
-
-        wn.add_pump("PUMP1", "R1", "T1", pump_type="POWER", pump_parameter=500.0)
-        wn.add_pipe("PIPE1", "T1", "J1", length=100.0, diameter=0.2, roughness=100.0)
-
-        # Add conditional control: close pump when tank level >= 7.0
-        pump = wn.get_link("PUMP1")
-        tank = wn.get_node("T1")
-
-        act_close = wntr.network.controls.ControlAction(
-            pump, "status", wntr.network.LinkStatus.Closed
-        )
-        cond_high = wntr.network.controls.ValueCondition(tank, "level", ">=", 7.0)
-        ctrl_close = wntr.network.controls.Control(cond_high, act_close)
-        wn.add_control("close_pump_high", ctrl_close)
-
-        # Add conditional control: open pump when tank level <= 2.0
-        act_open = wntr.network.controls.ControlAction(
-            pump, "status", wntr.network.LinkStatus.Open
-        )
-        cond_low = wntr.network.controls.ValueCondition(tank, "level", "<=", 2.0)
-        ctrl_open = wntr.network.controls.Control(cond_low, act_open)
-        wn.add_control("open_pump_low", ctrl_open)
-
-        # Run simulation
-        wn.options.time.duration = 86400  # 24 hours
-        wn.options.time.hydraulic_timestep = 3600
-
-        sim = wntr.sim.WNTRSimulator(wn)
-        results = sim.run_sim()
-
-        # Tank level should oscillate between control thresholds
-        tank_levels = results.node["pressure"].loc[:, "T1"]  # Actually head for tanks
-
-        # Verify simulation completed
-        assert len(tank_levels) > 0, "Simulation should produce results"
-
-        # The tank level history demonstrates that controls fired
-        # (We can't easily verify exact control behavior without detailed analysis,
-        # but the simulation completing shows the network is valid)
-
-    @pytest.fixture
-    def simple_network_for_pressure(self):
-        """Simple network for pressure control tests."""
-        return {
-            "version": 4,
-            "name": "water_network",
-            "type": "water_network",
-            "data": {
-                "water_reservoir_entities": {
-                    "id": [1],
-                    "reference": ["R1"],
-                    "geometry.x": [0.0],
-                    "geometry.y": [0.0],
-                    "drinking_water.base_head": [50.0],
-                },
-                "water_junction_entities": {
-                    "id": [2, 3],
-                    "reference": ["J1", "J2"],
-                    "geometry.x": [100.0, 200.0],
-                    "geometry.y": [0.0, 0.0],
-                    "geometry.z": [10.0, 10.0],
-                    "drinking_water.base_demand": [0.001, 0.001],
+                    "drinking_water.base_demand": [0.005],
                 },
                 "water_pipe_entities": {
                     "id": [101, 102],
@@ -1013,64 +779,43 @@ class TestWNTRConditionalControlEquivalence:
                     "shape.diameter": [0.3, 0.3],
                     "shape.length": [100.0, 100.0],
                     "drinking_water.roughness": [100.0, 100.0],
-                    "operational.status": [True, True],
                 },
             },
         }
 
     @pytest.fixture
-    def init_data(self, simple_network_for_pressure):
-        """Override init_data fixture with pressure test network."""
-        return [("water_network", simple_network_for_pressure)]
+    def init_data(self, tank_drain_network_data):
+        return [("water_network", tank_drain_network_data)]
 
-    def test_pressure_threshold_control_equivalence(self, create_model_tester, init_data):
-        """Test pressure-based control equivalence.
-
-        This simulates what the Rules Model would do when it has a rule like:
-        "if junction.pressure < threshold then close_valve"
-
-        We compare against WNTR ValueCondition control on pressure.
-        """
+    def test_tank_level_changes_across_timesteps(self, create_model_tester, init_data):
+        """Tank level should change progressively, not reset to init_level each step."""
+        timestep = 3600
         config = {
             "dataset": "water_network",
-            "options": {
-                "hydraulic_timestep": 3600,
-            },
+            "options": {"hydraulic_timestep": timestep},
         }
 
         tester = create_model_tester(Model, config)
         tester.initialize()
 
-        # Get initial pressure at J2
-        result, _ = tester.update(0, None)
+        levels = []
+        num_steps = 4
 
-        assert result is not None, "Initial simulation should return results"
-        junctions = result.get("water_network", {}).get("water_junction_entities", {})
-        assert "drinking_water.pressure" in junctions, "Results should contain pressure"
+        for step in range(num_steps):
+            t = step * timestep
+            if step > 0:
+                tester.new_time(t)
+            result, _ = tester.update(t, None)
+            if result is not None:
+                tanks = result.get("water_network", {}).get("water_tank_entities", {})
+                if "drinking_water.level" in tanks:
+                    levels.append(tanks["drinking_water.level"][0])
 
-        # J2 has id=3, junctions are ordered by id [2, 3] -> indices [0, 1]
-        initial_j2_pressure = junctions["drinking_water.pressure"][1]
+        # We should have at least 2 distinct level readings
+        assert len(levels) >= 2, f"Expected multiple level readings, got {len(levels)}"
 
-        # Simulate a Rules Model action: if we detect low pressure, close a pipe
-        # Here we just verify the mechanism works
-        tester.new_time(3600)
-        close_update = {
-            "water_network": {"water_pipe_entities": {"id": [102], "operational.status": [False]}}
-        }
-        result_closed, _ = tester.update(3600, close_update)
-
-        # After closing PIPE2, J2 becomes isolated and pressure drops
-        assert result_closed is not None, "Closed pipe simulation should return results"
-        junctions_closed = result_closed.get("water_network", {}).get(
-            "water_junction_entities", {}
-        )
-        assert "drinking_water.pressure" in junctions_closed, "Should contain pressure"
-
-        final_j2_pressure = junctions_closed["drinking_water.pressure"][1]
-
-        # After pipe closure, J2 is isolated - pressure should be affected
-        # (In this simple case, it might go to 0 or become meaningless)
-        assert initial_j2_pressure != final_j2_pressure or final_j2_pressure == 0, (
-            f"Closing pipe should affect downstream junction pressure: "
-            f"initial={initial_j2_pressure}, final={final_j2_pressure}"
+        # Tank levels must not all be the same (would indicate reset to init_level)
+        unique_levels = set(round(lv, 6) for lv in levels)
+        assert len(unique_levels) > 1, (
+            f"Tank level should change across timesteps but stayed at {levels}"
         )

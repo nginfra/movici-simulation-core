@@ -143,7 +143,6 @@ class WaterReservoirEntity(WaterNodeEntity):
     head_factor = field(DrinkingWater_HeadFactor, flags=OPT)
 
     # PUB attributes
-    head = field(DrinkingWater_Head, flags=PUB)
     flow = field(DrinkingWater_Flow, flags=PUB)
     flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
 
