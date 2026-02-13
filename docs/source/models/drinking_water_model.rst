@@ -319,7 +319,7 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``topology.to_node_id``                | INIT      | Node id on the to side (from ``LinkEntity``)      |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``pump_type``                          | INIT      | Pump type: ``power`` or ``head``                  |
+| ``drinking_water.pump_type``           | INIT      | Pump type: ``power`` or ``head``                  |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.power``               | OPT       | Fixed power for a ``power`` pump. Required for    |
 |                                        |           | power pumps                                       |
@@ -368,7 +368,7 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``topology.to_node_id``                    | INIT      | Node id on the to side (from ``LinkEntity``)      |
 +--------------------------------------------+-----------+---------------------------------------------------+
-| ``valve_type``                             | INIT      | Valve type: ``PRV``, ``PSV``, ``FCV``, or ``TCV`` |
+| ``drinking_water.valve_type``              | INIT      | Valve type: ``PRV``, ``PSV``, ``FCV``, or ``TCV`` |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``shape.diameter``                         | INIT      | Valve diameter                                    |
 +--------------------------------------------+-----------+---------------------------------------------------+

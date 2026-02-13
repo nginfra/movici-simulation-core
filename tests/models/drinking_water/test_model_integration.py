@@ -392,7 +392,7 @@ class TestMixedPumpTypes:
                     "reference": ["POWER_PUMP", "HEAD_PUMP"],
                     "topology.from_node_id": [1, 2],
                     "topology.to_node_id": [3, 5],
-                    "pump_type": [0, 1],
+                    "drinking_water.pump_type": [0, 1],
                     "drinking_water.power": [1000.0, 0.0],
                     "drinking_water.head_curve": [
                         None,
@@ -494,7 +494,7 @@ class TestValveStatus:
                     "reference": ["PRV1"],
                     "topology.from_node_id": [2],
                     "topology.to_node_id": [3],
-                    "valve_type": [0],
+                    "drinking_water.valve_type": [0],
                     "shape.diameter": [0.3],
                     "drinking_water.valve_pressure": [30.0],
                 },

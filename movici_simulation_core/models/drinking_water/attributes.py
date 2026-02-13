@@ -119,9 +119,13 @@ Operational_Status = AttributeSpec("operational.status", data_type=DataType(bool
 # Type attributes (string enum values)
 # =============================================================================
 # Pump type: 0="power", 1="head"
-Type_PumpType = AttributeSpec("pump_type", data_type=DataType(int), enum_name="pump_type")
+Type_PumpType = AttributeSpec(
+    "drinking_water.pump_type", data_type=DataType(int), enum_name="pump_type"
+)
 # Valve type: 0="PRV", 1="PSV", 2="FCV", 3="TCV"
-Type_ValveType = AttributeSpec("valve_type", data_type=DataType(int), enum_name="valve_type")
+Type_ValveType = AttributeSpec(
+    "drinking_water.valve_type", data_type=DataType(int), enum_name="valve_type"
+)
 
 # =============================================================================
 # Register all attributes as plugin
