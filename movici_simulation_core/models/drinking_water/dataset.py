@@ -215,6 +215,7 @@ class WaterValveEntity(WaterLinkEntity):
     valve_flow = field(DrinkingWater_ValveFlow, flags=OPT)
     valve_loss_coefficient = field(DrinkingWater_ValveLossCoefficient, flags=OPT)
     minor_loss = field(DrinkingWater_MinorLoss, flags=OPT)
+    status = field(Operational_Status, flags=OPT)
 
 
 @dataclasses.dataclass

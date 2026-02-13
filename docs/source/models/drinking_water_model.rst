@@ -385,6 +385,9 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 |                                            |           | when the valve is fully open, proportional to     |
 |                                            |           | flow velocity squared                             |
 +--------------------------------------------+-----------+---------------------------------------------------+
+| ``operational.status``                     | OPT       | Active (``True``) or Closed (``False``).          |
+|                                            |           | Default: Active                                   |
++--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow``                    | PUB       | Valve flow rate                                   |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow_rate.magnitude``     | PUB       | Absolute flow rate                                |
@@ -406,9 +409,12 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 
 .. note:: Valve Status
 
-   Valves do not have an ``operational.status`` attribute in our implementation. The valve setting
-   (pressure, flow, or coefficient) determines the valve behavior. Setting a valve_pressure of 0
-   for a PRV effectively closes it. This simplifies the interface and matches EPANET INP behavior.
+   Valves support ``operational.status`` to set the initial state: ``True`` = Active (valve
+   regulates normally using its setting), ``False`` = Closed (no flow). The WNTR "Active"
+   status means the valve actively enforces its setting (pressure, flow, or coefficient).
+   Setting ``operational.status`` to ``True`` restores normal regulation; it does **not** set
+   the valve to "Open" (which in WNTR terminology means the valve acts as a fully open pipe,
+   ignoring its setting).
 
 Controls
 ^^^^^^^^

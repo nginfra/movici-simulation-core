@@ -460,6 +460,19 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
                     else wntr.network.LinkStatus.Closed
                 )
 
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        # WNTR groups HeadPumps before PowerPumps in the results DataFrame,
+        # regardless of creation order.  Use name-based column lookup instead
+        # of positional slicing to handle mixed pump types correctly.
+        eg = self.entity_group
+        names = [self._link_name(eid) for eid in eg.index.ids]
+        flows = results.link["flowrate"].iloc[-1][names].values
+        eg.flow.array[:] = flows
+        eg.flow_rate_magnitude.array[:] = np.abs(flows)
+        eg.link_status.array[:] = results.link["status"].iloc[-1][names].values.astype(int)
+
     def update_elements(self):
         eg = self.entity_group
         if not len(eg) or not eg.status.has_data():
@@ -502,6 +515,7 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
         enum_values = eg.valve_type.options.enum_values
         valve_types = [enum_values[int(v)].upper() for v in eg.valve_type.array]
         ml_defined = _opt_defined(eg.minor_loss)
+        status_defined = _opt_defined(eg.status)
 
         # Pre-compute setting masks for all valve setting attributes
         setting_masks = {
@@ -517,6 +531,10 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
             setting = self._get_setting(idx, valve_type, setting_masks)
             minor_loss = _opt_val(eg.minor_loss, idx, ml_defined, 0.0)
 
+            initial_status = "ACTIVE"
+            if status_defined is not None and status_defined[idx]:
+                initial_status = "ACTIVE" if eg.status.array[idx] else "CLOSED"
+
             self.wn.add_valve(
                 name=name,
                 start_node_name=from_node,
@@ -525,6 +543,21 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
                 valve_type=valve_type,
                 minor_loss=minor_loss,
                 initial_setting=setting,
+                initial_status=initial_status,
+            )
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg) or not eg.status.has_data():
+            return
+        if not np.any(eg.status.changed):
+            return
+        for idx in np.flatnonzero(eg.status.changed):
+            link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
+            link.initial_status = (
+                wntr.network.LinkStatus.Active
+                if eg.status.array[idx]
+                else wntr.network.LinkStatus.Closed
             )
 
 

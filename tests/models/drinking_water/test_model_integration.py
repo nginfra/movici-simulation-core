@@ -178,6 +178,7 @@ class TestAttributeNaming:
         assert self._has_attribute(WaterValveEntity, "valve_pressure")
         assert self._has_attribute(WaterValveEntity, "valve_flow")
         assert self._has_attribute(WaterValveEntity, "valve_loss_coefficient")
+        assert self._has_attribute(WaterValveEntity, "status")
         assert self._has_attribute(WaterValveEntity, "flow")
 
 
@@ -323,3 +324,246 @@ class TestHydraulicOptionsFromDataset:
         assert wn.options.hydraulic.viscosity == 1.5
         assert wn.options.hydraulic.trials == 100
         assert wn.options.hydraulic.accuracy == 0.01
+
+
+class TestMixedPumpTypes:
+    """Test that results are correctly assigned when HEAD and POWER pumps coexist.
+
+    WNTR groups HeadPumps before PowerPumps in the results DataFrame,
+    regardless of creation order.  This test verifies that name-based
+    lookup produces correct results even when entity order differs from
+    WNTR's internal ordering.
+    """
+
+    @pytest.fixture
+    def additional_attributes(self):
+        return Model.get_schema_attributes()
+
+    @pytest.fixture
+    def global_timeline_info(self):
+        return TimelineInfo(reference=0, time_scale=1, start_time=0)
+
+    @pytest.fixture
+    def mixed_pump_network_data(self):
+        """Network with POWER pump before HEAD pump in entity order.
+
+        Topology::
+
+            R1 -(POWER pump PU201)-> J1 -(pipe P101)-> J2
+            R2 -(HEAD  pump PU202)-> J3 -(pipe P102)-> J4
+        """
+        return {
+            "version": 4,
+            "name": "water_network",
+            "type": "water_network",
+            "general": {
+                "enum": {
+                    "pump_type": ["power", "head"],
+                    "link_status": ["Closed", "Open", "Active", "CV"],
+                },
+            },
+            "data": {
+                "water_reservoir_entities": {
+                    "id": [1, 2],
+                    "reference": ["R1", "R2"],
+                    "geometry.x": [0.0, 0.0],
+                    "geometry.y": [0.0, 200.0],
+                    "drinking_water.base_head": [0.0, 0.0],
+                },
+                "water_junction_entities": {
+                    "id": [3, 4, 5, 6],
+                    "reference": ["J1", "J2", "J3", "J4"],
+                    "geometry.x": [100.0, 200.0, 100.0, 200.0],
+                    "geometry.y": [0.0, 0.0, 200.0, 200.0],
+                    "geometry.z": [0.0, 0.0, 0.0, 0.0],
+                    "drinking_water.base_demand": [0.0, 0.001, 0.0, 0.001],
+                },
+                "water_pipe_entities": {
+                    "id": [101, 102],
+                    "reference": ["PIPE1", "PIPE2"],
+                    "topology.from_node_id": [3, 5],
+                    "topology.to_node_id": [4, 6],
+                    "shape.diameter": [0.3, 0.3],
+                    "shape.length": [100.0, 100.0],
+                    "drinking_water.roughness": [100.0, 100.0],
+                },
+                "water_pump_entities": {
+                    "id": [201, 202],
+                    "reference": ["POWER_PUMP", "HEAD_PUMP"],
+                    "topology.from_node_id": [1, 2],
+                    "topology.to_node_id": [3, 5],
+                    "pump_type": [0, 1],
+                    "drinking_water.power": [1000.0, 0.0],
+                    "drinking_water.head_curve": [
+                        None,
+                        [[0.0, 50.0], [0.01, 0.0]],
+                    ],
+                },
+            },
+        }
+
+    @pytest.fixture
+    def init_data(self, mixed_pump_network_data):
+        return [("water_network", mixed_pump_network_data)]
+
+    @pytest.fixture
+    def model_config(self):
+        return {"dataset": "water_network", "options": {"hydraulic_timestep": 3600}}
+
+    def _get_wn(self, tester):
+        return tester.model.model.model.network.wn
+
+    def test_mixed_pump_results_correctly_assigned(self, create_model_tester, model_config):
+        """Verify results map to the correct pump when types are mixed."""
+        tester = create_model_tester(Model, model_config)
+        tester.initialize()
+
+        result, _ = tester.update(0, None)
+
+        assert result is not None
+        pumps = result["water_network"]["water_pump_entities"]
+        flows = pumps["drinking_water.flow"]
+
+        # Both pumps should produce positive flow
+        assert len(flows) == 2
+        assert flows[0] > 0, "Power pump (index 0) should have flow"
+        assert flows[1] > 0, "Head pump (index 1) should have flow"
+
+        # Confirm WNTR separated the pump types internally
+        wn = self._get_wn(tester)
+        assert "PU202" in wn.head_pump_name_list
+        assert "PU201" in wn.power_pump_name_list
+
+
+class TestValveStatus:
+    """Test valve operational.status for initial state and dynamic changes."""
+
+    @pytest.fixture
+    def additional_attributes(self):
+        return Model.get_schema_attributes()
+
+    @pytest.fixture
+    def global_timeline_info(self):
+        return TimelineInfo(reference=0, time_scale=1, start_time=0)
+
+    @pytest.fixture
+    def valve_network_data(self):
+        """Network with a PRV valve.
+
+        Topology::
+
+            R1 -(pipe P101)-> J1 -(PRV V301)-> J2 -(pipe P102)-> J3
+        """
+        return {
+            "version": 4,
+            "name": "water_network",
+            "type": "water_network",
+            "general": {
+                "enum": {
+                    "valve_type": ["PRV", "PSV", "FCV", "TCV"],
+                    "link_status": ["Closed", "Open", "Active", "CV"],
+                },
+            },
+            "data": {
+                "water_reservoir_entities": {
+                    "id": [1],
+                    "reference": ["R1"],
+                    "geometry.x": [0.0],
+                    "geometry.y": [0.0],
+                    "drinking_water.base_head": [50.0],
+                },
+                "water_junction_entities": {
+                    "id": [2, 3, 4],
+                    "reference": ["J1", "J2", "J3"],
+                    "geometry.x": [100.0, 200.0, 300.0],
+                    "geometry.y": [0.0, 0.0, 0.0],
+                    "geometry.z": [10.0, 10.0, 10.0],
+                    "drinking_water.base_demand": [0.0, 0.0, 0.001],
+                },
+                "water_pipe_entities": {
+                    "id": [101, 102],
+                    "reference": ["PIPE1", "PIPE2"],
+                    "topology.from_node_id": [1, 3],
+                    "topology.to_node_id": [2, 4],
+                    "shape.diameter": [0.3, 0.3],
+                    "shape.length": [100.0, 100.0],
+                    "drinking_water.roughness": [100.0, 100.0],
+                },
+                "water_valve_entities": {
+                    "id": [301],
+                    "reference": ["PRV1"],
+                    "topology.from_node_id": [2],
+                    "topology.to_node_id": [3],
+                    "valve_type": [0],
+                    "shape.diameter": [0.3],
+                    "drinking_water.valve_pressure": [30.0],
+                },
+            },
+        }
+
+    @pytest.fixture
+    def model_config(self):
+        return {"dataset": "water_network", "options": {"hydraulic_timestep": 3600}}
+
+    def test_valve_initially_closed(self, create_model_tester, model_config, valve_network_data):
+        """Valve with status=False should block flow."""
+        valve_network_data["data"]["water_valve_entities"]["operational.status"] = [False]
+
+        tester = create_model_tester(Model, model_config)
+        tester.add_init_data("water_network", valve_network_data)
+        tester.initialize()
+
+        result, _ = tester.update(0, None)
+
+        assert result is not None
+        valves = result["water_network"]["water_valve_entities"]
+        assert abs(valves["drinking_water.flow"][0]) < 1e-10
+
+    def test_valve_default_active(self, create_model_tester, model_config, valve_network_data):
+        """Valve without status attribute should be active (regulating)."""
+        tester = create_model_tester(Model, model_config)
+        tester.add_init_data("water_network", valve_network_data)
+        tester.initialize()
+
+        result, _ = tester.update(0, None)
+
+        assert result is not None
+        valves = result["water_network"]["water_valve_entities"]
+        assert abs(valves["drinking_water.flow"][0]) > 1e-6
+
+    def test_valve_status_change_reopens(
+        self, create_model_tester, model_config, valve_network_data
+    ):
+        """Changing valve status from closed to active should restore flow."""
+        valve_network_data["data"]["water_valve_entities"]["operational.status"] = [False]
+
+        tester = create_model_tester(Model, model_config)
+        tester.add_init_data("water_network", valve_network_data)
+        tester.initialize()
+
+        # t=0: valve closed
+        result_closed, _ = tester.update(0, None)
+        assert (
+            abs(result_closed["water_network"]["water_valve_entities"]["drinking_water.flow"][0])
+            < 1e-10
+        )
+
+        # t=3600: send status change to reopen
+        tester.new_time(3600)
+        update = {
+            "water_network": {
+                "water_valve_entities": {
+                    "id": [301],
+                    "operational.status": [True],
+                }
+            }
+        }
+        tester.update(3600, update)
+
+        # t=7200: valve active, flow should resume
+        tester.new_time(7200)
+        result_open, _ = tester.update(7200, None)
+
+        assert result_open is not None
+        valve_flow = result_open["water_network"]["water_valve_entities"]["drinking_water.flow"][0]
+        assert abs(valve_flow) > 1e-6, f"Reopened valve should have flow, got {valve_flow}"
