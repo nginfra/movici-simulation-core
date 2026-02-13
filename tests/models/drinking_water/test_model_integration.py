@@ -239,14 +239,11 @@ class TestHydraulicOptionsFromDataset:
         }
 
     def _get_wn(self, tester):
-        """Navigate the tester wrapper chain to get the WNTR WaterNetworkModel.
-
-        Chain: ModelTester.model (NumpyPreProcessor)
-               -> .model (TrackedModelAdapter)
-               -> .model (Model)
-               -> .network.wn
-        """
-        return tester.model.model.model.network.wn
+        """Navigate the tester wrapper chain to get the WNTR WaterNetworkModel."""
+        obj = tester.model
+        while hasattr(obj, "model"):
+            obj = obj.model
+        return obj.network.wn
 
     def test_options_applied_from_general_section(self, create_model_tester, model_config):
         """Test that data options from dataset general section are applied."""
@@ -411,7 +408,10 @@ class TestMixedPumpTypes:
         return {"dataset": "water_network", "options": {"hydraulic_timestep": 3600}}
 
     def _get_wn(self, tester):
-        return tester.model.model.model.network.wn
+        obj = tester.model
+        while hasattr(obj, "model"):
+            obj = obj.model
+        return obj.network.wn
 
     def test_mixed_pump_results_correctly_assigned(self, create_model_tester, model_config):
         """Verify results map to the correct pump when types are mixed."""
