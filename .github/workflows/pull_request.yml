@@ -38,8 +38,9 @@ jobs:
     - uses: actions/checkout@v5
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ matrix.python-version }}
 
     - name: Install Spatialite
@@ -67,8 +68,9 @@ jobs:
     - uses: actions/checkout@v5
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ env.python-version }}
 
     - name: Install Spatialite
@@ -95,8 +97,9 @@ jobs:
     - uses: actions/checkout@v5
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ env.python-version }}
 
     - name: Install Spatialite
@@ -104,7 +107,7 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install movici-core 
+    - name: Install movici-core
       uses: ./.github/actions/install-movici-core
       with:
         os: ${{ matrix.os }}
