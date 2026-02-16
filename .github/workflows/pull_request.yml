@@ -26,11 +26,11 @@ jobs:
         make lint
 
   test-all-platforms:
-    if: contains( github.event.pull_request.labels.*.name, 'all-versions')
+    # if: contains( github.event.pull_request.labels.*.name, 'all-versions')
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     runs-on: ${{ matrix.os }}
@@ -47,16 +47,17 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install
-      run: |
-        pip install .[models,dev]
+    - name: Install movici-core
+      uses: ./.github/actions/install-movici-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests
       run: |
         make test-numba
 
   test-numba:
-    if: contains( github.event.pull_request.labels.*.name, 'numba')
+    # if: contains( github.event.pull_request.labels.*.name, 'numba')
     strategy:
       fail-fast: false
       matrix:
@@ -75,9 +76,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install dependencies
-      run: |
-        pip install -e .[models,dev]
+    - name: Install movici-core
+      uses: ./.github/actions/install-movici-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests with Numba JIT enabled
       run: |
@@ -102,9 +104,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install dependencies
-      run: |
-        pip install -e .[models,dev]
+    - name: Install movici-core 
+      uses: ./.github/actions/install-movici-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests with coverage
       run: |

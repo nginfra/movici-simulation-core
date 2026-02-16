@@ -1,0 +1,31 @@
+name: "Install Movici Core"
+description: "Installs LLVM/Clang on macOS and pip-installs the project with the correct compiler flags. No-op on other OSes."
+
+inputs:
+  os:
+    description: "The currently running os"
+    required: true
+  pip-extras:
+    description: "The pip extras to install (e.g. '.[models,dev]')"
+    required: false
+    default: ".[models,dev]"
+
+runs:
+  using: "composite"
+  steps:
+  - name: Install with LLVM (macOS)
+    if: startsWith(inputs.os, 'macos')
+    shell: bash
+    run: |
+      brew install llvm
+      export CC=/opt/homebrew/opt/llvm/bin/clang
+      export CXX=/opt/homebrew/opt/llvm/bin/clang++
+      export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+      export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+      pip install -e ${{ inputs.pip-extras }}
+
+  - name: Install without LLVM (Linux/Windows)
+    if: ${{ !startsWith(inputs.os, 'macos') }}
+    shell: bash
+    run: |
+      pip install -e ${{ inputs.pip-extras }}

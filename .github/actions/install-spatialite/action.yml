@@ -1,4 +1,5 @@
 name: "Install Spatialite"
+description: "Installs Spatialite on the current OS. On Windows, it also adds the installation directory to the PATH."
 
 inputs:
   os:
