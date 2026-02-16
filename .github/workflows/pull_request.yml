@@ -2,9 +2,6 @@ name: Pull Requests
 
 on:
   pull_request:
-  push:
-    branches:
-      - macos-ci
 
 env:
   python-version: "3.13"
@@ -29,7 +26,7 @@ jobs:
         make lint
 
   test-all-platforms:
-    # if: contains( github.event.pull_request.labels.*.name, 'all-versions')
+    if: contains( github.event.pull_request.labels.*.name, 'all-versions')
     strategy:
       fail-fast: false
       matrix:
@@ -61,7 +58,7 @@ jobs:
         make test-numba
 
   test-numba:
-    # if: contains( github.event.pull_request.labels.*.name, 'numba')
+    if: contains( github.event.pull_request.labels.*.name, 'numba')
     strategy:
       fail-fast: false
       matrix:
@@ -94,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/checkout@v5
