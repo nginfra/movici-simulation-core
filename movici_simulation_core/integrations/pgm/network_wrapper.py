@@ -1,8 +1,11 @@
-"""Wrapper around power-grid-model's PowerGridModel.
+"""Power-grid-model integration with processor-based architecture.
 
-This module provides the PowerGridWrapper class which encapsulates the
-power-grid-model library, handling data conversion between Movici collections
-and PGM structured arrays.
+Each electrical entity type has a dedicated processor that handles:
+- Building PGM input arrays from Movici entity group data
+- Building sparse update arrays for changed elements
+- Writing PGM results back to entity group attributes
+
+The PowerGridWrapper orchestrates processors and manages the PGM model.
 """
 
 from __future__ import annotations
@@ -13,450 +16,567 @@ from enum import IntEnum
 import numpy as np
 import power_grid_model as pgm
 
-from .collections import (
-    ApplianceResult,
-    BranchResult,
-    FaultCollection,
-    GeneratorCollection,
-    LineCollection,
-    LoadCollection,
-    NodeCollection,
-    NodeResult,
-    PowerFlowResult,
-    PowerSensorCollection,
-    ShortCircuitResult,
-    ShuntCollection,
-    SourceCollection,
-    TransformerCollection,
-    VoltageSensorCollection,
-)
+from movici_simulation_core.core.entity_group import EntityGroup
+
 from .id_generator import ComponentIdManager
+
+if t.TYPE_CHECKING:
+    from movici_simulation_core.models.power_grid_calculation.dataset import PowerGridNetwork
+
+T = t.TypeVar("T", bound=EntityGroup)
+
+
+# =========================================================================
+# Enums
+# =========================================================================
 
 
 class CalculationType(IntEnum):
-    """Supported calculation types."""
-
     POWER_FLOW = 0
     STATE_ESTIMATION = 1
     SHORT_CIRCUIT = 2
 
 
 class CalculationMethod(IntEnum):
-    """Power flow calculation methods."""
-
     NEWTON_RAPHSON = 0
     LINEAR = 1
     LINEAR_CURRENT = 2
     ITERATIVE_CURRENT = 3
 
 
-class LoadGenType(IntEnum):
-    """Load/generator type enumeration."""
+_PGM_CALC_METHODS = {
+    CalculationMethod.NEWTON_RAPHSON: pgm.CalculationMethod.newton_raphson,
+    CalculationMethod.LINEAR: pgm.CalculationMethod.linear,
+    CalculationMethod.LINEAR_CURRENT: pgm.CalculationMethod.linear_current,
+    CalculationMethod.ITERATIVE_CURRENT: pgm.CalculationMethod.iterative_current,
+}
 
-    CONST_POWER = 0
-    CONST_IMPEDANCE = 1
-    CONST_CURRENT = 2
-
-
-class WindingType(IntEnum):
-    """Transformer winding type enumeration."""
-
-    WYE = 0
-    WYE_N = 1
-    DELTA = 2
-
-
-class BranchSide(IntEnum):
-    """Branch side enumeration."""
-
-    FROM = 0
-    TO = 1
+# PGM MeasuredTerminalType -> component types to search
+_TERMINAL_TYPE_TO_COMPONENTS = {
+    0: ["line", "transformer"],  # branch_from
+    1: ["line", "transformer"],  # branch_to
+    2: ["source"],
+    3: ["shunt"],
+    4: ["sym_load"],
+    5: ["sym_gen"],
+}
 
 
-class FaultType(IntEnum):
-    """Fault type enumeration."""
-
-    THREE_PHASE = 0
-    SINGLE_PHASE_TO_GROUND = 1
-    TWO_PHASE = 2
-    TWO_PHASE_TO_GROUND = 3
+# =========================================================================
+# Helpers
+# =========================================================================
 
 
-class PowerGridWrapper:
-    """Wrapper around power-grid-model's PowerGridModel.
+def _scalar(arr: np.ndarray) -> np.ndarray:
+    """Extract scalar values from a potentially 3-phase result array.
 
-    This class handles:
+    Short circuit results have shape ``(n, 3)`` (one value per phase).
+    Power flow results have shape ``(n,)``.  This helper returns phase A
+    (index 0) when the array is 2-D, otherwise returns the array as-is.
+    """
+    if arr.ndim == 2:
+        return arr[:, 0]
+    return arr
 
-    * Converting Movici collections to PGM structured arrays
-    * Managing component ID mappings
-    * Running calculations (power flow, state estimation, short circuit)
-    * Converting results back to Movici-compatible collections
+
+def _get_optional_array(attr, default=0, dtype=np.float64) -> np.ndarray:
+    """Get array from attribute, using default if not initialized."""
+    if attr.is_initialized():
+        return attr.array
+    return np.full(len(attr), default, dtype=dtype)
+
+
+def _get_status_array(attr, default: int = 1) -> np.ndarray:
+    """Get status array with default value of 1 (enabled)."""
+    if attr.is_initialized():
+        return attr.array.astype(np.int8)
+    return np.full(len(attr), default, dtype=np.int8)
+
+
+# =========================================================================
+# Base processor
+# =========================================================================
+
+
+class PGMElementProcessor(t.Generic[T]):
+    """Base class for PGM element processors.
+
+    Each processor handles one Movici entity type and knows how to build
+    PGM input/update arrays and write results back to entity attributes.
+
+    Class attributes:
+        PGM_COMPONENT: PGM component type name (e.g. ``"node"``, ``"line"``).
+            Multiple processors can share the same PGM_COMPONENT; the wrapper
+            concatenates their arrays.
     """
 
-    def __init__(self):
-        self.model = None
-        self.input_data: dict[str, np.ndarray] = {}
-        self.id_manager = ComponentIdManager()
+    PGM_COMPONENT: str
 
-    def build_network(
-        self,
-        nodes: NodeCollection,
-        lines: t.Optional[LineCollection] = None,
-        transformers: t.Optional[TransformerCollection] = None,
-        loads: t.Optional[LoadCollection] = None,
-        generators: t.Optional[GeneratorCollection] = None,
-        sources: t.Optional[SourceCollection] = None,
-        shunts: t.Optional[ShuntCollection] = None,
-        voltage_sensors: t.Optional[VoltageSensorCollection] = None,
-        power_sensors: t.Optional[PowerSensorCollection] = None,
-        faults: t.Optional[FaultCollection] = None,
-    ) -> None:
-        """Build the power grid model from component collections.
+    def __init__(self, wrapper: PowerGridWrapper, entity_group: T):
+        self.wrapper = wrapper
+        self.entity_group = entity_group
 
-        :param nodes: Node collection (required).
-        :param lines: Line collection (optional).
-        :param transformers: Transformer collection (optional).
-        :param loads: Load collection (optional).
-        :param generators: Generator collection (optional).
-        :param sources: Source collection (required for power flow).
-        :param shunts: Shunt collection (optional).
-        :param voltage_sensors: Voltage sensor collection (for state estimation).
-        :param power_sensors: Power sensor collection (for state estimation).
-        :param faults: Fault collection (for short circuit analysis).
-        """
-        self.id_manager.clear()
-        self.input_data = {}
+    @property
+    def id_manager(self) -> ComponentIdManager:
+        return self.wrapper.id_manager
 
-        # Build node array (required)
-        self.input_data["node"] = self._build_node_array(nodes)
+    def build_input_array(self) -> t.Optional[np.ndarray]:
+        raise NotImplementedError
 
-        # Build optional component arrays
-        if lines is not None and len(lines) > 0:
-            self.input_data["line"] = self._build_line_array(lines, nodes)
+    def build_update_array(self) -> t.Optional[np.ndarray]:
+        return None
 
-        if transformers is not None and len(transformers) > 0:
-            self.input_data["transformer"] = self._build_transformer_array(transformers, nodes)
+    def write_results(self, result: dict):
+        pass
 
-        if loads is not None and len(loads) > 0:
-            self.input_data["sym_load"] = self._build_load_array(loads, nodes)
 
-        if generators is not None and len(generators) > 0:
-            self.input_data["sym_gen"] = self._build_generator_array(generators, nodes)
+# =========================================================================
+# Node processors
+# =========================================================================
 
-        if sources is not None and len(sources) > 0:
-            self.input_data["source"] = self._build_source_array(sources, nodes)
 
-        if shunts is not None and len(shunts) > 0:
-            self.input_data["shunt"] = self._build_shunt_array(shunts, nodes)
+class NodeProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "node"
 
-        # Build sensor arrays (for state estimation)
-        if voltage_sensors is not None and len(voltage_sensors) > 0:
-            self.input_data["sym_voltage_sensor"] = self._build_voltage_sensor_array(
-                voltage_sensors
-            )
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("node", eg.index.ids)
+        arr = pgm.initialize_array("input", "node", len(eg))
+        arr["id"] = pgm_ids
+        arr["u_rated"] = eg.rated_voltage.array
+        return arr
 
-        if power_sensors is not None and len(power_sensors) > 0:
-            self.input_data["sym_power_sensor"] = self._build_power_sensor_array(power_sensors)
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        node_result = result.get("node")
+        if node_result is None:
+            return
+        result_ids = self.id_manager.get_movici_ids("node", node_result["id"])
+        mask = np.isin(result_ids, eg.index.ids)
+        if not np.any(mask):
+            return
+        indices = eg.get_indices(result_ids[mask])
+        eg.voltage_pu[indices] = _scalar(node_result["u_pu"][mask])
+        eg.voltage_angle[indices] = _scalar(node_result["u_angle"][mask])
+        eg.voltage[indices] = _scalar(node_result["u"][mask])
+        # p, q are not available in short circuit results
+        if "p" in node_result.dtype.names:
+            eg.active_power[indices] = node_result["p"][mask]
+            eg.reactive_power[indices] = node_result["q"][mask]
 
-        # Build fault array (for short circuit)
-        if faults is not None and len(faults) > 0:
-            self.input_data["fault"] = self._build_fault_array(faults)
 
-        # Create the PowerGridModel
-        self.model = pgm.PowerGridModel(self.input_data)
+class VirtualNodeProcessor(NodeProcessor):
+    """Same as NodeProcessor but for virtual node entities."""
 
-    def update_loads(self, loads: LoadCollection) -> None:
-        """Update load values for next calculation.
+    pass
 
-        :param loads: Load collection with updated p_specified and q_specified.
-        """
-        if self.model is None:
-            raise RuntimeError("Network not built. Call build_network first.")
 
-        update_data = self._build_load_update(loads)
-        self.model.update(update_data={"sym_load": update_data})
+# =========================================================================
+# Line/branch processors
+# =========================================================================
 
-    def update_generators(self, generators: GeneratorCollection) -> None:
-        """Update generator values for next calculation.
 
-        :param generators: Generator collection with updated values.
-        """
-        if self.model is None:
-            raise RuntimeError("Network not built. Call build_network first.")
+class LineProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "line"
 
-        update_data = self._build_generator_update(generators)
-        self.model.update(update_data={"sym_gen": update_data})
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("line", eg.index.ids)
+        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
+        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
 
-    def calculate_power_flow(
-        self,
-        method: CalculationMethod = CalculationMethod.NEWTON_RAPHSON,
-        symmetric: bool = True,
-    ) -> PowerFlowResult:
-        """Run power flow calculation.
+        arr = pgm.initialize_array("input", "line", len(eg))
+        arr["id"] = pgm_ids
+        arr["from_node"] = from_node_pgm
+        arr["to_node"] = to_node_pgm
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        arr["r1"] = eg.resistance.array
+        arr["x1"] = eg.reactance.array
+        arr["c1"] = eg.capacitance.array
+        arr["tan1"] = eg.tan_delta.array
+        i_n = _get_optional_array(eg.rated_current, default=np.inf)
+        arr["i_n"] = np.where(np.isinf(i_n), np.nan, i_n)
+        return arr
 
-        :param method: Calculation method to use.
-        :param symmetric: Whether to use symmetric (balanced) calculation.
-        :returns: Power flow results.
-        :raises RuntimeError: If network not built.
-        """
-        if self.model is None:
-            raise RuntimeError("Network not built. Call build_network first.")
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        line_result = result.get("line")
+        if line_result is None:
+            return
+        result_ids = self.id_manager.get_movici_ids("line", line_result["id"])
+        mask = np.isin(result_ids, eg.index.ids)
+        if not np.any(mask):
+            return
+        indices = eg.get_indices(result_ids[mask])
+        eg.current_from[indices] = _scalar(line_result["i_from"][mask])
+        eg.current_to[indices] = _scalar(line_result["i_to"][mask])
+        # p, q, loading are not available in short circuit results
+        if "p_from" in line_result.dtype.names:
+            eg.power_from[indices] = line_result["p_from"][mask]
+            eg.power_to[indices] = line_result["p_to"][mask]
+            eg.reactive_power_from[indices] = line_result["q_from"][mask]
+            eg.reactive_power_to[indices] = line_result["q_to"][mask]
+            eg.loading[indices] = line_result["loading"][mask]
 
-        # Map calculation method
-        calc_method = self._get_calculation_method(method)
 
-        # Run calculation
-        result = self.model.calculate_power_flow(
-            symmetric=symmetric,
-            calculation_method=calc_method,
+class CableProcessor(LineProcessor):
+    """Same as LineProcessor but for underground cable entities."""
+
+    pass
+
+
+class LinkProcessor(PGMElementProcessor):
+    """Converts zero-impedance links to minimal-impedance PGM lines."""
+
+    PGM_COMPONENT = "line"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        n = len(eg)
+        pgm_ids = self.id_manager.register_ids("line", eg.index.ids)
+        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
+        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
+
+        arr = pgm.initialize_array("input", "line", n)
+        arr["id"] = pgm_ids
+        arr["from_node"] = from_node_pgm
+        arr["to_node"] = to_node_pgm
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        arr["r1"] = np.full(n, 1e-6)
+        arr["x1"] = np.full(n, 1e-6)
+        arr["c1"] = np.full(n, 1e-12)
+        arr["tan1"] = np.zeros(n)
+        arr["i_n"] = np.full(n, np.nan)
+        return arr
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        line_result = result.get("line")
+        if line_result is None:
+            return
+        result_ids = self.id_manager.get_movici_ids("line", line_result["id"])
+        mask = np.isin(result_ids, eg.index.ids)
+        if not np.any(mask):
+            return
+        indices = eg.get_indices(result_ids[mask])
+        eg.current_from[indices] = _scalar(line_result["i_from"][mask])
+        eg.current_to[indices] = _scalar(line_result["i_to"][mask])
+        if "p_from" in line_result.dtype.names:
+            eg.power_from[indices] = line_result["p_from"][mask]
+            eg.power_to[indices] = line_result["p_to"][mask]
+            eg.reactive_power_from[indices] = line_result["q_from"][mask]
+            eg.reactive_power_to[indices] = line_result["q_to"][mask]
+            eg.loading[indices] = line_result["loading"][mask]
+
+
+class TransformerProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "transformer"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("transformer", eg.index.ids)
+        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
+        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
+
+        arr = pgm.initialize_array("input", "transformer", len(eg))
+        arr["id"] = pgm_ids
+        arr["from_node"] = from_node_pgm
+        arr["to_node"] = to_node_pgm
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        arr["u1"] = eg.primary_voltage.array
+        arr["u2"] = eg.secondary_voltage.array
+        arr["sn"] = eg.rated_power.array
+        arr["uk"] = eg.short_circuit_voltage.array
+        arr["pk"] = eg.copper_loss.array
+        arr["i0"] = eg.no_load_current.array
+        arr["p0"] = eg.no_load_loss.array
+        arr["winding_from"] = _get_optional_array(eg.winding_from, default=1, dtype=np.int8)
+        arr["winding_to"] = _get_optional_array(eg.winding_to, default=1, dtype=np.int8)
+        arr["clock"] = _get_optional_array(eg.clock, default=0, dtype=np.int8)
+        arr["tap_side"] = _get_optional_array(eg.tap_side, default=0, dtype=np.int8)
+        arr["tap_pos"] = _get_optional_array(eg.tap_position, default=0, dtype=np.int8)
+        arr["tap_min"] = _get_optional_array(eg.tap_min, default=0, dtype=np.int8)
+        arr["tap_max"] = _get_optional_array(eg.tap_max, default=0, dtype=np.int8)
+        arr["tap_nom"] = _get_optional_array(eg.tap_nom, default=0, dtype=np.int8)
+        arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
+        return arr
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        trafo_result = result.get("transformer")
+        if trafo_result is None:
+            return
+        result_ids = self.id_manager.get_movici_ids("transformer", trafo_result["id"])
+        mask = np.isin(result_ids, eg.index.ids)
+        if not np.any(mask):
+            return
+        indices = eg.get_indices(result_ids[mask])
+        eg.current_from[indices] = _scalar(trafo_result["i_from"][mask])
+        eg.current_to[indices] = _scalar(trafo_result["i_to"][mask])
+        if "p_from" in trafo_result.dtype.names:
+            eg.power_from[indices] = trafo_result["p_from"][mask]
+            eg.power_to[indices] = trafo_result["p_to"][mask]
+            eg.loading[indices] = trafo_result["loading"][mask]
+
+
+class ThreeWindingTransformerProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "three_winding_transformer"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("three_winding_transformer", eg.index.ids)
+        node1_pgm = self.id_manager.get_pgm_ids("node", eg.node_1_id.array)
+        node2_pgm = self.id_manager.get_pgm_ids("node", eg.node_2_id.array)
+        node3_pgm = self.id_manager.get_pgm_ids("node", eg.node_3_id.array)
+
+        arr = pgm.initialize_array("input", "three_winding_transformer", len(eg))
+        arr["id"] = pgm_ids
+        arr["node_1"] = node1_pgm
+        arr["node_2"] = node2_pgm
+        arr["node_3"] = node3_pgm
+        arr["status_1"] = _get_status_array(eg.status_1)
+        arr["status_2"] = _get_status_array(eg.status_2)
+        arr["status_3"] = _get_status_array(eg.status_3)
+        arr["u1"] = eg.primary_voltage.array
+        arr["u2"] = eg.secondary_voltage.array
+        arr["u3"] = eg.tertiary_voltage.array
+        arr["sn_1"] = eg.rated_power_1.array
+        arr["sn_2"] = eg.rated_power_2.array
+        arr["sn_3"] = eg.rated_power_3.array
+        arr["uk_12"] = eg.short_circuit_voltage_12.array
+        arr["uk_13"] = eg.short_circuit_voltage_13.array
+        arr["uk_23"] = eg.short_circuit_voltage_23.array
+        arr["pk_12"] = eg.copper_loss_12.array
+        arr["pk_13"] = eg.copper_loss_13.array
+        arr["pk_23"] = eg.copper_loss_23.array
+        arr["i0"] = eg.no_load_current.array
+        arr["p0"] = eg.no_load_loss.array
+        arr["winding_1"] = _get_optional_array(eg.winding_1, default=1, dtype=np.int8)
+        arr["winding_2"] = _get_optional_array(eg.winding_2, default=1, dtype=np.int8)
+        arr["winding_3"] = _get_optional_array(eg.winding_3, default=1, dtype=np.int8)
+        arr["clock_12"] = _get_optional_array(eg.clock_12, default=0, dtype=np.int8)
+        arr["clock_13"] = _get_optional_array(eg.clock_13, default=0, dtype=np.int8)
+        arr["tap_side"] = _get_optional_array(eg.tap_side, default=0, dtype=np.int8)
+        arr["tap_pos"] = _get_optional_array(eg.tap_position, default=0, dtype=np.int8)
+        arr["tap_min"] = _get_optional_array(eg.tap_min, default=0, dtype=np.int8)
+        arr["tap_max"] = _get_optional_array(eg.tap_max, default=0, dtype=np.int8)
+        arr["tap_nom"] = _get_optional_array(eg.tap_nom, default=0, dtype=np.int8)
+        arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
+        return arr
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        t3w_result = result.get("three_winding_transformer")
+        if t3w_result is None:
+            return
+        result_ids = self.id_manager.get_movici_ids(
+            "three_winding_transformer", t3w_result["id"]
         )
+        indices = eg.get_indices(result_ids)
+        eg.current_1[indices] = _scalar(t3w_result["i_1"])
+        eg.current_2[indices] = _scalar(t3w_result["i_2"])
+        eg.current_3[indices] = _scalar(t3w_result["i_3"])
+        if "p_1" in t3w_result.dtype.names:
+            eg.power_1[indices] = t3w_result["p_1"]
+            eg.power_2[indices] = t3w_result["p_2"]
+            eg.power_3[indices] = t3w_result["p_3"]
+            eg.reactive_power_1[indices] = t3w_result["q_1"]
+            eg.reactive_power_2[indices] = t3w_result["q_2"]
+            eg.reactive_power_3[indices] = t3w_result["q_3"]
+            eg.loading[indices] = t3w_result["loading"]
 
-        return self._convert_power_flow_result(result)
 
-    def calculate_state_estimation(
-        self,
-        symmetric: bool = True,
-    ) -> PowerFlowResult:
-        """Run state estimation calculation.
+# =========================================================================
+# Appliance processors
+# =========================================================================
 
-        Sensors must be provided during build_network() call.
 
-        :param symmetric: Whether to use symmetric calculation.
-        :returns: Estimated state as power flow result.
-        :raises RuntimeError: If network not built or no sensors defined.
-        """
-        if self.model is None:
-            raise RuntimeError("Network not built. Call build_network first.")
+class LoadProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_load"
 
-        if (
-            "sym_voltage_sensor" not in self.input_data
-            and "sym_power_sensor" not in self.input_data
-        ):
-            raise RuntimeError(
-                "No sensors defined. Provide voltage_sensors or power_sensors in build_network()."
-            )
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("sym_load", eg.index.ids)
+        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
 
-        result = self.model.calculate_state_estimation(symmetric=symmetric)
-        return self._convert_power_flow_result(result)
-
-    def calculate_short_circuit(self) -> ShortCircuitResult:
-        """Run short circuit calculation.
-
-        Faults must be provided during build_network() call.
-
-        :returns: Short circuit results.
-        :raises RuntimeError: If network not built or no faults defined.
-        """
-        if self.model is None:
-            raise RuntimeError("Network not built. Call build_network first.")
-
-        if "fault" not in self.input_data:
-            raise RuntimeError("No faults defined. Provide faults in build_network().")
-
-        result = self.model.calculate_short_circuit()
-        # Get fault IDs from input data
-        fault_ids = self.id_manager.get_movici_ids("fault", self.input_data["fault"]["id"])
-        return self._convert_short_circuit_result(result, fault_ids)
-
-    # =========================================================================
-    # Array building methods
-    # =========================================================================
-
-    def _build_node_array(self, nodes: NodeCollection) -> np.ndarray:
-        """Build PGM node input array.
-
-        :param nodes: Node collection.
-        :returns: PGM structured array for nodes.
-        """
-        pgm_ids = self.id_manager.register_ids("node", nodes.ids)
-        arr = pgm.initialize_array("input", "node", len(nodes))
-        arr["id"] = pgm_ids
-        arr["u_rated"] = nodes.u_rated
-        return arr
-
-    def _build_line_array(self, lines: LineCollection, nodes: NodeCollection) -> np.ndarray:
-        """Build PGM line input array.
-
-        :param lines: Line collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for lines.
-        """
-        pgm_ids = self.id_manager.register_ids("line", lines.ids)
-        from_node_pgm = self.id_manager.get_pgm_ids("node", lines.from_node)
-        to_node_pgm = self.id_manager.get_pgm_ids("node", lines.to_node)
-
-        arr = pgm.initialize_array("input", "line", len(lines))
-        arr["id"] = pgm_ids
-        arr["from_node"] = from_node_pgm
-        arr["to_node"] = to_node_pgm
-        arr["from_status"] = lines.from_status
-        arr["to_status"] = lines.to_status
-        arr["r1"] = lines.r1
-        arr["x1"] = lines.x1
-        arr["c1"] = lines.c1
-        arr["tan1"] = lines.tan1
-        arr["i_n"] = np.where(np.isinf(lines.i_n), np.nan, lines.i_n)  # PGM uses NaN for no limit
-        return arr
-
-    def _build_transformer_array(
-        self, transformers: TransformerCollection, nodes: NodeCollection
-    ) -> np.ndarray:
-        """Build PGM transformer input array.
-
-        :param transformers: Transformer collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for transformers.
-        """
-        pgm_ids = self.id_manager.register_ids("transformer", transformers.ids)
-        from_node_pgm = self.id_manager.get_pgm_ids("node", transformers.from_node)
-        to_node_pgm = self.id_manager.get_pgm_ids("node", transformers.to_node)
-
-        arr = pgm.initialize_array("input", "transformer", len(transformers))
-        arr["id"] = pgm_ids
-        arr["from_node"] = from_node_pgm
-        arr["to_node"] = to_node_pgm
-        arr["from_status"] = transformers.from_status
-        arr["to_status"] = transformers.to_status
-        arr["u1"] = transformers.u1
-        arr["u2"] = transformers.u2
-        arr["sn"] = transformers.sn
-        arr["uk"] = transformers.uk
-        arr["pk"] = transformers.pk
-        arr["i0"] = transformers.i0
-        arr["p0"] = transformers.p0
-        arr["winding_from"] = transformers.winding_from
-        arr["winding_to"] = transformers.winding_to
-        arr["clock"] = transformers.clock
-        arr["tap_side"] = transformers.tap_side
-        arr["tap_pos"] = transformers.tap_pos
-        arr["tap_min"] = transformers.tap_min
-        arr["tap_max"] = transformers.tap_max
-        arr["tap_nom"] = transformers.tap_nom
-        arr["tap_size"] = transformers.tap_size
-        return arr
-
-    def _build_load_array(self, loads: LoadCollection, nodes: NodeCollection) -> np.ndarray:
-        """Build PGM symmetric load input array.
-
-        :param loads: Load collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for loads.
-        """
-        pgm_ids = self.id_manager.register_ids("sym_load", loads.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", loads.node)
-
-        arr = pgm.initialize_array("input", "sym_load", len(loads))
+        arr = pgm.initialize_array("input", "sym_load", len(eg))
         arr["id"] = pgm_ids
         arr["node"] = node_pgm
-        arr["status"] = loads.status
-        arr["type"] = loads.type
-        arr["p_specified"] = loads.p_specified
-        arr["q_specified"] = loads.q_specified
+        arr["status"] = _get_status_array(eg.status)
+        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
+        arr["p_specified"] = eg.p_specified.array
+        arr["q_specified"] = eg.q_specified.array
         return arr
 
-    def _build_generator_array(
-        self, generators: GeneratorCollection, nodes: NodeCollection
-    ) -> np.ndarray:
-        """Build PGM symmetric generator input array.
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        p_changed = eg.p_specified.has_changes()
+        q_changed = eg.q_specified.has_changes()
+        if not (p_changed or q_changed):
+            return None
 
-        :param generators: Generator collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for generators.
-        """
-        pgm_ids = self.id_manager.register_ids("sym_gen", generators.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", generators.node)
+        changed = eg.p_specified.changed | eg.q_specified.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
 
-        arr = pgm.initialize_array("input", "sym_gen", len(generators))
+        pgm_ids = self.id_manager.get_pgm_ids("sym_load", changed_ids)
+        arr = pgm.initialize_array("update", "sym_load", len(idx))
+        arr["id"] = pgm_ids
+        arr["p_specified"] = eg.p_specified.array[idx]
+        arr["q_specified"] = eg.q_specified.array[idx]
+        return arr
+
+
+class GeneratorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_gen"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("sym_gen", eg.index.ids)
+        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
+
+        arr = pgm.initialize_array("input", "sym_gen", len(eg))
         arr["id"] = pgm_ids
         arr["node"] = node_pgm
-        arr["status"] = generators.status
-        arr["type"] = generators.type
-        arr["p_specified"] = generators.p_specified
-        arr["q_specified"] = generators.q_specified
+        arr["status"] = _get_status_array(eg.status)
+        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
+        arr["p_specified"] = eg.p_specified.array
+        arr["q_specified"] = eg.q_specified.array
         return arr
 
-    def _build_source_array(self, sources: SourceCollection, nodes: NodeCollection) -> np.ndarray:
-        """Build PGM source input array.
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        p_changed = eg.p_specified.has_changes()
+        q_changed = eg.q_specified.has_changes()
+        if not (p_changed or q_changed):
+            return None
 
-        :param sources: Source collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for sources.
-        """
-        pgm_ids = self.id_manager.register_ids("source", sources.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", sources.node)
+        changed = eg.p_specified.changed | eg.q_specified.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
 
-        arr = pgm.initialize_array("input", "source", len(sources))
+        pgm_ids = self.id_manager.get_pgm_ids("sym_gen", changed_ids)
+        arr = pgm.initialize_array("update", "sym_gen", len(idx))
+        arr["id"] = pgm_ids
+        arr["p_specified"] = eg.p_specified.array[idx]
+        arr["q_specified"] = eg.q_specified.array[idx]
+        return arr
+
+
+class SourceProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "source"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("source", eg.index.ids)
+        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
+
+        arr = pgm.initialize_array("input", "source", len(eg))
         arr["id"] = pgm_ids
         arr["node"] = node_pgm
-        arr["status"] = sources.status
-        arr["u_ref"] = sources.u_ref
-        arr["u_ref_angle"] = sources.u_ref_angle
-        arr["sk"] = sources.sk
-        arr["rx_ratio"] = sources.rx_ratio
+        arr["status"] = _get_status_array(eg.status)
+        arr["u_ref"] = eg.reference_voltage.array
+        arr["u_ref_angle"] = _get_optional_array(eg.reference_angle, default=0.0)
+        arr["sk"] = _get_optional_array(eg.short_circuit_power, default=1e10)
+        arr["rx_ratio"] = _get_optional_array(eg.rx_ratio, default=0.1)
         return arr
 
-    def _build_shunt_array(self, shunts: ShuntCollection, nodes: NodeCollection) -> np.ndarray:
-        """Build PGM shunt input array.
 
-        :param shunts: Shunt collection.
-        :param nodes: Node collection for ID mapping.
-        :returns: PGM structured array for shunts.
-        """
-        pgm_ids = self.id_manager.register_ids("shunt", shunts.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", shunts.node)
+class ShuntProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "shunt"
 
-        arr = pgm.initialize_array("input", "shunt", len(shunts))
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("shunt", eg.index.ids)
+        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
+
+        arr = pgm.initialize_array("input", "shunt", len(eg))
         arr["id"] = pgm_ids
         arr["node"] = node_pgm
-        arr["status"] = shunts.status
-        arr["g1"] = shunts.g1
-        arr["b1"] = shunts.b1
+        arr["status"] = _get_status_array(eg.status)
+        arr["g1"] = eg.conductance.array
+        arr["b1"] = eg.susceptance.array
         return arr
 
-    def _build_voltage_sensor_array(self, sensors: VoltageSensorCollection) -> np.ndarray:
-        """Build PGM voltage sensor input array.
 
-        :param sensors: Voltage sensor collection.
-        :returns: PGM structured array for voltage sensors.
-        """
-        pgm_ids = self.id_manager.register_ids("sym_voltage_sensor", sensors.ids)
-        measured_pgm = self.id_manager.get_pgm_ids("node", sensors.measured_object)
+# =========================================================================
+# Sensor processors (state estimation)
+# =========================================================================
 
-        arr = pgm.initialize_array("input", "sym_voltage_sensor", len(sensors))
+
+class VoltageSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_voltage_sensor"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("sym_voltage_sensor", eg.index.ids)
+        measured_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
+
+        arr = pgm.initialize_array("input", "sym_voltage_sensor", len(eg))
         arr["id"] = pgm_ids
         arr["measured_object"] = measured_pgm
-        arr["u_measured"] = sensors.u_measured
-        arr["u_sigma"] = sensors.u_sigma
+        arr["u_measured"] = eg.measured_voltage.array
+        arr["u_sigma"] = eg.voltage_sigma.array
         return arr
 
-    def _build_power_sensor_array(self, sensors: PowerSensorCollection) -> np.ndarray:
-        """Build PGM power sensor input array.
 
-        :param sensors: Power sensor collection.
-        :returns: PGM structured array for power sensors.
-        """
-        pgm_ids = self.id_manager.register_ids("sym_power_sensor", sensors.ids)
+class PowerSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_power_sensor"
 
-        # Map measured_terminal_type to component type for ID lookup
-        # PGM MeasuredTerminalType: 0=branch_from, 1=branch_to, 2=source, 3=shunt, 4=load, 5=gen
-        terminal_type_to_component = {
-            0: ["line", "transformer"],  # branch_from
-            1: ["line", "transformer"],  # branch_to
-            2: ["source"],
-            3: ["shunt"],
-            4: ["sym_load"],
-            5: ["sym_gen"],
-        }
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("sym_power_sensor", eg.index.ids)
 
-        # Get PGM IDs for measured objects based on their terminal type
-        measured_pgm = np.zeros(len(sensors), dtype=np.int32)
+        # Resolve measured_object IDs based on terminal type
+        measured_pgm = np.zeros(len(eg), dtype=np.int32)
         for i, (obj_id, term_type) in enumerate(
-            zip(sensors.measured_object, sensors.measured_terminal_type)
+            zip(eg.measured_object_id.array, eg.measured_terminal_type.array)
         ):
-            component_types = terminal_type_to_component.get(int(term_type), [])
+            component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
             for comp_type in component_types:
                 try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
+                    measured_pgm[i] = self.id_manager.get_pgm_ids(
+                        comp_type, np.array([obj_id])
+                    )[0]
                     break
                 except (ValueError, KeyError):
                     continue
@@ -465,213 +585,291 @@ class PowerGridWrapper:
                     f"Cannot find measured_object {obj_id} for terminal_type {term_type}"
                 )
 
-        arr = pgm.initialize_array("input", "sym_power_sensor", len(sensors))
+        arr = pgm.initialize_array("input", "sym_power_sensor", len(eg))
         arr["id"] = pgm_ids
         arr["measured_object"] = measured_pgm
-        arr["measured_terminal_type"] = sensors.measured_terminal_type
-        arr["p_measured"] = sensors.p_measured
-        arr["q_measured"] = sensors.q_measured
-        arr["power_sigma"] = sensors.power_sigma
+        arr["measured_terminal_type"] = eg.measured_terminal_type.array
+        arr["p_measured"] = eg.measured_active_power.array
+        arr["q_measured"] = eg.measured_reactive_power.array
+        arr["power_sigma"] = eg.power_sigma.array
         return arr
 
-    def _build_fault_array(self, faults: FaultCollection) -> np.ndarray:
-        """Build PGM fault input array.
 
-        :param faults: Fault collection.
-        :returns: PGM structured array for faults.
-        """
-        pgm_ids = self.id_manager.register_ids("fault", faults.ids)
-        fault_object_pgm = self.id_manager.get_pgm_ids("node", faults.fault_object)
+class CurrentSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_current_sensor"
 
-        arr = pgm.initialize_array("input", "fault", len(faults))
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("sym_current_sensor", eg.index.ids)
+
+        # Resolve measured_object IDs based on terminal type (same as power sensor)
+        measured_pgm = np.zeros(len(eg), dtype=np.int32)
+        for i, (obj_id, term_type) in enumerate(
+            zip(eg.measured_object_id.array, eg.measured_terminal_type.array)
+        ):
+            component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
+            for comp_type in component_types:
+                try:
+                    measured_pgm[i] = self.id_manager.get_pgm_ids(
+                        comp_type, np.array([obj_id])
+                    )[0]
+                    break
+                except (ValueError, KeyError):
+                    continue
+            else:
+                raise ValueError(
+                    f"Cannot find measured_object {obj_id} for terminal_type {term_type}"
+                )
+
+        arr = pgm.initialize_array("input", "sym_current_sensor", len(eg))
         arr["id"] = pgm_ids
-        arr["status"] = faults.status
-        arr["fault_type"] = faults.fault_type
-        arr["fault_phase"] = faults.fault_phase
+        arr["measured_object"] = measured_pgm
+        arr["measured_terminal_type"] = eg.measured_terminal_type.array
+        arr["i_measured"] = eg.measured_current.array
+        arr["i_sigma"] = eg.current_sigma.array
+        arr["angle_measurement_type"] = eg.angle_measurement_type.array
+        arr["i_angle_measured"] = eg.measured_current_angle.array
+        arr["i_angle_sigma"] = eg.current_angle_sigma.array
+        return arr
+
+
+# =========================================================================
+# Fault processor (short circuit)
+# =========================================================================
+
+
+class FaultProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "fault"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("fault", eg.index.ids)
+        fault_object_pgm = self.id_manager.get_pgm_ids("node", eg.fault_object_id.array)
+
+        arr = pgm.initialize_array("input", "fault", len(eg))
+        arr["id"] = pgm_ids
+        arr["status"] = _get_status_array(eg.status)
+        arr["fault_type"] = eg.fault_type.array
+        arr["fault_phase"] = _get_optional_array(eg.fault_phase, default=0, dtype=np.int8)
         arr["fault_object"] = fault_object_pgm
-        arr["r_f"] = faults.r_f
-        arr["x_f"] = faults.x_f
+        arr["r_f"] = _get_optional_array(eg.fault_resistance, default=0.0)
+        arr["x_f"] = _get_optional_array(eg.fault_reactance, default=0.0)
         return arr
 
-    # =========================================================================
-    # Update array building methods
-    # =========================================================================
-
-    def _build_load_update(self, loads: LoadCollection) -> np.ndarray:
-        """Build PGM load update array.
-
-        :param loads: Load collection with updated values.
-        :returns: PGM structured array for load updates.
-        """
-        pgm_ids = self.id_manager.get_pgm_ids("sym_load", loads.ids)
-
-        arr = pgm.initialize_array("update", "sym_load", len(loads))
-        arr["id"] = pgm_ids
-        arr["status"] = loads.status
-        arr["p_specified"] = loads.p_specified
-        arr["q_specified"] = loads.q_specified
-        return arr
-
-    def _build_generator_update(self, generators: GeneratorCollection) -> np.ndarray:
-        """Build PGM generator update array.
-
-        :param generators: Generator collection with updated values.
-        :returns: PGM structured array for generator updates.
-        """
-        pgm_ids = self.id_manager.get_pgm_ids("sym_gen", generators.ids)
-
-        arr = pgm.initialize_array("update", "sym_gen", len(generators))
-        arr["id"] = pgm_ids
-        arr["status"] = generators.status
-        arr["p_specified"] = generators.p_specified
-        arr["q_specified"] = generators.q_specified
-        return arr
-
-    # =========================================================================
-    # Result conversion methods
-    # =========================================================================
-
-    def _convert_power_flow_result(self, result: dict) -> PowerFlowResult:
-        """Convert PGM result dict to PowerFlowResult.
-
-        :param result: PGM calculation result dictionary.
-        :returns: PowerFlowResult with converted data.
-        """
-        # Convert node results
-        node_result = result.get("node")
-        nodes = NodeResult(
-            ids=self.id_manager.get_movici_ids("node", node_result["id"]),
-            u_pu=node_result["u_pu"],
-            u_angle=node_result["u_angle"],
-            u=node_result["u"],
-            p=node_result["p"],
-            q=node_result["q"],
-        )
-
-        # Convert line results if present
-        lines = None
-        if "line" in result:
-            line_result = result["line"]
-            lines = BranchResult(
-                ids=self.id_manager.get_movici_ids("line", line_result["id"]),
-                p_from=line_result["p_from"],
-                q_from=line_result["q_from"],
-                i_from=line_result["i_from"],
-                s_from=line_result["s_from"],
-                p_to=line_result["p_to"],
-                q_to=line_result["q_to"],
-                i_to=line_result["i_to"],
-                s_to=line_result["s_to"],
-                loading=line_result["loading"],
-            )
-
-        # Convert transformer results if present
-        transformers = None
-        if "transformer" in result:
-            trafo_result = result["transformer"]
-            transformers = BranchResult(
-                ids=self.id_manager.get_movici_ids("transformer", trafo_result["id"]),
-                p_from=trafo_result["p_from"],
-                q_from=trafo_result["q_from"],
-                i_from=trafo_result["i_from"],
-                s_from=trafo_result["s_from"],
-                p_to=trafo_result["p_to"],
-                q_to=trafo_result["q_to"],
-                i_to=trafo_result["i_to"],
-                s_to=trafo_result["s_to"],
-                loading=trafo_result["loading"],
-            )
-
-        # Convert load results if present
-        loads = None
-        if "sym_load" in result:
-            load_result = result["sym_load"]
-            loads = ApplianceResult(
-                ids=self.id_manager.get_movici_ids("sym_load", load_result["id"]),
-                p=load_result["p"],
-                q=load_result["q"],
-                i=load_result["i"],
-                s=load_result["s"],
-                pf=load_result["pf"],
-            )
-
-        # Convert generator results if present
-        generators = None
-        if "sym_gen" in result:
-            gen_result = result["sym_gen"]
-            generators = ApplianceResult(
-                ids=self.id_manager.get_movici_ids("sym_gen", gen_result["id"]),
-                p=gen_result["p"],
-                q=gen_result["q"],
-                i=gen_result["i"],
-                s=gen_result["s"],
-                pf=gen_result["pf"],
-            )
-
-        # Convert source results if present
-        sources = None
-        if "source" in result:
-            source_result = result["source"]
-            sources = ApplianceResult(
-                ids=self.id_manager.get_movici_ids("source", source_result["id"]),
-                p=source_result["p"],
-                q=source_result["q"],
-                i=source_result["i"],
-                s=source_result["s"],
-                pf=source_result["pf"],
-            )
-
-        return PowerFlowResult(
-            nodes=nodes,
-            lines=lines,
-            transformers=transformers,
-            loads=loads,
-            generators=generators,
-            sources=sources,
-        )
-
-    def _convert_short_circuit_result(
-        self, result: dict, fault_ids: np.ndarray
-    ) -> ShortCircuitResult:
-        """Convert PGM short circuit result.
-
-        :param result: PGM calculation result dictionary.
-        :param fault_ids: Movici fault IDs.
-        :returns: ShortCircuitResult with converted data.
-        """
-        n_faults = len(fault_ids)
-
-        # Short circuit result is a dict with structured numpy arrays
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
         fault_result = result.get("fault")
-        if fault_result is not None:
-            i_f = fault_result["i_f"]
-            i_f_angle = fault_result["i_f_angle"]
-        else:
-            i_f = np.zeros(n_faults)
-            i_f_angle = np.zeros(n_faults)
+        if fault_result is None:
+            return
+        # i_f and i_f_angle are only in short-circuit results
+        if "i_f" not in fault_result.dtype.names:
+            return
+        result_ids = self.id_manager.get_movici_ids("fault", fault_result["id"])
+        indices = eg.get_indices(result_ids)
+        eg.fault_current[indices] = _scalar(fault_result["i_f"])
+        eg.fault_current_angle[indices] = _scalar(fault_result["i_f_angle"])
 
-        return ShortCircuitResult(
-            fault_ids=fault_ids,
-            i_f=i_f,
-            i_f_angle=i_f_angle,
+
+# =========================================================================
+# Regulator processor
+# =========================================================================
+
+
+class TapRegulatorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "transformer_tap_regulator"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids("transformer_tap_regulator", eg.index.ids)
+
+        # Resolve regulated_object_id to transformer PGM ID
+        regulated_pgm = np.zeros(len(eg), dtype=np.int32)
+        for i, obj_id in enumerate(eg.regulated_object_id.array):
+            # Try both transformer and three_winding_transformer
+            for comp_type in ("transformer", "three_winding_transformer"):
+                try:
+                    regulated_pgm[i] = self.id_manager.get_pgm_ids(
+                        comp_type, np.array([obj_id])
+                    )[0]
+                    break
+                except (ValueError, KeyError):
+                    continue
+            else:
+                raise ValueError(
+                    f"Cannot find regulated transformer for ID {obj_id}"
+                )
+
+        arr = pgm.initialize_array("input", "transformer_tap_regulator", len(eg))
+        arr["id"] = pgm_ids
+        arr["regulated_object"] = regulated_pgm
+        arr["status"] = _get_status_array(eg.status)
+        arr["control_side"] = eg.control_side.array.astype(np.int8)
+        arr["u_set"] = eg.voltage_setpoint.array
+        arr["u_band"] = eg.voltage_band.array
+        arr["line_drop_compensation_r"] = _get_optional_array(
+            eg.line_drop_compensation_r, default=0.0
         )
+        arr["line_drop_compensation_x"] = _get_optional_array(
+            eg.line_drop_compensation_x, default=0.0
+        )
+        return arr
 
-    def _get_calculation_method(self, method: CalculationMethod):
-        """Get PGM calculation method enum.
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        reg_result = result.get("transformer_tap_regulator")
+        if reg_result is None:
+            return
+        if "tap_pos" not in reg_result.dtype.names:
+            return
+        result_ids = self.id_manager.get_movici_ids(
+            "transformer_tap_regulator", reg_result["id"]
+        )
+        indices = eg.get_indices(result_ids)
+        eg.tap_position[indices] = reg_result["tap_pos"]
 
-        :param method: Internal calculation method enum.
-        :returns: PGM CalculationMethod enum value.
+
+# =========================================================================
+# Wrapper
+# =========================================================================
+
+
+class PowerGridWrapper:
+    """Orchestrates PGM processors and manages the PowerGridModel.
+
+    Processors are created in dependency order (nodes before branches/appliances)
+    so that ID registration works correctly.
+    """
+
+    def __init__(self):
+        self.model: t.Optional[pgm.PowerGridModel] = None
+        self.input_data: dict[str, np.ndarray] = {}
+        self.id_manager = ComponentIdManager()
+        self.processors: list[PGMElementProcessor] = []
+
+    def initialize(self, dataset: PowerGridNetwork):
+        """Build the PGM model from a PowerGridNetwork.
+
+        :param dataset: PowerGridNetwork with entity groups loaded with init data.
         """
-        method_map = {
-            CalculationMethod.NEWTON_RAPHSON: pgm.CalculationMethod.newton_raphson,
-            CalculationMethod.LINEAR: pgm.CalculationMethod.linear,
-            CalculationMethod.LINEAR_CURRENT: pgm.CalculationMethod.linear_current,
-            CalculationMethod.ITERATIVE_CURRENT: pgm.CalculationMethod.iterative_current,
-        }
-        return method_map.get(method, pgm.CalculationMethod.newton_raphson)
+        self.id_manager.clear()
+        self.input_data = {}
+        self.processors = []
 
-    def close(self) -> None:
+        # Create processors in dependency order:
+        # 1. Nodes (must be first so branches can look up node IDs)
+        # 2. Branches (lines, cables, links, transformers)
+        # 3. Appliances (loads, generators, sources, shunts)
+        # 4. Sensors, faults, regulators
+        processor_specs = [
+            NodeProcessor(self, dataset.nodes),
+            VirtualNodeProcessor(self, dataset.virtual_nodes),
+            LineProcessor(self, dataset.lines),
+            CableProcessor(self, dataset.cables),
+            LinkProcessor(self, dataset.links),
+            TransformerProcessor(self, dataset.transformers),
+            ThreeWindingTransformerProcessor(self, dataset.three_winding_transformers),
+            LoadProcessor(self, dataset.loads),
+            GeneratorProcessor(self, dataset.generators),
+            SourceProcessor(self, dataset.sources),
+            ShuntProcessor(self, dataset.shunts),
+            VoltageSensorProcessor(self, dataset.voltage_sensors),
+            PowerSensorProcessor(self, dataset.power_sensors),
+            CurrentSensorProcessor(self, dataset.current_sensors),
+            FaultProcessor(self, dataset.faults),
+            TapRegulatorProcessor(self, dataset.tap_regulators),
+        ]
+
+        for proc in processor_specs:
+            arr = proc.build_input_array()
+            if arr is not None and len(arr) > 0:
+                self.processors.append(proc)
+                comp = proc.PGM_COMPONENT
+                if comp in self.input_data:
+                    self.input_data[comp] = np.concatenate(
+                        [self.input_data[comp], arr]
+                    )
+                else:
+                    self.input_data[comp] = arr
+
+        self.model = pgm.PowerGridModel(self.input_data)
+
+    def process_changes(self):
+        """Apply dynamic changes from processors with SUB attributes."""
+        update_data: dict[str, np.ndarray] = {}
+        for proc in self.processors:
+            arr = proc.build_update_array()
+            if arr is not None and len(arr) > 0:
+                comp = proc.PGM_COMPONENT
+                if comp in update_data:
+                    update_data[comp] = np.concatenate([update_data[comp], arr])
+                else:
+                    update_data[comp] = arr
+        if update_data:
+            self.model.update(update_data=update_data)
+
+    def calculate_power_flow(
+        self,
+        method: CalculationMethod = CalculationMethod.NEWTON_RAPHSON,
+        symmetric: bool = True,
+    ) -> dict:
+        """Run power flow calculation.
+
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        calc_method = _PGM_CALC_METHODS.get(method, pgm.CalculationMethod.newton_raphson)
+        kwargs: dict[str, t.Any] = {
+            "symmetric": symmetric,
+            "calculation_method": calc_method,
+        }
+        if "transformer_tap_regulator" in self.input_data:
+            kwargs["tap_changing_strategy"] = pgm.TapChangingStrategy.any_valid_tap
+        return self.model.calculate_power_flow(**kwargs)
+
+    def calculate_state_estimation(self, symmetric: bool = True) -> dict:
+        """Run state estimation calculation.
+
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if not any(
+            s in self.input_data
+            for s in ("sym_voltage_sensor", "sym_power_sensor", "sym_current_sensor")
+        ):
+            raise RuntimeError("No sensors defined.")
+        return self.model.calculate_state_estimation(symmetric=symmetric)
+
+    def calculate_short_circuit(self) -> dict:
+        """Run short circuit calculation.
+
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if "fault" not in self.input_data:
+            raise RuntimeError("No faults defined.")
+        return self.model.calculate_short_circuit()
+
+    def write_results(self, result: dict):
+        """Write PGM results back to entity groups via processors."""
+        for proc in self.processors:
+            proc.write_results(result)
+
+    def close(self):
         """Clean up resources."""
         self.model = None
         self.input_data.clear()
         self.id_manager.clear()
+        self.processors.clear()

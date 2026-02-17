@@ -92,26 +92,6 @@ Electrical_TapNom = AttributeSpec("electrical.tap_nom", DataType(int))
 Electrical_TapSize = AttributeSpec("electrical.tap_size", DataType(float))  # V
 
 # =============================================================================
-# Three-Winding Transformer Attributes
-# =============================================================================
-
-Electrical_TertiaryVoltage = AttributeSpec(
-    "electrical.tertiary_voltage", DataType(float)
-)  # V (u3)
-Electrical_RatedPower1 = AttributeSpec("electrical.rated_power_1", DataType(float))  # VA (sn_1)
-Electrical_RatedPower2 = AttributeSpec("electrical.rated_power_2", DataType(float))  # VA (sn_2)
-Electrical_RatedPower3 = AttributeSpec("electrical.rated_power_3", DataType(float))  # VA (sn_3)
-Electrical_ShortCircuitVoltage12 = AttributeSpec(
-    "electrical.short_circuit_voltage_12", DataType(float)
-)  # uk_12
-Electrical_ShortCircuitVoltage13 = AttributeSpec(
-    "electrical.short_circuit_voltage_13", DataType(float)
-)  # uk_13
-Electrical_ShortCircuitVoltage23 = AttributeSpec(
-    "electrical.short_circuit_voltage_23", DataType(float)
-)  # uk_23
-
-# =============================================================================
 # Source (External Grid) Attributes
 # =============================================================================
 
@@ -151,6 +131,101 @@ Electrical_CurrentSigma = AttributeSpec("electrical.current_sigma", DataType(flo
 Electrical_MeasuredTerminalType = AttributeSpec(
     "electrical.measured_terminal_type", DataType(int)
 )  # enum
+Electrical_AngleMeasurementType = AttributeSpec(
+    "electrical.angle_measurement_type", DataType(int)
+)  # enum: 0=local, 1=global
+Electrical_MeasuredCurrentAngle = AttributeSpec(
+    "electrical.measured_current_angle", DataType(float)
+)  # rad
+Electrical_CurrentAngleSigma = AttributeSpec(
+    "electrical.current_angle_sigma", DataType(float)
+)  # rad
+
+# =============================================================================
+# Three-Winding Transformer Attributes
+# =============================================================================
+
+# Node connections (3 sides)
+Electrical_Node1Id = AttributeSpec("electrical.node_1_id", DataType(int))
+Electrical_Node2Id = AttributeSpec("electrical.node_2_id", DataType(int))
+Electrical_Node3Id = AttributeSpec("electrical.node_3_id", DataType(int))
+
+# Per-side status
+Electrical_Status1 = AttributeSpec("electrical.status_1", DataType(int))
+Electrical_Status2 = AttributeSpec("electrical.status_2", DataType(int))
+Electrical_Status3 = AttributeSpec("electrical.status_3", DataType(int))
+
+# Voltages (u1 = PrimaryVoltage, u2 = SecondaryVoltage)
+Electrical_TertiaryVoltage = AttributeSpec(
+    "electrical.tertiary_voltage", DataType(float)
+)  # V (u3)
+
+# Per-winding rated power
+Electrical_RatedPower1 = AttributeSpec("electrical.rated_power_1", DataType(float))  # VA (sn_1)
+Electrical_RatedPower2 = AttributeSpec("electrical.rated_power_2", DataType(float))  # VA (sn_2)
+Electrical_RatedPower3 = AttributeSpec("electrical.rated_power_3", DataType(float))  # VA (sn_3)
+
+# Per-pair short circuit voltage
+Electrical_ShortCircuitVoltage12 = AttributeSpec(
+    "electrical.short_circuit_voltage_12", DataType(float)
+)  # p.u. (uk_12)
+Electrical_ShortCircuitVoltage13 = AttributeSpec(
+    "electrical.short_circuit_voltage_13", DataType(float)
+)  # p.u. (uk_13)
+Electrical_ShortCircuitVoltage23 = AttributeSpec(
+    "electrical.short_circuit_voltage_23", DataType(float)
+)  # p.u. (uk_23)
+
+# Per-pair copper loss
+Electrical_CopperLoss12 = AttributeSpec("electrical.copper_loss_12", DataType(float))  # W (pk_12)
+Electrical_CopperLoss13 = AttributeSpec("electrical.copper_loss_13", DataType(float))  # W (pk_13)
+Electrical_CopperLoss23 = AttributeSpec("electrical.copper_loss_23", DataType(float))  # W (pk_23)
+
+# Per-side winding type
+Electrical_Winding1 = AttributeSpec("electrical.winding_1", DataType(int))  # enum: wye/wye_n/delta
+Electrical_Winding2 = AttributeSpec("electrical.winding_2", DataType(int))
+Electrical_Winding3 = AttributeSpec("electrical.winding_3", DataType(int))
+
+# Clock numbers
+Electrical_Clock12 = AttributeSpec("electrical.clock_12", DataType(int))  # 0-12
+Electrical_Clock13 = AttributeSpec("electrical.clock_13", DataType(int))  # 0-12
+
+# Per-side output attributes (PUB)
+Electrical_Current1 = AttributeSpec("electrical.current_1", DataType(float))  # A (i_1)
+Electrical_Current2 = AttributeSpec("electrical.current_2", DataType(float))  # A (i_2)
+Electrical_Current3 = AttributeSpec("electrical.current_3", DataType(float))  # A (i_3)
+Electrical_Power1 = AttributeSpec("electrical.power_1", DataType(float))  # W (p_1)
+Electrical_Power2 = AttributeSpec("electrical.power_2", DataType(float))  # W (p_2)
+Electrical_Power3 = AttributeSpec("electrical.power_3", DataType(float))  # W (p_3)
+Electrical_ReactivePower1 = AttributeSpec(
+    "electrical.reactive_power_1", DataType(float)
+)  # VAr (q_1)
+Electrical_ReactivePower2 = AttributeSpec(
+    "electrical.reactive_power_2", DataType(float)
+)  # VAr (q_2)
+Electrical_ReactivePower3 = AttributeSpec(
+    "electrical.reactive_power_3", DataType(float)
+)  # VAr (q_3)
+
+# =============================================================================
+# Regulator Attributes
+# =============================================================================
+
+Electrical_RegulatorControlSide = AttributeSpec(
+    "electrical.regulator_control_side", DataType(int)
+)  # 0=from, 1=to
+Electrical_VoltageSetpoint = AttributeSpec(
+    "electrical.voltage_setpoint", DataType(float)
+)  # V (u_set)
+Electrical_VoltageBand = AttributeSpec(
+    "electrical.voltage_band", DataType(float)
+)  # V (u_band)
+Electrical_LineDropCompensationR = AttributeSpec(
+    "electrical.line_drop_compensation_r", DataType(float)
+)  # Ω
+Electrical_LineDropCompensationX = AttributeSpec(
+    "electrical.line_drop_compensation_x", DataType(float)
+)  # Ω
 
 # =============================================================================
 # Fault Attributes (for Short Circuit)
@@ -163,23 +238,11 @@ Electrical_FaultPhase = AttributeSpec("electrical.fault_phase", DataType(int))  
 Electrical_FaultResistance = AttributeSpec("electrical.fault_resistance", DataType(float))  # Ω
 Electrical_FaultReactance = AttributeSpec("electrical.fault_reactance", DataType(float))  # Ω
 
-# Short circuit results
-Electrical_FaultCurrent = AttributeSpec("electrical.fault_current", DataType(float))  # A
-Electrical_FaultPower = AttributeSpec("electrical.fault_power", DataType(float))  # VA
-
-# =============================================================================
-# Regulator Attributes
-# =============================================================================
-
-Electrical_RegulatorControlSide = AttributeSpec("electrical.regulator_control_side", DataType(int))
-Electrical_VoltageSetpoint = AttributeSpec("electrical.voltage_setpoint", DataType(float))  # V
-Electrical_VoltageBand = AttributeSpec("electrical.voltage_band", DataType(float))  # V
-Electrical_LineDropCompensationR = AttributeSpec(
-    "electrical.line_drop_compensation_r", DataType(float)
-)  # Ω
-Electrical_LineDropCompensationX = AttributeSpec(
-    "electrical.line_drop_compensation_x", DataType(float)
-)  # Ω
+# Fault output attributes (short-circuit results)
+Electrical_FaultCurrent = AttributeSpec("electrical.fault_current", DataType(float))  # A (i_f)
+Electrical_FaultCurrentAngle = AttributeSpec(
+    "electrical.fault_current_angle", DataType(float)
+)  # rad (i_f_angle)
 
 # =============================================================================
 # Plugin Export

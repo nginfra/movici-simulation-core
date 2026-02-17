@@ -4,6 +4,8 @@ This module defines EntityGroup subclasses for electrical network components:
 nodes, lines, transformers, loads, generators, sources, and sensors.
 """
 
+import dataclasses
+
 from movici_simulation_core.attributes import (
     Connection_ToId,
 )
@@ -14,13 +16,25 @@ from movici_simulation_core.models.common.entity_groups import LinkEntity, Point
 from .attributes import (
     Electrical_ActivePower,
     Electrical_ActivePowerSpecified,
+    Electrical_AngleMeasurementType,
     Electrical_Capacitance,
     Electrical_Clock,
+    Electrical_Clock12,
+    Electrical_Clock13,
     Electrical_Conductance,
     Electrical_CopperLoss,
+    Electrical_CopperLoss12,
+    Electrical_CopperLoss13,
+    Electrical_CopperLoss23,
+    Electrical_Current1,
+    Electrical_Current2,
+    Electrical_Current3,
+    Electrical_CurrentAngleSigma,
     Electrical_CurrentFrom,
     Electrical_CurrentSigma,
     Electrical_CurrentTo,
+    Electrical_FaultCurrent,
+    Electrical_FaultCurrentAngle,
     Electrical_FaultPhase,
     Electrical_FaultReactance,
     Electrical_FaultResistance,
@@ -32,20 +46,33 @@ from .attributes import (
     Electrical_LoadType,
     Electrical_MeasuredActivePower,
     Electrical_MeasuredCurrent,
+    Electrical_MeasuredCurrentAngle,
     Electrical_MeasuredReactivePower,
     Electrical_MeasuredTerminalType,
     Electrical_MeasuredVoltage,
     Electrical_NoLoadCurrent,
     Electrical_NoLoadLoss,
+    Electrical_Node1Id,
+    Electrical_Node2Id,
+    Electrical_Node3Id,
+    Electrical_Power1,
+    Electrical_Power2,
+    Electrical_Power3,
     Electrical_PowerFrom,
     Electrical_PowerSigma,
     Electrical_PowerTo,
     Electrical_PrimaryVoltage,
     Electrical_RatedCurrent,
     Electrical_RatedPower,
+    Electrical_RatedPower1,
+    Electrical_RatedPower2,
+    Electrical_RatedPower3,
     Electrical_RatedVoltage,
     Electrical_Reactance,
     Electrical_ReactivePower,
+    Electrical_ReactivePower1,
+    Electrical_ReactivePower2,
+    Electrical_ReactivePower3,
     Electrical_ReactivePowerFrom,
     Electrical_ReactivePowerSpecified,
     Electrical_ReactivePowerTo,
@@ -57,7 +84,13 @@ from .attributes import (
     Electrical_SecondaryVoltage,
     Electrical_ShortCircuitPower,
     Electrical_ShortCircuitVoltage,
+    Electrical_ShortCircuitVoltage12,
+    Electrical_ShortCircuitVoltage13,
+    Electrical_ShortCircuitVoltage23,
     Electrical_Status,
+    Electrical_Status1,
+    Electrical_Status2,
+    Electrical_Status3,
     Electrical_Susceptance,
     Electrical_TanDelta,
     Electrical_TapMax,
@@ -66,13 +99,17 @@ from .attributes import (
     Electrical_TapPosition,
     Electrical_TapSide,
     Electrical_TapSize,
+    Electrical_TertiaryVoltage,
     Electrical_ToStatus,
     Electrical_Voltage,
     Electrical_VoltageAngle,
     Electrical_VoltageBand,
     Electrical_VoltagePU,
-    Electrical_VoltageSetpoint,
     Electrical_VoltageSigma,
+    Electrical_VoltageSetpoint,
+    Electrical_Winding1,
+    Electrical_Winding2,
+    Electrical_Winding3,
     Electrical_WindingFrom,
     Electrical_WindingTo,
 )
@@ -352,6 +389,7 @@ class ElectricalCurrentSensorEntity(EntityGroup):
     """Current sensor for state estimation.
 
     Provides current measurements for state estimation calculations.
+    PGM component: sym_current_sensor.
     """
 
     __entity_name__ = "electrical_current_sensor_entities"
@@ -360,9 +398,12 @@ class ElectricalCurrentSensorEntity(EntityGroup):
     measured_object_id = field(Connection_ToId, flags=INIT)
     measured_terminal_type = field(Electrical_MeasuredTerminalType, flags=INIT)
     current_sigma = field(Electrical_CurrentSigma, flags=INIT)
+    angle_measurement_type = field(Electrical_AngleMeasurementType, flags=INIT)
+    current_angle_sigma = field(Electrical_CurrentAngleSigma, flags=INIT)
 
     # Subscribable attributes (measurement updates)
     measured_current = field(Electrical_MeasuredCurrent, flags=SUB)
+    measured_current_angle = field(Electrical_MeasuredCurrentAngle, flags=SUB)
 
 
 class ElectricalFaultEntity(EntityGroup):
@@ -381,11 +422,87 @@ class ElectricalFaultEntity(EntityGroup):
     fault_resistance = field(Electrical_FaultResistance, flags=OPT)
     fault_reactance = field(Electrical_FaultReactance, flags=OPT)
 
+    # Output attributes (short-circuit results)
+    fault_current = field(Electrical_FaultCurrent, flags=PUB)
+    fault_current_angle = field(Electrical_FaultCurrentAngle, flags=PUB)
+
+
+class ElectricalThreeWindingTransformerEntity(EntityGroup):
+    """Three-winding power transformer (Branch3).
+
+    Connects three nodes at potentially different voltage levels.
+    PGM component: three_winding_transformer.
+    """
+
+    __entity_name__ = "electrical_three_winding_transformer_entities"
+
+    # Node connections (3 sides)
+    node_1_id = field(Electrical_Node1Id, flags=INIT)
+    node_2_id = field(Electrical_Node2Id, flags=INIT)
+    node_3_id = field(Electrical_Node3Id, flags=INIT)
+
+    # Per-side status
+    status_1 = field(Electrical_Status1, flags=OPT)
+    status_2 = field(Electrical_Status2, flags=OPT)
+    status_3 = field(Electrical_Status3, flags=OPT)
+
+    # Voltage per winding
+    primary_voltage = field(Electrical_PrimaryVoltage, flags=INIT)
+    secondary_voltage = field(Electrical_SecondaryVoltage, flags=INIT)
+    tertiary_voltage = field(Electrical_TertiaryVoltage, flags=INIT)
+
+    # Per-winding rated power
+    rated_power_1 = field(Electrical_RatedPower1, flags=INIT)
+    rated_power_2 = field(Electrical_RatedPower2, flags=INIT)
+    rated_power_3 = field(Electrical_RatedPower3, flags=INIT)
+
+    # Per-pair short circuit voltage and copper loss
+    short_circuit_voltage_12 = field(Electrical_ShortCircuitVoltage12, flags=INIT)
+    short_circuit_voltage_13 = field(Electrical_ShortCircuitVoltage13, flags=INIT)
+    short_circuit_voltage_23 = field(Electrical_ShortCircuitVoltage23, flags=INIT)
+    copper_loss_12 = field(Electrical_CopperLoss12, flags=INIT)
+    copper_loss_13 = field(Electrical_CopperLoss13, flags=INIT)
+    copper_loss_23 = field(Electrical_CopperLoss23, flags=INIT)
+
+    # No-load parameters
+    no_load_current = field(Electrical_NoLoadCurrent, flags=INIT)
+    no_load_loss = field(Electrical_NoLoadLoss, flags=INIT)
+
+    # Per-side winding type
+    winding_1 = field(Electrical_Winding1, flags=OPT)
+    winding_2 = field(Electrical_Winding2, flags=OPT)
+    winding_3 = field(Electrical_Winding3, flags=OPT)
+
+    # Clock numbers
+    clock_12 = field(Electrical_Clock12, flags=OPT)
+    clock_13 = field(Electrical_Clock13, flags=OPT)
+
+    # Tap changer
+    tap_side = field(Electrical_TapSide, flags=OPT)
+    tap_position = field(Electrical_TapPosition, flags=OPT)
+    tap_min = field(Electrical_TapMin, flags=OPT)
+    tap_max = field(Electrical_TapMax, flags=OPT)
+    tap_nom = field(Electrical_TapNom, flags=OPT)
+    tap_size = field(Electrical_TapSize, flags=OPT)
+
+    # Output attributes
+    current_1 = field(Electrical_Current1, flags=PUB)
+    current_2 = field(Electrical_Current2, flags=PUB)
+    current_3 = field(Electrical_Current3, flags=PUB)
+    power_1 = field(Electrical_Power1, flags=PUB)
+    power_2 = field(Electrical_Power2, flags=PUB)
+    power_3 = field(Electrical_Power3, flags=PUB)
+    reactive_power_1 = field(Electrical_ReactivePower1, flags=PUB)
+    reactive_power_2 = field(Electrical_ReactivePower2, flags=PUB)
+    reactive_power_3 = field(Electrical_ReactivePower3, flags=PUB)
+    loading = field(Electrical_Loading, flags=PUB)
+
 
 class ElectricalTapRegulatorEntity(EntityGroup):
-    """Transformer tap regulator.
+    """Transformer tap regulator for automatic voltage control.
 
-    Controls transformer tap position based on voltage setpoint.
+    Adjusts transformer tap position to maintain voltage within
+    a specified band. PGM component: transformer_tap_regulator.
     """
 
     __entity_name__ = "electrical_tap_regulator_entities"
@@ -401,3 +518,25 @@ class ElectricalTapRegulatorEntity(EntityGroup):
 
     # Output attributes
     tap_position = field(Electrical_TapPosition, flags=PUB)
+
+
+@dataclasses.dataclass
+class PowerGridNetwork:
+    """Groups all entity types for a power grid dataset."""
+
+    nodes: ElectricalNodeEntity
+    virtual_nodes: ElectricalVirtualNodeEntity
+    lines: ElectricalLineEntity
+    cables: ElectricalCableEntity
+    links: ElectricalLinkEntity
+    transformers: ElectricalTransformerEntity
+    three_winding_transformers: ElectricalThreeWindingTransformerEntity
+    loads: ElectricalLoadEntity
+    generators: ElectricalGeneratorEntity
+    sources: ElectricalSourceEntity
+    shunts: ElectricalShuntEntity
+    voltage_sensors: ElectricalVoltageSensorEntity
+    power_sensors: ElectricalPowerSensorEntity
+    current_sensors: ElectricalCurrentSensorEntity
+    faults: ElectricalFaultEntity
+    tap_regulators: ElectricalTapRegulatorEntity

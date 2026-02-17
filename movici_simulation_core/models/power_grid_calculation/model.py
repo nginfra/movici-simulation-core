@@ -6,27 +6,38 @@ It supports power flow, state estimation, and short circuit calculations.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import typing as t
 
-import numpy as np
-
 from movici_simulation_core.base_models.tracked_model import TrackedModel
-from movici_simulation_core.core import TrackedState
+from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.integrations.pgm.network_wrapper import (
     CalculationMethod,
     CalculationType,
     PowerGridWrapper,
 )
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.models.common import pgm_util
-from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
 
 from . import dataset as ds
+from .dataset import PowerGridNetwork
 
 MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/power_grid_calculation.json"
+
+_CALC_TYPE_MAP = {
+    "power_flow": CalculationType.POWER_FLOW,
+    "state_estimation": CalculationType.STATE_ESTIMATION,
+    "short_circuit": CalculationType.SHORT_CIRCUIT,
+}
+
+_CALC_METHOD_MAP = {
+    "newton_raphson": CalculationMethod.NEWTON_RAPHSON,
+    "linear": CalculationMethod.LINEAR,
+    "linear_current": CalculationMethod.LINEAR_CURRENT,
+    "iterative_current": CalculationMethod.ITERATIVE_CURRENT,
+}
 
 
 class Model(TrackedModel, name="power_grid_calculation"):
@@ -42,433 +53,149 @@ class Model(TrackedModel, name="power_grid_calculation"):
     calculated voltages, currents, and power flows.
     """
 
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
+    auto_reset = PUBLISH
+
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "1",
-            {"1": {"schema": MODEL_CONFIG_SCHEMA_PATH}},
-        )
         super().__init__(model_config)
         self.wrapper: t.Optional[PowerGridWrapper] = None
+        self.dataset: t.Optional[PowerGridNetwork] = None
         self.logger: t.Optional[logging.Logger] = None
 
-        # Entity groups (initialized in setup)
-        self.nodes: t.Optional[ds.ElectricalNodeEntity] = None
-        self.virtual_nodes: t.Optional[ds.ElectricalVirtualNodeEntity] = None
-        self.lines: t.Optional[ds.ElectricalLineEntity] = None
-        self.cables: t.Optional[ds.ElectricalCableEntity] = None
-        self.links: t.Optional[ds.ElectricalLinkEntity] = None
-        self.transformers: t.Optional[ds.ElectricalTransformerEntity] = None
-        self.loads: t.Optional[ds.ElectricalLoadEntity] = None
-        self.generators: t.Optional[ds.ElectricalGeneratorEntity] = None
-        self.sources: t.Optional[ds.ElectricalSourceEntity] = None
-        self.shunts: t.Optional[ds.ElectricalShuntEntity] = None
-        self.voltage_sensors: t.Optional[ds.ElectricalVoltageSensorEntity] = None
-        self.power_sensors: t.Optional[ds.ElectricalPowerSensorEntity] = None
-        self.faults: t.Optional[ds.ElectricalFaultEntity] = None
+        # Cache config-derived values
+        self.calc_type = _CALC_TYPE_MAP.get(
+            self.config.get("calculation_type", "power_flow"),
+            CalculationType.POWER_FLOW,
+        )
+        self.calc_method = _CALC_METHOD_MAP.get(
+            self.config.get("algorithm", "newton_raphson"),
+            CalculationMethod.NEWTON_RAPHSON,
+        )
+        self.symmetric = self.config.get("symmetric", True)
 
-    def setup(
-        self,
-        state: TrackedState,
-        settings: Settings,
-        logger: logging.Logger,
-        **_,
-    ):
-        """Set up the model by registering entity groups.
-
-        :param state: TrackedState for entity registration.
-        :param settings: Global simulation settings.
-        :param logger: Logger instance.
-        """
+    def setup(self, state: TrackedState, logger: logging.Logger, **_):
         self.logger = logger
-        dataset_name = self.config["dataset"]
-        calc_type = self._get_calculation_type()
+        name = self.config["dataset"]
 
-        # Register required entity groups
-        self.nodes = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalNodeEntity(name="electrical_node_entities"),
+        self.dataset = PowerGridNetwork(
+            nodes=state.register_entity_group(
+                name, ds.ElectricalNodeEntity(name="electrical_node_entities")
+            ),
+            virtual_nodes=state.register_entity_group(
+                name,
+                ds.ElectricalVirtualNodeEntity(
+                    name="electrical_virtual_node_entities", optional=True
+                ),
+            ),
+            lines=state.register_entity_group(
+                name, ds.ElectricalLineEntity(name="electrical_line_entities", optional=True)
+            ),
+            cables=state.register_entity_group(
+                name, ds.ElectricalCableEntity(name="electrical_cable_entities", optional=True)
+            ),
+            links=state.register_entity_group(
+                name, ds.ElectricalLinkEntity(name="electrical_link_entities", optional=True)
+            ),
+            transformers=state.register_entity_group(
+                name,
+                ds.ElectricalTransformerEntity(
+                    name="electrical_transformer_entities", optional=True
+                ),
+            ),
+            three_winding_transformers=state.register_entity_group(
+                name,
+                ds.ElectricalThreeWindingTransformerEntity(
+                    name="electrical_three_winding_transformer_entities", optional=True
+                ),
+            ),
+            loads=state.register_entity_group(
+                name, ds.ElectricalLoadEntity(name="electrical_load_entities", optional=True)
+            ),
+            generators=state.register_entity_group(
+                name,
+                ds.ElectricalGeneratorEntity(name="electrical_generator_entities", optional=True),
+            ),
+            sources=state.register_entity_group(
+                name, ds.ElectricalSourceEntity(name="electrical_source_entities", optional=True)
+            ),
+            shunts=state.register_entity_group(
+                name, ds.ElectricalShuntEntity(name="electrical_shunt_entities", optional=True)
+            ),
+            voltage_sensors=state.register_entity_group(
+                name,
+                ds.ElectricalVoltageSensorEntity(
+                    name="electrical_voltage_sensor_entities", optional=True
+                ),
+            ),
+            power_sensors=state.register_entity_group(
+                name,
+                ds.ElectricalPowerSensorEntity(
+                    name="electrical_power_sensor_entities", optional=True
+                ),
+            ),
+            current_sensors=state.register_entity_group(
+                name,
+                ds.ElectricalCurrentSensorEntity(
+                    name="electrical_current_sensor_entities", optional=True
+                ),
+            ),
+            faults=state.register_entity_group(
+                name, ds.ElectricalFaultEntity(name="electrical_fault_entities", optional=True)
+            ),
+            tap_regulators=state.register_entity_group(
+                name,
+                ds.ElectricalTapRegulatorEntity(
+                    name="electrical_tap_regulator_entities", optional=True
+                ),
+            ),
         )
-        self.sources = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalSourceEntity(name="electrical_source_entities"),
-        )
-
-        # Register optional entity groups based on config
-        # TODO: Add proper config-based entity group registration
-        # For now, entity groups with INIT attributes are only registered if
-        # explicitly enabled, to avoid issues with missing entity types in datasets.
-
-        # Virtual nodes (external grid connection points) - no INIT attributes
-        self.virtual_nodes = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalVirtualNodeEntity(name="electrical_virtual_node_entities"),
-        )
-
-        # Lines - only register if explicitly requested (has INIT attributes)
-        # self.lines = state.register_entity_group(
-        #     dataset_name,
-        #     ds.ElectricalLineEntity(name="electrical_line_entities"),
-        # )
-
-        # Cables (underground lines, treated same as lines)
-        self.cables = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalCableEntity(name="electrical_cable_entities"),
-        )
-
-        # Links (zero-impedance connections, typically from virtual nodes)
-        self.links = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalLinkEntity(name="electrical_link_entities"),
-        )
-
-        self.transformers = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalTransformerEntity(name="electrical_transformer_entities"),
-        )
-
-        self.loads = state.register_entity_group(
-            dataset_name,
-            ds.ElectricalLoadEntity(name="electrical_load_entities"),
-        )
-
-        # Generators and shunts - only register if explicitly requested (has INIT attributes)
-        # self.generators = state.register_entity_group(
-        #     dataset_name,
-        #     ds.ElectricalGeneratorEntity(name="electrical_generator_entities"),
-        # )
-        # self.shunts = state.register_entity_group(
-        #     dataset_name,
-        #     ds.ElectricalShuntEntity(name="electrical_shunt_entities"),
-        # )
-
-        # Register sensor entity groups for state estimation
-        if calc_type == CalculationType.STATE_ESTIMATION:
-            self.voltage_sensors = state.register_entity_group(
-                dataset_name,
-                ds.ElectricalVoltageSensorEntity(name="electrical_voltage_sensor_entities"),
-            )
-            self.power_sensors = state.register_entity_group(
-                dataset_name,
-                ds.ElectricalPowerSensorEntity(name="electrical_power_sensor_entities"),
-            )
-
-        # Register fault entity group for short circuit
-        if calc_type == CalculationType.SHORT_CIRCUIT:
-            self.faults = state.register_entity_group(
-                dataset_name,
-                ds.ElectricalFaultEntity(name="electrical_fault_entities"),
-            )
-
-        # Create the wrapper
         self.wrapper = PowerGridWrapper()
 
     def initialize(self, state: TrackedState):
-        """Initialize the model by building the network.
-
-        :param state: TrackedState with loaded entity data.
-        """
-        # Ensure required entities are ready
-        self.nodes.ensure_ready()
-
-        # Build the network
-        self._build_network()
-        self.logger.info(f"Power grid network built with {len(self.nodes)} nodes")
-
-    def _build_network(self):
-        """Build the power grid model from entity data."""
-        # Build node collection, merging virtual nodes with regular nodes
-        nodes = pgm_util.get_nodes(self.nodes)
-        if self._has_entities(self.virtual_nodes):
-            virtual_nodes = pgm_util.get_nodes(self.virtual_nodes)
-            nodes = pgm_util.merge_node_collections(nodes, virtual_nodes)
-
-        # Build line collection, merging lines, cables, and links
-        lines = None
-        if self._has_entities(self.lines):
-            lines = pgm_util.get_lines(self.lines)
-        if self._has_entities(self.cables):
-            cables = pgm_util.get_lines(self.cables)
-            lines = pgm_util.merge_line_collections(lines, cables)
-        if self._has_entities(self.links):
-            link_lines = pgm_util.get_links_as_lines(self.links)
-            lines = pgm_util.merge_line_collections(lines, link_lines)
-
-        transformers = None
-        if self._has_entities(self.transformers):
-            transformers = pgm_util.get_transformers(self.transformers)
-
-        loads = None
-        if self._has_entities(self.loads):
-            loads = pgm_util.get_loads(self.loads)
-
-        generators = None
-        if self._has_entities(self.generators):
-            generators = pgm_util.get_generators(self.generators)
-
-        sources = None
-        if self._has_entities(self.sources):
-            sources = pgm_util.get_sources(self.sources)
-
-        shunts = None
-        if self._has_entities(self.shunts):
-            shunts = pgm_util.get_shunts(self.shunts)
-
-        # Sensors for state estimation
-        voltage_sensors = None
-        if self._has_entities(self.voltage_sensors):
-            voltage_sensors = pgm_util.get_voltage_sensors(self.voltage_sensors)
-
-        power_sensors = None
-        if self._has_entities(self.power_sensors):
-            power_sensors = pgm_util.get_power_sensors(self.power_sensors)
-
-        # Faults for short circuit
-        faults = None
-        if self._has_entities(self.faults):
-            faults = pgm_util.get_faults(self.faults)
-
-        self.wrapper.build_network(
-            nodes=nodes,
-            lines=lines,
-            transformers=transformers,
-            loads=loads,
-            generators=generators,
-            sources=sources,
-            shunts=shunts,
-            voltage_sensors=voltage_sensors,
-            power_sensors=power_sensors,
-            faults=faults,
-        )
+        self._ensure_pub_attributes_initialized()
+        self.wrapper.initialize(self.dataset)
+        self.logger.info(f"Power grid network built with {len(self.dataset.nodes)} nodes")
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-        """Perform calculation and publish results.
+        # Run calculation with current (old) state
+        result = self._calculate()
 
-        :param state: TrackedState with current entity data.
-        :param moment: Current simulation moment.
-        :returns: None (no next time scheduling).
-        """
-        # Check for dynamic load updates
-        if self._has_load_changes():
-            loads = pgm_util.get_loads(self.loads)
-            self.wrapper.update_loads(loads)
+        # Apply incoming changes for next calculation
+        self.wrapper.process_changes()
 
-        # Check for dynamic generator updates
-        if self._has_generator_changes():
-            generators = pgm_util.get_generators(self.generators)
-            self.wrapper.update_generators(generators)
-
-        # Run calculation based on type
-        calc_type = self._get_calculation_type()
-
-        if calc_type == CalculationType.POWER_FLOW:
-            result = self._run_power_flow()
-        elif calc_type == CalculationType.STATE_ESTIMATION:
-            result = self._run_state_estimation()
-        elif calc_type == CalculationType.SHORT_CIRCUIT:
-            result = self._run_short_circuit()
-            # Short circuit has different result structure
-            return None
+        # Reset SUBSCRIBE changes after process_changes consumed them
+        state.reset_tracked_changes(SUBSCRIBE)
 
         # Publish results
-        self._publish_node_results(result)
-        self._publish_line_results(result)
-        self._publish_transformer_results(result)
-
+        self.wrapper.write_results(result)
         return None
 
-    def _run_power_flow(self):
-        """Run power flow calculation.
+    def _calculate(self) -> dict:
+        if self.calc_type == CalculationType.POWER_FLOW:
+            return self.wrapper.calculate_power_flow(
+                method=self.calc_method, symmetric=self.symmetric
+            )
+        elif self.calc_type == CalculationType.STATE_ESTIMATION:
+            return self.wrapper.calculate_state_estimation(symmetric=self.symmetric)
+        else:
+            return self.wrapper.calculate_short_circuit()
 
-        :returns: PowerFlowResult.
+    def _ensure_pub_attributes_initialized(self):
+        """Ensure all PUB attributes have their arrays allocated.
+
+        PUB-only attributes may not receive data during init loading.
+        They must be initialized before the framework checks their
+        ``.changed`` property during ``generate_update``.
         """
-        method = self._get_calculation_method()
-        symmetric = self.config.get("symmetric", True)
-        return self.wrapper.calculate_power_flow(method=method, symmetric=symmetric)
-
-    def _run_state_estimation(self):
-        """Run state estimation calculation.
-
-        Sensors must be defined in the dataset and are provided during network build.
-
-        :returns: PowerFlowResult (estimated state).
-        """
-        symmetric = self.config.get("symmetric", True)
-        return self.wrapper.calculate_state_estimation(symmetric=symmetric)
-
-    def _run_short_circuit(self):
-        """Run short circuit calculation.
-
-        Faults must be defined in the dataset and are provided during network build.
-
-        :returns: ShortCircuitResult.
-        """
-        return self.wrapper.calculate_short_circuit()
-
-    def _publish_node_results(self, result):
-        """Publish node results to entity group.
-
-        :param result: PowerFlowResult with node data.
-        """
-        node_result = result.nodes
-
-        # Publish to regular nodes
-        self._publish_to_node_entity(self.nodes, node_result)
-
-        # Publish to virtual nodes
-        if self._has_entities(self.virtual_nodes):
-            self._publish_to_node_entity(self.virtual_nodes, node_result)
-
-    def _publish_to_node_entity(self, entity, node_result):
-        """Publish node results to a specific node entity group.
-
-        :param entity: Node entity group to publish to.
-        :param node_result: NodeResult with calculation data.
-        """
-        # Result IDs are already Movici IDs, use entity index to get array indices
-        # Only publish results for IDs that exist in this entity group
-        mask = np.isin(node_result.ids, entity.index.ids)
-        if not np.any(mask):
-            return
-
-        result_ids = node_result.ids[mask]
-        indices = entity.get_indices(result_ids)
-
-        entity.voltage_pu[indices] = node_result.u_pu[mask]
-        entity.voltage_angle[indices] = node_result.u_angle[mask]
-        entity.voltage[indices] = node_result.u[mask]
-        entity.active_power[indices] = node_result.p[mask]
-        entity.reactive_power[indices] = node_result.q[mask]
-
-    def _publish_line_results(self, result):
-        """Publish line results to entity group.
-
-        :param result: PowerFlowResult with line data.
-        """
-        if result.lines is None:
-            return
-
-        line_result = result.lines
-
-        # Publish to regular lines
-        if self._has_entities(self.lines):
-            self._publish_to_line_entity(self.lines, line_result)
-
-        # Publish to cables
-        if self._has_entities(self.cables):
-            self._publish_to_line_entity(self.cables, line_result)
-
-        # Publish to links
-        if self._has_entities(self.links):
-            self._publish_to_line_entity(self.links, line_result)
-
-    def _publish_to_line_entity(self, entity, line_result):
-        """Publish line results to a specific line entity group.
-
-        :param entity: Line entity group to publish to.
-        :param line_result: BranchResult with calculation data.
-        """
-        # Result IDs are already Movici IDs, use entity index to get array indices
-        # Only publish results for IDs that exist in this entity group
-        mask = np.isin(line_result.ids, entity.index.ids)
-        if not np.any(mask):
-            return
-
-        result_ids = line_result.ids[mask]
-        indices = entity.get_indices(result_ids)
-
-        entity.current_from[indices] = line_result.i_from[mask]
-        entity.current_to[indices] = line_result.i_to[mask]
-        entity.power_from[indices] = line_result.p_from[mask]
-        entity.power_to[indices] = line_result.p_to[mask]
-        entity.reactive_power_from[indices] = line_result.q_from[mask]
-        entity.reactive_power_to[indices] = line_result.q_to[mask]
-        entity.loading[indices] = line_result.loading[mask]
-
-    def _publish_transformer_results(self, result):
-        """Publish transformer results to entity group.
-
-        :param result: PowerFlowResult with transformer data.
-        """
-        if result.transformers is None or self.transformers is None:
-            return
-
-        trafo_result = result.transformers
-        # Result IDs are already Movici IDs, use entity index to get array indices
-        indices = self.transformers.get_indices(trafo_result.ids)
-
-        self.transformers.current_from[indices] = trafo_result.i_from
-        self.transformers.current_to[indices] = trafo_result.i_to
-        self.transformers.power_from[indices] = trafo_result.p_from
-        self.transformers.power_to[indices] = trafo_result.p_to
-        self.transformers.loading[indices] = trafo_result.loading
-
-    def _has_load_changes(self) -> bool:
-        """Check if load values have changed.
-
-        :returns: True if loads have changed.
-        """
-        if self.loads is None:
-            return False
-        return self.loads.p_specified.has_changes() or self.loads.q_specified.has_changes()
-
-    def _has_generator_changes(self) -> bool:
-        """Check if generator values have changed.
-
-        :returns: True if generators have changed.
-        """
-        if self.generators is None:
-            return False
-        return (
-            self.generators.p_specified.has_changes() or self.generators.q_specified.has_changes()
-        )
-
-    def _has_entities(self, entity_group) -> bool:
-        """Check if an entity group has any entities.
-
-        :param entity_group: Entity group to check.
-        :returns: True if entity group exists and has entities.
-        """
-        if entity_group is None:
-            return False
-        try:
-            return len(entity_group) > 0
-        except Exception:
-            return False
-
-    def _get_calculation_type(self) -> CalculationType:
-        """Get calculation type from config.
-
-        :returns: CalculationType enum value.
-        """
-        type_str = self.config.get("calculation_type", "power_flow")
-        type_map = {
-            "power_flow": CalculationType.POWER_FLOW,
-            "state_estimation": CalculationType.STATE_ESTIMATION,
-            "short_circuit": CalculationType.SHORT_CIRCUIT,
-        }
-        return type_map.get(type_str, CalculationType.POWER_FLOW)
-
-    def _get_calculation_method(self) -> CalculationMethod:
-        """Get calculation method from config.
-
-        :returns: CalculationMethod enum value.
-        """
-        method_str = self.config.get("algorithm", "newton_raphson")
-        method_map = {
-            "newton_raphson": CalculationMethod.NEWTON_RAPHSON,
-            "linear": CalculationMethod.LINEAR,
-            "linear_current": CalculationMethod.LINEAR_CURRENT,
-            "iterative_current": CalculationMethod.ITERATIVE_CURRENT,
-        }
-        return method_map.get(method_str, CalculationMethod.NEWTON_RAPHSON)
+        for f in dataclasses.fields(self.dataset):
+            entity = getattr(self.dataset, f.name)
+            size = len(entity)
+            for attr_field in entity.all_attributes().values():
+                attr = attr_field.get_for(entity)
+                if attr.flags & PUBLISH and not attr.has_data():
+                    attr.initialize(size)
 
     def shutdown(self, state: TrackedState):
-        """Clean up resources.
-
-        :param state: TrackedState (unused).
-        """
         if self.wrapper is not None:
             self.wrapper.close()
             self.wrapper = None
