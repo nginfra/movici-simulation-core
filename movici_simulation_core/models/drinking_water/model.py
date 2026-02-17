@@ -97,9 +97,10 @@ class Model(TrackedModel, name="drinking_water"):
         :param schema: Attribute schema
         """
 
-        self._register_dataset(state, self.dataset_name)
+        self.dataset = self._register_dataset(state, self.dataset_name)
 
-    def _register_dataset(self, state: TrackedState, dataset_name: str):
+    @staticmethod
+    def _register_dataset(state: TrackedState, dataset_name: str):
         """Register entity groups.
 
         Entity groups are registered as optional so that empty groups
@@ -108,7 +109,7 @@ class Model(TrackedModel, name="drinking_water"):
         :param state: Tracked state for entity registration
         :param dataset_name: Name of the dataset to register entities in
         """
-        self.dataset = DrinkingWaterNetwork(
+        return DrinkingWaterNetwork(
             junctions=state.register_entity_group(
                 dataset_name, WaterJunctionEntity(optional=True)
             ),
