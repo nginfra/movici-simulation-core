@@ -122,6 +122,10 @@ def initialize_wrapper(schema, state):
 
 
 class TestProcessingBase:
+    ACTIVE = wntr.network.LinkStatus.Active
+    OPEN = wntr.network.LinkStatus.Open
+    CLOSED = wntr.network.LinkStatus.Closed
+
     @pytest.fixture
     def wrapper(self, network_data, initialize_wrapper) -> NetworkWrapper:
         return initialize_wrapper(network_data)
@@ -287,9 +291,6 @@ class TestPipeProcessing(TestProcessingBase):
 
 
 class TestPumpProcessing(TestProcessingBase):
-    OPEN = wntr.network.LinkStatus.Open
-    CLOSED = wntr.network.LinkStatus.Closed
-
     @pytest.fixture
     def network_data(self):
         return {
@@ -324,7 +325,6 @@ class TestPumpProcessing(TestProcessingBase):
         assert p2.pump_type == "HEAD"
         assert p2.get_pump_curve().points == [(0, 25), (1, 13)]
 
-    @pytest.mark.xfail(reason="TODO: implement")
     def test_update_pump_power(self, wrapper, state):
         p1: wntr.network.elements.PowerPump = wrapper.wn.get_link("PU1")
         self.apply_update(
@@ -363,3 +363,88 @@ class TestPumpProcessing(TestProcessingBase):
         wrapper.process_changes()
         assert p1.status == self.CLOSED
         assert p2.status == self.CLOSED
+
+
+class TestValveProcessing(TestProcessingBase):
+    @pytest.fixture
+    def network_data(self):
+        return {
+            "general": {
+                "enum": {"valve_type": ["PRV", "PSV", "FCV", "TCV"]},
+            },
+            "drinking_water": {
+                "water_junction_entities": {
+                    "id": [10, 20, 30],
+                    "drinking_water.base_demand": [2] * 3,
+                    "geometry.z": [0] * 3,
+                },
+                "water_valve_entities": {
+                    "id": [1, 2],
+                    "topology.from_node_id": [10, 20],
+                    "topology.to_node_id": [20, 30],
+                    "shape.diameter": [1, 2],
+                    "drinking_water.valve_type": [0, 1],
+                    "drinking_water.valve_pressure": [10, 10],
+                    "operational.status": [None, True],
+                },
+            },
+        }
+
+    @pytest.mark.parametrize(
+        "valve_type, setting_attribute",
+        [
+            ("PRV", "drinking_water.valve_pressure"),
+            ("PSV", "drinking_water.valve_pressure"),
+            ("FCV", "drinking_water.valve_flow"),
+            ("TCV", "drinking_water.valve_loss_coefficient"),
+        ],
+    )
+    def test_different_valve_types(self, initialize_wrapper, valve_type, setting_attribute):
+        valve_types = ["PRV", "PSV", "FCV", "TCV"]
+        wrapper = initialize_wrapper(
+            {
+                "general": {
+                    "enum": {"valve_type": valve_types},
+                },
+                "drinking_water": {
+                    "water_junction_entities": {
+                        "id": [10, 20],
+                        "drinking_water.base_demand": [2] * 2,
+                        "geometry.z": [0] * 2,
+                    },
+                    "water_valve_entities": {
+                        "id": [1],
+                        "topology.from_node_id": [10],
+                        "topology.to_node_id": [20],
+                        "shape.diameter": [1],
+                        "drinking_water.valve_type": [valve_types.index(valve_type)],
+                        **{setting_attribute: [42]},
+                    },
+                },
+            }
+        )
+        valve: wntr.network.elements.Valve = wrapper.wn.get_link("V1")
+        assert valve.valve_type == valve_type
+        assert valve.setting == 42
+
+    def test_update_valve_status(self, wrapper, state):
+        v1: wntr.network.elements.PowerPump = wrapper.wn.get_link("V1")
+        v2: wntr.network.elements.HeadPump = wrapper.wn.get_link("V2")
+
+        assert v1.status == self.ACTIVE
+        assert v2.status == self.ACTIVE
+
+        self.apply_update(
+            state,
+            {
+                "drinking_water": {
+                    "water_valve_entities": {
+                        "id": [1],
+                        "operational.status": [False],
+                    }
+                }
+            },
+        )
+        wrapper.process_changes()
+        assert v1.status == self.CLOSED
+        assert v2.status == self.ACTIVE

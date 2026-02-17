@@ -11,7 +11,9 @@ import typing as t
 
 import numpy as np
 import wntr
+from wntr.network import LinkStatus
 
+from movici_simulation_core.core.attribute import UniformAttribute
 from movici_simulation_core.core.entity_group import EntityGroup
 
 from .dataset import (
@@ -380,11 +382,7 @@ class PipeProcessor(LinkProcessor[WaterPipeEntity]):
             return
         for idx in np.flatnonzero(eg.status.changed):
             link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
-            link.initial_status = (
-                wntr.network.LinkStatus.Open
-                if eg.status.array[idx]
-                else wntr.network.LinkStatus.Closed
-            )
+            link.initial_status = LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
 
     def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
         eg = self.entity_group
@@ -440,9 +438,7 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
             if status_defined is not None and status_defined[idx]:
                 pump = self.wn.get_link(name)
                 pump.initial_status = (
-                    wntr.network.LinkStatus.Open
-                    if eg.status.array[idx]
-                    else wntr.network.LinkStatus.Closed
+                    LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
                 )
 
     def _write_common_results(
@@ -460,36 +456,40 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
 
     def update_elements(self):
         eg = self.entity_group
-        if not len(eg) or not eg.status.has_data():
+        if not len(eg):
             return
-        if not np.any(eg.status.changed):
+
+        status_changed = eg.status.changed
+        power_changed = eg.power.changed
+        any_changed = status_changed | power_changed
+        if not np.any(any_changed):
             return
-        for idx in np.flatnonzero(eg.status.changed):
-            link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
-            link.initial_status = (
-                wntr.network.LinkStatus.Open
-                if eg.status.array[idx]
-                else wntr.network.LinkStatus.Closed
-            )
+
+        for idx in np.flatnonzero(any_changed):
+            pump = self.wn.get_link(self._link_name(eg.index.ids[idx]))
+            pump.initial_status = LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
+            pump.power = eg.power.array[idx]
 
 
 class ValveProcessor(LinkProcessor[WaterValveEntity]):
     PREFIX = "V"
 
-    _VALVE_SETTING_ATTRS: t.ClassVar[dict[str, str]] = {
-        "PRV": "valve_pressure",
-        "PSV": "valve_pressure",
-        "FCV": "valve_flow",
-        "TCV": "valve_loss_coefficient",
-    }
+    def _get_setting(self, idx: int, valve_type: str) -> float:
+        attribute = self._get_setting_attribute(valve_type)
+        value = attribute.array[idx]
+        if attribute.data_type.is_undefined(value):
+            raise ValueError(f"No setting available for valve type {valve_type} at index {idx}")
+        return float(value)
 
-    def _get_setting(self, idx: int, valve_type: str, masks: dict) -> float:
-        attr_name = self._VALVE_SETTING_ATTRS.get(valve_type)
-        if attr_name:
-            defined = masks.get(attr_name)
-            if defined is not None and defined[idx]:
-                return float(getattr(self.entity_group, attr_name).array[idx])
-        raise ValueError(f"No setting available for valve type {valve_type} at index {idx}")
+    def _get_setting_attribute(self, valve_type: str) -> UniformAttribute:
+        if valve_type in ("PRV", "PSV"):
+            return self.entity_group.valve_pressure
+        if valve_type == "FCV":
+            return self.entity_group.valve_flow
+        if valve_type == "TCV":
+            return self.entity_group.valve_loss_coefficient
+
+        raise ValueError(f"Unsupported Valve type {valve_type}")
 
     def create_elements(self):
         eg = self.entity_group
@@ -502,18 +502,12 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
         ml_defined = _opt_defined(eg.minor_loss)
         status_defined = _opt_defined(eg.status)
 
-        # Pre-compute setting masks for all valve setting attributes
-        setting_masks = {
-            attr_name: _opt_defined(getattr(eg, attr_name))
-            for attr_name in set(self._VALVE_SETTING_ATTRS.values())
-        }
-
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._link_name(entity_id)
             self.wrapper.id_mapper.register(entity_id, name)
             from_node, to_node = self._from_to(idx, entity_id=entity_id)
             valve_type = valve_types[idx]
-            setting = self._get_setting(idx, valve_type, setting_masks)
+            setting = self._get_setting(idx, valve_type)
             minor_loss = _opt_val(eg.minor_loss, idx, ml_defined, 0.0)
 
             initial_status = "ACTIVE"
@@ -539,11 +533,7 @@ class ValveProcessor(LinkProcessor[WaterValveEntity]):
             return
         for idx in np.flatnonzero(eg.status.changed):
             link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
-            link.initial_status = (
-                wntr.network.LinkStatus.Active
-                if eg.status.array[idx]
-                else wntr.network.LinkStatus.Closed
-            )
+            link.initial_status = LinkStatus.Active if eg.status.array[idx] else LinkStatus.Closed
 
 
 class IdMapper:
