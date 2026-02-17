@@ -13,19 +13,17 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: Install with LLVM (macOS)
+  - name: Install build dependencies (macOS)
     if: startsWith(inputs.os, 'macos')
     shell: bash
     run: |
       brew install llvm
-      export CC=/opt/homebrew/opt/llvm/bin/clang
-      export CXX=/opt/homebrew/opt/llvm/bin/clang++
-      export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
-      export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
-      pip install -e ${{ inputs.pip-extras }}
+      echo "CC=/opt/homebrew/opt/llvm/bin/clang" >> $GITHUB_ENV
+      echo "CXX=/opt/homebrew/opt/llvm/bin/clang++" >> $GITHUB_ENV
+      echo "LDFLAGS=-L/opt/homebrew/opt/llvm/lib" >> $GITHUB_ENV
+      echo "CPPFLAGS=-I/opt/homebrew/opt/llvm/include" >> $GITHUB_ENV
 
-  - name: Install without LLVM (Linux/Windows)
-    if: ${{ !startsWith(inputs.os, 'macos') }}
+  - name: Install Movici Simulation Core 
     shell: bash
     run: |
       pip install -e ${{ inputs.pip-extras }}
