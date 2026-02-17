@@ -32,7 +32,6 @@ from .attributes import (
     DrinkingWater_MinimumPressure,
     DrinkingWater_MinLevel,
     DrinkingWater_MinorLoss,
-    DrinkingWater_MinVolume,
     DrinkingWater_Power,
     DrinkingWater_Pressure,
     DrinkingWater_PressureExponent,
@@ -96,22 +95,19 @@ class WaterTankEntity(WaterNodeEntity):
     Tank volume can be defined either by:
 
     - Constant diameter (cylindrical tank): use ``diameter``, ``min_level``, ``max_level``
-    - Volume curve (non-cylindrical): use ``volume_curve``, ``min_volume``
+    - Volume curve (non-cylindrical): use ``volume_curve``, ``min_level``, ``max_level`
     """
 
     __entity_name__ = "water_tank_entities"
 
     elevation = field(Geometry_Z, flags=INIT)
 
-    # OPT attributes - either diameter group OR volume_curve group
-    # Cylindrical tank attributes
+    # OPT attributes - either a diameter OR a volume_curve group
     diameter = field(Shape_Diameter, flags=OPT)
-    min_level = field(DrinkingWater_MinLevel, flags=OPT)
-    max_level = field(DrinkingWater_MaxLevel, flags=OPT)
-
-    # Volume curve tank attributes
     volume_curve = field(Shape_VolumeCurve, flags=OPT)
-    min_volume = field(DrinkingWater_MinVolume, flags=OPT)
+
+    min_level = field(DrinkingWater_MinLevel, flags=INIT)
+    max_level = field(DrinkingWater_MaxLevel, flags=INIT)
 
     # INIT|PUB attributes - initial value required, then published
     level = field(DrinkingWater_Level, flags=INIT | PUB)

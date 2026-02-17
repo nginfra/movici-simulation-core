@@ -170,14 +170,11 @@ model — as a simulation progresses, tanks may fill up or empty over time. Tank
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.min_level``           | OPT       | Minimum level to be able to drain (Default: 0)    |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.max_level``           | OPT       | Maximum level. If a tank is overflowable, it will |
+| ``drinking_water.max_level``           | INIT      | Maximum level. If a tank is overflowable, it will |
 |                                        |           | overflow beyond this level                        |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``shape.volume_curve``                 | OPT       | Curve of (x,y) pairs defining the tank volume     |
 |                                        |           | over depth. Data type shape: (2,)-csr. Used for   |
-|                                        |           | non-cylindrical tanks                             |
-+----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.min_volume``          | OPT       | Minimum volume to be able to drain. Used for      |
 |                                        |           | non-cylindrical tanks                             |
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.level``               | INIT, PUB | Water level (m) in the tank. Required as an       |

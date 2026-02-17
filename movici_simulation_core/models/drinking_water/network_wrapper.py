@@ -242,41 +242,36 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
         if not size:
             return
 
-        # Pre-compute all optional masks
-        min_lvl_defined = _opt_defined(eg.min_level)
-        max_lvl_defined = _opt_defined(eg.max_level)
-        dia_defined = _opt_defined(eg.diameter)
-        min_vol_defined = _opt_defined(eg.min_volume)
-        has_vol_curve = eg.volume_curve.has_data()
-
-        # Pre-compute default arrays
+        # Required attribute data
         init_levels = eg.level.array
         elevations = eg.elevation.array
+        max_levels = eg.max_level.array
+
+        # Optional masks
+        min_lvl_defined = _opt_defined(eg.min_level)
+        dia_defined = _opt_defined(eg.diameter)
 
         for idx, entity_id in enumerate(eg.index.ids):
             name = self._node_name(entity_id)
             self.wrapper.id_mapper.register(entity_id, name)
 
-            init_level = float(init_levels[idx])
             min_level = _opt_val(eg.min_level, idx, min_lvl_defined, 0.0)
-            max_level = _opt_val(eg.max_level, idx, max_lvl_defined, init_level * 2)
             diameter = _opt_val(eg.diameter, idx, dia_defined, 0.0)
-            min_vol = _opt_val(eg.min_volume, idx, min_vol_defined, 0.0)
 
             vol_curve_name = None
-            if has_vol_curve:
-                curve_data = _extract_csr_curve(eg.volume_curve, idx)
-                if curve_data is not None:
-                    vol_curve_name = self.wrapper.add_curve(curve_data, "VOLUME")
+            if (
+                eg.volume_curve.has_data()
+                and (curve_data := _extract_csr_curve(eg.volume_curve, idx)) is not None
+            ):
+                vol_curve_name = self.wrapper.add_curve(curve_data, "VOLUME")
 
             self.wn.add_tank(
                 name=name,
                 elevation=float(elevations[idx]),
-                init_level=init_level,
+                init_level=float(init_levels[idx]),
                 min_level=min_level,
-                max_level=max_level,
+                max_level=float(max_levels[idx]),
                 diameter=diameter,
-                min_vol=min_vol,
                 vol_curve=vol_curve_name,
             )
 

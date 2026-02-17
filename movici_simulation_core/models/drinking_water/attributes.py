@@ -54,7 +54,6 @@ DrinkingWater_Head = AttributeSpec("drinking_water.head", data_type=DataType(flo
 DrinkingWater_Level = AttributeSpec("drinking_water.level", data_type=DataType(float))
 DrinkingWater_MinLevel = AttributeSpec("drinking_water.min_level", data_type=DataType(float))
 DrinkingWater_MaxLevel = AttributeSpec("drinking_water.max_level", data_type=DataType(float))
-DrinkingWater_MinVolume = AttributeSpec("drinking_water.min_volume", data_type=DataType(float))
 DrinkingWater_Overflow = AttributeSpec("drinking_water.overflow", data_type=DataType(bool))
 
 # =============================================================================
