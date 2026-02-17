@@ -68,9 +68,7 @@ class WaterLinkEntity(LinkEntity):
     link_status = field(DrinkingWater_LinkStatus, flags=PUB)
 
 
-class WaterJunctionEntity(
-    WaterNodeEntity,
-):
+class WaterJunctionEntity(WaterNodeEntity):
     """Water network junctions (demand nodes).
 
     Junctions are nodes in the drinking water network. They connect pipes

@@ -4,8 +4,6 @@ import logging
 
 import pytest
 
-pytest.importorskip("wntr")
-
 from movici_simulation_core.models.drinking_water.network_wrapper import NetworkWrapper
 
 

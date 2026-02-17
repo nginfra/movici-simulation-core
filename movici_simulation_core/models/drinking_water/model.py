@@ -19,6 +19,7 @@ from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
 
 from . import attributes
 from .dataset import (
@@ -62,6 +63,7 @@ class Model(TrackedModel, name="drinking_water"):
        Controls are handled by the Movici Rules Model, not internally.
     """
 
+    __model_config_schema__ = SCHEMA_PATH / "models/drinking_water.json"
     auto_reset = PUBLISH
 
     @classmethod
@@ -77,7 +79,7 @@ class Model(TrackedModel, name="drinking_water"):
         self.network = NetworkWrapper()
         self.last_calculated: Moment | None = None
         self.dataset: DrinkingWaterNetwork | None = None
-        self.dataset_name: t.Optional[str] = None
+        self.dataset_name = self.config["dataset"]
 
         options = self.config.get("options", {})
         self.hydraulic_timestep: int = options.get("hydraulic_timestep", 3600)
@@ -94,9 +96,6 @@ class Model(TrackedModel, name="drinking_water"):
         :param state: Tracked state for entity registration
         :param schema: Attribute schema
         """
-        self.dataset_name = self.config.get("dataset")
-        if not self.dataset_name:
-            raise ValueError("dataset required in model config")
 
         self._register_dataset(state, self.dataset_name)
 
