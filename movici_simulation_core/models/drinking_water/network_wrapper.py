@@ -248,7 +248,6 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
         dia_defined = _opt_defined(eg.diameter)
         min_vol_defined = _opt_defined(eg.min_volume)
         has_vol_curve = eg.volume_curve.has_data()
-        overflow_defined = _opt_defined(eg.overflow)
 
         # Pre-compute default arrays
         init_levels = eg.level.array
@@ -280,9 +279,6 @@ class TankProcessor(NodeProcessor[WaterTankEntity]):
                 min_vol=min_vol,
                 vol_curve=vol_curve_name,
             )
-
-            if overflow_defined is not None and overflow_defined[idx]:
-                self.wn.get_node(name).overflow = bool(eg.overflow.array[idx])
 
     def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
         heads = results.node["head"].iloc[-1].values[df_begin:df_end]

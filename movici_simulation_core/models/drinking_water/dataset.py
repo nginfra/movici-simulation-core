@@ -33,7 +33,6 @@ from .attributes import (
     DrinkingWater_MinLevel,
     DrinkingWater_MinorLoss,
     DrinkingWater_MinVolume,
-    DrinkingWater_Overflow,
     DrinkingWater_Power,
     DrinkingWater_Pressure,
     DrinkingWater_PressureExponent,
@@ -113,9 +112,6 @@ class WaterTankEntity(WaterNodeEntity):
     # Volume curve tank attributes
     volume_curve = field(Shape_VolumeCurve, flags=OPT)
     min_volume = field(DrinkingWater_MinVolume, flags=OPT)
-
-    # Common optional attributes
-    overflow = field(DrinkingWater_Overflow, flags=OPT)
 
     # INIT|PUB attributes - initial value required, then published
     level = field(DrinkingWater_Level, flags=INIT | PUB)
