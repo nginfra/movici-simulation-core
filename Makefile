@@ -4,7 +4,12 @@ unittest:
 	NUMBA_DISABLE_JIT=1 pytest -v tests/
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest --cov $(MODULE_NAME) --cov-report=term-missing --cov-report=xml  tests/
+	NUMBA_DISABLE_JIT=1 pytest \
+		--cov $(MODULE_NAME) \
+		--cov-report=term-missing \
+		--cov-report=xml \
+		--cov-report=html \
+		tests/
 
 test-numba:
 	pytest -v tests/

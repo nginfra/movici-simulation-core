@@ -31,9 +31,10 @@ attribute.
 
 However, there are exceptions to this rule. For example, a model may progress the state
 of an attribute based on some initial value. The attribute would in that case be registered
-as ``INIT|PUB``. While ``INIT`` is a special case of ``PUB`` it does indicate that it is
-expected to only be set once during initialize, and then other models don't update it. Our
-model is then free to publish on this attribute after it's been set initially. 
+as ``INIT|PUB``. While ``INIT`` is a special case of ``SUB``, it does indicate that it is
+expected to only be set once during initialize, and that after that other models don't
+update it. Our model is then free to publish on this attribute after it's been set
+initially. 
 
 However, the default way that attribute changes are tracked by the |code_TrackedModel|
 machinery, is incompatible with this kind of model and this behaviour must be (partially)
