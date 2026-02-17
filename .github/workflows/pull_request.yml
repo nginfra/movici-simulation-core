@@ -10,7 +10,7 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
       uses: actions/setup-python@v6
@@ -35,7 +35,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: ./.github/actions/setup-python
@@ -65,7 +65,7 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
       uses: ./.github/actions/setup-python
@@ -94,7 +94,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
       uses: ./.github/actions/setup-python
@@ -119,8 +119,7 @@ jobs:
   test-docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-
+    - uses: actions/checkout@v6
     - name: Set up Python ${{ env.python-version }}
       uses: actions/setup-python@v6
       with:
