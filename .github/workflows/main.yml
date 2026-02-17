@@ -30,8 +30,8 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install Movici Core      
-      uses: ./.github/actions/install-movici-core
+    - name: Install Movici Simulation Core      
+      uses: ./.github/actions/install-movici-simulation-core
       with:
         os: ${{ matrix.os }}
 

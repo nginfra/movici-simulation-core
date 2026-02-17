@@ -1,4 +1,4 @@
-name: "Install Movici Core"
+name: "Install Movici Simulation Core"
 description: "Installs LLVM/Clang on macOS and pip-installs the project with the correct compiler flags. No-op on other OSes."
 
 inputs:
