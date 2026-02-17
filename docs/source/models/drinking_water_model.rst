@@ -321,8 +321,6 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 | ``drinking_water.power``               | OPT       | Fixed power for a ``power`` pump. Required for    |
 |                                        |           | power pumps                                       |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.speed``               | OPT       | Relative pump speed (Default: 1)                  |
-+----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.head_curve``          | OPT       | Head/flow curve for a ``head`` pump as (x,y)      |
 |                                        |           | pairs. Data type shape: (2,)-csr. Required for    |
 |                                        |           | head pumps                                        |
@@ -344,11 +342,10 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
    The WNTR "active" status (open with specific speed) is handled by combining ``operational.status = True``
    with a ``drinking_water.speed`` value. This simplifies the interface while maintaining full functionality.
 
-.. note:: Power Pump Speed
+.. note:: Pump power / speed
 
-   For ``power`` pumps, the speed setting is **ignored** by WNTR. Power pumps provide constant power
-   regardless of the speed setting. For ``head`` pumps, speed scales the pump curve: speed=1 is nominal,
-   speed=0.8 reduces head and flow by 80%, etc.
+   ``power`` pumps can operate at a fixed power, although this power can be updated during a simulation.
+   ``head`` pumps can only be turned on or off. When on, they operate according to their head curve
 
 Valves
 ^^^^^^

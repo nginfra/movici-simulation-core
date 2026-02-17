@@ -37,7 +37,6 @@ from .attributes import (
     DrinkingWater_PressureExponent,
     DrinkingWater_RequiredPressure,
     DrinkingWater_Roughness,
-    DrinkingWater_Speed,
     DrinkingWater_ValveFlow,
     DrinkingWater_ValveLossCoefficient,
     DrinkingWater_ValvePressure,
@@ -165,8 +164,8 @@ class WaterPumpEntity(WaterLinkEntity):
 
     Pumps increase the head from one node to another. Two types:
 
-    - Power pump: Fixed power, speed ignored
-    - Head pump: Uses head curve, speed scales the curve
+    - Power pump: Fixed power
+    - Head pump: Uses head curve
     """
 
     __entity_name__ = "water_pump_entities"
@@ -177,7 +176,6 @@ class WaterPumpEntity(WaterLinkEntity):
     # OPT attributes (depends on pump_type)
     power = field(DrinkingWater_Power, flags=OPT)
     head_curve = field(DrinkingWater_HeadCurve, flags=OPT)
-    speed = field(DrinkingWater_Speed, flags=OPT)
     status = field(Operational_Status, flags=OPT)
 
 

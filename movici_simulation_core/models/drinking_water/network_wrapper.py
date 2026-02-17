@@ -403,7 +403,6 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
         enum_values = eg.pump_type.options.enum_values
         pump_types = [enum_values[int(v)].upper() for v in eg.pump_type.array]
         has_head_curve = eg.head_curve.has_data()
-        speed_defined = _opt_defined(eg.speed)
         status_defined = _opt_defined(eg.status)
 
         for idx, entity_id in enumerate(eg.index.ids):
@@ -437,11 +436,6 @@ class PumpProcessor(LinkProcessor[WaterPumpEntity]):
                     pump_type="HEAD",
                     pump_parameter=curve_name,
                 )
-
-            if pump_type == "HEAD" and speed_defined is not None and speed_defined[idx]:
-                pump = self.wn.get_link(name)
-                if hasattr(pump, "speed_timeseries"):
-                    pump.speed_timeseries.base_value = float(eg.speed.array[idx])
 
             if status_defined is not None and status_defined[idx]:
                 pump = self.wn.get_link(name)

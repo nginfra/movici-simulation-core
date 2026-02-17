@@ -82,7 +82,6 @@ DrinkingWater_Velocity = AttributeSpec("drinking_water.velocity", data_type=Data
 # Drinking water attributes - Pumps
 # =============================================================================
 DrinkingWater_Power = AttributeSpec("drinking_water.power", data_type=DataType(float))
-DrinkingWater_Speed = AttributeSpec("drinking_water.speed", data_type=DataType(float))
 DrinkingWater_HeadCurve = AttributeSpec(
     "drinking_water.head_curve", data_type=DataType(float, (2,), csr=True)
 )
