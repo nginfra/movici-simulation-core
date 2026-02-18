@@ -69,6 +69,7 @@ use the :meth:`~movici_simulation_core.core.state.TrackedState.register_attribut
 provided ``state`` object.
 
 .. testcode:: registering attributes
+
   from movici_simulation_core import TrackedModel, TrackedState, AttributeSpec, INIT
 
   class MyModel(TrackedModel):
