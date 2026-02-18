@@ -67,7 +67,7 @@ class TrackedState:
         self.attributes = {}
         self.index = {}
         self.logger = logger
-        self.schema = schema
+        self.schema = schema or AttributeSchema()
         self.general = {}
         self.registered_entity_groups = {}
         self.registered_attributes = {}
