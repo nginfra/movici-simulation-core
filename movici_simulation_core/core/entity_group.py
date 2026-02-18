@@ -40,11 +40,11 @@ class EntityGroup:
             exclude = set(self.__exclude__ or []) | set(exclude or [])
 
         all_attributes = self._all_attributes()
-        non_exisiting_exclude = exclude - all_attributes.keys()
-        if non_exisiting_exclude:
+        non_existing_exclude = exclude - all_attributes.keys()
+        if non_existing_exclude:
             raise ValueError(
-                "Cannot exclude non-existing attributes for EntityGroup:"
-                f" {','.join(non_exisiting_exclude)}"
+                f"Cannot exclude non-existing attributes for {type(self).__name__}:"
+                f" {','.join(non_existing_exclude)}"
             )
         self.attributes = {k: all_attributes[k] for k in all_attributes.keys() - exclude}
 

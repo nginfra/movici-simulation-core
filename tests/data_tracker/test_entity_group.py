@@ -92,5 +92,5 @@ class TestExcludeAttributes:
     def test_exclude_from_parent_and_instance(self):
         assert self.Derived(exclude=["other_attr"]).attributes.keys() == set()
 
-    def test_override_xclude(self):
+    def test_override_exclude(self):
         assert self.Derived(override_exclude=["other_attr"]).attributes.keys() == {"attr"}
