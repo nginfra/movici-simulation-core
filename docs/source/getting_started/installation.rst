@@ -70,6 +70,61 @@ Then you can install the extra python requirements throug pip:
   
   pip install movici-simulation-core[models]
 
+
+.. _installation_macos:
+
+MacOS
+------
+
+The installation on MacOS is a bit more involved. Python must be installed via `Homebrew <https://brew.sh/>`_  because the system's Python on MacOS does not support Spatialite.
+
+**Pre-requisites:**
+
+- `Homebrew <https://brew.sh/>`_ package manager 
+- Python 3.11 or higher installed via Homebrew (Lower versions will raise conflicts with OpenMP, a requirement of Aequilibrae)
+
+1. On a terminal. Install the spatialite library as follows:
+  
+.. code-block:: bash
+
+    brew update
+    brew install libspatialite
+
+2. Install ``movici-simulation-core`` to your Homebrew Python environment (below instructions assume Python 3.12):
+
+.. code-block:: bash
+
+  python3.12 -m pip install movici-simulation-core
+
+.. note::
+  On Apple Silicon (M1/M2/M3) Macs, you may need to ensure Homebrew is properly configured
+  in your PATH. Homebrew typically installs to ``/opt/homebrew`` on Apple Silicon.
+
+Installing the **models** requires additional steps: 
+
+1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
+
+.. code-block:: bash
+
+  brew install llvm 
+
+2. Set the following environment variables to point ``pip`` to use the ``llvm`` compiler and libraries:  
+
+.. code-block:: bash
+
+  export CC=/opt/homebrew/opt/llvm/bin/clang
+  export CXX=/opt/homebrew/opt/llvm/bin/clang++
+  export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+  export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+
+
+3. Install the movici models with the following command:
+
+.. code-block:: bash
+
+  python3.12 -m pip install movici-simulation-core[models]
+
+
 Alternative environments
 -------------------------
 
@@ -96,30 +151,3 @@ for Windows 10 and higher. When using WSL, it is recommended to use VSCode as yo
 environment. See `Developing in WSL <https://code.visualstudio.com/docs/remote/wsl>`_ for 
 installation instructions. After installation of WSL, follow the installation instructuctions for
 :ref:`Linux<installation_linux>` for how to install Movici. 
-
-
-MacOS
-^^^^^
-
-``movici-simulation-core`` can be installed on macOS (including Apple Silicon) using pip:
-
-.. code-block::
-
-  pip install movici-simulation-core
-
-For the extra model requirements that depend on geospatial libraries, first install
-``libspatialite`` using Homebrew:
-
-.. code-block::
-
-  brew install libspatialite
-
-Then you can install the extra python requirements through pip:
-
-.. code-block::
-
-  pip install movici-simulation-core[models]
-
-.. note::
-  On Apple Silicon (M1/M2/M3) Macs, you may need to ensure Homebrew is properly configured
-  in your PATH. Homebrew typically installs to ``/opt/homebrew`` on Apple Silicon.
