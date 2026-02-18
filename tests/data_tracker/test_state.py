@@ -28,6 +28,7 @@ from movici_simulation_core.core.state import (
     parse_special_values,
 )
 from movici_simulation_core.testing.helpers import (
+    assert_equivalent_data_mask,
     dataset_data_to_numpy,
     dataset_dicts_equal,
     get_attribute,
@@ -225,10 +226,13 @@ def test_get_data_mask():
     state = TrackedState()
     state.register_dataset("pub_dataset", [Pub])
     state.register_dataset("sub_dataset", [Sub])
-    assert state.get_data_mask() == {
-        "pub": {"pub_dataset": {"pub_entities": ["pub_attr"]}},
-        "sub": {"sub_dataset": {"sub_entities": ["sub_attr", "init_attr", "opt_attr"]}},
-    }
+    assert_equivalent_data_mask(
+        state.get_data_mask(),
+        {
+            "pub": {"pub_dataset": {"pub_entities": ["pub_attr"]}},
+            "sub": {"sub_dataset": {"sub_entities": ["sub_attr", "init_attr", "opt_attr"]}},
+        },
+    )
 
 
 @pytest.fixture
@@ -753,7 +757,7 @@ def test_can_inherit_attributes():
             spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {attr.name for attr in Derived.all_attributes().values()} == {
+    assert {attr.name for attr in Derived().attributes.values()} == {
         "attr",
         "also_attr",
     }
@@ -765,7 +769,7 @@ def test_can_override_attributes():
             spec=AttributeSpec("also_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [attr.name for attr in Derived.all_attributes().values()] == ["also_attr"]
+    assert [attr.name for attr in Derived().attributes.values()] == ["also_attr"]
 
 
 def test_cascading_inheritance():
@@ -779,7 +783,7 @@ def test_cascading_inheritance():
             spec=AttributeSpec("other_attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert {attr.name for attr in DoubleDerived.all_attributes().values()} == {
+    assert {attr.name for attr in DoubleDerived().attributes.values()} == {
         "also_attr",
         "other_attr",
     }
@@ -791,7 +795,7 @@ def test_can_duplicate_attr():
             spec=AttributeSpec("attr", data_type=DataType(int, (), False)), flags=PUB
         )
 
-    assert [attr.name for attr in Derived.all_attributes().values()] == [
+    assert [attr.name for attr in Derived().attributes.values()] == [
         "attr",
         "attr",
     ]
