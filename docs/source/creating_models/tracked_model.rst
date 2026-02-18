@@ -84,14 +84,14 @@ provided ``state`` object.
           #
           # The attributes are assumed to be ``float`` attributes
           self.input_attribute = state.register_attribute(
-            dataset_name=self.config['dataset'],
-            entity_name=self.config['entity_group'],
-            spec=AttributeSpec(self.config['input_attribute'], data_type=float, flags=INIT)
+            dataset_name=self.config["dataset"],
+            entity_name=self.config["entity_group"],
+            spec=AttributeSpec(self.config["input_attribute"], data_type=float, flags=INIT)
           )
           self.output_attribute = state.register_attribute(
-            dataset_name=self.config['dataset'],
-            entity_name=self.config['entity_group'],
-            spec=AttributeSpec(self.config['output_attribute'], data_type=float),
+            dataset_name=self.config["dataset"],
+            entity_name=self.config["entity_group"],
+            spec=AttributeSpec(self.config["output_attribute"], data_type=float),
             flags=INIT
           )
 
@@ -115,9 +115,9 @@ an entity group called ``"my_entities"`` that has a point geometry (ie. the enti
       y = field(Geometry_Y, flags=INIT)
 
 
-This uses the predefined |code_AttributeSpec|\s to register ``"geometry.x"`` and ``geometry.y`` as
-``INIT`` attributes. :module:`movici_simulation_core.attributes` and 
-:module:`movici_simulation_core.models.common.attributes` contain many |code_AttributeSpec|s that 
+This uses predefined |code_AttributeSpec|\s to register ``"geometry.x"`` and ``"geometry.y"``
+as ``INIT`` attributes. :mod:`movici_simulation_core.attributes` and 
+:mod:`movici_simulation_core.models.common.attributes` contain many |code_AttributeSpec|\s that 
 can be used for defining and registering attributes. 
 
 The |code_TrackedModel| can then look something like this:
