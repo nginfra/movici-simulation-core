@@ -8,10 +8,25 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from .dataset import TimeWindowEntity, TimeWindowStatusEntity
 from .time_window_status import TimeWindowStatus
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/time_window_status.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/time_window_status.json"
+
+
+def convert_v1_v2(config):
+    return {
+        "source": config["time_window_dataset"][0],
+        "time_window_begin": config["time_window_begin"][1],
+        "time_window_end": config["time_window_end"][1],
+        "targets": [
+            {"entity_group": eg, "attribute": config["time_window_status"][1]}
+            for eg in config["status_datasets"]
+        ],
+    }
 
 
 class Model(TrackedModel, name="time_window_status"):
@@ -19,20 +34,14 @@ class Model(TrackedModel, name="time_window_status"):
     Implementation of the time window status model
     """
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
+
     time_window_status: TimeWindowStatus
     source_entity_group: TimeWindowEntity
     target_entity_groups: t.List[TimeWindowStatusEntity]
-
-    def __init__(self, model_config):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema: AttributeSchema, settings: Settings, **_):
         source_dataset, source_entity_name = self.config["source"]
@@ -77,19 +86,3 @@ class Model(TrackedModel, name="time_window_status"):
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         return self.time_window_status.update(moment)
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/time_window_status.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/time_window_status.json"
-
-
-def convert_v1_v2(config):
-    return {
-        "source": config["time_window_dataset"][0],
-        "time_window_begin": config["time_window_begin"][1],
-        "time_window_end": config["time_window_end"][1],
-        "targets": [
-            {"entity_group": eg, "attribute": config["time_window_status"][1]}
-            for eg in config["status_datasets"]
-        ],
-    }

@@ -38,10 +38,62 @@ from movici_simulation_core.models.traffic_demand_calculation.local_contributors
     RouteCostFactor,
 )
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 DEFAULT_DATA_TYPE = DataType(float, (), False)
 DEFAULT_CSR_DATA_TYPE = DataType(float, (), True)
+
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_demand_calculation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_demand_calculation.json"
+
+
+def convert_v1_v2(config):
+    rv = {
+        "demand_path": [*config["demand_entity"][0], config["demand_property"][1]],
+        "global_parameters": [
+            {
+                "name": config["global_parameters"][i],
+                "elasticity": config["global_elasticities"][i],
+            }
+            for i in range(len(config.get("global_parameters", [])))
+        ],
+        "local_parameters": [
+            {
+                "attribute_path": [
+                    *config["local_entity_groups"][i],
+                    config["local_properties"][i][1],
+                ],
+                "geometry": config["local_geometries"][i],
+                "elasticity": config["local_elasticities"][i],
+                "mapping_type": (
+                    config["local_mapping_type"][i]
+                    if "local_mapping_type" in config
+                    else "nearest"
+                ),
+            }
+            for i in range(len(config.get("local_entity_groups", [])))
+        ],
+    }
+    if "scenario_parameters" in config:
+        rv["parameter_dataset"] = config["scenario_parameters"][0]
+
+    if prop := config.get("total_inward_demand_property"):
+        rv["total_inward_demand_attribute"] = prop[1]
+    if prop := config.get("total_outward_demand_property"):
+        rv["total_outward_demand_attribute"] = prop[1]
+
+    for key in (
+        "investment_multipliers",
+        "atol",
+        "rtol",
+        "max_iterations",
+        "scenario_multipliers",
+    ):
+        if key in config:
+            rv[key] = config[key]
+
+    return rv
 
 
 class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
@@ -54,6 +106,22 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
+
+    # This model has as PUB|INIT attribute (the demand_attribute). On initialization it reads
+    # the initial demand matrix, and on update it publishes on that attribute. This means that
+    # at t=0 the demand attribute has changes (coming from the init data), but the model may not
+    # produce any changes. With the default behaviour, the changes from the init data are
+    # reset after the TrackedModelAdapter reads the TrackedState, so the init data changes
+    # are included in the update. For this model, this is not the desired behaviour. In order
+    # to catch this, the model needs to be in control when the SUBSCRIBE changes are reset,
+    # namely after we have entered the update method, but before the update method produces
+    # any changes.
+    #
+    # We only want to automatically reset PUBLISH changes
     auto_reset = PUBLISH
 
     demand_estimation: DemandEstimation
@@ -73,14 +141,6 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
     }
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(model_config)
         self.update_count = 0
         self.max_iterations = model_config.get("max_iterations", 10_000_000)
@@ -224,8 +284,10 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
             demand_matrix, self.update_count == 0, moment=moment
         )
 
-        # Reset SUBSCRIBE before we publish results, so that all tracked changes are attributed to
-        # our model's calculation
+        # Reset SUBSCRIBE before we publish results, so that if we don't have any changes
+        # the demand_attribute is reset and no changes are published, but if we do have changes
+        # those changes are the only ones that will end up in the update produced by
+        # TrackedModelAdapter
         state.reset_tracked_changes(SUBSCRIBE)
 
         self._demand_attribute.csr.update_from_matrix(updated)
@@ -256,55 +318,3 @@ class TrafficDemandCalculation(TrackedModel, name="traffic_demand_calculation"):
 
     def shutdown(self, state: TrackedState) -> None:
         self.demand_estimation.close()
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_demand_calculation.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_demand_calculation.json"
-
-
-def convert_v1_v2(config):
-    rv = {
-        "demand_path": [*config["demand_entity"][0], config["demand_property"][1]],
-        "global_parameters": [
-            {
-                "name": config["global_parameters"][i],
-                "elasticity": config["global_elasticities"][i],
-            }
-            for i in range(len(config.get("global_parameters", [])))
-        ],
-        "local_parameters": [
-            {
-                "attribute_path": [
-                    *config["local_entity_groups"][i],
-                    config["local_properties"][i][1],
-                ],
-                "geometry": config["local_geometries"][i],
-                "elasticity": config["local_elasticities"][i],
-                "mapping_type": (
-                    config["local_mapping_type"][i]
-                    if "local_mapping_type" in config
-                    else "nearest"
-                ),
-            }
-            for i in range(len(config.get("local_entity_groups", [])))
-        ],
-    }
-    if "scenario_parameters" in config:
-        rv["parameter_dataset"] = config["scenario_parameters"][0]
-
-    if prop := config.get("total_inward_demand_property"):
-        rv["total_inward_demand_attribute"] = prop[1]
-    if prop := config.get("total_outward_demand_property"):
-        rv["total_outward_demand_attribute"] = prop[1]
-
-    for key in (
-        "investment_multipliers",
-        "atol",
-        "rtol",
-        "max_iterations",
-        "scenario_multipliers",
-    ):
-        if key in config:
-            rv[key] = config[key]
-
-    return rv

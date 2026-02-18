@@ -11,6 +11,12 @@ from jsonschema import exceptions, validators
 import movici_simulation_core.core.schema as schema
 
 
+@dataclasses.dataclass
+class ModelConfigSchema:
+    schema: dict | Path
+    convert_from_previous: t.Callable[[dict], dict] | None = None
+
+
 class MoviciTypeReport(exceptions.ValidationError):
     """Indicates the existence of a ``movici.type`` field in the instance. By deriving from
     ``exceptions.ValidationError``, we hook into the existing ``jsonschema`` code that sets the
@@ -201,10 +207,7 @@ class AttributeSchemaLookup(MoviciTypeLookup):
 
 def validate_and_process(
     instance: t.Any, schema: dict, lookup: MoviciTypeLookup | None = None, return_errors=False
-) -> t.Union[
-    t.List[MoviciDataRefInfo],
-    t.Tuple[t.List[MoviciDataRefInfo], t.List[exceptions.ValidationError]],
-]:
+) -> tuple[list[MoviciDataRefInfo], list[exceptions.ValidationError]]:
     r"""Extension of ``jsonschema.validators.validate`` that strips out and processes
     ``MoviciTypeReport``\s
     """
@@ -227,42 +230,7 @@ def validate_and_process(
     error = exceptions.best_match(errors)
     if error is not None:
         raise error
-    return data_refs
-
-
-def _extract_reports_from_error(
-    error: exceptions.ValidationError,
-) -> t.Tuple[MoviciTypeReport, t.Optional[exceptions.ValidationError]]:
-    if isinstance(error, MoviciTypeReport):
-        return [error], None
-
-    # ValidationErrors may either be a single error, or a container of errors (in case of anyOf,
-    # oneof, etc) kept in ValidationError.context. We filter out MoviciTypeReports from the real
-    # ValidationErrors. If there no real errors left, we drop the container sinces it's no longer
-    # an error. Otherwise we keep it.
-
-    if not error.context:
-        return [], error
-
-    reports = []
-    real_errors = []
-
-    for candidate in error.context:
-        if isinstance(candidate, MoviciTypeReport):
-            reports.append(candidate)
-            continue
-        elif candidate.context:
-            reports, candidate = _extract_reports_from_error(candidate)
-            reports.extend(reports)
-
-        if candidate is not None:
-            real_errors.append(candidate)
-
-    if real_errors:
-        error.context = real_errors
-    else:
-        error = None
-    return reports, error
+    return data_refs, errors
 
 
 def movici_validator(schema, lookup: MoviciTypeLookup | None = None):
@@ -340,37 +308,50 @@ class MoviciDataRefInfo:
         return tuple(rv)
 
 
-class ConfigVersion(t.TypedDict, total=False):
-    schema: dict
-    convert_from: t.Dict[str, t.Callable[[dict], dict]]
-
-
-def ensure_valid_config(
+def validate_and_migrate_config(
     config: dict,
-    target_version: str,
-    versions: t.Dict[str, ConfigVersion],
+    versions: t.Sequence[ModelConfigSchema],
     add_name_and_type=True,
 ):
+    if not versions:
+        raise ValueError("versions must contain at least one ModelConfigSchema")
     try:
         config = json.loads(json.dumps(config))
     except (TypeError, json.JSONDecodeError):
         raise TypeError(f"config {config} is not a valid JSON-encodable object") from None
 
-    version = versions[target_version]
-    schema = ensure_schema(version["schema"], add_name_and_type)
+    schema = ensure_schema(versions[-1].schema, add_name_and_type)
     errors = get_validation_errors(config, schema)
 
     if not errors:
         return config
 
-    for ver, converter in version.get("convert_from", {}).items():
-        legacy_version = versions[ver]
-        schema = ensure_schema(legacy_version["schema"])
+    if len(versions) == 1:
+        raise exceptions.best_match(errors)
+
+    idx = len(versions) - 2
+    while idx >= 0:
+        # move down the list of schema versions until we've passed a validation
+        # or we've run out of schema versions
+        schema = ensure_schema(versions[idx].schema, add_name_and_type)
         errs = get_validation_errors(config, schema)
         if not errs:
-            return converter(config)
+            break
+        idx -= 1
+    else:
+        # if we have not broken out of the while loop, we enter the else clause
+        raise exceptions.best_match(errors)
 
-    raise (exceptions.best_match(errors))
+    while idx < len(versions) - 1:
+        # go back up the list of schemas and convert the config to newer versions
+        # until we've reached the latest version
+        idx += 1
+        next_version = versions[idx]
+        if next_version.convert_from_previous is None:
+            raise ValueError("Cannot convert config without valid converter function")
+        config = next_version.convert_from_previous(config)
+
+    return config
 
 
 def ensure_schema(schema_identifier: t.Union[dict, str, Path], add_name_and_type=True):

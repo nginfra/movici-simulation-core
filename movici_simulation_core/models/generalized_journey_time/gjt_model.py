@@ -32,7 +32,7 @@ from movici_simulation_core.models.common.entity_groups import (
 )
 from movici_simulation_core.models.common.model_util import safe_divide
 from movici_simulation_core.models.common.network import Network, NetworkEntities
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from .crowdedness import crowdedness
 
@@ -62,7 +62,22 @@ class GJTTrackSegmentEntity(TransportSegmentEntity):
     capacity = field(Transport_Capacity_Hours, flags=0)
 
 
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/generalized_journey_time.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/generalized_journey_time.json"
+
+
+def convert_v1_v2(config):
+    return {
+        "travel_time": config["travel_time"][1],
+        "transport_segments": config["transport_segments"][0],
+    }
+
+
 class GJTModel(TrackedModel, name="generalized_journey_time"):
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     _transport_nodes: t.Optional[PointEntity] = None
     _transport_segments: t.Optional[TransportSegmentEntity] = None
     _demand_nodes: t.Optional[TrackDemandNodeEntity] = None
@@ -72,17 +87,6 @@ class GJTModel(TrackedModel, name="generalized_journey_time"):
     _travel_time: t.Optional[UniformAttribute]
     _passenger_flow: t.Optional[UniformAttribute]
     _network_entities: NetworkEntities
-
-    def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema: AttributeSchema, logger: logging.Logger, **_):
         self._logger = logger
@@ -210,14 +214,3 @@ class GJTCalculator:
                 )
 
         return avg_passenger_flow
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/generalized_journey_time.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/generalized_journey_time.json"
-
-
-def convert_v1_v2(config):
-    return {
-        "travel_time": config["travel_time"][1],
-        "transport_segments": config["transport_segments"][0],
-    }

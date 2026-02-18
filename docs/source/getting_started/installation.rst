@@ -96,6 +96,10 @@ The installation on MacOS is a bit more involved. Python must be installed via `
 
   python3.12 -m pip install movici-simulation-core
 
+.. note::
+  On Apple Silicon (M1/M2/M3) Macs, you may need to ensure Homebrew is properly configured
+  in your PATH. Homebrew typically installs to ``/opt/homebrew`` on Apple Silicon.
+
 Installing the **models** requires additional steps: 
 
 1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
@@ -147,4 +151,3 @@ for Windows 10 and higher. When using WSL, it is recommended to use VSCode as yo
 environment. See `Developing in WSL <https://code.visualstudio.com/docs/remote/wsl>`_ for 
 installation instructions. After installation of WSL, follow the installation instructuctions for
 :ref:`Linux<installation_linux>` for how to install Movici. 
-
