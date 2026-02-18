@@ -20,8 +20,9 @@ jobs:
     - uses: actions/checkout@v5
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ matrix.python-version }}
 
     - name: Install Spatialite
@@ -29,9 +30,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install
-      run: |
-        pip install .[models,dev]
+    - name: Install Movici Simulation Core      
+      uses: ./.github/actions/install-movici-simulation-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests
       run: |

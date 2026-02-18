@@ -10,7 +10,7 @@ jobs:
   linting:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
       uses: actions/setup-python@v6
@@ -30,16 +30,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ matrix.python-version }}
 
     - name: Install Spatialite
@@ -47,9 +48,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install
-      run: |
-        pip install .[models,dev]
+    - name: Install Movici Simulation Core
+      uses: ./.github/actions/install-movici-simulation-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests
       run: |
@@ -63,11 +65,12 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ env.python-version }}
 
     - name: Install Spatialite
@@ -75,9 +78,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install dependencies
-      run: |
-        pip install -e .[models,dev]
+    - name: Install Movici Simulation Core
+      uses: ./.github/actions/install-movici-simulation-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests with Numba JIT enabled
       run: |
@@ -90,11 +94,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Set up Python ${{ env.python-version }}
-      uses: actions/setup-python@v6
+      uses: ./.github/actions/setup-python
       with:
+        os: ${{ matrix.os }}
         python-version: ${{ env.python-version }}
 
     - name: Install Spatialite
@@ -102,9 +107,10 @@ jobs:
       with:
         os: ${{ matrix.os }}
 
-    - name: Install dependencies
-      run: |
-        pip install -e .[models,dev]
+    - name: Install Movici Simulation Core
+      uses: ./.github/actions/install-movici-simulation-core
+      with:
+        os: ${{ matrix.os }}
 
     - name: Run tests with coverage
       run: |
@@ -113,8 +119,7 @@ jobs:
   test-docs:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-
+    - uses: actions/checkout@v6
     - name: Set up Python ${{ env.python-version }}
       uses: actions/setup-python@v6
       with:

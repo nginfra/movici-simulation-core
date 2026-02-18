@@ -1,0 +1,27 @@
+name: "Setup Python"
+description: "Sets up Python using actions/setup-python on Linux/Windows and Homebrew on macOS (for SQLite extension loading support)."
+
+inputs:
+  os:
+    description: "The currently running os"
+    required: true
+  python-version:
+    description: "Python version to install (e.g. '3.13')"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+  - name: Set up Python via Homebrew (macOS)
+    if: startsWith(inputs.os, 'macos')
+    shell: bash
+    run: |
+      brew install python@${{ inputs.python-version }}
+      "$(brew --prefix python@${{ inputs.python-version }})/libexec/bin/python" -m venv ${{ github.workspace }}/.venv
+      echo "${{ github.workspace }}/.venv/bin" >> $GITHUB_PATH
+
+  - name: Set up Python (Linux/Windows)
+    if: ${{ !startsWith(inputs.os, 'macos') }}
+    uses: actions/setup-python@v6
+    with:
+      python-version: ${{ inputs.python-version }}

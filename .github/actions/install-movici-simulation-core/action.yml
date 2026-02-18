@@ -1,0 +1,29 @@
+name: "Install Movici Simulation Core"
+description: "Installs LLVM/Clang on macOS and pip-installs the project with the correct compiler flags. No-op on other OSes."
+
+inputs:
+  os:
+    description: "The currently running os"
+    required: true
+  pip-extras:
+    description: "The pip extras to install (e.g. '.[models,dev]')"
+    required: false
+    default: ".[models,dev]"
+
+runs:
+  using: "composite"
+  steps:
+  - name: Install build dependencies (macOS)
+    if: startsWith(inputs.os, 'macos')
+    shell: bash
+    run: |
+      brew install llvm
+      echo "CC=/opt/homebrew/opt/llvm/bin/clang" >> $GITHUB_ENV
+      echo "CXX=/opt/homebrew/opt/llvm/bin/clang++" >> $GITHUB_ENV
+      echo "LDFLAGS=-L/opt/homebrew/opt/llvm/lib" >> $GITHUB_ENV
+      echo "CPPFLAGS=-I/opt/homebrew/opt/llvm/include" >> $GITHUB_ENV
+
+  - name: Install Movici Simulation Core 
+    shell: bash
+    run: |
+      pip install -e ${{ inputs.pip-extras }}
