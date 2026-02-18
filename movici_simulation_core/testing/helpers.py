@@ -3,15 +3,16 @@ from pathlib import Path
 
 import numpy as np
 
+from movici_simulation_core.attributes import GlobalAttributes
 from movici_simulation_core.core import (
     AttributeField,
-    AttributeSchema,
     AttributeSpec,
     DataType,
     EntityGroup,
     EntityInitDataFormat,
     TrackedState,
 )
+from movici_simulation_core.models.common.attributes import CommonAttributes
 
 
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
@@ -32,12 +33,19 @@ T = t.TypeVar("T", bound=EntityGroup)
 
 
 def create_entity_group_with_data(
-    entity_type: t.Union[T, t.Type[T]], data: dict, state: t.Optional[TrackedState] = None
+    entity_type: t.Union[T, t.Type[T]],
+    data: dict,
+    state: t.Optional[TrackedState] = None,
+    populate_schema=True,
 ) -> T:
     DATASET = "dummy"
     state = state or TrackedState()
     entity_group = state.register_entity_group(DATASET, entity_type)
-    schema = AttributeSchema(attr.spec for attr in entity_type.all_attributes().values())
+    schema = state.schema
+    if populate_schema:
+        schema.use(GlobalAttributes)
+        schema.use(CommonAttributes)
+    schema.add_attributes(attr.spec for attr in entity_group.attributes.values())
     schema.add_attribute(AttributeSpec("id", DataType(int)))
     state.receive_update(
         EntityInitDataFormat(schema).load_json({DATASET: {entity_group.__entity_name__: data}})
