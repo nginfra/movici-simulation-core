@@ -184,19 +184,18 @@ class TrackedModelAdapter(ModelAdapterBase):
 
 
 class TrackedModel(Model):
-    """To work with a `TrackedState`, a model developer could create their own `TrackedState()`
+    """To work with a ``TrackedState``, a model developer could create their own ``TrackedState()``
     object and work with it directly to track changes and produce updates of changed data. However,
-    It is also possible to extend this `TrackedModel` class and let the
-    `TrackedModelAdapter` manage the `TrackedState`
+    It is also possible to extend this ``TrackedModel`` class and let the
+    ``TrackedModelAdapter`` manage the ``TrackedState``
 
-    Attributes:
-        auto_reset  By default, the TrackedModelAdapter resets tracking information of the
-                    state for PUB and/or SUB attributes at the appropriate time, so that the model
-                    receives a SUB update only once, and PUB attributes are published
-                    only once. By setting `auto_reset` to `0`, `PUB`, `SUB` or `PUB|SUB`. A model
-                    can limit this automatic behaviour and gain full control over which attributes
-                    are reset and when. However, when overriding the default behaviour, a model
-                    must be very careful in implementing this appropriately.
+    :cvar auto_reset: By default, the TrackedModelAdapter resets tracking information of the
+        state for PUB and/or SUB attributes at the appropriate time, so that the model receives a
+        SUB update only once, and PUB attributes are published only once. By setting ``auto_reset``
+        to ``0``, ``PUBLISH``, ``SUBSCRIBE`` or ``PUBLISH|SUBSCRIBE``. A model can limit this
+        automatic behaviour and gain full control over which attributes are reset and when.
+        However, when overriding the default behaviour, a model must be very careful in
+        implementing this appropriately.
     """
 
     auto_reset = (
@@ -212,74 +211,78 @@ class TrackedModel(Model):
         init_data_handler: InitDataHandler,
         logger: logging.Logger,
     ):
-        """In `setup`, a model receives a `state` object, it's `config` and other parameters. The
-        goal of `setup` is to prepare the `state` by giving it information of the attributes it
-        needs to track (by subscribing (INIT/SUB/OPT) or publishing (PUB) attributes) from which
-        datasets. These attributes may be grouped together in `EntityGroup` classes or created
-        directly. The main entry points for registering are:
+        """In ``setup``, a model receives a ``state`` object, it's ``config`` and other parameters.
+        The goal of ``setup`` is to prepare the ``state`` by giving it information of the
+        attributes it needs to track (by subscribing (INIT/SUB/OPT) or publishing (PUB) attributes)
+        from which datasets. These attributes may be grouped together in ``EntityGroup`` classes or
+        created directly. The main entry points for registering are:
 
-         * `state.add_dataset()` for registering a bunch of `EntityGroup` classes for a certain
-           dataset name at once
-         * `state.add_entity_group()` for registering a single `EntityGroup` class (or instance)
-           for a dataset name
-         * `state.register_attribute()` for registering a single attribute in a
-           dataset/entity_group combination
+        * ``state.add_dataset()`` for registering a bunch of ``EntityGroup`` classes for a certain
+          dataset name at once
+        * ``state.add_entity_group()`` for registering a single ``EntityGroup`` class (or instance)
+          for a dataset name
+        * ``state.register_attribute()`` for registering a single attribute in a
+          dataset/entity_group combination
 
-        During `setup` there is no data available in the `state`. These will be downloaded
-        automatically by the `TrackedModelAdapter`. However, additional datasets may be
-        requested directly through the `init_data_handler` parameter.
+        During ``setup`` there is no data available in the ``state``. These will be downloaded
+        automatically by the ``TrackedModelAdapter``. However, additional datasets may be
+        requested directly through the ``init_data_handler`` parameter.
 
-        :param state: The model's TrackedState object, managed by the `TrackedModelAdapter`
+        :param state: The model's TrackedState object, managed by the ``TrackedModelAdapter``
         :param settings: global settings
         :param schema: The AttributeSchema with all registered attributes
-        :param init_data_handler: an `InitDataHandler` that may be used to retrieve additional
+        :param init_data_handler: an ``InitDataHandler`` that may be used to retrieve additional
             datasets
-        :param logger: a `logging.Logger` instance
+        :param logger: a ``logging.Logger`` instance
         """
-        ...
+        raise NotImplementedError
 
     def initialize(self, state: TrackedState):
-        """The `initialize` method is called when all of the `state`'s `INIT` attribute arrays are
-        filled with data. This may be during the model engines initialization phase or during
-        `t=0`. Data that is required for the model to initialize attribute may be published in
-        another model's t0-update, and the `TrackedModelAdapter` can wait for this to happen
-        before calling `initialize`. When the simulation progresses to `t>0` before the model's
-        INIT attributes have been filled, an Exception is raised, indicating that the model was
-        not ready yet.
+        r"""The ``initialize`` method is called when all of the ``state``'s ``INIT`` attribute
+        arrays are filled with data. This may be during the model engines initialization phase or
+        during ``t=0``. Data that is required for the model to initialize attribute may be
+        published in another model's t0-update, and the ``TrackedModelAdapter`` can wait for this
+        to happen before calling ``initialize``. When the simulation progresses to ``t>0`` before
+        the model's INIT attributes have been filled, an Exception is raised, indicating that the
+        model was not ready yet.
 
-        `Model.initialize` may raise `NotReady` to indicate that it does not have its required
-        input data yet. This is for example useful if a model has a number `OPT`ional required
+        ``Model.initialize`` may raise ``NotReady`` to indicate that it does not have its required
+        input data yet. This is for example useful if a model has a number ``OPT``\ional required
         attributes of which at least one must be set. The model would check whether this is the
-        case, and raise `NotReady` if it is not. Once a model has succesfully run its initialize
+        case, and raise ``NotReady`` if it is not. Once a model has succesfully run its initialize
         method, this method will not be called again for the duration of the simulation.
 
-        :param state: The model's TrackedState object, managed by the `TrackedModelAdapter`
+        :param state: The model's TrackedState object, managed by the ``TrackedModelAdapter``
         """
 
     @abstractmethod
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-        """The `update` method is called for every update coming from the model engine. However
+        """The ``update`` method is called for every update coming from the model engine. However
         it is only called the first time once all PUB attributes have their arrays filled with
-        data. When the simulation progresses to `t>0` before the model's SUB attributes have been
+        data. When the simulation progresses to ``t>0`` before the model's SUB attributes have been
         filled, an Exception is raised, indicating that the model was not ready yet.
 
-        :param state: The model's TrackedState object, managed by the `TrackedModelAdapter`
-        :param moment: The current simulation `Moment`
+        :param state: The model's TrackedState object, managed by the ``TrackedModelAdapter``
+        :param moment: The current simulation ``Moment``
 
-        :return: an optional `Moment` indicating the next time a model want to be woken up, as
+        :return: an optional ``Moment`` indicating the next time a model want to be woken up, as
                  per the model engine's protocol
         """
+        raise NotImplementedError
 
-    def new_time(self, state: TrackedState, time_stamp: Moment):
+    def new_time(self, state: TrackedState, moment: Moment):
         """Called for every change of timestamp during a simulation run. This method is called
         before checking whether the state is ready for INIT or PUB and may be called before the
-        `initialize` and `update` methods have been called the first time.
+        ``initialize`` and ``update`` methods have been called the first time.
+
+        :param state: The model's TrackedState object, managed by the ``TrackedModelAdapter``
+        :param moment: The new simulation ``Moment``
         """
 
     def shutdown(self, state: TrackedState):
         """Called when a simulation ends (either due to it being finished or one of the models
         raises an exception). The model may implement this method to clean up local resources.
-        This method may be called before the `initialize` and `update` methods have been called
+        This method may be called before the ``initialize`` and ``update`` methods have been called
         the first time"""
 
     def get_adapter(self) -> t.Type[ModelAdapterBase]:
