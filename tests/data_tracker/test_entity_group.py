@@ -39,7 +39,7 @@ def test_creates_attribute_fields_attribute():
         attr2 = get_attribute(name="other_attribute")
         not_a_attr = 123
 
-    assert set(MyEntity.attributes.values()) == {MyEntity.attr, MyEntity.attr2}
+    assert set(MyEntity().attributes.values()) == {MyEntity.attr, MyEntity.attr2}
 
 
 def test_can_ask_state_for_attribute(entity_group):
@@ -73,6 +73,24 @@ def test_overwrite_attribute():
     class Derived(BaseEntity):
         attr = get_attribute(name="some_attribute", flags=0)
 
-    attrs = Derived.all_attributes()
+    attrs = Derived().attributes
     assert set(attrs) == {"attr"}
     assert attrs["attr"].flags == 0
+
+
+class TestExcludeAttributes:
+    class BaseEntity(EntityGroup):
+        attr = get_attribute(name="some_attribute")
+
+    class Derived(BaseEntity):
+        other_attr = get_attribute(name="other_attribute")
+        __exclude__ = ["attr"]
+
+    def test_exclude_attributes_from_parent(self):
+        assert self.Derived().attributes.keys() == {"other_attr"}
+
+    def test_exclude_from_parent_and_instance(self):
+        assert self.Derived(exclude=["other_attr"]).attributes.keys() == set()
+
+    def test_override_xclude(self):
+        assert self.Derived(override_exclude=["other_attr"]).attributes.keys() == {"attr"}

@@ -12,20 +12,45 @@ from .index import Index
 
 
 class EntityGroup:
-    _state: state_.StateProxy | None = None
-    attributes: t.Dict[str, attribute.AttributeField] = {}
     __entity_name__: t.Optional[str] = None
+    __exclude__: t.ClassVar[t.Iterable[str] | None] = None
     __optional__: bool = False
 
-    def __init__(self, name: str | None = None, optional: bool | None = None):
+    _state: state_.StateProxy | None = None
+    _attributes: t.ClassVar[t.Dict[str, attribute.AttributeField]] = {}
+
+    def __init__(
+        self,
+        name: str | None = None,
+        optional: bool | None = None,
+        exclude: t.Iterable[str] | None = None,
+        override_exclude: t.Iterable[str] | None = None,
+    ):
         if name is not None:
             self.__entity_name__ = name
         if optional is not None:
             self.__optional__ = optional
 
+        if exclude is not None and override_exclude is not None:
+            raise ValueError("Cannot supply both exclude and override_exclude arguments")
+
+        if override_exclude is not None:
+            exclude = set(override_exclude)
+        else:
+            exclude = set(self.__exclude__ or []) | set(exclude or [])
+
+        all_attributes = self._all_attributes()
+        non_exisiting_exclude = exclude - all_attributes.keys()
+        if non_exisiting_exclude:
+            raise ValueError(
+                "Cannot exclude non-existing attributes for EntityGroup:"
+                f" {','.join(non_exisiting_exclude)}"
+            )
+        self.attributes = {k: all_attributes[k] for k in all_attributes.keys() - exclude}
+
     def __init_subclass__(cls, **kwargs):
         cls.__entity_name__ = kwargs.get("name", cls.__entity_name__)
-        cls.attributes = {
+        cls._attributes = {
             key: value
             for key, value in vars(cls).items()
             if isinstance(value, attribute.AttributeField)
@@ -49,7 +74,7 @@ class EntityGroup:
             return True
         return all(
             attr.get_for(self).is_initialized()
-            for attr in self.all_attributes().values()
+            for attr in self.attributes.values()
             if flag & attr.flags
         )
 
@@ -88,9 +113,9 @@ class EntityGroup:
         return self.state.register_attribute(spec, flags, rtol, atol)
 
     @classmethod
-    def all_attributes(cls) -> t.Dict[str, attribute.AttributeField]:
+    def _all_attributes(cls) -> t.Dict[str, attribute.AttributeField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
-        return dict(itertools.chain.from_iterable(b.attributes.items() for b in reversed(bases)))
+        return dict(itertools.chain.from_iterable(b._attributes.items() for b in reversed(bases)))
 
     @property
     def index(self) -> Index:
