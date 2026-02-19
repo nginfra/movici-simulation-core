@@ -11,6 +11,31 @@ from movici_simulation_core.models.drinking_water.model import Model as Drinking
 from movici_simulation_core.models.drinking_water.network_wrapper import NetworkWrapper
 
 
+@pytest.fixture
+def schema(global_schema):
+    global_schema.register_attributes(DrinkingWaterModel.get_schema_attributes())
+    return global_schema
+
+
+@pytest.fixture
+def state(schema):
+    return TrackedState(schema=schema)
+
+
+@pytest.fixture
+def initialize_wrapper(schema, state):
+    converter = EntityInitDataFormat(schema)
+
+    def _initialize(init_data: dict, dataset_name="drinking_water") -> NetworkWrapper:
+        dataset = DrinkingWaterModel._register_dataset(state, dataset_name=dataset_name)
+        state.receive_update(converter.load_json(init_data), is_initial=True)
+        wrapper = NetworkWrapper()
+        wrapper.initialize(dataset)
+        return wrapper
+
+    return _initialize
+
+
 class TestConfigureOptions:
     """Test configure_options applies WNTR options correctly."""
 
@@ -96,29 +121,64 @@ class TestConfigureOptions:
         assert wrapper.wn.options.hydraulic.specific_gravity == 1.0
 
 
-@pytest.fixture
-def schema(global_schema):
-    global_schema.register_attributes(DrinkingWaterModel.get_schema_attributes())
-    return global_schema
+class TestSolverTimestep:
+    @pytest.fixture
+    def network_data(self):
+        return {
+            "drinking_water": {
+                "water_junction_entities": {
+                    "id": [10, 20],
+                    "drinking_water.base_demand": [1, 1],
+                    "geometry.z": [0, 0],
+                },
+                "water_pipe_entities": {
+                    "id": [1],
+                    "topology.from_node_id": [10],
+                    "topology.to_node_id": [20],
+                    "shape.diameter": [1],
+                    "shape.length": [10],
+                    "drinking_water.roughness": [100.0],
+                },
+            }
+        }
 
+    @pytest.fixture
+    def wrapper(self, initialize_wrapper, network_data):
+        return initialize_wrapper(network_data)
 
-@pytest.fixture
-def state(schema):
-    return TrackedState(schema=schema)
+    @pytest.fixture(autouse=True)
+    def no_warnings_emitted(self, caplog):
+        yield
+        messages = [
+            x.message
+            for when in ("setup", "call")
+            for x in caplog.get_records(when)
+            if x.levelno == logging.WARNING
+        ]
 
+        if messages:
+            pytest.fail("warning messages encountered during testing: {}".format(messages))
 
-@pytest.fixture
-def initialize_wrapper(schema, state):
-    converter = EntityInitDataFormat(schema)
+    def test_run_simulation_at_t0(self, wrapper):
+        """This test is to show that we cannot run a wntr simulation for 0 seconds, and the
+        t=0 result actually is at t=1. If we find a way to circumvent this, we can remove this
+        test"""
+        result = wrapper.run_simulation(0, hydraulic_timestep=2)
+        assert result.node["head"].index[-1] == 1
 
-    def _initialize(init_data: dict, dataset_name="drinking_water") -> NetworkWrapper:
-        dataset = DrinkingWaterModel._register_dataset(state, dataset_name=dataset_name)
-        state.receive_update(converter.load_json(init_data), is_initial=True)
-        wrapper = NetworkWrapper()
-        wrapper.initialize(dataset)
-        return wrapper
+    def test_run_simulation_with_aligned_hydraulic_timestep(self, wrapper):
+        wrapper.run_simulation(0, hydraulic_timestep=2)
 
-    return _initialize
+        new_time = 10
+        result = wrapper.run_simulation(new_time, hydraulic_timestep=2)
+        assert result.node["head"].index[-1] == new_time
+
+    def test_run_simulation_with_unaligned_hydraulic_timestep(self, wrapper):
+        wrapper.run_simulation(0, hydraulic_timestep=2)
+
+        new_time = 11
+        result = wrapper.run_simulation(new_time, hydraulic_timestep=2)
+        assert result.node["head"].index[-1] == new_time
 
 
 class TestProcessingBase:

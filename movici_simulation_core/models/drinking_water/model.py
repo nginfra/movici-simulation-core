@@ -12,12 +12,13 @@ including pressure, flow, and velocity calculations.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
-from movici_simulation_core.core.schema import AttributeSchema, attributes_from_dict
+from movici_simulation_core.core.schema import attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 
@@ -82,13 +83,14 @@ class Model(TrackedModel, name="drinking_water"):
         self.dataset_name = self.config["dataset"]
 
         options = self.config.get("options", {})
-        self.hydraulic_timestep: int = options.get("hydraulic_timestep", 3600)
-        self.report_timestep: t.Optional[int] = options.get("report_timestep")
+        self.hydraulic_timestep: int = options.get("hydraulic_timestep", 360)
+        self.report_timestep: int = options.get("report_timestep", 3600)
+        self.next_time = Moment(self.report_timestep)
 
     def setup(
         self,
         state: TrackedState,
-        schema: AttributeSchema,
+        logger: logging.Logger,
         **kwargs,
     ):
         """Setup the model and initialize network.
@@ -96,7 +98,7 @@ class Model(TrackedModel, name="drinking_water"):
         :param state: Tracked state for entity registration
         :param schema: Attribute schema
         """
-
+        self.network.logger = logger
         self.dataset = self._register_dataset(state, self.dataset_name)
 
     @staticmethod
@@ -189,14 +191,10 @@ class Model(TrackedModel, name="drinking_water"):
             # Already calculated for this timestep — accumulate changes only
             self.network.process_changes()
             state.reset_tracked_changes(SUBSCRIBE)
-            return None
+            return self.next_time
 
         # 1. Simulate with the current (old) input state
-        results = self.network.run_simulation(
-            duration=self.hydraulic_timestep,
-            hydraulic_timestep=self.hydraulic_timestep,
-            report_timestep=self.report_timestep,
-        )
+        results = self.network.run_simulation(int(moment.seconds), self.hydraulic_timestep)
 
         # 2. Apply incoming changes for the next timestep.
         #    Skip on the very first call — init data was already consumed by
@@ -213,8 +211,9 @@ class Model(TrackedModel, name="drinking_water"):
         # 4. Publish simulation results
         self.network.write_results(results)
         self.last_calculated = moment
-
-        return None
+        if moment >= self.next_time:
+            self.next_time = Moment(self.next_time.timestamp + self.report_timestep)
+        return self.next_time
 
     def shutdown(self, state: TrackedState):
         """Clean up resources.

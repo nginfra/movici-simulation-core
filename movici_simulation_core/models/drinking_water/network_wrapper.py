@@ -28,8 +28,6 @@ from .dataset import (
     WaterValveEntity,
 )
 
-logger = logging.getLogger(__name__)
-
 T = t.TypeVar("T", bound=EntityGroup)
 N = t.TypeVar("N", bound=WaterNodeEntity)
 L = t.TypeVar("L", bound=WaterLinkEntity)
@@ -568,8 +566,8 @@ class NetworkWrapper:
     data model and WNTR's water network simulation engine.
     """
 
-    def __init__(self):
-        self.wntr = wntr
+    def __init__(self, logger: logging.Logger | None = None):
+        self.logger = logger or logging.getLogger(__name__)
         self._curve_counter = 0
         self.wn = wntr.network.WaterNetworkModel()
         self.id_mapper = IdMapper()
@@ -591,6 +589,7 @@ class NetworkWrapper:
 
         for processor in self.processors.values():
             processor.create_elements()
+        self._sim = wntr.sim.WNTRSimulator(self.wn)
 
     def process_changes(self):
         """Process any changes to the DrinkingWaterNetwork that may have happened
@@ -625,46 +624,80 @@ class NetworkWrapper:
                 continue
             section = getattr(self.wn.options, section_name, None)
             if section is None:
-                logger.warning(f"Unknown WNTR options section '{section_name}', ignoring")
+                self.logger.warning(f"Unknown WNTR options section '{section_name}', ignoring")
                 continue
             for key, value in section_options.items():
                 if value is None:
                     continue
                 if not hasattr(section, key):
-                    logger.warning(f"Unknown option '{key}' in section '{section_name}', ignoring")
+                    self.logger.warning(
+                        f"Unknown option '{key}' in section '{section_name}', ignoring"
+                    )
                     continue
                 setattr(section, key, value)
 
-    def run_simulation(
-        self,
-        duration: t.Optional[float] = None,
-        hydraulic_timestep: float = 3600,
-        report_timestep: t.Optional[float] = None,
-    ) -> wntr.sim.SimulationResults:
+    def run_simulation(self, new_time: int, hydraulic_timestep: int) -> wntr.sim.SimulationResults:
         """Run WNTR simulation for one step using pause/restart.
 
         The simulator is kept alive across calls so that WNTR's internal
         state (tank levels, solver state) carries forward between timesteps.
         Duration is cumulative: each call advances ``sim_time`` by *step*.
 
-        :param duration: Step size in seconds (None uses *hydraulic_timestep*)
+        :param new_time: the new simulation time to progress the internal WNTR network to
         :param hydraulic_timestep: Hydraulic timestep in seconds
-        :param report_timestep: Report timestep in seconds (None = same as hydraulic)
+
         :return: WNTR SimulationResults object
         """
-        step = duration if duration is not None else hydraulic_timestep
-        self.wn.options.time.duration = int(self.wn.sim_time + step)
-        self.wn.options.time.hydraulic_timestep = int(hydraulic_timestep)
-
-        if report_timestep is not None:
-            self.wn.options.time.report_timestep = int(report_timestep)
-        else:
-            self.wn.options.time.report_timestep = int(hydraulic_timestep)
-
         if self._sim is None:
-            self._sim = self.wntr.sim.WNTRSimulator(self.wn)
+            raise RuntimeError("Must initialize first")
 
-        return self._sim.run_sim()
+        new_time = new_time or 1  # WNTR cannot run simulation for 0 duration
+        hydraulic_timestep = min(hydraulic_timestep, new_time)
+        progress_to = (new_time // hydraulic_timestep) * hydraulic_timestep
+
+        # Hydraulic timestep and report timestep are aligned to the global simulation duration,
+        # not the incremental duration between runs. This means that, in case we request a new_time
+        # that is not aligned with the hydraulic (or report) timestep, we can first run until
+        # the last aligned timestep before the new_time, and then do a second run that takes us
+        # to the requested new_time
+        self.wn.options.time.duration = progress_to
+        self.wn.options.time.hydraulic_timestep = hydraulic_timestep
+        self.wn.options.time.report_timestep = progress_to
+
+        result = self._sim.run_sim()
+        last_result_time = int(result.node["head"].index[-1])
+
+        # if we have not reached the requested new_time yet, we run the simulation again,
+        # with a single hydraulic step to the desired new time
+        if progress_to < new_time:
+            # after a simulation run wn.sim_time is already one hydraulic timestep further
+            # than the result timestep. If we want the next report to be in between the last
+            # result and the next hydraulic timestep (and by the time we're in this block, yes
+            # we do want that), we need to reset the wn.sim_time to the last result timestep
+            # which equals the progress_to timestep
+            # TODO: Validate that this rolling back of the sim_time, doesnt actually affect the
+            # results
+            self.wn.sim_time = progress_to
+
+            # Since the hydraulic and report timesteps are aligned to the overall simulation
+            # duration, we can set these values to the new_time, to ensure that we get a single
+            # (small) hydraulic timestep that takes us to the new time
+            self.wn.options.time.duration = new_time
+            self.wn.options.time.hydraulic_timestep = new_time
+            self.wn.options.time.report_timestep = new_time
+
+            result = self._sim.run_sim()
+            last_result_time = int(result.node["head"].index[-1])
+
+        # A final check that we have reached our desired new_time, but this should always be true
+        if last_result_time != new_time:
+            self.logger.warning(
+                "Due to hydraulic_timestep mismatch, WNTR solver simulated until"
+                f" t={last_result_time}s but t={new_time}s was expected."
+                f" This is a difference of {new_time - last_result_time}s.",
+            )
+
+        return result
 
     def write_results(self, results: wntr.sim.SimulationResults):
         """Write WNTR results back into entity group arrays.

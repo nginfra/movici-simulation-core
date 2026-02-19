@@ -15,6 +15,13 @@ from movici_simulation_core.models.drinking_water.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
 
 
+@pytest.fixture
+def additional_attributes():
+    """Register drinking water network attributes with schema."""
+    # Return the list of AttributeSpec objects from the model
+    return Model.get_schema_attributes()
+
+
 def wn_from_tester(tester: ModelTester):
     """returns the wntr network from a ModelTester configured with the drinking_water model"""
     return tester.model.network.wn
@@ -28,13 +35,13 @@ class TestConfigSchema:
         config = {
             "dataset": "water_network",
             "options": {
-                "hydraulic_timestep": 1800,
+                "report_timestep": 1800,
             },
         }
 
         model = Model(config)
         assert model.dataset_name == "water_network"
-        assert model.hydraulic_timestep == 1800
+        assert model.report_timestep == 1800
 
     def test_invalid_configuration(self):
         with pytest.raises(ValidationError):
@@ -93,7 +100,7 @@ class TestHydraulicOptionsFromDataset:
         return {
             "dataset": "water_network",
             "options": {
-                "hydraulic_timestep": 3600,
+                "report_timestep": 3600,
             },
         }
 
@@ -174,20 +181,13 @@ class TestHydraulicOptionsFromDataset:
         assert wn.options.hydraulic.accuracy == 0.01
 
 
-@pytest.fixture
-def additional_attributes():
-    """Register drinking water network attributes with schema."""
-    # Return the list of AttributeSpec objects from the model
-    return Model.get_schema_attributes()
-
-
 class TestDrinkingWaterModelBase:
     @pytest.fixture
     def model_config(self):
         return {
             "dataset": "water_network",
             "options": {
-                "hydraulic_timestep": 3600,
+                "report_timestep": 3600,
             },
         }
 
@@ -376,6 +376,43 @@ class TestSimpleNetwork(TestDrinkingWaterModelBase):
         # Verify pipe2 has no flow
         assert flowrate[0] > 1e-6, "P101 should have flow when open"
         assert flowrate[1] < 1e-6, "P102 should have no flow when closed"
+
+
+class TestNextTime(TestDrinkingWaterModelBase):
+    def test_initial_next_time(self, tester):
+        model = tester.model
+        report_timestep = model.report_timestep
+        tester.initialize()
+        _, next_time = tester.update(0, None)
+        assert next_time > 0
+        assert next_time == report_timestep
+
+    def test_next_time_progression(self, tester):
+        model = tester.model
+        report_timestep = model.report_timestep
+        tester.initialize()
+        _, next_time = tester.update(0, None)
+
+        tester.new_time(next_time)
+        _, new_next_time = tester.update(next_time, None)
+        assert new_next_time == next_time + report_timestep
+
+    def test_next_time_remains_unchanged_after_interruption(self, tester):
+        model = tester.model
+        report_timestep = model.report_timestep
+        tester.initialize()
+        _, next_time = tester.update(
+            report_timestep - 10,
+            {
+                "water_network": {
+                    "water_pipe_entities": {
+                        "id": [102],  # PIPE2
+                        "operational.status": [False],
+                    }
+                }
+            },
+        )
+        assert next_time == report_timestep
 
 
 class TestBranchedNetworkControl(TestDrinkingWaterModelBase):
@@ -577,7 +614,7 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
 
     def test_tank_level_changes_across_timesteps(self, tester, model_config):
         """Tank level should change progressively, not reset to init_level each step."""
-        timestep = model_config["options"]["hydraulic_timestep"]
+        timestep = model_config["options"]["report_timestep"]
 
         tester.initialize()
 
@@ -610,7 +647,7 @@ class TestMixedPumpTypes(TestDrinkingWaterModelBase):
         return {
             "dataset": "water_network",
             "options": {
-                "hydraulic_timestep": 10,
+                "report_timestep": 10,
             },
         }
 
