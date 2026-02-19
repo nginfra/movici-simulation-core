@@ -7,6 +7,7 @@ from .netcdf_player.netcdf_player import NetCDFPlayer as NetCDFPlayerModel
 from .operational_status.operational_status import OperationalStatus as OperationalStatusModel
 from .opportunities.model import Model as OpportunitiesModel
 from .overlap_status.model import Model as OverlapStatusModel
+from .rules.model import Model as RulesModel
 from .shortest_path.model import ShortestPathModel
 from .tape_player.model import Model as TapePlayerModel
 from .time_window_status.model import Model as TimeWindowStatusModel
@@ -28,6 +29,7 @@ __all__ = [
     "OperationalStatusModel",
     "OpportunitiesModel",
     "OverlapStatusModel",
+    "RulesModel",
     "ShortestPathModel",
     "TapePlayerModel",
     "TimeWindowStatusModel",

@@ -7,4 +7,5 @@ Model Library
 
    data_collector
    netcdf_player
+   rules_model
    traffic_assignment

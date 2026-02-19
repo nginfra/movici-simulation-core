@@ -1,5 +1,5 @@
 import dataclasses
-import datetime
+import datetime as _datetime
 import functools
 import typing as t
 
@@ -29,11 +29,13 @@ class TimelineInfo:
     def seconds_to_timestamp(self, seconds: float) -> int:
         return int(seconds / self.time_scale)
 
-    def datetime_to_timestamp(self, dt: datetime.datetime) -> int:
+    def datetime_to_timestamp(self, dt: _datetime.datetime) -> int:
         return self.unix_time_to_timestamp(dt.timestamp())
 
     def timestamp_to_datetime(self, timestamp: int):
-        return datetime.datetime.fromtimestamp(self.timestamp_to_unix_time(timestamp))
+        return _datetime.datetime.fromtimestamp(
+            self.timestamp_to_unix_time(timestamp), tz=_datetime.timezone.utc
+        )
 
     def string_to_timestamp(self, dt_string: str, **kwargs):
         return self.datetime_to_timestamp(string_to_datetime(dt_string, **kwargs))
@@ -103,6 +105,11 @@ class Moment:
         timeline_info = self.assert_timeline_info(self.timeline_info)
         return timeline_info.timestamp_to_unix_time(self.timestamp)
 
+    @property
+    def datetime(self):
+        timeline_info = self.assert_timeline_info(self.timeline_info)
+        return timeline_info.timestamp_to_datetime(self.timestamp)
+
     def is_at_beginning(self):
         timeline_info = self.assert_timeline_info(self.timeline_info)
         return timeline_info.is_at_beginning(self.timestamp)
@@ -132,7 +139,7 @@ class Moment:
         )
 
     @classmethod
-    def from_datetime(cls, dt: datetime.datetime, timeline_info: t.Optional[TimelineInfo] = None):
+    def from_datetime(cls, dt: _datetime.datetime, timeline_info: t.Optional[TimelineInfo] = None):
         timeline_info = cls.assert_timeline_info(timeline_info)
         return cls(timeline_info.unix_time_to_timestamp(dt.timestamp()), timeline_info)
 
