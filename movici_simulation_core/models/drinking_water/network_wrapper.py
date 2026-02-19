@@ -1,0 +1,726 @@
+"""Main wrapper for WNTR WaterNetworkModel with Movici integration.
+
+This module provides a clean interface between Movici's entity-based
+data model and WNTR's water network simulation engine.
+"""
+
+from __future__ import annotations
+
+import logging
+import typing as t
+
+import numpy as np
+import wntr
+from wntr.network import LinkStatus
+
+from movici_simulation_core.core.attribute import UniformAttribute
+from movici_simulation_core.core.entity_group import EntityGroup
+
+from .dataset import (
+    DrinkingWaterNetwork,
+    WaterJunctionEntity,
+    WaterLinkEntity,
+    WaterNodeEntity,
+    WaterPipeEntity,
+    WaterPumpEntity,
+    WaterReservoirEntity,
+    WaterTankEntity,
+    WaterValveEntity,
+)
+
+T = t.TypeVar("T", bound=EntityGroup)
+N = t.TypeVar("N", bound=WaterNodeEntity)
+L = t.TypeVar("L", bound=WaterLinkEntity)
+
+
+def _extract_csr_curve(csr_attribute, idx: int) -> t.Optional[np.ndarray]:
+    """Extract a single curve from a CSR attribute.
+
+    :param csr_attribute: CSR attribute containing curve data
+    :param idx: Index of the entity
+    :return: Numpy array of curve data, or None if empty/undefined
+    """
+    csr = csr_attribute.csr
+    start = csr.row_ptr[idx]
+    end = csr.row_ptr[idx + 1]
+    if end > start:
+        data = csr.data[start:end]
+        if np.any(np.isnan(data)):
+            return None
+        return data
+    return None
+
+
+def _opt_defined(attr) -> t.Optional[np.ndarray]:
+    """Return a boolean mask of defined values, or None if attr has no data."""
+    if not attr.has_data():
+        return None
+    return ~attr.is_undefined()
+
+
+def _opt_val(attr, idx: int, mask: t.Optional[np.ndarray], default):
+    """Get optional attribute value, returning *default* if undefined."""
+    if mask is not None and mask[idx]:
+        return type(default)(attr.array[idx])
+    return default
+
+
+class WNTRElementProcessor(t.Generic[T]):
+    def __init__(self, wrapper: NetworkWrapper, entity_group: T):
+        self.wrapper = wrapper
+        self.entity_group = entity_group
+
+    @property
+    def wn(self) -> wntr.network.WaterNetworkModel:
+        return self.wrapper.wn
+
+    def create_elements(self):
+        raise NotImplementedError
+
+    def update_elements(self):
+        pass
+
+    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
+        pass
+
+
+class NodeProcessor(WNTRElementProcessor[N]):
+    """Base for node processors that write head & pressure.
+
+    Subclasses must define ``PREFIX`` (e.g. ``"J"`` for junctions).
+    """
+
+    PREFIX: str
+
+    def _node_name(self, entity_id: int) -> str:
+        return self.PREFIX + str(entity_id)
+
+    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
+        eg = self.entity_group
+        size = len(eg)
+        if not size:
+            return
+        end = df_offset + size
+
+        self._write_common_results(results, df_begin=df_offset, df_end=end)
+        self._write_results(results, df_begin=df_offset, df_end=end)
+
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        eg = self.entity_group
+        # the slicing assignment ([:]) is needed to maintain change tracking
+        eg.head.array[:] = results.node["head"].iloc[-1].values[df_begin:df_end]
+        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_begin:df_end]
+        eg.demand.array[:] = results.node["demand"].iloc[-1].values[df_begin:df_end]
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        pass
+
+
+class LinkProcessor(WNTRElementProcessor[L]):
+    """Base for link processors that write flow, flow_rate_magnitude, link_status.
+
+    Subclasses must define ``PREFIX`` (e.g. ``"P"`` for pipes).
+    """
+
+    PREFIX: str
+
+    def _link_name(self, entity_id: int) -> str:
+        return self.PREFIX + str(entity_id)
+
+    def _from_to(self, idx: int, entity_id: int) -> tuple[str, str]:
+        eg = self.entity_group
+        from_id = eg.from_node_id.array[idx]
+        to_id = eg.to_node_id.array[idx]
+
+        try:
+            from_element = self.wrapper.id_mapper.get_wntr_name(eg.from_node_id.array[idx])
+        except KeyError:
+            raise ValueError(f"Invalid from_node_id {from_id} for link #{entity_id}") from None
+
+        try:
+            to_element = self.wrapper.id_mapper.get_wntr_name(eg.to_node_id.array[idx])
+        except KeyError:
+            raise ValueError(f"Invalid to_node_id {to_id} for link #{entity_id}") from None
+
+        return (from_element, to_element)
+
+    def write_results(self, results: wntr.sim.SimulationResults, df_offset: int):
+        eg = self.entity_group
+        size = len(eg)
+        if not size:
+            return
+        end = df_offset + size
+        self._write_common_results(results, df_begin=df_offset, df_end=end)
+        self._write_results(results, df_begin=df_offset, df_end=end)
+
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        # the slicing assignment ([:]) is needed to maintain change tracking
+        flows = results.link["flowrate"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.flow.array[:] = flows
+        self.entity_group.flow_rate_magnitude.array[:] = np.abs(flows)
+        self.entity_group.link_status.array[:] = (
+            results.link["status"].iloc[-1].values[df_begin:df_end].astype(int)
+        )
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Node processors
+# ---------------------------------------------------------------------------
+
+
+class JunctionProcessor(NodeProcessor[WaterJunctionEntity]):
+    PREFIX = "J"
+
+    def create_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        # Pre-compute effective demands (base_demand * demand_factor where defined)
+        demand = eg.base_demand.array.copy()
+        df_defined = _opt_defined(eg.demand_factor)
+        if df_defined is not None:
+            demand[df_defined] *= eg.demand_factor.array[df_defined]
+
+        # Pre-compute PDD masks
+        min_p_defined = _opt_defined(eg.minimum_pressure)
+        req_p_defined = _opt_defined(eg.required_pressure)
+        exp_defined = _opt_defined(eg.pressure_exponent)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._node_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+
+            self.wn.add_junction(
+                name=name,
+                base_demand=float(demand[idx]),
+                elevation=float(eg.elevation.array[idx]),
+            )
+
+            junction = t.cast(wntr.network.Junction, self.wn.get_node(name))
+            if min_p_defined is not None and min_p_defined[idx]:
+                junction.minimum_pressure = float(eg.minimum_pressure.array[idx])
+            if req_p_defined is not None and req_p_defined[idx]:
+                junction.required_pressure = float(eg.required_pressure.array[idx])
+            if exp_defined is not None and exp_defined[idx]:
+                junction.pressure_exponent = float(eg.pressure_exponent.array[idx])
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        bd_changed = eg.base_demand.changed
+        df_changed = eg.demand_factor.changed if eg.demand_factor.has_data() else bd_changed
+        any_changed = bd_changed | df_changed
+
+        df_defined = _opt_defined(eg.demand_factor)
+
+        for idx in np.flatnonzero(any_changed):
+            junction = t.cast(
+                wntr.network.Junction,
+                self.wn.get_node(self._node_name(eg.index.ids[idx])),
+            )
+            demand = float(eg.base_demand.array[idx])
+            if df_defined is not None and df_defined[idx]:
+                demand *= float(eg.demand_factor.array[idx])
+            junction.demand_timeseries_list[0].base_value = demand
+
+
+class TankProcessor(NodeProcessor[WaterTankEntity]):
+    PREFIX = "T"
+
+    def create_elements(self):
+        eg = self.entity_group
+        size = len(eg)
+        if not size:
+            return
+
+        # Required attribute data
+        init_levels = eg.level.array
+        elevations = eg.elevation.array
+        max_levels = eg.max_level.array
+
+        # Optional masks
+        min_lvl_defined = _opt_defined(eg.min_level)
+        dia_defined = _opt_defined(eg.diameter)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._node_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+
+            min_level = _opt_val(eg.min_level, idx, min_lvl_defined, 0.0)
+            diameter = _opt_val(eg.diameter, idx, dia_defined, 0.0)
+
+            vol_curve_name = None
+            if (
+                eg.volume_curve.has_data()
+                and (curve_data := _extract_csr_curve(eg.volume_curve, idx)) is not None
+            ):
+                vol_curve_name = self.wrapper.add_curve(curve_data, "VOLUME")
+
+            self.wn.add_tank(
+                name=name,
+                elevation=float(elevations[idx]),
+                init_level=float(init_levels[idx]),
+                min_level=min_level,
+                max_level=float(max_levels[idx]),
+                diameter=diameter,
+                vol_curve=vol_curve_name,
+            )
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        heads = results.node["head"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.level.array[:] = heads - self.entity_group.elevation.array
+
+
+class ReservoirProcessor(NodeProcessor[WaterReservoirEntity]):
+    PREFIX = "R"
+
+    def create_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        # Pre-compute effective heads
+        heads = eg.base_head.array.copy()
+        hf_defined = _opt_defined(eg.head_factor)
+        if hf_defined is not None:
+            heads[hf_defined] *= eg.head_factor.array[hf_defined]
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._node_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+            self.wn.add_reservoir(
+                name=name,
+                base_head=float(heads[idx]),
+                head_pattern=None,
+            )
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg) or not eg.head_factor.has_data():
+            return
+        if not np.any(eg.head_factor.changed | eg.base_head.changed):
+            return
+
+        hf_defined = _opt_defined(eg.head_factor)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            reservoir = self.wn.get_node(self._node_name(entity_id))
+            head = float(eg.base_head.array[idx])
+            if hf_defined is not None and hf_defined[idx]:
+                head *= float(eg.head_factor.array[idx])
+            reservoir.base_head = head
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        demands = results.node["demand"].iloc[-1].values[df_begin:df_end]
+        self.entity_group.flow.array[:] = -demands
+        self.entity_group.flow_rate_magnitude.array[:] = np.abs(demands)
+
+
+# ---------------------------------------------------------------------------
+# Link processors
+# ---------------------------------------------------------------------------
+
+
+class PipeProcessor(LinkProcessor[WaterPipeEntity]):
+    PREFIX = "P"
+
+    def create_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        # Pre-compute optional masks
+        status_defined = _opt_defined(eg.status)
+        cv_defined = _opt_defined(eg.check_valve)
+        length_defined = _opt_defined(eg.length)
+        ml_defined = _opt_defined(eg.minor_loss)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._link_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
+
+            status_str = "OPEN"
+            if status_defined is not None and status_defined[idx]:
+                status_str = "OPEN" if eg.status.array[idx] else "CLOSED"
+
+            check_valve = False
+            if cv_defined is not None and cv_defined[idx]:
+                check_valve = bool(eg.check_valve.array[idx])
+
+            length = _opt_val(eg.length, idx, length_defined, 100.0)
+            minor_loss = _opt_val(eg.minor_loss, idx, ml_defined, 0.0)
+
+            self.wn.add_pipe(
+                name=name,
+                start_node_name=from_node,
+                end_node_name=to_node,
+                length=length,
+                diameter=float(eg.diameter.array[idx]),
+                roughness=float(eg.roughness.array[idx]),
+                minor_loss=minor_loss,
+                initial_status=status_str,
+                check_valve=check_valve,
+            )
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg) or not eg.status.has_data():
+            return
+        if not np.any(eg.status.changed):
+            return
+        for idx in np.flatnonzero(eg.status.changed):
+            link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
+            link.initial_status = LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
+
+    def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
+        eg = self.entity_group
+        eg.velocity.array[:] = results.link["velocity"].iloc[-1].values[df_begin:df_end]
+
+
+class PumpProcessor(LinkProcessor[WaterPumpEntity]):
+    PREFIX = "PU"
+
+    def create_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        # Pre-compute enum strings and optional masks
+        enum_values = eg.pump_type.options.enum_values
+        pump_types = [enum_values[int(v)].upper() for v in eg.pump_type.array]
+        has_head_curve = eg.head_curve.has_data()
+        status_defined = _opt_defined(eg.status)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._link_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
+            pump_type = pump_types[idx]
+
+            if pump_type == "POWER":
+                power = 1.0
+                if eg.power.has_data() and not eg.power.is_undefined()[idx]:
+                    power = float(eg.power.array[idx])
+                self.wn.add_pump(
+                    name=name,
+                    start_node_name=from_node,
+                    end_node_name=to_node,
+                    pump_type="POWER",
+                    pump_parameter=power,
+                )
+            else:  # HEAD
+                curve_data = None
+                if has_head_curve:
+                    curve_data = _extract_csr_curve(eg.head_curve, idx)
+                if curve_data is None:
+                    raise ValueError(f"Head pump '{name}' requires a head_curve")
+                curve_name = self.wrapper.add_curve(curve_data, "HEAD")
+                self.wn.add_pump(
+                    name=name,
+                    start_node_name=from_node,
+                    end_node_name=to_node,
+                    pump_type="HEAD",
+                    pump_parameter=curve_name,
+                )
+
+            if status_defined is not None and status_defined[idx]:
+                pump = self.wn.get_link(name)
+                pump.initial_status = (
+                    LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
+                )
+
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        # WNTR groups HeadPumps before PowerPumps in the results DataFrame,
+        # regardless of creation order.  Use name-based column lookup instead
+        # of positional slicing to handle mixed pump types correctly.
+        eg = self.entity_group
+        names = [self._link_name(eid) for eid in eg.index.ids]
+        flows = results.link["flowrate"].iloc[-1][names].values
+        eg.flow.array[:] = flows
+        eg.flow_rate_magnitude.array[:] = np.abs(flows)
+        eg.link_status.array[:] = results.link["status"].iloc[-1][names].values.astype(int)
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        status_changed = eg.status.changed
+        power_changed = eg.power.changed
+        any_changed = status_changed | power_changed
+        if not np.any(any_changed):
+            return
+
+        for idx in np.flatnonzero(any_changed):
+            pump = self.wn.get_link(self._link_name(eg.index.ids[idx]))
+            pump.initial_status = LinkStatus.Open if eg.status.array[idx] else LinkStatus.Closed
+            pump.power = eg.power.array[idx]
+
+
+class ValveProcessor(LinkProcessor[WaterValveEntity]):
+    PREFIX = "V"
+
+    def _get_setting(self, idx: int, valve_type: str) -> float:
+        attribute = self._get_setting_attribute(valve_type)
+        value = attribute.array[idx]
+        if attribute.data_type.is_undefined(value):
+            raise ValueError(f"No setting available for valve type {valve_type} at index {idx}")
+        return float(value)
+
+    def _get_setting_attribute(self, valve_type: str) -> UniformAttribute:
+        if valve_type in ("PRV", "PSV"):
+            return self.entity_group.valve_pressure
+        if valve_type == "FCV":
+            return self.entity_group.valve_flow
+        if valve_type == "TCV":
+            return self.entity_group.valve_loss_coefficient
+
+        raise ValueError(f"Unsupported Valve type {valve_type}")
+
+    def create_elements(self):
+        eg = self.entity_group
+        if not len(eg):
+            return
+
+        # Pre-compute enum strings and optional masks
+        enum_values = eg.valve_type.options.enum_values
+        valve_types = [enum_values[int(v)].upper() for v in eg.valve_type.array]
+        ml_defined = _opt_defined(eg.minor_loss)
+        status_defined = _opt_defined(eg.status)
+
+        for idx, entity_id in enumerate(eg.index.ids):
+            name = self._link_name(entity_id)
+            self.wrapper.id_mapper.register(entity_id, name)
+            from_node, to_node = self._from_to(idx, entity_id=entity_id)
+            valve_type = valve_types[idx]
+            setting = self._get_setting(idx, valve_type)
+            minor_loss = _opt_val(eg.minor_loss, idx, ml_defined, 0.0)
+
+            initial_status = "ACTIVE"
+            if status_defined is not None and status_defined[idx]:
+                initial_status = "ACTIVE" if eg.status.array[idx] else "CLOSED"
+
+            self.wn.add_valve(
+                name=name,
+                start_node_name=from_node,
+                end_node_name=to_node,
+                diameter=float(eg.diameter.array[idx]),
+                valve_type=valve_type,
+                minor_loss=minor_loss,
+                initial_setting=setting,
+                initial_status=initial_status,
+            )
+
+    def update_elements(self):
+        eg = self.entity_group
+        if not len(eg) or not eg.status.has_data():
+            return
+        if not np.any(eg.status.changed):
+            return
+        for idx in np.flatnonzero(eg.status.changed):
+            link = self.wn.get_link(self._link_name(eg.index.ids[idx]))
+            link.initial_status = LinkStatus.Active if eg.status.array[idx] else LinkStatus.Closed
+
+
+class IdMapper:
+    """Maps between Movici integer IDs and WNTR string names.
+
+    Each processor registers its entities with a type-specific prefix
+    (e.g. ``"J"`` for junctions, ``"P"`` for pipes), producing WNTR
+    names like ``"J5"`` or ``"P101"``.
+    """
+
+    def __init__(self):
+        self.elements_by_id: dict[int, str] = {}
+
+    def register(self, entity_id: int, wntr_name: str):
+        if entity_id in self.elements_by_id:
+            raise ValueError(f"Duplicate Entity ID {entity_id}")
+        self.elements_by_id[entity_id] = wntr_name
+
+    def get_wntr_name(self, entity_id: int) -> str:
+        """Get WNTR name for a Movici ID.
+
+        :param movici_id: Movici entity ID
+        :return: WNTR name string
+        """
+        return self.elements_by_id[int(entity_id)]
+
+
+class NetworkWrapper:
+    """Wraps WNTR WaterNetworkModel with Movici-friendly API.
+
+    This class provides a clean interface between Movici's entity-based
+    data model and WNTR's water network simulation engine.
+    """
+
+    def __init__(self, logger: logging.Logger | None = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self._curve_counter = 0
+        self.wn = wntr.network.WaterNetworkModel()
+        self.id_mapper = IdMapper()
+        self.processors: dict[str, WNTRElementProcessor] = {}
+        self._sim: t.Optional[wntr.sim.WNTRSimulator] = None
+
+    def initialize(self, dataset: DrinkingWaterNetwork):
+        """Build the WNTR WaterNetworkModel from a DrinkingWaterNetwork.
+
+        :param dataset: A valid DrinkingWaterNetwork whose entity groups
+            have been loaded with init data.
+        """
+        self.processors["junctions"] = JunctionProcessor(self, dataset.junctions)
+        self.processors["tanks"] = TankProcessor(self, dataset.tanks)
+        self.processors["reservoirs"] = ReservoirProcessor(self, dataset.reservoirs)
+        self.processors["pipes"] = PipeProcessor(self, dataset.pipes)
+        self.processors["pumps"] = PumpProcessor(self, dataset.pumps)
+        self.processors["valves"] = ValveProcessor(self, dataset.valves)
+
+        for processor in self.processors.values():
+            processor.create_elements()
+        self._sim = wntr.sim.WNTRSimulator(self.wn)
+
+    def process_changes(self):
+        """Process any changes to the DrinkingWaterNetwork that may have happened
+        and update the WNTR WaterNetworkModel."""
+        for processor in self.processors.values():
+            processor.update_elements()
+
+    def add_curve(self, curve_data: np.ndarray, curve_type: str) -> str:
+        """Add a curve to the WNTR network.
+
+        :param curve_data: Numpy array of shape (N, 2) with x, y points
+        :param curve_type: Type of curve (``"HEAD"``, ``"VOLUME"``, etc.)
+        :return: Name of the created curve
+        """
+        self._curve_counter += 1
+        curve_name = f"curve_{self._curve_counter}"
+
+        if curve_data.ndim == 1:
+            curve_data = curve_data.reshape(-1, 2)
+
+        curve_points = [(float(row[0]), float(row[1])) for row in curve_data]
+        self.wn.add_curve(curve_name, curve_type, curve_points)
+        return curve_name
+
+    def configure_options(self, options: dict):
+        """Configure WNTR options from a dict of section_name -> {key: value} mappings.
+
+        :param options: Dict mapping section names to dicts of option key/value pairs
+        """
+        for section_name, section_options in options.items():
+            if not isinstance(section_options, dict):
+                continue
+            section = getattr(self.wn.options, section_name, None)
+            if section is None:
+                self.logger.warning(f"Unknown WNTR options section '{section_name}', ignoring")
+                continue
+            for key, value in section_options.items():
+                if value is None:
+                    continue
+                if not hasattr(section, key):
+                    self.logger.warning(
+                        f"Unknown option '{key}' in section '{section_name}', ignoring"
+                    )
+                    continue
+                setattr(section, key, value)
+
+    def run_simulation(self, new_time: int, hydraulic_timestep: int) -> wntr.sim.SimulationResults:
+        """Run WNTR simulation for one step using pause/restart.
+
+        The simulator is kept alive across calls so that WNTR's internal
+        state (tank levels, solver state) carries forward between timesteps.
+        Duration is cumulative: each call advances ``sim_time`` by *step*.
+
+        :param new_time: the new simulation time to progress the internal WNTR network to
+        :param hydraulic_timestep: Hydraulic timestep in seconds
+
+        :return: WNTR SimulationResults object
+        """
+        if self._sim is None:
+            raise RuntimeError("Must initialize first")
+
+        new_time = new_time or 1  # WNTR cannot run simulation for 0 duration
+        hydraulic_timestep = min(hydraulic_timestep, new_time)
+        progress_to = (new_time // hydraulic_timestep) * hydraulic_timestep
+
+        # Hydraulic timestep and report timestep are aligned to the global simulation duration,
+        # not the incremental duration between runs. This means that, in case we request a new_time
+        # that is not aligned with the hydraulic (or report) timestep, we can first run until
+        # the last aligned timestep before the new_time, and then do a second run that takes us
+        # to the requested new_time
+        self.wn.options.time.duration = progress_to
+        self.wn.options.time.hydraulic_timestep = hydraulic_timestep
+        self.wn.options.time.report_timestep = progress_to
+
+        result = self._sim.run_sim()
+        last_result_time = int(result.node["head"].index[-1])
+
+        # if we have not reached the requested new_time yet, we run the simulation again,
+        # with a single hydraulic step to the desired new time
+        if progress_to < new_time:
+            # after a simulation run wn.sim_time is already one hydraulic timestep further
+            # than the result timestep. If we want the next report to be in between the last
+            # result and the next hydraulic timestep (and by the time we're in this block, yes
+            # we do want that), we need to reset the wn.sim_time to the last result timestep
+            # which equals the progress_to timestep
+            # TODO: Validate that this rolling back of the sim_time, doesnt actually affect the
+            # results
+            self.wn.sim_time = progress_to
+
+            # Since the hydraulic and report timesteps are aligned to the overall simulation
+            # duration, we can set these values to the new_time, to ensure that we get a single
+            # (small) hydraulic timestep that takes us to the new time
+            self.wn.options.time.duration = new_time
+            self.wn.options.time.hydraulic_timestep = new_time
+            self.wn.options.time.report_timestep = new_time
+
+            result = self._sim.run_sim()
+            last_result_time = int(result.node["head"].index[-1])
+
+        # A final check that we have reached our desired new_time, but this should always be true
+        if last_result_time != new_time:
+            self.logger.warning(
+                "Due to hydraulic_timestep mismatch, WNTR solver simulated until"
+                f" t={last_result_time}s but t={new_time}s was expected."
+                f" This is a difference of {new_time - last_result_time}s.",
+            )
+
+        return result
+
+    def write_results(self, results: wntr.sim.SimulationResults):
+        """Write WNTR results back into entity group arrays.
+
+        The results dataframe columns are ordered by category then insertion
+        order.  Nodes: Junction, Tank, Reservoir.  Links: Pipe, Pump, Valve.
+
+        When adding new element types, the correct order in the result
+        dataframe must be determined to calculate the right offset for
+        each element's data.
+        """
+        df_offset = 0
+        for kind in ["junctions", "tanks", "reservoirs"]:
+            processor = self.processors[kind]
+            processor.write_results(results, df_offset=df_offset)
+            df_offset += len(processor.entity_group)
+
+        df_offset = 0
+        for kind in ["pipes", "pumps", "valves"]:
+            processor = self.processors[kind]
+            processor.write_results(results, df_offset=df_offset)
+            df_offset += len(processor.entity_group)
+
+    def close(self):
+        """Clean up resources."""
+        self._sim = None

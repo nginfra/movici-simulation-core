@@ -1,0 +1,224 @@
+"""Water network simulation model using WNTR.
+
+This model simulates drinking water distribution networks using the WNTR
+(Water Network Tool for Resilience) library. It supports hydraulic simulation
+including pressure, flow, and velocity calculations.
+
+.. note::
+   Controls (time-based or conditional) are NOT handled internally by this model.
+   Use the Movici Rules Model to implement control logic externally.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import logging
+import typing as t
+
+from movici_simulation_core.base_models.tracked_model import TrackedModel
+from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
+from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.schema import attributes_from_dict
+from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.json_schemas import SCHEMA_PATH
+
+from . import attributes
+from .dataset import (
+    DrinkingWaterNetwork,
+    WaterJunctionEntity,
+    WaterPipeEntity,
+    WaterPumpEntity,
+    WaterReservoirEntity,
+    WaterTankEntity,
+    WaterValveEntity,
+)
+from .network_wrapper import NetworkWrapper
+
+
+def _deep_merge(a: dict, b: dict) -> dict:
+    """Deep-merge two dicts. Values in *b* take precedence.
+
+    :param a: Base dictionary
+    :param b: Override dictionary
+    :return: New merged dictionary
+    """
+    result = dict(a)
+    for key, value in b.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+class Model(TrackedModel, name="drinking_water"):
+    """Water network simulation model using WNTRSimulator.
+
+    This model simulates water distribution networks including:
+
+    - Hydraulic simulation (pressure, flow, velocity)
+    - Support for pipes, pumps, valves, tanks, and reservoirs
+    - CSR curve data for pump head curves and tank volume curves
+
+    .. note::
+       Controls are handled by the Movici Rules Model, not internally.
+    """
+
+    __model_config_schema__ = SCHEMA_PATH / "models/drinking_water.json"
+    auto_reset = PUBLISH
+
+    @classmethod
+    def get_schema_attributes(cls):
+        """Return all AttributeSpecs used by this model.
+
+        :return: Sequence of AttributeSpec objects
+        """
+        return attributes_from_dict(vars(attributes))
+
+    def __init__(self, model_config: dict):
+        super().__init__(model_config)
+        self.network = NetworkWrapper()
+        self.last_calculated: Moment | None = None
+        self.dataset: DrinkingWaterNetwork | None = None
+        self.dataset_name = self.config["dataset"]
+
+        options = self.config.get("options", {})
+        self.hydraulic_timestep: int = options.get("hydraulic_timestep", 360)
+        self.report_timestep: int = options.get("report_timestep", 3600)
+        self.next_time = Moment(self.report_timestep)
+
+    def setup(
+        self,
+        state: TrackedState,
+        logger: logging.Logger,
+        **kwargs,
+    ):
+        """Setup the model and initialize network.
+
+        :param state: Tracked state for entity registration
+        :param schema: Attribute schema
+        """
+        self.network.logger = logger
+        self.dataset = self._register_dataset(state, self.dataset_name)
+
+    @staticmethod
+    def _register_dataset(state: TrackedState, dataset_name: str):
+        """Register entity groups.
+
+        Entity groups are registered as optional so that empty groups
+        don't block initialization.
+
+        :param state: Tracked state for entity registration
+        :param dataset_name: Name of the dataset to register entities in
+        """
+        return DrinkingWaterNetwork(
+            junctions=state.register_entity_group(
+                dataset_name, WaterJunctionEntity(optional=True)
+            ),
+            tanks=state.register_entity_group(dataset_name, WaterTankEntity(optional=True)),
+            reservoirs=state.register_entity_group(
+                dataset_name, WaterReservoirEntity(optional=True)
+            ),
+            pipes=state.register_entity_group(dataset_name, WaterPipeEntity(optional=True)),
+            pumps=state.register_entity_group(dataset_name, WaterPumpEntity(optional=True)),
+            valves=state.register_entity_group(dataset_name, WaterValveEntity(optional=True)),
+        )
+
+    def _ensure_pub_attributes_initialized(self):
+        """Ensure all PUB attributes have their arrays allocated.
+
+        PUB-only attributes (like link_status, flow_rate_magnitude) may not
+        receive data during init loading. They must be initialized before the
+        framework checks their ``.changed`` property during ``generate_update``.
+        """
+        for f in dataclasses.fields(self.dataset):
+            entity = getattr(self.dataset, f.name)
+            size = len(entity)
+            for attr_name in entity.all_attributes():
+                attr = getattr(entity, attr_name)
+                if attr.flags & PUBLISH and not attr.has_data():
+                    attr.initialize(size)
+
+    def _get_options(self, state: TrackedState) -> dict:
+        """Get WNTR options from model config and dataset general section.
+
+        Solver-tuning options (trials, accuracy, etc.) come from the model
+        config ``"options"`` key.  Physical/data options (headloss, viscosity,
+        etc.) come from the dataset's general section.  Both contribute
+        disjoint keys to the same WNTR options structure.
+
+        :param state: Tracked state
+        :return: Dict of section_name -> {key: value} mappings
+        """
+        config_options = dict(self.config.get("options", {}))
+        dataset_options = dict(state.general.get(self.dataset_name, {}))
+        return _deep_merge(config_options, dataset_options)
+
+    def initialize(self, state: TrackedState):
+        """Initialize model: validate network and configure WNTR.
+
+        :param state: Tracked state
+        """
+        if self.dataset is None:
+            raise RuntimeError("Model.setup() must be called before model.initialize()")
+
+        for f in dataclasses.fields(self.dataset):
+            getattr(self.dataset, f.name).is_ready()
+
+        self._ensure_pub_attributes_initialized()
+        self.network.initialize(self.dataset)
+        self.network.configure_options(self._get_options(state))
+
+    def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
+        """Update simulation at each timestep.
+
+        :param state: Tracked state
+        :param moment: Current simulation moment
+        :return: Next update time or None
+        """
+        # This is a stateful, time-dependent model.  The previous input state
+        # is valid until something changes it.  When we receive a change at
+        # t=x we first simulate up to t=x with the OLD state, then apply the
+        # change so it takes effect from t=x onward.
+        #
+        # If we are updated again at the same timestep we just accumulate the
+        # changes without recalculating — the simulation for this timestep
+        # already used the pre-change state.
+        #
+        # The WNTR simulator is kept alive across calls (pause/restart) so
+        # that internal state such as tank levels carries forward naturally.
+        if self.last_calculated is not None and self.last_calculated >= moment:
+            # Already calculated for this timestep — accumulate changes only
+            self.network.process_changes()
+            state.reset_tracked_changes(SUBSCRIBE)
+            return self.next_time
+
+        # 1. Simulate with the current (old) input state
+        results = self.network.run_simulation(int(moment.seconds), self.hydraulic_timestep)
+
+        # 2. Apply incoming changes for the next timestep.
+        #    Skip on the very first call — init data was already consumed by
+        #    create_elements() during initialize().
+        if self.last_calculated is not None:
+            self.network.process_changes()
+
+        # 3. Reset SUBSCRIBE changes after process_changes() consumed them
+        #    but before write_results() sets new PUB changes.  This prevents
+        #    INIT data on PUB|INIT attributes (e.g. tank level) from leaking
+        #    into the PUB update.
+        state.reset_tracked_changes(SUBSCRIBE)
+
+        # 4. Publish simulation results
+        self.network.write_results(results)
+        self.last_calculated = moment
+        if moment >= self.next_time:
+            self.next_time = Moment(self.next_time.timestamp + self.report_timestep)
+        return self.next_time
+
+    def shutdown(self, state: TrackedState):
+        """Clean up resources.
+
+        :param state: Tracked state
+        """
+        if self.network:
+            self.network.close()
