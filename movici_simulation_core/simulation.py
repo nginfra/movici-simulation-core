@@ -318,7 +318,10 @@ class Simulation(Extensible):
 
 
 class Runner:
-    ctx = multiprocessing.get_context()
+    # Explicitly set start method, so that we're not dependent on global python state
+    # that may be modified by other libraries
+    _start_method = "spawn" if sys.platform in ("darwin", "win32") else "fork"
+    ctx = multiprocessing.get_context(_start_method)
 
     def __init__(
         self, strategies: list[type] | None, schema: t.Optional[AttributeSchema] = None
