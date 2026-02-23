@@ -558,11 +558,11 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
 
     @pytest.fixture
     def network_data(self):
-        """A Tank draining into a reservoir
+        """A Tank draining by a junction demand
 
         Topology::
 
-            T1 -(pipe1)-> R1
+            T1 -(pipe1)-> J1
 
         The tank has a higher elevation than the reservoir, so it drains into it.
         """
@@ -571,12 +571,13 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
             "name": "water_network",
             "type": "water_network",
             "data": {
-                "water_reservoir_entities": {
+                "water_junction_entities": {
                     "id": [1],
-                    "reference": ["R1"],
+                    "reference": ["J1"],
                     "geometry.x": [0.0],
                     "geometry.y": [0.0],
-                    "drinking_water.base_head": [0.0],
+                    "geometry.z": [0.0],
+                    "drinking_water.base_demand": [0.1],
                 },
                 "water_tank_entities": {
                     "id": [2],
@@ -584,24 +585,25 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
                     "geometry.x": [100.0],
                     "geometry.y": [0.0],
                     "geometry.z": [1.0],
-                    "shape.diameter": [5.0],
-                    "drinking_water.level": [5.0],
+                    # a diameter so that the surface area is 10 m2
+                    "shape.diameter": [np.sqrt(10 * 4 / np.pi)],
+                    "drinking_water.level": [40.0],
                     "drinking_water.min_level": [0.0],
-                    "drinking_water.max_level": [5.0],
+                    "drinking_water.max_level": [50.0],
                 },
                 "water_pipe_entities": {
                     "id": [101],
                     "reference": ["PIPE1"],
                     "topology.from_node_id": [2],
                     "topology.to_node_id": [1],
-                    # with the pipe diameter we tweak how quickly the tank drains
-                    "shape.diameter": [0.05],
-                    "shape.length": [100.0],
+                    "shape.diameter": [1],
+                    "shape.length": [1],
                     "drinking_water.roughness": [100.0],
                 },
             },
         }
 
+    # TODO: find a way to run a WNTR simulation to obtain its initial state
     @pytest.mark.xfail
     def test_tank_level_at_initial_value(self, tester):
         """At t=0, the tank should be at initial level, so no update to its level is expected"""
@@ -613,8 +615,12 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
         assert "water_tank_entities" not in result["water_network"]
 
     def test_tank_level_changes_across_timesteps(self, tester, model_config):
-        """Tank level should change progressively, not reset to init_level each step."""
-        timestep = model_config["options"]["report_timestep"]
+        """Tank level should decrease linearly by junction demand. Messing with the hydraulic
+        timestep or the wn.sim_time has no effect on the results"""
+
+        # picked to be larger than 1/10th of the report timestep (so that it's larger than a
+        # standard hydraulic timestep)
+        timestep = 400
 
         tester.initialize()
 
@@ -630,7 +636,11 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
             levels.append(
                 result["water_network"]["water_tank_entities"]["drinking_water.level"][0]
             )
-        assert np.all(np.diff(levels) < 0)
+
+        # With a junction demand of 0.1 m3/s and a surface area of 10 m2, we expect the tank to
+        # empty out 1 meter per 100 seconds, or 4 meters per 400 seconds. We start at 40m
+        assert 0 < 40 - levels[0] < 1e-2  # the first timestep is a bit skewed because it is at t=1
+        np.testing.assert_allclose(levels[1:], [36, 32, 28])
 
 
 class TestMixedPumpTypes(TestDrinkingWaterModelBase):

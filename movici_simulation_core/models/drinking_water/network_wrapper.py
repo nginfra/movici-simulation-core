@@ -663,6 +663,8 @@ class NetworkWrapper:
         self.wn.options.time.duration = progress_to
         self.wn.options.time.hydraulic_timestep = hydraulic_timestep
         self.wn.options.time.report_timestep = progress_to
+        if self.wn._prev_sim_time is not None:
+            self.wn.sim_time = self.wn._prev_sim_time
 
         result = self._sim.run_sim()
         last_result_time = int(result.node["head"].index[-1])
@@ -675,9 +677,6 @@ class NetworkWrapper:
             # result and the next hydraulic timestep (and by the time we're in this block, yes
             # we do want that), we need to reset the wn.sim_time to the last result timestep
             # which equals the progress_to timestep
-            # TODO: Validate that this rolling back of the sim_time, doesnt actually affect the
-            # results
-            self.wn.sim_time = progress_to
 
             # Since the hydraulic and report timesteps are aligned to the overall simulation
             # duration, we can set these values to the new_time, to ensure that we get a single
@@ -686,6 +685,7 @@ class NetworkWrapper:
             self.wn.options.time.hydraulic_timestep = new_time
             self.wn.options.time.report_timestep = new_time
 
+            self.wn.sim_time = self.wn._prev_sim_time
             result = self._sim.run_sim()
             last_result_time = int(result.node["head"].index[-1])
 
@@ -696,7 +696,6 @@ class NetworkWrapper:
                 f" t={last_result_time}s but t={new_time}s was expected."
                 f" This is a difference of {new_time - last_result_time}s.",
             )
-
         return result
 
     def write_results(self, results: wntr.sim.SimulationResults):
