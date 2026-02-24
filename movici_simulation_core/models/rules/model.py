@@ -19,7 +19,7 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector import InitDataHandler
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from .expression import ExpressionType, ParsedCondition, parse_condition
 
@@ -191,14 +191,9 @@ class Model(TrackedModel, name="rules"):
     - Optionally, an else_value when the condition is false
     """
 
+    __model_config_schema__ = [ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH)]
+
     def __init__(self, config: dict) -> None:
-        config = ensure_valid_config(
-            config,
-            "1",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_PATH},
-            },
-        )
         super().__init__(config)
         self.rules: list[Rule] = []
         self.timeline_info: t.Optional[t.Any] = None
