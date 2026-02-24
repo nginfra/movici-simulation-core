@@ -34,7 +34,7 @@ def delayed_raise(err: Exception):
     return _inner
 
 
-try:
+if t.TYPE_CHECKING:
     from movici_geo_query.geometry import (
         ClosedPolygonGeometry,
         Geometry,
@@ -42,21 +42,32 @@ try:
         OpenPolygonGeometry,
         PointGeometry,
     )
-except ImportError as e:
-    ClosedPolygonGeometry = delayed_raise(e)
-    Geometry = delayed_raise(e)
-    LinestringGeometry = delayed_raise(e)
-    OpenPolygonGeometry = delayed_raise(e)
-    PointGeometry = delayed_raise(e)
-
-try:
     from shapely.geometry import LineString, Point, Polygon
     from shapely.geometry.base import BaseGeometry
-except ImportError as e:
-    BaseGeometry = delayed_raise(e)
-    LineString = delayed_raise(e)
-    Point = delayed_raise(e)
-    Polygon = delayed_raise(e)
+else:
+    try:
+        from movici_geo_query.geometry import (
+            ClosedPolygonGeometry,
+            Geometry,
+            LinestringGeometry,
+            OpenPolygonGeometry,
+            PointGeometry,
+        )
+    except ImportError as e:
+        ClosedPolygonGeometry = delayed_raise(e)
+        Geometry = delayed_raise(e)
+        LinestringGeometry = delayed_raise(e)
+        OpenPolygonGeometry = delayed_raise(e)
+        PointGeometry = delayed_raise(e)
+
+    try:
+        from shapely.geometry import LineString, Point, Polygon
+        from shapely.geometry.base import BaseGeometry
+    except ImportError as e:
+        BaseGeometry = delayed_raise(e)
+        LineString = delayed_raise(e)
+        Point = delayed_raise(e)
+        Polygon = delayed_raise(e)
 
 
 class GeometryEntity(EntityGroup):
@@ -75,7 +86,7 @@ class GeometryEntity(EntityGroup):
         if not self.is_ready():
             raise NotReady
 
-    def is_ready(self):
+    def is_ready(self) -> bool:
         return True
 
 

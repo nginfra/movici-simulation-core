@@ -34,6 +34,7 @@ extensions = [
     "sphinxcontrib.mermaid",
     "sphinx.ext.doctest",
     "sphinxcontrib.plantuml",
+    "sphinx.ext.todo",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
