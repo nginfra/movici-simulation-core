@@ -4,10 +4,13 @@ This model updates entity attributes based on conditions defined in
 rules datasets or model configuration.
 """
 
+from __future__ import annotations
+
 import logging
 import typing as t
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from movici_simulation_core import UniformAttribute
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import OPT, PUB, SUB
 from movici_simulation_core.core.moment import Moment
@@ -24,13 +27,11 @@ MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models" / "rules.json"
 
 
 @dataclass
-class Rule:
-    """A single rule that updates a target attribute based on a condition."""
-
-    condition: ParsedCondition
-    to_dataset: str  # Required: target dataset
+class RuleSpec:
+    condition: str  # Required: raw "if" condition
     output: str  # Required: output attribute name
-    value: t.Any  # Required: value to set when condition is true
+    value: bool | int | float | str | None  # Required: value to set when condition is true
+    to_dataset: t.Optional[str] = None
     from_dataset: t.Optional[str] = None
     from_id: t.Optional[int] = None
     from_reference: t.Optional[str] = None
@@ -38,85 +39,142 @@ class Rule:
     to_reference: t.Optional[str] = None
     else_value: t.Any = None
 
-    # Resolved during setup
-    from_entity_idx: t.Optional[int] = None
-    to_entity_idx: t.Optional[int] = None
-    output_array: t.Any = None
-    source_attributes: dict = field(default_factory=dict)
+
+@dataclass
+class Rule:
+    """A single rule that updates a target attribute based on a condition."""
+
+    condition: ParsedCondition
+    output: str  # Required: output attribute name
+    value: bool | int | float | str  # Required: value to set when condition is true
+    else_value: bool | int | float | str | None
+
+    to_entity_idx: int
+    output_array: UniformAttribute
+
+    from_entity_idx: t.Optional[int]
+    source_attributes: dict[str, UniformAttribute]
+
+    @classmethod
+    def from_spec(
+        self,
+        spec: RuleSpec,
+        reference_indices: dict[str, DatasetReferenceIndex],
+        state: TrackedState,
+        schema: AttributeSchema,
+    ):
+        if not spec.to_dataset:
+            raise RuleValidationError("Rule must have a 'to_dataset'")
+        if not spec.condition:
+            raise RuleValidationError("Rule must have a 'if' condition")
+        if spec.value is None:
+            raise RuleValidationError("Rule must have an output value")
+
+        condition = parse_condition(spec.condition)
+
+        # If condition has attributes, validate source entity specification
+        attr_names = condition.get_attribute_names()
+        source_attributes: dict[str, UniformAttribute] = {}
+        from_idx = None
+        if attr_names:
+            if not spec.from_dataset:
+                raise RuleValidationError(
+                    f"Rule condition references attributes {attr_names} "
+                    "but no 'from_dataset' specified"
+                )
+            if not (spec.from_id is not None) ^ (spec.from_reference is not None):
+                raise RuleValidationError(
+                    "Rule with attribute condition must have exactly one of "
+                    "'from_id' or 'from_reference'"
+                )
+            from_entity_group, from_idx = self._get_entity_idx_or_raise(
+                spec.from_dataset, spec.from_id, spec.from_reference, reference_indices
+            )
+
+            # Register each attribute (register_attribute auto-creates the entity group entry)
+            for attr_name in attr_names:
+                attr_spec = schema.get_spec(attr_name, DataType(float))
+                attr = state.register_attribute(
+                    spec.from_dataset, from_entity_group, attr_spec, flags=SUB | OPT
+                )
+                source_attributes[attr_name] = t.cast(UniformAttribute, attr)
+
+        to_entity_group, to_idx = self._get_entity_idx_or_raise(
+            spec.to_dataset, spec.to_id, spec.to_reference, reference_indices
+        )
+        attr_spec = schema.get_spec(spec.output, DataType(type(spec.value)))
+        target_array = t.cast(
+            UniformAttribute,
+            state.register_attribute(spec.to_dataset, to_entity_group, spec=attr_spec, flags=PUB),
+        )
+
+        return Rule(
+            condition=condition,
+            output=spec.output,
+            value=spec.value,
+            else_value=spec.else_value,
+            from_entity_idx=from_idx,
+            source_attributes=source_attributes,
+            to_entity_idx=to_idx,
+            output_array=target_array,
+        )
+
+    @staticmethod
+    def _get_entity_idx_or_raise(
+        dataset: str,
+        entity_id: int | None,
+        reference: str | None,
+        reference_indices: dict[str, DatasetReferenceIndex],
+    ) -> tuple[str, int]:
+        ref_idx = reference_indices[dataset]
+        idx = None
+        if reference is not None:
+            entity_group, idx = ref_idx.get_entity_idx_by_reference(reference)
+            if idx is None or entity_group is None:
+                raise RuleValidationError(f"Reference {reference} not found in dataset {dataset}")
+            return entity_group, idx
+        elif entity_id is not None:
+            entity_group, idx = ref_idx.get_entity_idx_by_id(entity_id)
+            if idx is None or entity_group is None:
+                raise ValueError(f"ID {entity_id} not found in dataset {dataset}")
+            return entity_group, idx
+        raise RuleValidationError(
+            f"Cannot find entity in dataset {dataset} without ID or reference"
+        )
+
+
+@dataclass
+class DatasetReferenceIndex:
+    ids: dict[str, dict[int, int]]  # dict[entity_group, dict[id, idx]]
+    references: dict[str, dict[str, int]]  # dict[entity_group, dict[reference, idx]]
+
+    def get_entity_idx_by_reference(self, ref: str) -> tuple[str, int] | tuple[None, None]:
+        """Retrieve location of an entity by reference
+        :param ref: an entity reference
+
+        :return: A tuple (entity group name, entity_idx)
+        """
+        for entity_group, refs in self.references.items():
+            if ref in refs:
+                return entity_group, refs[ref]
+        return None, None
+
+    def get_entity_idx_by_id(self, entity_id: int) -> tuple[str, int] | tuple[None, None]:
+        """Retrieve location of an entity id
+        :param entity_id: an entity id
+
+        :return: A tuple (entity group name, entity_idx)
+        """
+        for entity_group, ids in self.ids.items():
+            if entity_id in ids:
+                return entity_group, ids[entity_id]
+        return None, None
 
 
 class RuleValidationError(ValueError):
     """Raised when a rule specification is invalid."""
 
     pass
-
-
-def validate_rule_spec(rule_spec: dict, defaults: t.Optional[dict] = None) -> None:
-    """Validate a rule specification for fields that depend on runtime defaults.
-
-    Basic structural validation (required fields, to_id/to_reference exclusivity)
-    is handled by the JSON schema. This function checks constraints that depend on
-    merged defaults.
-
-    :param rule_spec: Rule specification dict
-    :param defaults: Default values for from_dataset, to_dataset
-    :raises RuleValidationError: If required fields are missing
-    """
-    defaults = defaults or {}
-
-    # Must have to_dataset (from spec or defaults)
-    to_dataset = rule_spec.get("to_dataset", defaults.get("to_dataset"))
-    if not to_dataset:
-        raise RuleValidationError("Rule must have a 'to_dataset' (or default)")
-
-
-def parse_rule(rule_spec: dict, defaults: t.Optional[dict] = None) -> Rule:
-    """Parse a rule specification into a Rule object.
-
-    :param rule_spec: Rule specification dict
-    :param defaults: Default values for from_dataset, to_dataset
-    :returns: Parsed Rule object
-    :rtype: Rule
-    :raises RuleValidationError: If the rule specification is invalid
-    """
-    defaults = defaults or {}
-
-    # Validate required fields
-    validate_rule_spec(rule_spec, defaults)
-
-    condition = parse_condition(rule_spec["if"])
-
-    # Check if condition needs source attributes
-    attr_names = condition.get_attribute_names()
-    from_dataset = rule_spec.get("from_dataset", defaults.get("from_dataset"))
-    from_id = rule_spec.get("from_id")
-    from_reference = rule_spec.get("from_reference")
-
-    # If condition has attributes, validate source entity specification
-    if attr_names:
-        if not from_dataset:
-            raise RuleValidationError(
-                f"Rule condition references attributes {attr_names} "
-                "but no 'from_dataset' specified"
-            )
-        if not (from_id is not None) ^ (from_reference is not None):
-            raise RuleValidationError(
-                "Rule with attribute condition must have exactly one of "
-                "'from_id' or 'from_reference'"
-            )
-
-    return Rule(
-        condition=condition,
-        to_dataset=rule_spec.get("to_dataset", defaults.get("to_dataset")),
-        output=rule_spec["output"],
-        value=rule_spec["value"],
-        from_dataset=from_dataset,
-        from_id=from_id,
-        from_reference=from_reference,
-        to_id=rule_spec.get("to_id"),
-        to_reference=rule_spec.get("to_reference"),
-        else_value=rule_spec.get("else_value"),
-    )
 
 
 class Model(TrackedModel, name="rules"):
@@ -147,7 +205,6 @@ class Model(TrackedModel, name="rules"):
         self._simtime_thresholds: list[float] = []
         self._clocktime_thresholds: list[float] = []
         # Cache for loaded dataset data to avoid repeated reads
-        self._dataset_cache: dict[str, dict] = {}
 
     def setup(
         self,
@@ -156,7 +213,7 @@ class Model(TrackedModel, name="rules"):
         settings: Settings,
         init_data_handler: InitDataHandler,
         logger: logging.Logger,
-        **_: t.Any,
+        **__: t.Any,
     ) -> None:
         """Set up the model with state and schema.
 
@@ -169,12 +226,12 @@ class Model(TrackedModel, name="rules"):
         self.timeline_info = settings.timeline_info
 
         # Parse rules from config or load from rules dataset
-        rules_spec = self._load_rules(init_data_handler)
-        defaults = rules_spec.get("defaults", {})
-
-        for rule_spec in rules_spec.get("rules", []):
-            rule = parse_rule(rule_spec, defaults)
-            self.rules.append(rule)
+        rule_specs = self._load_rule_specs(init_data_handler)
+        reference_indices = self._get_dataset_reference_indices(rule_specs, init_data_handler)
+        self.rules = [
+            Rule.from_spec(spec, reference_indices=reference_indices, state=state, schema=schema)
+            for spec in rule_specs
+        ]
 
         # Pre-compute time thresholds from all rule conditions
         for rule in self.rules:
@@ -184,10 +241,35 @@ class Model(TrackedModel, name="rules"):
                 elif expr_type == ExpressionType.CLOCKTIME:
                     self._clocktime_thresholds.append(value)
 
-        # Register attributes for each rule
-        self._register_rule_attributes(state, schema, init_data_handler)
+    def _get_dataset_reference_indices(
+        self, rules: t.Iterable[RuleSpec], init_data_handler: InitDataHandler
+    ) -> dict[str, DatasetReferenceIndex]:
+        result = {}
+        for rule in rules:
+            for dataset in (rule.from_dataset, rule.to_dataset):
+                if dataset is None or dataset in result:
+                    continue
+                result[dataset] = self._get_dataset_reference_index(dataset, init_data_handler)
 
-    def _load_rules(self, init_data_handler: InitDataHandler) -> dict:
+        return result
+
+    def _get_dataset_reference_index(self, dataset_name: str, init_data_handler: InitDataHandler):
+        _, path = init_data_handler.get(dataset_name)
+        if path is None:
+            raise ValueError(f"Dataset '{dataset_name}' not found")
+
+        dataset = path.read_dict()
+        references: dict[str, dict[str, int]] = {}
+        entity_ids: dict[str, dict[int, int]] = {}
+        for entity_group, attributes in dataset.get("data", {}).items():
+            ids = attributes["id"]["data"]
+            reference_array = attributes["reference"]["data"] if "reference" in attributes else []
+            references[entity_group] = {str(ref): idx for idx, ref in enumerate(reference_array)}
+            entity_ids[entity_group] = {int(id): idx for idx, id in enumerate(ids)}
+
+        return DatasetReferenceIndex(entity_ids, references)
+
+    def _load_rule_specs(self, init_data_handler: InitDataHandler) -> list[RuleSpec]:
         """Load and merge rules from config and/or rules dataset.
 
         If both config and dataset specify rules, they are merged.
@@ -199,11 +281,6 @@ class Model(TrackedModel, name="rules"):
         """
         merged_rules: list = []
         merged_defaults: dict = {}
-
-        # Load from config if present
-        if "rules" in self.config:
-            merged_rules.extend(self.config["rules"])
-            merged_defaults.update(self.config.get("defaults", {}))
 
         # Load from dataset if present
         if "rules_dataset" in self.config:
@@ -226,195 +303,29 @@ class Model(TrackedModel, name="rules"):
             dataset_rules = rules_data.get("rules", [])
             dataset_defaults = rules_data.get("defaults", {})
 
-            # Merge: dataset defaults are overridden by config defaults
-            for key, value in dataset_defaults.items():
-                if key not in merged_defaults:
-                    merged_defaults[key] = value
-
             merged_rules.extend(dataset_rules)
+            merged_defaults.update(dataset_defaults)
 
-        return {"rules": merged_rules, "defaults": merged_defaults}
+        # Load from config if present
+        if "rules" in self.config:
+            merged_rules.extend(self.config["rules"])
+            merged_defaults.update(self.config.get("defaults", {}))
 
-    def _register_rule_attributes(
-        self,
-        state: TrackedState,
-        schema: AttributeSchema,
-        init_data_handler: InitDataHandler,
-    ) -> None:
-        """Register source and target attributes for all rules.
-
-        :param state: TrackedState instance
-        :param schema: AttributeSchema for attribute specs
-        :param init_data_handler: Handler for loading entity data
-        """
-        for rule in self.rules:
-            # Register source attributes if needed
-            attr_names = rule.condition.get_attribute_names()
-            if attr_names and rule.from_dataset:
-                self._register_source_attributes(
-                    rule, attr_names, state, schema, init_data_handler
-                )
-
-            # Register target attribute
-            if rule.to_dataset and rule.output:
-                self._register_target_attribute(rule, state, schema, init_data_handler)
-
-    def _register_source_attributes(
-        self,
-        rule: Rule,
-        attr_names: set[str],
-        state: TrackedState,
-        schema: AttributeSchema,
-        init_data_handler: InitDataHandler,
-    ) -> None:
-        """Register source attributes for a rule's condition.
-
-        :param rule: The rule being processed
-        :param attr_names: Set of attribute names referenced in the condition
-        :param state: TrackedState instance
-        :param schema: AttributeSchema
-        :param init_data_handler: Handler for loading entity data
-        """
-        # Find which entity group contains the source entity
-        entity_group_name, entity_idx = self._find_entity_group(
-            rule.from_dataset,
-            rule.from_id,
-            rule.from_reference,
-            init_data_handler,
-        )
-
-        if entity_group_name is None:
-            entity_desc = f"id={rule.from_id}" if rule.from_id else f"ref='{rule.from_reference}'"
-            raise RuleValidationError(
-                f"Could not find source entity ({entity_desc}) in dataset '{rule.from_dataset}'"
+        return [
+            RuleSpec(
+                condition=spec.get("if", ""),
+                to_dataset=spec.get("to_dataset", merged_defaults.get("to_dataset")),
+                output=spec.get("output", ""),
+                value=spec.get("value"),
+                from_dataset=spec.get("from_dataset", merged_defaults.get("from_dataset")),
+                from_id=spec.get("from_id"),
+                from_reference=spec.get("from_reference"),
+                to_id=spec.get("to_id"),
+                to_reference=spec.get("to_reference"),
+                else_value=spec.get("else_value"),
             )
-
-        rule.from_entity_idx = entity_idx
-
-        # Register each attribute (register_attribute auto-creates the entity group entry)
-        for attr_name in attr_names:
-            attr_spec = schema.get_spec(attr_name, DataType(float))
-            attr = state.register_attribute(
-                rule.from_dataset,
-                entity_group_name,
-                attr_spec,
-                flags=SUB | OPT,
-            )
-            rule.source_attributes[attr_name] = attr
-
-    def _register_target_attribute(
-        self,
-        rule: Rule,
-        state: TrackedState,
-        schema: AttributeSchema,
-        init_data_handler: InitDataHandler,
-    ) -> None:
-        """Register target attribute for a rule's output.
-
-        :param rule: The rule being processed
-        :param state: TrackedState instance
-        :param schema: AttributeSchema
-        :param init_data_handler: Handler for loading entity data
-        """
-        entity_group_name, entity_idx = self._find_entity_group(
-            rule.to_dataset,
-            rule.to_id,
-            rule.to_reference,
-            init_data_handler,
-        )
-
-        if entity_group_name is None:
-            entity_desc = f"id={rule.to_id}" if rule.to_id else f"ref='{rule.to_reference}'"
-            raise RuleValidationError(
-                f"Could not find target entity ({entity_desc}) in dataset '{rule.to_dataset}'"
-            )
-
-        rule.to_entity_idx = entity_idx
-
-        # Determine output attribute type from value
-        # Note: Check bool first since bool is subclass of int in Python
-        if isinstance(rule.value, bool):
-            dtype = DataType(bool)
-        elif isinstance(rule.value, int):
-            dtype = DataType(int)
-        elif isinstance(rule.value, float):
-            dtype = DataType(float)
-        else:
-            dtype = DataType(float)
-
-        attr_spec = schema.get_spec(rule.output, dtype)
-        rule.output_array = state.register_attribute(
-            rule.to_dataset,
-            entity_group_name,
-            attr_spec,
-            flags=PUB,
-        )
-
-    def _find_entity_group(
-        self,
-        dataset: t.Optional[str],
-        entity_id: t.Optional[int],
-        reference: t.Optional[str],
-        init_data_handler: InitDataHandler,
-    ) -> tuple[t.Optional[str], t.Optional[int]]:
-        """Find which entity group contains a given entity and its index.
-
-        :param dataset: Dataset name
-        :param entity_id: Entity ID to find
-        :param reference: Entity reference to find
-        :param init_data_handler: Handler for loading entity data
-        :returns: Tuple of (entity_group_name, entity_index) or (None, None) if not found
-        :rtype: tuple[Optional[str], Optional[int]]
-        """
-        if dataset is None:
-            return None, None
-
-        # Validate: must have exactly one of entity_id or reference
-        if not ((entity_id is not None) ^ (reference is not None)):
-            return None, None
-
-        # Use cached data if available
-        if dataset in self._dataset_cache:
-            data = self._dataset_cache[dataset]
-        else:
-            try:
-                _, path = init_data_handler.get(dataset)
-                if path is None:
-                    return None, None
-                data = path.read_dict()
-                self._dataset_cache[dataset] = data
-            except (KeyError, OSError, ValueError, TypeError):
-                return None, None
-
-        # Search through entity groups in the dataset
-        for key, value in data.get("data", {}).items():
-            # Check if this entity group contains the entity
-            ids = value.get("id", {}).get("data", [])
-            references = value.get("reference", {}).get("data", [])
-
-            if entity_id is not None:
-                ids_list = ids.tolist() if hasattr(ids, "tolist") else list(ids)
-                if entity_id in ids_list:
-                    idx = ids_list.index(entity_id)
-                    return key, idx
-            elif reference is not None:
-                refs_list = (
-                    references.tolist() if hasattr(references, "tolist") else list(references)
-                )
-                if reference in refs_list:
-                    idx = refs_list.index(reference)
-                    return key, idx
-
-        return None, None
-
-    def initialize(self, state: TrackedState) -> None:
-        """Initialize the model state.
-
-        :param state: TrackedState instance
-        """
-        # Entity indices are resolved during setup in _find_entity_group
-        # Clear dataset cache after setup to free memory
-        self._dataset_cache.clear()
+            for spec in merged_rules
+        ]
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         """Update entity attributes based on rules.
