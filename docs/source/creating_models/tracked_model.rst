@@ -146,6 +146,32 @@ The |code_TrackedModel| can then look something like this:
               self.config['dataset'], PointEntityGroup(name="other_entities")
           )
 
+In some cases it can be useful to exclude certain attributes from the EntityGroup when registering
+it to the tracked state, for example to if those attributes would be unused by the model. This can
+happen in case you have subclassed an existing |code_EntityGroup| class. There are three ways to
+exclude attributes. The first way is to define an ``__exclude__`` member on the |code_EntityGroup|:
+
+.. code-block:: python
+
+  class OnlyXPointEntityGroup(PointEntityGroup):
+      __exclude__ = ["y"]
+
+the second way is to define the exclude upon instantation of the |code_EntityGroup|:
+
+
+.. code-block:: python
+
+  entity_group = PointEntityGroup(exclude=["y"])
+
+
+the third way can be used to override any previously defined exclusions, which for the following
+case will result in only ``"x"`` being excluded, and not ``"y"``:
+
+
+.. code-block:: python
+
+  entity_group = OnlyXPointEntityGroup(override_exclude=["x"])
+
 .. _models-moment:
 
 Simulation time defined by Moment
