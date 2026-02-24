@@ -10,6 +10,9 @@ import logging
 import typing as t
 from dataclasses import dataclass
 
+import msgpack
+import orjson as json
+
 from movici_simulation_core import UniformAttribute
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import OPT, PUB, SUB
@@ -17,7 +20,7 @@ from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.model_connector import InitDataHandler
+from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.validate import ModelConfigSchema
 
@@ -280,11 +283,18 @@ class Model(TrackedModel, name="rules"):
         # Load from dataset if present
         if "rules_dataset" in self.config:
             dataset_name = self.config["rules_dataset"]
-            _, path = init_data_handler.get(dataset_name)
+            ftype, path = init_data_handler.get(dataset_name)
             if path is None:
                 raise ValueError(f"Rules dataset '{dataset_name}' not found")
 
-            data = path.read_dict()
+            if ftype == FileType.JSON:
+                data = json.loads(path.read_bytes())
+            elif ftype == FileType.MSGPACK:
+                data = msgpack.unpackb(path.read_bytes())
+            else:
+                raise TypeError(
+                    f"Invalid data type for rules dataset '{dataset_name}': {ftype.name}"
+                )
 
             # Validate dataset type is "rules"
             dataset_type = data.get("type")

@@ -338,10 +338,6 @@ def test_entity_lookup_by_reference():
     assert actuators["control.valve_open"] == [None, False]
 
 
-@pytest.mark.xfail(
-    reason="rules dataset 'data' section is incompatible with EntityInitDataFormat.read_dict()",
-    raises=TypeError,
-)
 def test_rules_from_dataset():
     schema = get_schema()
     timeline_info = TimelineInfo(reference=0, time_scale=1, start_time=0, duration=7200)
@@ -382,7 +378,7 @@ def test_rules_from_dataset():
             result, _ = tester.update(0, None)
 
     actuators = result["actuators"]["actuator_entities"]
-    assert actuators["control.pump_speed"] == [1.5, None]
+    assert actuators["control.pump_speed"] == [1.5]
 
 
 def test_clocktime_condition():
