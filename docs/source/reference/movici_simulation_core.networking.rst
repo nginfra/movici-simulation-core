@@ -1,12 +1,12 @@
 
 
-networking 
+networking
 ===========
 
 
 
 
-client 
+client
 -------
 
 .. automodule:: movici_simulation_core.networking.client
@@ -16,11 +16,10 @@ client
 
 
 
-stream 
+stream
 -------
 
 .. automodule:: movici_simulation_core.networking.stream
    :members:
    :show-inheritance:
    :undoc-members:
-

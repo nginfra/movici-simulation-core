@@ -1,12 +1,12 @@
 
 
-postprocessing 
+postprocessing
 ===============
 
 
 
 
-results 
+results
 --------
 
 .. automodule:: movici_simulation_core.postprocessing.results
@@ -16,11 +16,10 @@ results
 
 
 
-sqlite\_results 
+sqlite\_results
 ----------------
 
 .. automodule:: movici_simulation_core.postprocessing.sqlite_results
    :members:
    :show-inheritance:
    :undoc-members:
-

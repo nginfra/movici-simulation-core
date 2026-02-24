@@ -79,4 +79,3 @@ NetCDFPlayerAttribute
 ``properties``:
   | ``source``: ``string`` The variable name in the source (``netcdf_tape``) |required|
   | ``target``: ``string`` The attribute name in the target entity group |required|
-

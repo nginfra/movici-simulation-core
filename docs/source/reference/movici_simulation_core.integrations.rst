@@ -1,6 +1,6 @@
 
 
-integrations 
+integrations
 =============
 
 Subpackages
@@ -10,4 +10,3 @@ Subpackages
    :maxdepth: 1
 
    movici_simulation_core.integrations.ae
-

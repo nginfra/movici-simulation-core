@@ -7,4 +7,3 @@ Tutorials
    data_preparation
    custom_model
    plugins
-   

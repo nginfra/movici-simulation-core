@@ -1,12 +1,12 @@
 
 
-overlap\_status 
+overlap\_status
 ================
 
 
 
 
-dataset 
+dataset
 --------
 
 .. automodule:: movici_simulation_core.models.overlap_status.dataset
@@ -16,7 +16,7 @@ dataset
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.overlap_status.model
@@ -26,11 +26,10 @@ model
 
 
 
-overlap\_status 
+overlap\_status
 ----------------
 
 .. automodule:: movici_simulation_core.models.overlap_status.overlap_status
    :members:
    :show-inheritance:
    :undoc-members:
-
