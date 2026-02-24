@@ -6,7 +6,7 @@ Storage
 
 By default, a [Simulation] doesn't persist any of the results. This must be explicitly enabled by
 adding a ``DataCollector`` model to the [Scenario]. When adding a data collector, the simulation
-results are by default stored as files in the ``Settings.storage_dir`` directory. However, it 
+results are by default stored as files in the ``Settings.storage_dir`` directory. However, it
 is also possible to store the results in a :ref:`SQLite database <sqlite-storage>`. This can be
 done by setting ``Settings.storage`` to ``"sqlite"``
 
@@ -60,7 +60,7 @@ Option 2: Model Configuration
         "database_path": "./results/my_simulation.db"  # Explicit path
     })
 
-This will store the results in the specified database file. 
+This will store the results in the specified database file.
 
 .. warning:: if the database already exists, this will overwrite any data inside this file
 
@@ -183,4 +183,3 @@ Examples
 ########
 
 See ``examples/sqlite_storage_example.py`` for more examples
-

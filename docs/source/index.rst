@@ -12,7 +12,7 @@ To get started, please read the Introduction below
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
-   
+
    getting_started/index
    movici_way/index
    tutorials/index
@@ -22,4 +22,3 @@ To get started, please read the Introduction below
    models/index
    glossary
    reference/modules
-   

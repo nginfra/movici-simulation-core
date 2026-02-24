@@ -1,12 +1,12 @@
 
 
-udf\_model 
+udf\_model
 ===========
 
 
 
 
-compiler 
+compiler
 ---------
 
 .. automodule:: movici_simulation_core.models.udf_model.compiler
@@ -16,7 +16,7 @@ compiler
 
 
 
-functions 
+functions
 ----------
 
 .. automodule:: movici_simulation_core.models.udf_model.functions
@@ -26,11 +26,10 @@ functions
 
 
 
-udf\_model 
+udf\_model
 -----------
 
 .. automodule:: movici_simulation_core.models.udf_model.udf_model
    :members:
    :show-inheritance:
    :undoc-members:
-
