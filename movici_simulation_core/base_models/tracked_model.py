@@ -171,7 +171,7 @@ class TrackedModelAdapter(ModelAdapterBase):
                 for entity_group in entity_groups:
                     if entity_group.__optional__ and len(entity_group) == 0:
                         continue
-                    for field in entity_group.all_attributes().values():
+                    for field in entity_group.attributes.values():
                         attr = field.get_for(entity_group)
                         if (attr.flags & REQUIRED) and not attr.is_initialized():
                             yield f"{ds}/{entity_group.__entity_name__}/{field.spec.name}"
