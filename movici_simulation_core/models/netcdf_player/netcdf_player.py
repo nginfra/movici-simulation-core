@@ -13,24 +13,14 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common.csv_tape import BaseTapefile
-from movici_simulation_core.validate import ensure_valid_config
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/netcdf_player.json"
 
 
 class NetCDFPlayer(TrackedModel, name="netcdf_player"):
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
     publishers: t.List[Publisher]
     netcdf_tape: NetCDFTape
-
-    def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "1",
-            {
-                "1": {
-                    "schema": MODEL_CONFIG_SCHEMA_PATH,
-                },
-            },
-        )
-        super().__init__(model_config)
 
     def setup(
         self, state: TrackedState, schema: AttributeSchema, init_data_handler: InitDataHandler, **_
@@ -62,9 +52,6 @@ class NetCDFPlayer(TrackedModel, name="netcdf_player"):
     def shutdown(self, **_):
         if self.netcdf_tape:
             self.netcdf_tape.close()
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/netcdf_player.json"
 
 
 class Publisher:

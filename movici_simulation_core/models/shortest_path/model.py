@@ -20,26 +20,39 @@ from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common.network import Network, NetworkEntities
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/shortest_path.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/shortest_path.json"
+
+
+def convert_v1_v2(config):
+    return {
+        **config,
+        "cost_factor": config["cost_factor"][1],
+        "transport_segments": config["transport_segments"][0],
+        "calculations": [
+            {
+                **calc,
+                "input": calc["input"][1],
+                "output": calc["output"][1],
+            }
+            for calc in config["calculations"]
+        ],
+    }
 
 
 class ShortestPathModel(TrackedModel, name="shortest_path"):
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
+
     cost_factor: UniformAttribute
     entity_groups: NetworkEntities
     network: t.Optional[Network] = None
     calculators: t.List[NetworkCalculator]
     no_update_shortest_path: bool = False
-
-    def __init__(self, model_config):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
         dataset, segments = self.config["transport_segments"]
@@ -200,22 +213,3 @@ CALCULATORS: t.Dict[str, t.Type[NetworkCalculator]] = {
     "sum": SumCalculator,
     "weighted_average": WeightedAverageCalculator,
 }
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/shortest_path.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/shortest_path.json"
-
-
-def convert_v1_v2(config):
-    return {
-        **config,
-        "cost_factor": config["cost_factor"][1],
-        "transport_segments": config["transport_segments"][0],
-        "calculations": [
-            {
-                **calc,
-                "input": calc["input"][1],
-                "output": calc["output"][1],
-            }
-            for calc in config["calculations"]
-        ],
-    }

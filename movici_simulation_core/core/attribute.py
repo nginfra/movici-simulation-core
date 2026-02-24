@@ -8,6 +8,7 @@ import typing as t
 
 import numpy as np
 
+import movici_simulation_core
 from movici_simulation_core.csr import generate_update, remove_undefined_csr
 from movici_simulation_core.types import CSRAttributeData, NumpyAttributeData, UniformAttributeData
 from movici_simulation_core.utils.unicode import determine_new_unicode_dtype
@@ -24,9 +25,6 @@ from .schema import (
     has_rowptr_key,
     infer_data_type_from_array,
 )
-
-if t.TYPE_CHECKING:
-    from .entity_group import EntityGroup
 
 # Base attribute pub/sub flags
 # These are used internally when checking for attributes, model developers should use the combined
@@ -74,14 +72,17 @@ class AttributeField:
         self.atol = atol
 
     def __get__(
-        self, instance: t.Optional[EntityGroup], owner
-    ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
+        self, instance: t.Optional[movici_simulation_core.EntityGroup], owner
+    ) -> t.Union[UniformAttribute, CSRAttribute]:
         if instance is None:
             return self
-        return instance.get_attribute(self.spec.name)
+        return self.get_for(instance)
 
-    def __set__(self, instance: EntityGroup, value):
+    def __set__(self, instance: movici_simulation_core.EntityGroup, value):
         raise TypeError("AttributeField is read only")
+
+    def get_for(self, instance: movici_simulation_core.EntityGroup):
+        return instance.get_attribute(self.spec.name)
 
     @property
     def name(self):
@@ -515,18 +516,19 @@ def get_undefined_array(
     return TrackedArray(data, rtol=rtol, atol=atol, equal_nan=True)
 
 
-def create_empty_attribute(data_type, length=None, rtol=1e-5, atol=1e-8, options=None):
+def create_empty_attribute(
+    data_type, length=None, rtol=1e-5, atol=1e-8, options: AttributeOptions | None = None
+):
     attr_t = CSRAttribute if data_type.csr else UniformAttribute
     arr = None if length is None else get_undefined_array(data_type, length, rtol=rtol, atol=atol)
     return attr_t(arr, data_type, rtol=rtol, atol=atol, options=options)
 
 
-def create_empty_attribute_for_data(data: NumpyAttributeData, length: int):
+def create_empty_attribute_for_data(
+    data: NumpyAttributeData, length: int, options: AttributeOptions | None = None
+):
     data_type = infer_data_type_from_array(data)
-    return create_empty_attribute(
-        data_type,
-        length=length,
-    )
+    return create_empty_attribute(data_type, length=length, options=options)
 
 
 def ensure_uniform_data(

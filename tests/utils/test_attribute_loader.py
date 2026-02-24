@@ -16,10 +16,12 @@ class TestCreateAttributeSpec:
         "data_type_str,expected_py_type",
         [
             ("float", float),
+            ("double", float),
             ("int", int),
             ("str", str),
+            ("string", str),
             ("bool", bool),
-            ("object", object),
+            ("boolean", bool),
         ],
     )
     def test_create_simple_attribute(self, data_type_str, expected_py_type):
@@ -99,8 +101,8 @@ class TestCreateAttributeSpec:
 class TestLoadAttributes:
     """Tests for load_attributes function."""
 
-    @pytest.fixture
-    def sample_attributes_json(self, tmp_path):
+    @pytest.fixture(params=[list, dict])
+    def sample_attributes_json(self, request, tmp_path):
         """Create a temporary JSON file with sample attributes."""
         data = {
             "velocity": {"data_type": "float", "shape": [2], "csr": False},
@@ -108,6 +110,8 @@ class TestLoadAttributes:
             "name": {"data_type": "str"},
             "is_active": {"data_type": "bool"},
         }
+        if request.param is list:
+            data = [{**v, "name": k} for k, v in data.items()]
         json_path = tmp_path / "attributes.json"
         json_path.write_text(json.dumps(data))
         return json_path

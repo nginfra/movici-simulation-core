@@ -20,9 +20,7 @@ updates:
       development:
         patterns:
           - "pytest*"
-          - "black*"
-          - "flake8*"
-          - "isort*"
+          - "ruff*"
           - "mypy*"
           - "pre-commit*"
           - "coverage*"
@@ -34,9 +32,7 @@ updates:
       production:
         exclude-patterns:
           - "pytest*"
-          - "black*"
-          - "flake8*"
-          - "isort*"
+          - "ruff*"
           - "mypy*"
           - "pre-commit*"
           - "coverage*"

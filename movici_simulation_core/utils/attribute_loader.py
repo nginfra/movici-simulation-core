@@ -26,12 +26,16 @@ def load_attributes(json_path: Path) -> List[AttributeSpec]:
 
     attr_config = json.loads(json_path.read_text())
 
-    attributes = []
+    if isinstance(attr_config, dict):
+        return [
+            create_attribute_spec(attr_name, config) for attr_name, config in attr_config.items()
+        ]
 
-    for attr_name, config in attr_config.items():
-        attributes.append(create_attribute_spec(attr_name, config))
+    elif isinstance(attr_config, list):
+        return [create_attribute_spec(attr_info["name"], attr_info) for attr_info in attr_config]
 
-    return attributes
+    else:
+        raise TypeError("attributes file content must be a list or dict")
 
 
 def create_attribute_spec(name: str, config: Dict[str, Any]) -> AttributeSpec:
@@ -48,7 +52,7 @@ def create_attribute_spec(name: str, config: Dict[str, Any]) -> AttributeSpec:
     :returns: AttributeSpec object
     :rtype: AttributeSpec
     """
-    data_type_str = config.get("data_type", "float")
+    data_type_str = config.get("data_type", "float").lower()
     csr = config.get("csr", False)
     unit_shape = tuple(config.get("shape", []))
     enum_name = config.get("enum_name")
@@ -56,10 +60,12 @@ def create_attribute_spec(name: str, config: Dict[str, Any]) -> AttributeSpec:
     # Map string types to Python types
     type_map = {
         "float": float,
+        "double": float,
         "int": int,
-        "str": str,
         "bool": bool,
-        "object": object,
+        "boolean": bool,
+        "str": str,
+        "string": str,
     }
 
     if data_type_str not in type_map:

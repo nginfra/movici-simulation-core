@@ -8,11 +8,45 @@ from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, a
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from ..common.model_util import try_get_geometry_type
 from . import dataset as ds
 from .overlap_status import OverlapStatus
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/overlap_status.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/overlap_status.json"
+
+
+def convert_v1_v2(config):
+    rv = {
+        "output_dataset": config["output_dataset"][0],
+        "source": {
+            "entity_group": config["from_entity_group"][0],
+            "geometry": config["from_geometry_type"],
+        },
+    }
+    if "from_check_status_property" in config:
+        rv["source"]["status_attribute"] = config["from_check_status_property"][1]
+
+    for key in ("distance_threshold", "display_name_template"):
+        if key in config:
+            rv[key] = config[key]
+
+    targets = []
+    for i in range(len(config["to_entity_groups"])):
+        tgt = {
+            "entity_group": config["to_entity_groups"][i],
+            "geometry": config["to_geometry_types"][i],
+        }
+        if "to_check_status_properties" in config:
+            comp_prop = config["to_check_status_properties"][i]
+            attr = comp_prop if comp_prop is None else comp_prop[1]
+            tgt["status_attribute"] = attr
+        targets.append(tgt)
+    rv["targets"] = targets
+
+    return rv
 
 
 class Model(TrackedModel, name="overlap_status"):
@@ -20,18 +54,11 @@ class Model(TrackedModel, name="overlap_status"):
     Implementation of the overlap status model
     """
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     overlap_status: t.Union[OverlapStatus, None] = None
-
-    def __init__(self, model_config):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema, **_):
         self.parse_config(state, schema)
@@ -107,38 +134,3 @@ class Model(TrackedModel, name="overlap_status"):
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(ds))
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/overlap_status.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/overlap_status.json"
-
-
-def convert_v1_v2(config):
-    rv = {
-        "output_dataset": config["output_dataset"][0],
-        "source": {
-            "entity_group": config["from_entity_group"][0],
-            "geometry": config["from_geometry_type"],
-        },
-    }
-    if "from_check_status_property" in config:
-        rv["source"]["status_attribute"] = config["from_check_status_property"][1]
-
-    for key in ("distance_threshold", "display_name_template"):
-        if key in config:
-            rv[key] = config[key]
-
-    targets = []
-    for i in range(len(config["to_entity_groups"])):
-        tgt = {
-            "entity_group": config["to_entity_groups"][i],
-            "geometry": config["to_geometry_types"][i],
-        }
-        if "to_check_status_properties" in config:
-            comp_prop = config["to_check_status_properties"][i]
-            attr = comp_prop if comp_prop is None else comp_prop[1]
-            tgt["status_attribute"] = attr
-        targets.append(tgt)
-    rv["targets"] = targets
-
-    return rv

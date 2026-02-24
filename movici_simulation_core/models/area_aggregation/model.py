@@ -19,7 +19,7 @@ from movici_simulation_core import (
 from ...json_schemas import SCHEMA_PATH
 from ...models.common import try_get_geometry_type
 from ...models.common.entity_groups import GeometryEntity, PolygonEntity
-from ...validate import ensure_valid_config
+from ...validate import ModelConfigSchema
 from .aggregators import AttributeAggregator, functions
 
 
@@ -31,9 +31,37 @@ class AggregatorConfig(t.TypedDict):
     source_geometry: str
 
 
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/area_aggregation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/area_aggregation.json"
+
+
+def convert_v1_v2(config):
+    rv = {
+        "target_entity_group": config["target_entity_group"][0],
+        "aggregations": [
+            {
+                "source_entity_group": config["source_entity_groups"][i],
+                "source_attribute": config["source_properties"][i][1],
+                "target_attribute": config["target_properties"][i][1],
+                "function": config["aggregation_functions"][i],
+                "source_geometry": config["source_geometry_types"][i],
+            }
+            for i in range(len(config["source_entity_groups"]))
+        ],
+    }
+    if "output_interval" in config:
+        rv["output_interval"] = config["output_interval"]
+
+    return rv
+
+
 class Model(TrackedModel, name="area_aggregation"):
     """Implementation of the area aggregation model"""
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     output_interval: t.Optional[int]
     aggregators: t.List[AttributeAggregator]
     target_entity: t.Optional[t.Union[PolygonEntity, EntityGroup]]
@@ -41,14 +69,6 @@ class Model(TrackedModel, name="area_aggregation"):
     previous_timestamp: t.Optional[Moment]
 
     def __init__(self, config):
-        config = ensure_valid_config(
-            config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(config)
         self.aggregators = []
         self.target_entity = None
@@ -189,27 +209,3 @@ def ensure_function(func):
     if func not in functions:
         raise ValueError(f"models function must be one of {[k for k in functions.keys()]}")
     return func
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/area_aggregation.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/area_aggregation.json"
-
-
-def convert_v1_v2(config):
-    rv = {
-        "target_entity_group": config["target_entity_group"][0],
-        "aggregations": [
-            {
-                "source_entity_group": config["source_entity_groups"][i],
-                "source_attribute": config["source_properties"][i][1],
-                "target_attribute": config["target_properties"][i][1],
-                "function": config["aggregation_functions"][i],
-                "source_geometry": config["source_geometry_types"][i],
-            }
-            for i in range(len(config["source_entity_groups"]))
-        ],
-    }
-    if "output_interval" in config:
-        rv["output_interval"] = config["output_interval"]
-
-    return rv

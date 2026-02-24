@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.5
+  rev: v0.15.0
   hooks:
     - id: ruff-format
       name: Ruff format
@@ -14,12 +14,3 @@ repos:
   hooks:
     - id: taplo-format
       name: Taplo format (TOML)
-
-- repo: local
-  hooks:
-  - id: python-safety-dependencies-check
-    entry: bash
-    name: Safety
-    args: [-c, "pip freeze | safety scan --stdin --full-report"]
-    language: system
-    pass_filenames: false

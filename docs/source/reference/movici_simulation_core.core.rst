@@ -11,8 +11,8 @@ arrays
 
 .. automodule:: movici_simulation_core.core.arrays
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -21,8 +21,8 @@ attribute
 
 .. automodule:: movici_simulation_core.core.attribute
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -31,8 +31,8 @@ attribute\_spec
 
 .. automodule:: movici_simulation_core.core.attribute_spec
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -41,8 +41,8 @@ data\_format
 
 .. automodule:: movici_simulation_core.core.data_format
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -51,8 +51,8 @@ data\_type
 
 .. automodule:: movici_simulation_core.core.data_type
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -61,8 +61,8 @@ entity\_group
 
 .. automodule:: movici_simulation_core.core.entity_group
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -71,8 +71,8 @@ index
 
 .. automodule:: movici_simulation_core.core.index
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -81,8 +81,8 @@ moment
 
 .. automodule:: movici_simulation_core.core.moment
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -91,8 +91,8 @@ numba\_extensions
 
 .. automodule:: movici_simulation_core.core.numba_extensions
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -101,8 +101,8 @@ schema
 
 .. automodule:: movici_simulation_core.core.schema
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -111,8 +111,8 @@ serialization
 
 .. automodule:: movici_simulation_core.core.serialization
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -121,8 +121,8 @@ state
 
 .. automodule:: movici_simulation_core.core.state
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -131,8 +131,8 @@ types
 
 .. automodule:: movici_simulation_core.core.types
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
@@ -141,13 +141,6 @@ utils
 
 .. automodule:: movici_simulation_core.core.utils
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.core
-   :members:
    :undoc-members:
-   :show-inheritance:
+

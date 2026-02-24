@@ -13,7 +13,7 @@ from movici_simulation_core.model_connector.init_data import FileType, InitDataH
 from movici_simulation_core.models.common import model_util
 from movici_simulation_core.models.common.csv_tape import CsvTape
 from movici_simulation_core.models.traffic_kpi.coefficients_tape import CoefficientsTape
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from .entities import TransportSegments
 
@@ -27,6 +27,38 @@ DEFAULT_ENERGY_CONSUMPTION_ATTR = "transport.energy_consumption.hours"
 DEFAULT_CO2_EMISSION_ATTR = "transport.co2_emission.hours"
 DEFAULT_NOX_EMISSION_ATTR = "transport.nox_emission.hours"
 
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_kpi.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_kpi.json"
+
+
+def convert_v1_v2(config):
+    modality, dataset = model_util.get_transport_info(config)
+
+    rv = {
+        "modality": modality,
+        "dataset": dataset,
+        "coefficients_dataset": config["coefficients_csv"][0],
+    }
+
+    if "scenario_parameters" in config:
+        rv["scenario_parameters_dataset"] = config["scenario_parameters"][0]
+
+    for src, tgt in (
+        ("energy_consumption_property", "energy_consumption_attribute"),
+        ("co2_emission_property", "co2_emission_attribute"),
+        ("nox_emission_property", "nox_emission_attribute"),
+    ):
+        if src in config:
+            rv[tgt] = config[src][1]
+
+    for key in (
+        "cargo_scenario_parameters",
+        "passenger_scenario_parameters",
+    ):
+        if key in config:
+            rv[key] = config[key]
+    return rv
+
 
 class Model(TrackedModel, name="traffic_kpi"):
     """
@@ -38,6 +70,10 @@ class Model(TrackedModel, name="traffic_kpi"):
     Modeling interdependent infrastructures under future scenarios. Work in Progress.
     """
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     segments: t.Optional[TransportSegments]
     modality: t.Literal["roads", "tracks", "waterways"]
     ec_attr: UniformAttribute
@@ -50,14 +86,6 @@ class Model(TrackedModel, name="traffic_kpi"):
     _new_timesteps_first_update: bool = True
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(model_config)
         self.segments = None
         self.coefficients_tape = CoefficientsTape()
@@ -475,36 +503,3 @@ class Model(TrackedModel, name="traffic_kpi"):
                 parameter_multiplier = self.scenario_parameters_tape[param]
                 scenario_multiplier *= parameter_multiplier
         return scenario_multiplier
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_kpi.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_kpi.json"
-
-
-def convert_v1_v2(config):
-    modality, dataset = model_util.get_transport_info(config)
-
-    rv = {
-        "modality": modality,
-        "dataset": dataset,
-        "coefficients_dataset": config["coefficients_csv"][0],
-    }
-
-    if "scenario_parameters" in config:
-        rv["scenario_parameters_dataset"] = config["scenario_parameters"][0]
-
-    for src, tgt in (
-        ("energy_consumption_property", "energy_consumption_attribute"),
-        ("co2_emission_property", "co2_emission_attribute"),
-        ("nox_emission_property", "nox_emission_attribute"),
-    ):
-        if src in config:
-            rv[tgt] = config[src][1]
-
-    for key in (
-        "cargo_scenario_parameters",
-        "passenger_scenario_parameters",
-    ):
-        if key in config:
-            rv[key] = config[key]
-    return rv

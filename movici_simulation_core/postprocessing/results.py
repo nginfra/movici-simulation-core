@@ -71,7 +71,9 @@ class SimulationResults:
             }
             for upd in update_files
         ]
-        return ResultDataset(init_data, updates, timeline_info=self.timeline_info)
+        return ResultDataset(
+            init_data, updates, timeline_info=self.timeline_info, schema=self.schema
+        )
 
     def _build_init_data_index(self):
         return {file.stem: file for file in self.init_data_dir.glob("*.json")}
@@ -98,19 +100,18 @@ class ResultDataset:
         init_data: dict,
         updates: t.Iterable[t.Dict],
         timeline_info: t.Optional[TimelineInfo] = None,
+        schema: AttributeSchema | None = None,
     ):
         self.name = (
             init_data.get("name", None)
             or [
-                key
-                for key, val in init_data.items()
-                if isinstance(val, dict) and key not in ("general",)
+                key for key, val in init_data.items() if isinstance(val, dict) and key != "general"
             ][0]
         )
         self.metadata = {
             k: v for k, v in init_data.items() if (k == "general" or not isinstance(v, dict))
         }
-        self.state = TimeProgressingState()
+        self.state = TimeProgressingState(schema=schema)
         self.state.add_init_data(init_data)
         self.state.add_updates_to_timeline(updates)
         self.timeline_info = timeline_info
@@ -158,9 +159,9 @@ class ResultDataset:
 
 
 class TimeProgressingState(TrackedState):
-    def __init__(self, logger=None):
-        super().__init__(logger, track_unknown=OPT)
-        self.streams: t.Dict[(str, str), UpdateStream] = {}
+    def __init__(self, schema: AttributeSchema | None = None, logger=None):
+        super().__init__(schema=schema, logger=logger, track_unknown=OPT)
+        self.streams: t.Dict[tuple[str, str], UpdateStream] = {}
         self.last_timestamp = None
 
     def add_init_data(self, init_data: t.Dict):

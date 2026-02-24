@@ -143,7 +143,7 @@ class SQLiteStorageStrategy(StorageStrategy):
             raise NotADirectoryError(f"init_data_dir is not a directory: {init_data_dir}")
 
         # Get dataset list from scenario config
-        datasets = self.settings.datasets if self.settings.datasets else []
+        datasets = self.settings.datasets or []
 
         # If no datasets in config, fall back to all files in init_data_dir
         if not datasets:

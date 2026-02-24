@@ -28,6 +28,9 @@ class TestIndex:
         index = Index([1, 2])
         assert index[item] == 1
 
+    def test_index_length(self):
+        assert len(Index()) == 0
+
 
 class TestBlockIndex:
     @pytest.mark.parametrize(

@@ -58,11 +58,3 @@ then install the precommit hooks by running
 
   pre-commit install
 
-In order to get the `safety` pre-commit hook working, you must first create an account on 
-`safety-cli.com <https://platform.safetycli.com/>`_. Then, login using the safety cli:
-
-.. code-block::
-
-  safety auth login
-
-You have now succesfully setup the pre-commit hooks
