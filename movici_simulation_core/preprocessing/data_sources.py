@@ -181,9 +181,18 @@ class GeopandasSource(DataSource):
     def get_bounding_box(self):
         return self.gdf.total_bounds
 
+    @staticmethod
+    def _get_python_value(val):
+        """coerce nan's into None and np scalars into python types"""
+        if isinstance(val, (float, np.floating)) and np.isnan(val):
+            return None
+        if isinstance(val, np.generic):
+            return val.item()
+        return val
+
     def get_attribute(self, name: str):
         try:
-            return list(self.gdf[name])
+            return [self._get_python_value(i) for i in self.gdf[name].array]
         except KeyError as e:
             raise ValueError(
                 f"'{name}' was not found as a feature property, perhaps it has an "
