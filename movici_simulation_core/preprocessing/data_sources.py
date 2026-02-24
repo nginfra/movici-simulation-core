@@ -186,7 +186,7 @@ class GeopandasSource(DataSource):
         """coerce nan's into None and np scalars into python types"""
         if isinstance(val, (float, np.floating)) and np.isnan(val):
             return None
-        if hasattr(val, "item"):
+        if isinstance(val, np.generic):
             return val.item()
         return val
 
