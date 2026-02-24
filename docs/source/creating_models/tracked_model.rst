@@ -10,7 +10,7 @@ Using TrackedModel
     For a tutorial on how to create a custom model using |code_TrackedModel|, see 
     :ref:`custom-model`
 
-When developing a custom model, it is recommended to subclass |code_TrackedModel| since it is 
+When developing a custom model, it is recommended to subclass |code_TrackedModel| since it
 provides a high level API on top of the Movici framework, especially concerning publishing and 
 subscribing to data (see |Datamasks|). |code_TrackedModel| provides a |code_TrackedState| instance
 which the developer can use to subscribe to data and publish results. |code_TrackedModel| works in
@@ -33,7 +33,7 @@ which the developer can use to subscribe to data and publish results. |code_Trac
 3) **Running**: After *Initialize*, when the model's ``SUB`` attributes have been filled with data
    it enters the *Running* stage and its
    :meth:`~movici_simulation_core.base_models.tracked_model.TrackedModel.update` method is called
-   at least once (at ``t=0``) so that the model can perform its first calcations, publish its
+   at least once (at ``t=0``) so that the model can perform its first calculations, publish its
    initial results and provide (return) an optional ``next_time`` |code_Moment| object on when the
    model wants to be called next (for time dependent models, :ref:`models-moment` below).
    Regardless of whether the model has provided a ``next_time`` |code_Moment|, its
@@ -52,7 +52,7 @@ In the setup stage, the model must register full attribute paths that the model 
 and or publish to. Depending on the model, it can choose to register |code_EntityGroup| subclasses
 or instances, or register attributes directly. When a model has a very flexible data model, that
 is, if it can work on a wide range of different entity groups and attributes, it is most
-straight-forward to register attributes directly using by calling
+straight-forward to register attributes directly by calling
 :meth:`~movici_simulation_core.core.state.TrackedState.register_attribute` on the provided
 ``state`` object. If a model requires a certain structure of entity groups containing one or more
 predefined attributes, it is beneficial to first define this data model in terms of
@@ -87,7 +87,8 @@ provided ``state`` object.
           self.input_attribute = state.register_attribute(
             dataset_name=self.config["dataset"],
             entity_name=self.config["entity_group"],
-            spec=AttributeSpec(self.config["input_attribute"], data_type=float, flags=INIT)
+            spec=AttributeSpec(self.config["input_attribute"], data_type=float),
+            flags=INIT
           )
           self.output_attribute = state.register_attribute(
             dataset_name=self.config["dataset"],
@@ -101,7 +102,7 @@ Registering Entity Groups
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In order to define a |Datamask| based on a structure of entity groups, a model developer can
-define subclassses of |code_EntityGroup|. For example, if a model wants to publish or subscribe to
+define subclasses of |code_EntityGroup|. For example, if a model wants to publish or subscribe to
 an entity group called ``"my_entities"`` that has a point geometry (ie. the entity group has a
 ``geometry.x`` and ``geometry.y`` attribute). It can define the following ``EntityGroup``
 
@@ -110,8 +111,7 @@ an entity group called ``"my_entities"`` that has a point geometry (ie. the enti
   from movici_simulation_core import EntityGroup, field, INIT
   from movici_simulation_core.attributes import Geometry_X, Geometry_Y
   
-  class PointEntityGroup(EntityGroup):
-      __entity_name__ = "my_entities"
+  class PointEntityGroup(EntityGroup, name="my_entities"):
       x = field(Geometry_X, flags=INIT)
       y = field(Geometry_Y, flags=INIT)
 
@@ -151,14 +151,16 @@ The |code_TrackedModel| can then look something like this:
 Simulation time defined by Moment
 ---------------------------------
 
-<placeholder for documentation about Moment>
+Work in progress...
+
+.. todo::  <placeholder for documentation about Moment>
 
 
 Caveats
 -------
 
-Attributes should have at most one PUBlising model
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Attributes should have at most one PUBlishing model
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Generally, every attribute should have at most one publisher. That model
 is considered to be the owner of that attribute. If more than one model publishes
@@ -176,7 +178,7 @@ Attributes that are both PUB and SUB
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 The corollary of requiring at most one publisher per attribute is that it is discouraged
 to register an attribute as ``PUB|SUB``; that is: a model both subscribes to an attribute
-and publishes to it. An subscribed attribute implies that there may be another model
+and publishes to it. A subscribed attribute implies that there may be another model
 that publishes on that attribute, which would in this case mean two publishers to that
 attribute.
 
@@ -200,7 +202,7 @@ entity in the entity group by 1
 
 .. testcode:: python
   
-  from movici_simulation_core import TrackedModel, AttributeSpec, PUB, INIT
+  from movici_simulation_core import TrackedModel, AttributeSpec, Moment, PUB, INIT
 
   class MyModel(TrackedModel, name="mymodel"):
       def setup(self, state):
@@ -212,7 +214,7 @@ entity in the entity group by 1
             )
           self.next_update = 10
 
-      def update(self, moment):
+      def update(self, moment, **_):
           if moment.seconds < self.next_update:
               return None
 
@@ -234,7 +236,7 @@ up with the following erroneous behaviour of the model:
   ``PUB`` data is produced, those changes are tracked appropriately.
 * However, because in this case our attribute is considered both ``PUB`` and ``INIT``, when
   |code_TrackedModelAdapter| generates the update at ``t=0``, the attribute's ``INIT`` changes have 
-  not been reset yet and when the update is generated, these changes are in corporated in the
+  not been reset yet and when the update is generated, these changes are incorporated in the
   update, which leads at best to a redundant update, and at worst to undefined or non-deterministic
   behaviour. 
 
@@ -242,13 +244,13 @@ In order to fix this, the model must reset the attribute's changes just prior to
 own changes, so that only its changes are picked up when |code_TrackedModelAdapter| generates
 the update. Two small changes are required. First the model must indicate that it only wants the
 |code_TrackedModelAdapter| to automatically reset the ``PUB`` changes and not the ``SUB`` changes
-by setting the :attr:`TrackedModel.auto_reset` property. Secondly, the model must call
-:meth:`~movici_simulation_core.base_models.core.state.TrackedState.reset_tracked_changes` in its
+by setting the :attr:`movici_simulation_core.base_models_tracked_model.TrackedModel.auto_reset` property. Secondly, the model must call
+:meth:`~movici_simulation_core.core.state.TrackedState.reset_tracked_changes` in its
 update method:
 
 .. testcode:: python
   
-  from movici_simulation_core import TrackedModel, AttributeSpec, PUB, INIT
+  from movici_simulation_core import TrackedModel, AttributeSpec, Moment, PUB, INIT
   from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 
   class MyModel(TrackedModel, name="mymodel"):
