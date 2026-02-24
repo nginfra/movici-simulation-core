@@ -154,14 +154,14 @@ exclude attributes. The first way is to define an ``__exclude__`` member on the 
 .. code-block:: python
 
   class OnlyXPointEntityGroup(PointEntityGroup):
-      __exclude__ = ["y"]
+      __exclude__ = ("y",)
 
 the second way is to define the exclude upon instantation of the |code_EntityGroup|:
 
 
 .. code-block:: python
 
-  entity_group = PointEntityGroup(exclude=["y"])
+  entity_group = PointEntityGroup(exclude=("y",))
 
 
 the third way can be used to override any previously defined exclusions, which for the following
@@ -170,7 +170,7 @@ case will result in only ``"x"`` being excluded, and not ``"y"``:
 
 .. code-block:: python
 
-  entity_group = OnlyXPointEntityGroup(override_exclude=["x"])
+  entity_group = OnlyXPointEntityGroup(override_exclude=("x",))
 
 .. _models-moment:
 
