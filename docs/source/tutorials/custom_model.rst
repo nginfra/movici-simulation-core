@@ -676,3 +676,7 @@ Final Remarks
 
 You have now succesfully created your first model! The full example can also be found in 
 ``examples/signal_strength``
+
+.. hint:: 
+    For more information on how to create a custom model using |code_TrackedModel|, see 
+    :ref:`models-trackedmodel`

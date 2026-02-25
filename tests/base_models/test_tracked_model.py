@@ -20,7 +20,11 @@ from movici_simulation_core.messages import (
     UpdateSeriesMessage,
 )
 from movici_simulation_core.model_connector.init_data import FileType
-from movici_simulation_core.testing.helpers import dataset_data_to_numpy, dataset_dicts_equal
+from movici_simulation_core.testing.helpers import (
+    assert_equivalent_data_mask,
+    dataset_data_to_numpy,
+    dataset_dicts_equal,
+)
 
 
 @pytest.fixture
@@ -148,10 +152,13 @@ def test_base_model(model, adapter, update, init_data_handler):
 
 
 def test_data_mask(adapter, init_data_handler):
-    assert adapter.initialize(init_data_handler) == {
-        "sub": {"dataset": {"my_entities": ["init_attr", "sub_attr"]}},
-        "pub": {"dataset": {"my_entities": ["pub_attr"]}},
-    }
+    assert_equivalent_data_mask(
+        adapter.initialize(init_data_handler),
+        {
+            "sub": {"dataset": {"my_entities": ["init_attr", "sub_attr"]}},
+            "pub": {"dataset": {"my_entities": ["pub_attr"]}},
+        },
+    )
 
 
 def test_new_time(adapter, model):
