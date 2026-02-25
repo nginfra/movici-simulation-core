@@ -1,9 +1,9 @@
 Movici Simulation Core
 ======================
 
-Copyright 2020ff NGinfra
+Copyright 2026 NGinfra
 
-Movici is a set of tools and software for performing simulations geospatial entities. 
+Movici is a set of tools and software for performing simulations on geospatial entities. 
 
 Movici Simulation Core is the main package needed to run Movici simulations. It contains
   
@@ -16,43 +16,92 @@ Movici Simulation Core is the main package needed to run Movici simulations. It 
 Installation
 ------------
 
+On Windows and Linux
+#####################
+
 .. code-block::
 
   pip install movici-simulation-core
 
+
+On MacOS
+##########
+
+Python must be installed via `Homebrew <https://brew.sh/>`_  to support Spatialite.
+
+**Pre-requisites:**
+
+- `Homebrew <https://brew.sh/>`_ package manager 
+- Python 3.11 or higher installed via Homebrew (Lower versions will raise conflicts with OpenMP, a requirement of Aequilibrae)
+
+1. On a terminal. Install the spatialite library as follows:
+  
+.. code-block:: bash
+
+    brew update
+    brew install libspatialite
+
+2. Install ``movici-simulation-core`` to your Homebrew Python environment (below instructions assume Python 3.12):
+
+.. code-block:: bash
+
+  python3.12 -m pip install movici-simulation-core
 
 Installing Models
 -----------------
 
 Some models require additional libraries to be installed. Most of these can be installed using the
 ``models`` extras (``pip install movici-simulation-core[models]``). However, there are some 
-exceptions
+exceptions:
 
-
-traffic_assignment_calculation
+Traffic Assignment Calculation
 ##############################
 
-The traffic assignment model uses ``aequilibrae`` to perform it's traffic assignment. This library
-requires the ``mod_spatialite`` sqlite extension. On Debian based Linux (eg. Ubuntu) this can
-be done using ``apt-get install libsqlite3-mod-spatialite``. On Windows, please follow the 
-`official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
+The traffic assignment model uses ``aequilibrae`` to perform traffic assignment. This library
+requires the ``mod_spatialite`` sqlite extension. 
+
+- On Debian based Linux (eg. Ubuntu) this can be done using ``apt-get install libsqlite3-mod-spatialite``. 
+- On Windows, please follow the `official installation guide <https://faims2-documentation.readthedocs.io/en/latest/Installing+Spatialite+on+Windows/>`_
+- On MacOS, this can be done using the ``llvm`` compiler. Please follow the instructions below:
+
+  1. Install the ``llvm`` compiler suite. This is requiered to build ``Aequilibrae`` with OpenMP support. On a terminal, run:
+
+  .. code-block:: bash
+
+    brew install llvm 
+
+  2. Set the following environment variables to point ``pip`` to use the ``llvm`` compiler and libraries:  
+
+  .. code-block:: bash
+
+    export CC=/opt/homebrew/opt/llvm/bin/clang
+    export CXX=/opt/homebrew/opt/llvm/bin/clang++
+    export LDFLAGS="-L/opt/homebrew/opt/llvm/lib"
+    export CPPFLAGS="-I/opt/homebrew/opt/llvm/include"
+
+  3. Install the movici models with the following command:
+
+  .. code-block:: bash
+
+    pip install movici-simulation-core[models]
 
 
 Development
 -----------
 
-Install this package in editable mode and include all depenencies:
+If you want to develop on this package, you can follow the installation steps above for your choice of operating system. Then,
+clone the repository and install it in editable mode with the following command:
 
-.. code-block::
+.. code-block:: bash
 
+  git clone https://github.com/nginfra/movici-simulation-core.git
   pip install -e .[dev,models]
 
-pre-commit
-##########
 
-To install the pre-commit hooks, please first install pre-commit using your favorite installer, eg: `pipx` or `uv tool`.
+Using Pre-commit Hooks
+######################
 
-then install the precommit hooks by running 
+To install the pre-commit hooks, first install ``pre-commit`` using your favorite installer, eg: ``pipx`` or ``uv tool``. Then, install the precommit hooks by running 
 
 .. code-block::
 

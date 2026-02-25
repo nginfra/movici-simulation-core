@@ -1,4 +1,5 @@
 name: "Install Spatialite"
+description: "Installs Spatialite on the current OS. On Windows, it also adds the installation directory to the PATH."
 
 inputs:
   os:
@@ -24,3 +25,9 @@ runs:
     run: |
       sudo apt-get update
       sudo apt-get install -y libsqlite3-mod-spatialite
+
+  - name: Install spatialite (macOS)
+    if: startsWith(inputs.os, 'macos')
+    shell: bash
+    run: |
+      brew install libspatialite
