@@ -231,6 +231,8 @@ class Model(TrackedModel, name="rules"):
             for spec in rule_specs
         ]
 
+        self._detect_overlapping_rules(rule_specs, logger)
+
         # Pre-compute time thresholds from all rule conditions
         for rule in self.rules:
             for expr_type, value in rule.condition.get_time_thresholds():
@@ -331,6 +333,40 @@ class Model(TrackedModel, name="rules"):
             )
             for spec in merged_rules
         ]
+
+    def _detect_overlapping_rules(
+        self, rule_specs: list[RuleSpec], logger: logging.Logger
+    ) -> None:
+        """Detect and warn about rules that target the same entity and attribute.
+
+        When multiple rules write to the same target (dataset, entity, attribute),
+        later rules override earlier ones. A warning is logged so the user is aware
+        of the overlap.
+        """
+        # Group rule indices by target: (output_array identity, to_entity_idx)
+        targets: dict[tuple[int, int], list[int]] = {}
+        for i, rule in enumerate(self.rules):
+            key = (id(rule.output_array), rule.to_entity_idx)
+            targets.setdefault(key, []).append(i)
+
+        for indices in targets.values():
+            if len(indices) <= 1:
+                continue
+            first_spec = rule_specs[indices[0]]
+            target_id = (
+                first_spec.to_id if first_spec.to_id is not None else first_spec.to_reference
+            )
+            descriptions = ", ".join(
+                f"rule {i + 1} (if: {rule_specs[i].condition!r})" for i in indices
+            )
+            logger.warning(
+                "Multiple rules target attribute %r on entity %s in dataset %r: %s. "
+                "Later rules will override earlier ones.",
+                first_spec.output,
+                target_id,
+                first_spec.to_dataset,
+                descriptions,
+            )
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
         """Update entity attributes based on rules.

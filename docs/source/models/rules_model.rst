@@ -169,13 +169,35 @@ Rules can also be loaded from a separate dataset of type ``"rules"``:
 When both config and dataset specify rules, they are merged (config defaults
 take precedence over dataset defaults).
 
+Rule Ordering and Overrides
+---------------------------
+
+Rules are evaluated sequentially in the order they are defined. When multiple
+rules target the same entity and output attribute, **later rules override earlier
+ones**. This applies regardless of whether conditions are true or false (a later
+rule's ``else_value`` can override an earlier rule's ``value``).
+
+When both a rules dataset and inline config rules are present, they are merged in
+this order:
+
+1. Rules from the rules dataset (evaluated first)
+2. Rules from the model config (evaluated last, can override dataset rules)
+
+This means config rules take precedence over dataset rules for the same target.
+
+A **warning** is logged during setup whenever multiple rules target the same
+entity and output attribute. This helps identify unintentional overlaps. The
+warning includes the rule indices and their conditions so overlapping rules can
+be reviewed.
+
+To intentionally override a rule (e.g., a config rule overriding a dataset
+default), the warning can be safely ignored.
+
 Notes
 -----
 
 * Each rule targets a single entity; other entities in the same group are
   unaffected
-* Rules are evaluated in order; later rules can overwrite earlier ones for
-  the same output attribute
 * Time-only conditions (``<simtime>``, ``<clocktime>``) do not require
   ``from_dataset``/``from_id``/``from_reference``
 
