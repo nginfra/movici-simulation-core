@@ -25,7 +25,6 @@ from movici_simulation_core.models.common.entity_groups import (
     PolygonEntity,
 )
 from movici_simulation_core.models.common.model_util import try_get_geometry_type
-from movici_simulation_core.validate import ensure_valid_config
 
 Flooding_WaterHeight = AttributeSpec("flooding.water_height", float)
 Flooding_WaterDepth = AttributeSpec("flooding.water_depth", float)
@@ -34,16 +33,9 @@ MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/operational_status.json"
 
 
 class OperationalStatus(TrackedModel, name="operational_status"):
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
+
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "1",
-            {
-                "1": {
-                    "schema": MODEL_CONFIG_SCHEMA_PATH,
-                },
-            },
-        )
         super().__init__(model_config)
         self.modules: t.List[StatusModule] = []
 

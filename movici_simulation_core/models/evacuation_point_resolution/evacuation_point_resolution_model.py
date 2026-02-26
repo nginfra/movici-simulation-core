@@ -18,7 +18,6 @@ from movici_simulation_core import (
 from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.validate import ensure_schema, validate_and_process
 
 Evacuation_RoadIds = AttributeSpec("evacuation.road_ids", DataType(int, csr=True))
 Evacuation_LastId = AttributeSpec("evacuation.last_id", int)
@@ -36,24 +35,23 @@ class RoadSegments(EntityGroup):
 
 
 class EvacuatonPointResolution(TrackedModel, name="evacuation_point_resolution"):
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
     evac_points: EvacuationPoints
     roads: RoadSegments
     label_mapping: t.Dict[int, int]
 
     def __init__(self, model_config: dict):
-        validate_and_process(model_config, schema=ensure_schema(MODEL_CONFIG_SCHEMA_PATH))
-
-        model_config.setdefault(
+        super().__init__(model_config)
+        self.config.setdefault(
             "evacuation_points", {"entity_group": "evacuation_point_entities", "attribute": "id"}
         )
-        model_config.setdefault(
+        self.config.setdefault(
             "road_segments",
             {
                 "entity_group": "road_segment_entities",
                 "attribute": Evacuation_EvacuationPointId.name,
             },
         )
-        super().__init__(model_config)
 
     def setup(self, state: TrackedState, schema: AttributeSchema, **_):
         dataset = self.config["dataset"]

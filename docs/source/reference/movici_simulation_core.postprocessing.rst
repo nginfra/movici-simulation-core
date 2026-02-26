@@ -1,23 +1,25 @@
 
 
-postprocessing 
+postprocessing
 ===============
 
 
 
 
-results 
+results
 --------
 
 .. automodule:: movici_simulation_core.postprocessing.results
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-Module contents
----------------
 
-.. automodule:: movici_simulation_core.postprocessing
+
+sqlite\_results
+----------------
+
+.. automodule:: movici_simulation_core.postprocessing.sqlite_results
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:

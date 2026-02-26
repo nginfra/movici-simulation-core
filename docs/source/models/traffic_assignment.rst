@@ -88,4 +88,3 @@ TrafficAssignmentConfig
   | ``vdf_alpha``: ``number`` the alpha parameter of the volume delay function (default: ``4.0``)
   | ``vdf_beta``: ``number`` the beta parameter of the volume delay function (default: ``0.64``)
   | ``cargo_pcu``: ``number`` the weight factor of a cargo vehicle (truck) on the volume (default: ``1.9``)
-

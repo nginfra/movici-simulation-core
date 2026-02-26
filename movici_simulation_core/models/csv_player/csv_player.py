@@ -12,23 +12,36 @@ from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.model_connector.init_data import FileType, InitDataHandler
 from movici_simulation_core.models.common.csv_tape import CsvTape
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/csv_player.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/csv_player.json"
+
+
+def convert_v1_v2(config):
+    return {
+        "csv_tape": config["csv_tape"][0],
+        "entity_group": config["entity_group"][0],
+        "csv_parameters": [
+            {
+                "parameter": config["csv_parameters"][i],
+                "target_attribute": config["target_attributes"][i][1],
+            }
+            for i in range(len(config["csv_parameters"]))
+        ],
+    }
 
 
 class CSVPlayer(TrackedModel, name="csv_player"):
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     targets: t.Dict[str, UniformAttribute]
     publishers: t.List[Publisher]
     csv_tape: CsvTape
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "2",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                "2": {"schema": MODEL_CONFIG_SCHEMA_PATH, "convert_from": {"1": convert_v1_v2}},
-            },
-        )
         super().__init__(model_config)
 
     def setup(
@@ -89,21 +102,3 @@ def get_publish_attribute(
         schema.get_spec(attr, default_data_type=DataType(float)),
         flags=PUB,
     )
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/csv_player.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/csv_player.json"
-
-
-def convert_v1_v2(config):
-    return {
-        "csv_tape": config["csv_tape"][0],
-        "entity_group": config["entity_group"][0],
-        "csv_parameters": [
-            {
-                "parameter": config["csv_parameters"][i],
-                "target_attribute": config["target_attributes"][i][1],
-            }
-            for i in range(len(config["csv_parameters"]))
-        ],
-    }

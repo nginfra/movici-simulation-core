@@ -1,6 +1,6 @@
 
 
-json\_schemas 
+json\_schemas
 ==============
 
 Subpackages
@@ -10,11 +10,3 @@ Subpackages
    :maxdepth: 1
 
    movici_simulation_core.json_schemas.models
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.json_schemas
-   :members:
-   :undoc-members:
-   :show-inheritance:

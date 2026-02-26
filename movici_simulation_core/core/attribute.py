@@ -73,7 +73,7 @@ class AttributeField:
 
     def __get__(
         self, instance: t.Optional[movici_simulation_core.EntityGroup], owner
-    ) -> t.Union[AttributeField, UniformAttribute, CSRAttribute]:
+    ) -> t.Union[UniformAttribute, CSRAttribute]:
         if instance is None:
             return self
         return self.get_for(instance)

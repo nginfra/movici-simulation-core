@@ -332,9 +332,9 @@ class TestGeopandasDataSource:
     @pytest.mark.parametrize(
         "input, expected",
         [
-            ([10, None], [10.0, float("NaN")]),
-            ([10.1, None], [10.1, float("NaN")]),
-            ([True, None], [True, float("NaN")]),
+            ([10, None], [10.0, None]),
+            ([10.1, None], [10.1, None]),
+            ([True, None], [True, None]),
             (["bla", None], ["bla", None]),
         ],
     )

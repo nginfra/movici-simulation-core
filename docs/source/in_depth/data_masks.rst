@@ -10,7 +10,7 @@ Data masks
   When using the |code_TrackedState| and/or |code_TrackedModel| classes, data masks are created
   for you, so you don't have to deal with these yourself and it will just work.
 
-A data mask is a model's description of what data it produces (``pub``), and what data it is 
+A data mask is a model's description of what data it produces (``pub``), and what data it is
 interested in (``sub``). The mask specifies datasets, entity groups and attributes in the following
 way:
 
@@ -29,7 +29,7 @@ way:
     }
   }
 
-The above data mask indicates that a model publishes data on ``foo_entities`` inside 
+The above data mask indicates that a model publishes data on ``foo_entities`` inside
 ``some_dataset`` and that it only ever publishes ``attribute.a`` and ``attribute.b``. It subscribes
 to ``bar_entities`` in ``some_other_dataset``, and is only interested in ``attribute.c``
 
@@ -56,8 +56,8 @@ valid locations for ``null``:
     "sub": null
   }
 
-The ``pub`` mask means the model could publish anything in ``some_dataset.foo_entities`` and 
-anything in ``some_other_dataset``. It is not obliged to do so. Meanwhile it subscribes to 
+The ``pub`` mask means the model could publish anything in ``some_dataset.foo_entities`` and
+anything in ``some_other_dataset``. It is not obliged to do so. Meanwhile it subscribes to
 everything in the world state.
 
 Empty containers (``{}`` or ``[]``) are not allowed in a data mask, except directly after ``pub``
@@ -71,7 +71,7 @@ cases the entry should just be omitted from the data mask.
       "some_dataset": {
         "foo_entities": []
       },
-      
+
     },
     "sub": {
       "some_other_dataset": {}

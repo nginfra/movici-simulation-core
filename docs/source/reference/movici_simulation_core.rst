@@ -1,6 +1,6 @@
 
 
-movici\_simulation\_core 
+movici\_simulation\_core
 =========================
 
 Subpackages
@@ -9,9 +9,9 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
-   movici_simulation_core.integrations
    movici_simulation_core.base_models
    movici_simulation_core.core
+   movici_simulation_core.integrations
    movici_simulation_core.json_schemas
    movici_simulation_core.model_connector
    movici_simulation_core.models
@@ -19,94 +19,87 @@ Subpackages
    movici_simulation_core.postprocessing
    movici_simulation_core.preprocessing
    movici_simulation_core.services
+   movici_simulation_core.storage
    movici_simulation_core.testing
    movici_simulation_core.utils
 
 
 
 
-attributes 
+attributes
 -----------
 
 .. automodule:: movici_simulation_core.attributes
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-csr 
+csr
 ----
 
 .. automodule:: movici_simulation_core.csr
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-exceptions 
+exceptions
 -----------
 
 .. automodule:: movici_simulation_core.exceptions
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-messages 
+messages
 ---------
 
 .. automodule:: movici_simulation_core.messages
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-settings 
+settings
 ---------
 
 .. automodule:: movici_simulation_core.settings
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-simulation 
+simulation
 -----------
 
 .. automodule:: movici_simulation_core.simulation
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-types 
+types
 ------
 
 .. automodule:: movici_simulation_core.types
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-validate 
+validate
 ---------
 
 .. automodule:: movici_simulation_core.validate
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core
-   :members:
    :undoc-members:
-   :show-inheritance:

@@ -18,31 +18,41 @@ from movici_simulation_core.json_schemas import SCHEMA_PATH
 from movici_simulation_core.models.common import ae_util, model_util
 from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.validate import ensure_valid_config
+from movici_simulation_core.validate import ModelConfigSchema
 
 from . import attributes
 from .entities import CorridorEntity, CorridorTransportSegmentEntity, DemandNodeEntity
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/corridor.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/corridor.json"
+
+
+def convert_v1_v2(config):
+    rv = {"corridors": config["corridors"][0]}
+    for key in ("cargo_pcu", "publish_corridor_geometry"):
+        if key in config:
+            rv[key] = config[key]
+
+    for key in ("roads", "waterways", "tracks"):
+        if key in config:
+            rv["dataset"] = config[key][0]
+            rv["modality"] = key
+            break
+
+    return rv
 
 
 class Model(TrackedModel, name="corridor"):
     """Implementation of the corridor model"""
 
+    __model_config_schema__ = [
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_LEGACY_PATH),
+        ModelConfigSchema(MODEL_CONFIG_SCHEMA_PATH, convert_from_previous=convert_v1_v2),
+    ]
     epsilon = 1e-12
 
     def __init__(self, model_config: dict, validate_config=True):
-        if validate_config:
-            model_config = ensure_valid_config(
-                model_config,
-                "2",
-                {
-                    "1": {"schema": MODEL_CONFIG_SCHEMA_LEGACY_PATH},
-                    "2": {
-                        "schema": MODEL_CONFIG_SCHEMA_PATH,
-                        "convert_from": {"1": convert_v1_v2},
-                    },
-                },
-            )
-        super().__init__(model_config)
+        super().__init__(model_config, validate_config=validate_config)
         self._corridor_entity: t.Optional[CorridorEntity] = None
         self._transport_segments: t.Optional[CorridorTransportSegmentEntity] = None
         self._transport_nodes: t.Optional[PointEntity] = None
@@ -299,22 +309,3 @@ class Model(TrackedModel, name="corridor"):
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
         return attributes_from_dict(vars(attributes))
-
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/corridor.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/corridor.json"
-
-
-def convert_v1_v2(config):
-    rv = {"corridors": config["corridors"][0]}
-    for key in ("cargo_pcu", "publish_corridor_geometry"):
-        if key in config:
-            rv[key] = config[key]
-
-    for key in ("roads", "waterways", "tracks"):
-        if key in config:
-            rv["dataset"] = config[key][0]
-            rv["modality"] = key
-            break
-
-    return rv

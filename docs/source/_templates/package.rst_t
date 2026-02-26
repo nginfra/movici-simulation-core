@@ -25,10 +25,6 @@
 .. py:module:: {{ pkgname }}
 {% endif %}
 
-{%- if modulefirst and not is_namespace %}
-{{ automodule(pkgname, automodule_options) }}
-{% endif %}
-
 {%- if subpackages %}
 Subpackages
 -----------
@@ -52,10 +48,3 @@ Submodules
 {% endfor %}
 {%- endif %}
 {%- endif %}
-
-{%- if not modulefirst and not is_namespace %}
-Module contents
----------------
-
-{{ automodule(pkgname, automodule_options) }}
-{% endif %}

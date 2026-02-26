@@ -1,33 +1,25 @@
 
 
-opportunities 
+opportunities
 ==============
 
 
 
 
-dataset 
+dataset
 --------
 
 .. automodule:: movici_simulation_core.models.opportunities.dataset
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.opportunities.model
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.models.opportunities
-   :members:
    :undoc-members:
-   :show-inheritance:

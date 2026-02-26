@@ -1,53 +1,45 @@
 
 
-traffic\_demand\_calculation 
+traffic\_demand\_calculation
 =============================
 
 
 
 
-common 
+common
 -------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.common
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-global\_contributors 
+global\_contributors
 ---------------------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.global_contributors
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-local\_contributors 
+local\_contributors
 --------------------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.local_contributors
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.traffic_demand_calculation.model
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.models.traffic_demand_calculation
-   :members:
    :undoc-members:
-   :show-inheritance:

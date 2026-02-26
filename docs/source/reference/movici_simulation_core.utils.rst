@@ -1,83 +1,85 @@
 
 
-utils 
+utils
 ======
 
 
 
 
-data\_mask 
+attribute\_loader
+------------------
+
+.. automodule:: movici_simulation_core.utils.attribute_loader
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+
+
+data\_mask
 -----------
 
 .. automodule:: movici_simulation_core.utils.data_mask
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-lifecycle 
+lifecycle
 ----------
 
 .. automodule:: movici_simulation_core.utils.lifecycle
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-logging 
+logging
 --------
 
 .. automodule:: movici_simulation_core.utils.logging
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-path 
+path
 -----
 
 .. automodule:: movici_simulation_core.utils.path
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-strategies 
+strategies
 -----------
 
 .. automodule:: movici_simulation_core.utils.strategies
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-time 
+time
 -----
 
 .. automodule:: movici_simulation_core.utils.time
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-unicode 
+unicode
 --------
 
 .. automodule:: movici_simulation_core.utils.unicode
    :members:
-   :undoc-members:
    :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: movici_simulation_core.utils
-   :members:
    :undoc-members:
-   :show-inheritance:

@@ -26,13 +26,14 @@ from movici_simulation_core.types import (
     UpdateData,
 )
 from movici_simulation_core.utils import strategies
-from movici_simulation_core.validate import ensure_valid_config
 
 # Optional SQLite storage support
 try:
     from .sqlite_strategy import SQLiteStorageStrategy
 except ImportError:
     SQLiteStorageStrategy = None
+
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"
 
 
 @dataclasses.dataclass
@@ -48,19 +49,13 @@ class UpdateInfo:
 
 
 class DataCollector(SimpleModel, name="data_collector"):
+    __model_config_schema__ = MODEL_CONFIG_SCHEMA_PATH
     state: t.Optional[TrackedState] = None
     aggregate: bool = False
     strategy: StorageStrategy
     strategies: t.Dict[str, t.Type[StorageStrategy]] = {}
 
     def __init__(self, model_config: dict):
-        model_config = ensure_valid_config(
-            model_config,
-            "1",
-            {
-                "1": {"schema": MODEL_CONFIG_SCHEMA_PATH},
-            },
-        )
         super().__init__(model_config)
         self.pool = LimitedThreadPoolExecutor(max_workers=5)
         self.futures = MultipleFutures()
@@ -173,5 +168,3 @@ DataCollector.add_storage_strategy("file", FileStorageStrategy)
 # Register SQLite storage strategy if available
 if SQLiteStorageStrategy is not None:
     DataCollector.add_storage_strategy("sqlite", SQLiteStorageStrategy)
-
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/data_collector.json"

@@ -67,7 +67,7 @@ class TrackedState:
         self.attributes = {}
         self.index = {}
         self.logger = logger
-        self.schema = schema
+        self.schema = schema or AttributeSchema()
         self.general = {}
         self.registered_entity_groups = {}
         self.registered_attributes = {}
@@ -101,7 +101,7 @@ class TrackedState:
         if entity.__entity_name__ is None:
             raise ValueError("EntityGroup must have __entity_name__ defined")
         ensure_path(self.attributes, (dataset_name, entity.__entity_name__))
-        for field in entity.all_attributes().values():
+        for field in entity.attributes.values():
             self._register_attribute(
                 dataset_name=dataset_name,
                 entity_name=entity.__entity_name__,

@@ -1,33 +1,45 @@
 
 
-data\_collector 
+data\_collector
 ================
 
 
 
 
-concurrent 
+concurrent
 -----------
 
 .. automodule:: movici_simulation_core.models.data_collector.concurrent
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
 
 
-data\_collector 
+data\_collector
 ----------------
 
 .. automodule:: movici_simulation_core.models.data_collector.data_collector
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
 
-Module contents
----------------
 
-.. automodule:: movici_simulation_core.models.data_collector
+
+sqlite\_strategy
+-----------------
+
+.. automodule:: movici_simulation_core.models.data_collector.sqlite_strategy
    :members:
-   :undoc-members:
    :show-inheritance:
+   :undoc-members:
+
+
+
+strategy
+---------
+
+.. automodule:: movici_simulation_core.models.data_collector.strategy
+   :members:
+   :show-inheritance:
+   :undoc-members:
