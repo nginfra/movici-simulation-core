@@ -14,7 +14,7 @@ from jsonschema.validators import validator_for
 from movici_simulation_core.attributes import Grid_GridPoints
 from movici_simulation_core.json_schemas import PATH
 
-from .data_sources import GeometryType, GeopandasSource, NetCDFGridSource, SourcesDict
+from .data_sources import GeometryType, GeopandasSource, INPSource, NetCDFGridSource, SourcesDict
 
 _dataset_creator_schema = None
 
@@ -136,6 +136,8 @@ class SourcesSetup(DatasetOperation):
             cls = GeopandasSource
         elif source_type == "netcdf":
             cls = NetCDFGridSource
+        elif source_type == "inp":
+            cls = INPSource
         else:
             raise ValueError(f"Unknown source type '{source_type}'")
         return cls.from_source_info(source_info)
