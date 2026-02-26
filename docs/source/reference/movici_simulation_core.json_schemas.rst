@@ -1,6 +1,6 @@
 
 
-json\_schemas 
+json\_schemas
 ==============
 
 Subpackages
@@ -10,4 +10,3 @@ Subpackages
    :maxdepth: 1
 
    movici_simulation_core.json_schemas.models
-

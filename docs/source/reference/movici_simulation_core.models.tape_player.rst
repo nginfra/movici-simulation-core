@@ -1,16 +1,15 @@
 
 
-tape\_player 
+tape\_player
 =============
 
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.tape_player.model
    :members:
    :show-inheritance:
    :undoc-members:
-

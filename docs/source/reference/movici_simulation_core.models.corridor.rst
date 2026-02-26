@@ -1,12 +1,12 @@
 
 
-corridor 
+corridor
 =========
 
 
 
 
-attributes 
+attributes
 -----------
 
 .. automodule:: movici_simulation_core.models.corridor.attributes
@@ -16,7 +16,7 @@ attributes
 
 
 
-entities 
+entities
 ---------
 
 .. automodule:: movici_simulation_core.models.corridor.entities
@@ -26,11 +26,10 @@ entities
 
 
 
-model 
+model
 ------
 
 .. automodule:: movici_simulation_core.models.corridor.model
    :members:
    :show-inheritance:
    :undoc-members:
-
