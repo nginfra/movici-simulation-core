@@ -18,4 +18,3 @@
 .. |code_ShortestPathModel| replace:: :class:`~movici_simulation_core.models.shortest_path.model.ShortestPathModel`
 .. |code_TapePlayer| replace:: :class:`TapePlayer<movici_simulation_core.models.tape_player.model.Model>`
 .. |code_CSVPlayer| replace:: :class:`~movici_simulation_core.models.csv_player.csv_player.CSVPlayer`
-

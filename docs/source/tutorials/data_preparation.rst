@@ -12,7 +12,7 @@ Movici |Datasets|, or init data, need to be provided in the :ref:`movici-data-fo
 way to create these dataset files is to use a |code_DatasetCreator|, or more specifically, the
 shorthand function |create_dataset|.
 
-This function can create a Dataset from a ``dataset creator config``, a json object following a 
+This function can create a Dataset from a ``dataset creator config``, a json object following a
 specific :ref:`schema<tutorial-dataset-creator-config-schema>`. A simple example of a dataset
 creator config is as following:
 
@@ -50,7 +50,7 @@ Dataset Creator Config
   }
 
 
-Let's look at the config piece by piece to show what everything means. 
+Let's look at the config piece by piece to show what everything means.
 
 Global meta data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -85,7 +85,7 @@ __meta__ section
 The ``__meta__`` field contains addtional metadata about the dataset creator needs to know about. In
 this case it contains a ``crs`` field, indicating the desired coordinate reference system of the
 dataset. This may be different from the crs of the sources (and the sources may each have their own
-crs), but the geospatial coordinates of the source entities will be transformed into the value 
+crs), but the geospatial coordinates of the source entities will be transformed into the value
 of ``crs``. If omitted, the default value is ``EPSG:28992``, which corresponds with `Amersfoort / RD New`
 
 Data Sources
@@ -104,7 +104,7 @@ Data Sources
 The ``__sources__`` field contains definitions of data sources. Keys are identifiers that may be
 used later on to reference a specific source. The values give information about the source.
 ``source_type`` gives the type of the source. Currently, only files are allowed. ``path`` gives
-the location to the source file. Since only files are supported, the above snippet may be 
+the location to the source file. Since only files are supported, the above snippet may be
 simplified as following:
 
 .. code-block::
@@ -144,23 +144,23 @@ Data section
   Attributes are values, usually in array form, belonging to an |Entity Group| in a Movici Dataset.
   Properties indicate the same data, but from source data, such as in a geojson or shapefile
 
-The ``data`` section of the dataset creator config loosely follows the same structure as the 
+The ``data`` section of the dataset creator config loosely follows the same structure as the
 ``data`` section of the resulting dataset. Top-level keys inside the ``data`` section represent
-entity groups, and inside entity groups, most keys represent attributes. In this case there is 
+entity groups, and inside entity groups, most keys represent attributes. In this case there is
 a single entity group ``my_entities`` which will have an attribute ``my_attribute``. An entity
 group also requires a ``__meta__`` key with additional information on how to construct the entity
 group. Here, it has a ``source`` field, which identifies one of the source in the ``__sources__``
-field (see above). It also specifies a geometry, in this case ``points``. Other supported 
+field (see above). It also specifies a geometry, in this case ``points``. Other supported
 geometries are ``lines`` and ``polygons``. For more information about the supported geometries and
 how they map to common (geojson) feature types see :ref:`movici-geometries`. An entity group does
 not need to have a geometry, but most do.
 
 The ``my_attribute`` field will result in an attribute ``my_attribute`` for the ``my_entities``
-entity group. The data for this attribute (array) is taken from the source specified in the 
+entity group. The data for this attribute (array) is taken from the source specified in the
 ``__meta__`` field and the ``property`` field in ``my_attribute``.
 
 An attribute config may also specify a ``loaders`` key. See :ref:`dataset-creator-attribute-loaders`
-for more information about loaders and an overview of the supported loaders. In this case, the 
+for more information about loaders and an overview of the supported loaders. In this case, the
 ``int`` loader ensures that the resulting attribute data has an `integer` data type.
 
 
@@ -169,7 +169,7 @@ ID generation
 
 You may have noticed that the above example does not specify an ``id`` for the ``my_entities``
 entity group. In fact, specifying an ``id`` attribute is not allowed. ``id``\s are always generated
-for you by the dataset creator. This way, it can be always be ensured that ``id``\s are unique 
+for you by the dataset creator. This way, it can be always be ensured that ``id``\s are unique
 within a dataset. In case you need to keep track of which entity belongs to which source asset, you
 may use the ``reference`` attribute and fill it with a (unique) string belonging to the source
 asset.
@@ -222,7 +222,7 @@ to use the |create_dataset| function:
 
   Path('dataset.json').unlink(missing_ok=True)
   Path('source_a.csv').unlink(missing_ok=True)
-  
+
 .. testcode:: create-dataset
 
   import json
@@ -233,12 +233,12 @@ to use the |create_dataset| function:
       json.dump(dataset, file)
 
 
-This will use the config to create a dataset. It is also possible to supply additional 
+This will use the config to create a dataset. It is also possible to supply additional
 ``DataSources`` as using the ``sources`` arguments. These are then merged with any sources defined
 in the config's ``__sources__`` key:
 
 .. testcode:: create-dataset
-  
+
   import pandas as pd
   from movici_simulation_core.preprocessing import create_dataset, PandasDataSource
 
@@ -298,9 +298,9 @@ Attributes with array-like data types
 
 Movici datasets support array-like values for a single entity's attribute. However, supplying such
 data in source properties can be tricky. While geojson supports arrays as a feature property, the
-underlying machinery of the |code_DatasetCreator| (``geopandas`` and ``Fiona``) does not. Instead, 
+underlying machinery of the |code_DatasetCreator| (``geopandas`` and ``Fiona``) does not. Instead,
 array-like data may be supplied as a string, either as comma-separated-values or a json string.
-These can then be converted into their array-like data using respectively the ``csv`` or the 
+These can then be converted into their array-like data using respectively the ``csv`` or the
 ``json`` loader. For example, consider a geosjon feature with the following property:
 
 .. code-block::
@@ -311,7 +311,7 @@ These can then be converted into their array-like data using respectively the ``
     }
   }
 
-An entity group config that reads this property may look like this: 
+An entity group config that reads this property may look like this:
 
 .. code-block::
 
@@ -329,11 +329,11 @@ dataset will look like this:
 
 .. code-block::
 
-  { 
+  {
     "id": [0]
     "transport.layout": [[0,1,1,0]]
   }
-  
+
 Similarly, if the source property would be json-encoded (eg. ``"[0,1,1,0]"``), you would use the
 ``json`` loader. As a bonus, when loading json data, all values are converted to their respective
 data type automatically.
@@ -368,7 +368,7 @@ Linking entities by id
 
 Sometimes it is necessary to link entities together within a dataset, for example when specifying
 a network dataset, in which edges are connected to nodes (See also :ref:`movici-common-attributes`
-). These connections are done on an `id`\-basis, which means there is an attribute in an entity 
+). These connections are done on an `id`\-basis, which means there is an attribute in an entity
 group with integer values that reference `id`\s of other entities (in the same dataset). Since it
 is not allowed to specify the `id` for entities created using a dataset creator, the fact that a
 certain attribute references `id`\s in other entity groups, must be specified separately. Let's look
@@ -409,29 +409,29 @@ at an example dataset creator config:
     }
   }
 
-This config will interpret the source data in the following way: 
+This config will interpret the source data in the following way:
 
-* the ``nodes`` source is expected to have features with a ``ref`` property. Every feature must 
+* the ``nodes`` source is expected to have features with a ``ref`` property. Every feature must
   have unique ``ref`` property
 * the ``edges`` source is expected to have features with a ``from_node_ref`` and a ``to_node_ref``
   property. Values for these properties are expected to match a ``ref`` field of a feature in
   the ``nodes`` source. This information links a single edge to two nodes; in the attribute config
-  for ``topology.from_node_id`` and ``topology.to_node_id`` this link is specified using the 
+  for ``topology.from_node_id`` and ``topology.to_node_id`` this link is specified using the
   ``id_link`` field
 * After generating the ``id``\s for every entity, the dataset creator revisits attributes with an
   ``id_link``. It looks up the ``source`` for a linked entity group (in this case "node_entities")
-  and maps it to a unique ``id``, which it places in the linking attribute (in this case 
+  and maps it to a unique ``id``, which it places in the linking attribute (in this case
   ``topology.from_node_id`` and ``topology.to_node_id``). Note that it is not required to have
   the linking source property (ie: ``ref``) be available as an attribute in the linked entity
   group. (ie. ``node_entities``), it will read the data directly from the source.
 
-As an example, consider the following input data. it represents two points that are connected by 
-a linestring. Processing this data using the above dataset creator config will result in the 
+As an example, consider the following input data. it represents two points that are connected by
+a linestring. Processing this data using the above dataset creator config will result in the
 below output data:
 
 .. code-block::
   :caption: nodes.geojson
-  
+
   {
     "type": "FeatureCollection",
     "features": [
@@ -460,7 +460,7 @@ below output data:
 
 .. code-block::
   :caption: edges.geojson
-  
+
   {
     "type": "FeatureCollection",
     "features": [
@@ -516,7 +516,7 @@ array of entries:
     }
   }
 
-The values of "ref" and "other_ref" must be unique within their respective source, but 
+The values of "ref" and "other_ref" must be unique within their respective source, but
 there may be duplicates between the sources
 
 
@@ -536,7 +536,7 @@ It is possible to create entities in an entity group that do not have any attrib
   }
 
 In case there is a source, the dataset creator simply looks at the number of features of the source
-and creates the same amount of entities. If there is no source available, you can set a fixed 
+and creates the same amount of entities. If there is no source available, you can set a fixed
 number of entities using the ``count`` field:
 
 
@@ -555,8 +555,8 @@ Undefined attribute values and dealing with NaN
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 A property does not have to be defined for every feature within a source. In case a property is not
-defined, this results in a ``null`` / ``None`` in the dataset for that entity. For ``bool`` and 
-``str`` data types this works as expected. However, for ``int`` and ``float`` there are a few 
+defined, this results in a ``null`` / ``None`` in the dataset for that entity. For ``bool`` and
+``str`` data types this works as expected. However, for ``int`` and ``float`` there are a few
 caveats
 
 The default data source uses ``pandas`` under the hood. Any ``None`` in a ``float`` property array
@@ -567,7 +567,7 @@ values to a non-``NaN`` |Special| value.
 
 When ``None`` exists within a property of type ``int``, ``pandas`` converts the property array to
 ``float`` and inserts these ``None`` values to ``NaN``. This means that in case you have ``None``
-values for an ``int`` property, it is recommended to add the ``int`` loader to your attribute 
+values for an ``int`` property, it is recommended to add the ``int`` loader to your attribute
 config to ensure the correct data type.
 
 
@@ -576,7 +576,7 @@ config to ensure the correct data type.
 Preprocess data and custom data sources
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Sometimes, it is necessary to perform additional preprocessing to the geospatial data before 
+Sometimes, it is necessary to perform additional preprocessing to the geospatial data before
 converting it to a Movici dataset. The preferred, and most flexible, way to do this is to first
 read the data in a ``geopandas.GeoDataFrame`` and perform any operations you want directly on the
 dataframe. You can then hand over the dataframe to a |code_DatasetCreator| and use it to create the
@@ -666,9 +666,9 @@ DatasetCreatorMetaData
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | ``type``: ``object``
 
-``properties``: 
+``properties``:
   | ``crs``: ``string`` or ``integer`` indicating the Coordinate Reference System. Can be anything
-      that is supported by ``geopandas`` as a valid CRS identifier. Default: ``EPSG:28992`` 
+      that is supported by ``geopandas`` as a valid CRS identifier. Default: ``EPSG:28992``
       (Amersfoort/RD new)
 
 .. _DatasetCreatorDatasetSources:
@@ -677,7 +677,7 @@ DatasetCreatorDatasetSources
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 | ``type``: ``object``
 
-``additionalProperties``: 
+``additionalProperties``:
   | `keys`: Source name
   | `values`: :ref:`DatasetCreatorSource`
 
@@ -770,7 +770,7 @@ DatasetCreatorEntityGroup
 ``properties``:
   | ``__meta__``: :ref:`DatasetCreatorEntityGroupMeta`
 
-``additionalProperties``: 
+``additionalProperties``:
   | `keys`: attribute names that will reflect attributes in the dataset
   | `values`: :ref:`DatasetCreatorAttribute`
 
@@ -849,4 +849,3 @@ DatasetCreatorAttributeLoaders
 | ``type``: ``array``
 | ``items``: ``string``
 | ``values``: ``json``, ``csv``, ``bool``, ``int``, ``float``, ``str``
-

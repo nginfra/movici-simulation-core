@@ -1,12 +1,12 @@
 
 
-ae 
+ae
 ===
 
 
 
 
-collections 
+collections
 ------------
 
 .. automodule:: movici_simulation_core.integrations.ae.collections
@@ -16,7 +16,7 @@ collections
 
 
 
-id\_generator 
+id\_generator
 --------------
 
 .. automodule:: movici_simulation_core.integrations.ae.id_generator
@@ -26,7 +26,7 @@ id\_generator
 
 
 
-patches 
+patches
 --------
 
 .. automodule:: movici_simulation_core.integrations.ae.patches
@@ -36,7 +36,7 @@ patches
 
 
 
-point\_generator 
+point\_generator
 -----------------
 
 .. automodule:: movici_simulation_core.integrations.ae.point_generator
@@ -46,11 +46,10 @@ point\_generator
 
 
 
-project 
+project
 --------
 
 .. automodule:: movici_simulation_core.integrations.ae.project
    :members:
    :show-inheritance:
    :undoc-members:
-

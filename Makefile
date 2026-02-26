@@ -25,7 +25,7 @@ mypy:
 	- mypy $(MODULE_NAME)
 
 lint: ruff toml-check mypy
-	
+
 test-all: coverage lint
 
 level=patch

@@ -1,6 +1,6 @@
 
 
-models 
+models
 =======
 
 Subpackages
@@ -28,4 +28,3 @@ Subpackages
    movici_simulation_core.models.traffic_kpi
    movici_simulation_core.models.udf_model
    movici_simulation_core.models.unit_conversions
-

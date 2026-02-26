@@ -50,7 +50,7 @@ are already defined in the system. The following tabel gives an overview of thes
   * - ``geometry.linestring_2d``
     - ``float``, ``(2,)`` , ``csr``
     - ``m`` or ``deg`` depending on CRS
-    - Geometry of a 2D LineString 
+    - Geometry of a 2D LineString
   * - ``geometry.linestring_3d``
     - ``float``, ``(3,)`` , ``csr``
     - ``m`` or ``deg`` depending on CRS
@@ -70,19 +70,19 @@ are already defined in the system. The following tabel gives an overview of thes
   * - ``grid.grid_points``
     - ``int``, ``csr``
     - \-
-    - Used in grid-type datasets where every entity represents a grid cell. Values refer to the 
+    - Used in grid-type datasets where every entity represents a grid cell. Values refer to the
       ``id`` of entities that form the vertices for each grid cell. Those entities are expected to
       have a point geometry (``geometry.x`` and ``geometry.y``)
 
   * - ``topology.from_node_id``
     - ``int``
     - \-
-    - Used in network-type datasets to connect edges to nodes. The value refers to the ``id`` of 
+    - Used in network-type datasets to connect edges to nodes. The value refers to the ``id`` of
       an entity that acts as a node. Marks the beginning of a (directional) edge.
   * - ``topology.to_node_id``
     - ``int``
     - \-
-    - Used in network-type datasets to connect edges to nodes. The value refers to the ``id`` of 
+    - Used in network-type datasets to connect edges to nodes. The value refers to the ``id`` of
       an entity that acts as a node. Marks the end of a (directional) edge.
   * - ``shape.area``
     - ``float``
@@ -96,7 +96,7 @@ are already defined in the system. The following tabel gives an overview of thes
     - ``int``
     - \-
 
-    - Arbitrary reference that connects this entity to an entity that may reside in a different 
+    - Arbitrary reference that connects this entity to an entity that may reside in a different
       dataset. See also ``connection.from_dataset``
   * - ``connection.from_ids``
     - ``int`` , ``csr``
@@ -109,7 +109,7 @@ are already defined in the system. The following tabel gives an overview of thes
     - ``int``
     - \-
 
-    - Arbitrary reference that connects this entity to an entity that may reside in a different 
+    - Arbitrary reference that connects this entity to an entity that may reside in a different
       dataset. See also ``connection.to_dataset``
   * - ``connection.to_ids``
     - ``int`` , ``csr``
@@ -123,7 +123,7 @@ are already defined in the system. The following tabel gives an overview of thes
     - \-
 
     - a reference to a dataset in which the ``from`` connected entities reside. May be the same
-      dataset as the connecting entity's, or a different one. Can also be used without an 
+      dataset as the connecting entity's, or a different one. Can also be used without an
       accompanying ``from_id`` / ``from_reference`` attribute, in which case a model may create
       a connection itself based on proximity using the ``movici-geo-query`` spatial indexing tools
   * - ``connection.to_dataset``
@@ -131,16 +131,16 @@ are already defined in the system. The following tabel gives an overview of thes
     - \-
 
     - a reference to a dataset in which the ``to`` connected entities reside. May be the same
-      dataset as the connecting entity's, or a different one. Can also be used without an 
+      dataset as the connecting entity's, or a different one. Can also be used without an
       accompanying ``from_id`` / ``from_reference`` attribute, in which case a model may create
       a connection itself based on proximity using the ``movici-geo-query`` spatial indexing tools
   * - ``connection.from_reference``
     - ``str``
     - \-
 
-    - Arbitrary reference that connects this entity to an entity that may reside in a different 
-      dataset. See also ``connection.from_dataset``. The connection is defined based on the 
-      ``reference`` field of the connected entity. This may be used as an alternative as 
+    - Arbitrary reference that connects this entity to an entity that may reside in a different
+      dataset. See also ``connection.from_dataset``. The connection is defined based on the
+      ``reference`` field of the connected entity. This may be used as an alternative as
       ``connection.from_id`` in case the connected entity's ``id`` attribute is not known
       beforehand.
   * - ``connection.from_references``
@@ -156,9 +156,9 @@ are already defined in the system. The following tabel gives an overview of thes
     - ``str``
     - \-
 
-    - Arbitrary reference that connects this entity to an entity that may reside in a different 
-      dataset. See also ``connection.to_dataset``. The connection is defined based on the 
-      ``reference`` field of the connected entity. This may be used as an alternative as 
+    - Arbitrary reference that connects this entity to an entity that may reside in a different
+      dataset. See also ``connection.to_dataset``. The connection is defined based on the
+      ``reference`` field of the connected entity. This may be used as an alternative as
       ``connection.to_id`` in case the connected entity's ``id`` attribute is not known
       beforehand.
   * - ``connection.to_references``

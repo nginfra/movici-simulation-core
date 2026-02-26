@@ -1,12 +1,12 @@
 
 
-data\_collector 
+data\_collector
 ================
 
 
 
 
-concurrent 
+concurrent
 -----------
 
 .. automodule:: movici_simulation_core.models.data_collector.concurrent
@@ -16,7 +16,7 @@ concurrent
 
 
 
-data\_collector 
+data\_collector
 ----------------
 
 .. automodule:: movici_simulation_core.models.data_collector.data_collector
@@ -26,7 +26,7 @@ data\_collector
 
 
 
-sqlite\_strategy 
+sqlite\_strategy
 -----------------
 
 .. automodule:: movici_simulation_core.models.data_collector.sqlite_strategy
@@ -36,11 +36,10 @@ sqlite\_strategy
 
 
 
-strategy 
+strategy
 ---------
 
 .. automodule:: movici_simulation_core.models.data_collector.strategy
    :members:
    :show-inheritance:
    :undoc-members:
-

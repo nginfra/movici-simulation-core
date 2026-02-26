@@ -1,6 +1,6 @@
 
 
-movici\_simulation\_core 
+movici\_simulation\_core
 =========================
 
 Subpackages
@@ -26,7 +26,7 @@ Subpackages
 
 
 
-attributes 
+attributes
 -----------
 
 .. automodule:: movici_simulation_core.attributes
@@ -36,7 +36,7 @@ attributes
 
 
 
-csr 
+csr
 ----
 
 .. automodule:: movici_simulation_core.csr
@@ -46,7 +46,7 @@ csr
 
 
 
-exceptions 
+exceptions
 -----------
 
 .. automodule:: movici_simulation_core.exceptions
@@ -56,7 +56,7 @@ exceptions
 
 
 
-messages 
+messages
 ---------
 
 .. automodule:: movici_simulation_core.messages
@@ -66,7 +66,7 @@ messages
 
 
 
-settings 
+settings
 ---------
 
 .. automodule:: movici_simulation_core.settings
@@ -76,7 +76,7 @@ settings
 
 
 
-simulation 
+simulation
 -----------
 
 .. automodule:: movici_simulation_core.simulation
@@ -86,7 +86,7 @@ simulation
 
 
 
-types 
+types
 ------
 
 .. automodule:: movici_simulation_core.types
@@ -96,11 +96,10 @@ types
 
 
 
-validate 
+validate
 ---------
 
 .. automodule:: movici_simulation_core.validate
    :members:
    :show-inheritance:
    :undoc-members:
-
