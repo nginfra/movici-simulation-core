@@ -44,19 +44,13 @@ class TestComponentIdManager:
         np.testing.assert_array_equal(node_ids, [100, 200])
         np.testing.assert_array_equal(line_ids, [400, 300])
 
-    def test_get_pgm_ids_raises_on_unregistered_type(self):
-        """Test that get_pgm_ids raises for unregistered component type."""
+    @pytest.mark.parametrize("method", ["get_pgm_ids", "get_movici_ids"])
+    def test_raises_on_unregistered_type(self, method):
+        """Test that lookup methods raise for unregistered component type."""
         manager = ComponentIdManager()
 
         with pytest.raises(ValueError, match="not registered"):
-            manager.get_pgm_ids("unknown", np.array([1]))
-
-    def test_get_movici_ids_raises_on_unregistered_type(self):
-        """Test that get_movici_ids raises for unregistered component type."""
-        manager = ComponentIdManager()
-
-        with pytest.raises(ValueError, match="not registered"):
-            manager.get_movici_ids("unknown", np.array([1]))
+            getattr(manager, method)("unknown", np.array([1]))
 
     def test_clear_resets_counter_and_mappings(self):
         """Test that clear resets the global counter and all mappings."""

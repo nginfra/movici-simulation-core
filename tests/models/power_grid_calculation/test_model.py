@@ -496,9 +496,9 @@ class TestStateEstimation:
             "calculation_type": "state_estimation",
         }
 
-    @pytest.fixture
-    def network_with_voltage_power_sensors(self):
-        """Simple network with voltage and power sensors."""
+    @pytest.fixture(params=["power_sensors", "current_sensor"])
+    def sensor_network(self, request):
+        """Network with voltage sensors + either power or current sensors."""
         data = _simple_network_data()
         data["electrical_voltage_sensor_entities"] = {
             "id": [80, 81],
@@ -514,61 +514,24 @@ class TestStateEstimation:
             "electrical.measured_active_power": [100000.0],
             "electrical.measured_reactive_power": [0.0],
         }
+        if request.param == "current_sensor":
+            data["electrical_current_sensor_entities"] = {
+                "id": [85],
+                "connection.to_id": [30],  # references the line
+                "electrical.measured_terminal_type": [0],  # branch_from
+                "electrical.current_sigma": [1.0],
+                "electrical.measured_current": [10.0],
+                "electrical.angle_measurement_type": [0],  # local
+                "electrical.measured_current_angle": [0.5],  # rad
+                "electrical.current_angle_sigma": [0.1],  # rad
+            }
         return get_dataset(DATASET_NAME, "electrical_network", data)
 
-    @pytest.fixture
-    def network_with_current_sensor(self):
-        """Simple network with voltage, power, and current sensors."""
-        data = _simple_network_data()
-        data["electrical_voltage_sensor_entities"] = {
-            "id": [80, 81],
-            "connection.to_id": [1, 2],
-            "electrical.voltage_sigma": [100.0, 100.0],
-            "electrical.measured_voltage": [10000.0, 9900.0],
-        }
-        data["electrical_power_sensor_entities"] = {
-            "id": [90],
-            "connection.to_id": [20],  # references the load
-            "electrical.measured_terminal_type": [4],  # sym_load
-            "electrical.power_sigma": [10000.0],
-            "electrical.measured_active_power": [100000.0],
-            "electrical.measured_reactive_power": [0.0],
-        }
-        data["electrical_current_sensor_entities"] = {
-            "id": [85],
-            "connection.to_id": [30],  # references the line
-            "electrical.measured_terminal_type": [0],  # branch_from
-            "electrical.current_sigma": [1.0],
-            "electrical.measured_current": [10.0],
-            "electrical.angle_measurement_type": [0],  # local
-            "electrical.measured_current_angle": [0.5],  # rad
-            "electrical.current_angle_sigma": [0.1],  # rad
-        }
-        return get_dataset(DATASET_NAME, "electrical_network", data)
-
-    def test_state_estimation_with_power_sensors(
-        self, model_config, network_with_voltage_power_sensors, global_schema
+    def test_state_estimation_produces_finite_voltages(
+        self, model_config, sensor_network, global_schema
     ):
-        """State estimation produces voltage results using voltage+power sensors."""
-        init_data = [{"name": DATASET_NAME, "data": network_with_voltage_power_sensors}]
-        model = Model(model_config)
-        with ModelTester(model, schema=global_schema) as tester:
-            for ds in init_data:
-                tester.add_init_data(ds["name"], ds["data"])
-            tester.initialize()
-            result, _ = tester.update(0, None)
-
-        nodes = result[DATASET_NAME]["electrical_node_entities"]
-        assert len(nodes["electrical.voltage_pu"]) == 2
-        # Source node should be near 1.0 pu
-        source_idx = nodes["id"].index(1)
-        assert abs(nodes["electrical.voltage_pu"][source_idx] - 1.0) < 0.05
-
-    def test_state_estimation_with_current_sensor(
-        self, model_config, network_with_current_sensor, global_schema
-    ):
-        """State estimation produces results using voltage+current sensors."""
-        init_data = [{"name": DATASET_NAME, "data": network_with_current_sensor}]
+        """State estimation produces finite voltage results for all sensor configurations."""
+        init_data = [{"name": DATASET_NAME, "data": sensor_network}]
         model = Model(model_config)
         with ModelTester(model, schema=global_schema) as tester:
             for ds in init_data:
@@ -580,6 +543,9 @@ class TestStateEstimation:
         assert len(nodes["electrical.voltage_pu"]) == 2
         for v in nodes["electrical.voltage_pu"]:
             assert np.isfinite(v)
+        # Source node should be near 1.0 pu
+        source_idx = nodes["id"].index(1)
+        assert abs(nodes["electrical.voltage_pu"][source_idx] - 1.0) < 0.05
 
 
 class TestShunt:
@@ -791,21 +757,22 @@ class TestThreeWindingTransformer:
     def init_data(self, network_with_3w_trafo):
         return [{"name": DATASET_NAME, "data": network_with_3w_trafo}]
 
-    def test_3w_trafo_produces_current_results(self, tester):
-        """Three-winding transformer should produce per-side current results."""
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "electrical.current_1",
+            "electrical.current_2",
+            "electrical.current_3",
+            "electrical.power_1",
+            "electrical.power_2",
+            "electrical.power_3",
+        ],
+    )
+    def test_3w_trafo_produces_results(self, tester, field):
+        """Three-winding transformer should produce nonzero per-side results."""
         result, _ = tester.update(0, None)
         t3w = result[DATASET_NAME]["electrical_three_winding_transformer_entities"]
-        assert t3w["electrical.current_1"][0] > 0
-        assert t3w["electrical.current_2"][0] > 0
-        assert t3w["electrical.current_3"][0] > 0
-
-    def test_3w_trafo_produces_power_results(self, tester):
-        """Three-winding transformer should produce per-side power results."""
-        result, _ = tester.update(0, None)
-        t3w = result[DATASET_NAME]["electrical_three_winding_transformer_entities"]
-        assert t3w["electrical.power_1"][0] != 0
-        assert t3w["electrical.power_2"][0] != 0
-        assert t3w["electrical.power_3"][0] != 0
+        assert t3w[field][0] != 0
 
     def test_3w_trafo_voltage_transformation(self, tester):
         """Nodes connected via 3W trafo should have proper voltage levels."""
@@ -908,18 +875,16 @@ class TestShortCircuitFaultOutput:
     def init_data(self, network_with_fault):
         return [{"name": DATASET_NAME, "data": network_with_fault}]
 
-    def test_fault_current_output(self, tester):
-        """Fault entity should have fault current result."""
+    @pytest.mark.parametrize(
+        "field",
+        ["electrical.fault_current", "electrical.fault_current_angle"],
+    )
+    def test_fault_output_field(self, tester, field):
+        """Fault entity should have finite, nonzero result for each output field."""
         result, _ = tester.update(0, None)
         faults = result[DATASET_NAME]["electrical_fault_entities"]
-        assert faults["electrical.fault_current"][0] > 0
-
-    def test_fault_current_angle_output(self, tester):
-        """Fault entity should have fault current angle result."""
-        result, _ = tester.update(0, None)
-        faults = result[DATASET_NAME]["electrical_fault_entities"]
-        # Angle should be finite (not NaN)
-        assert np.isfinite(faults["electrical.fault_current_angle"][0])
+        assert np.isfinite(faults[field][0])
+        assert faults[field][0] != 0
 
 
 class TestTapRegulator:

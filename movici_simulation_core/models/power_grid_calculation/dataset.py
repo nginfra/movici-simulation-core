@@ -127,7 +127,6 @@ class ElectricalNodeEntity(PointEntity):
 
     # Input attributes
     rated_voltage = field(Electrical_RatedVoltage, flags=INIT)
-    status = field(Electrical_Status, flags=OPT)
 
     # Output attributes
     voltage_pu = field(Electrical_VoltagePU, flags=PUB)
@@ -152,7 +151,6 @@ class ElectricalVirtualNodeEntity(EntityGroup):
 
     # Input attributes
     rated_voltage = field(Electrical_RatedVoltage, flags=INIT)
-    status = field(Electrical_Status, flags=OPT)
 
     # Output attributes (same as regular nodes)
     voltage_pu = field(Electrical_VoltagePU, flags=PUB)

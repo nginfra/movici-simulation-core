@@ -16,14 +16,10 @@ from enum import IntEnum
 import numpy as np
 import power_grid_model as pgm
 
-from movici_simulation_core.core.entity_group import EntityGroup
-
 from .id_generator import ComponentIdManager
 
 if t.TYPE_CHECKING:
     from movici_simulation_core.models.power_grid_calculation.dataset import PowerGridNetwork
-
-T = t.TypeVar("T", bound=EntityGroup)
 
 
 # =========================================================================
@@ -93,12 +89,31 @@ def _get_status_array(attr, default: int = 1) -> np.ndarray:
     return np.full(len(attr), default, dtype=np.int8)
 
 
+def _resolve_measured_objects(
+    id_manager: ComponentIdManager, obj_ids: np.ndarray, term_types: np.ndarray
+) -> np.ndarray:
+    """Resolve measured_object IDs to PGM IDs based on terminal type.
+
+    Groups by terminal type and uses vectorized resolve_ids for each group.
+    """
+    result = np.full(len(obj_ids), -1, dtype=np.int32)
+    for term_type, comp_types in _TERMINAL_TYPE_TO_COMPONENTS.items():
+        mask = term_types == term_type
+        if not np.any(mask):
+            continue
+        result[mask] = id_manager.resolve_ids(comp_types, obj_ids[mask])
+    if np.any(result == -1):
+        bad = obj_ids[result == -1]
+        raise ValueError(f"Cannot resolve measured_object IDs: {bad}")
+    return result
+
+
 # =========================================================================
 # Base processor
 # =========================================================================
 
 
-class PGMElementProcessor(t.Generic[T]):
+class PGMElementProcessor:
     """Base class for PGM element processors.
 
     Each processor handles one Movici entity type and knows how to build
@@ -112,7 +127,7 @@ class PGMElementProcessor(t.Generic[T]):
 
     PGM_COMPONENT: str
 
-    def __init__(self, wrapper: PowerGridWrapper, entity_group: T):
+    def __init__(self, wrapper: PowerGridWrapper, entity_group):
         self.wrapper = wrapper
         self.entity_group = entity_group
 
@@ -128,6 +143,22 @@ class PGMElementProcessor(t.Generic[T]):
 
     def write_results(self, result: dict):
         pass
+
+    def _get_result_slice(self, result: dict) -> tuple[np.ndarray, np.ndarray] | None:
+        """Extract the result slice relevant to this processor's entity group.
+
+        :returns: ``(sliced_result, entity_indices)`` or ``None`` if no results
+            match this processor's entities.
+        """
+        comp_result = result.get(self.PGM_COMPONENT)
+        if comp_result is None:
+            return None
+        result_ids = self.id_manager.get_movici_ids(self.PGM_COMPONENT, comp_result["id"])
+        mask = np.isin(result_ids, self.entity_group.index.ids)
+        if not np.any(mask):
+            return None
+        indices = self.entity_group.get_indices(result_ids[mask])
+        return comp_result[mask], indices
 
 
 # =========================================================================
@@ -149,30 +180,20 @@ class NodeProcessor(PGMElementProcessor):
         return arr
 
     def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
         eg = self.entity_group
-        if not len(eg):
-            return
-        node_result = result.get("node")
-        if node_result is None:
-            return
-        result_ids = self.id_manager.get_movici_ids("node", node_result["id"])
-        mask = np.isin(result_ids, eg.index.ids)
-        if not np.any(mask):
-            return
-        indices = eg.get_indices(result_ids[mask])
-        eg.voltage_pu[indices] = _scalar(node_result["u_pu"][mask])
-        eg.voltage_angle[indices] = _scalar(node_result["u_angle"][mask])
-        eg.voltage[indices] = _scalar(node_result["u"][mask])
+        eg.voltage_pu[indices] = _scalar(comp_result["u_pu"])
+        eg.voltage_angle[indices] = _scalar(comp_result["u_angle"])
+        eg.voltage[indices] = _scalar(comp_result["u"])
         # p, q are not available in short circuit results
-        if "p" in node_result.dtype.names:
-            eg.active_power[indices] = node_result["p"][mask]
-            eg.reactive_power[indices] = node_result["q"][mask]
-
-
-class VirtualNodeProcessor(NodeProcessor):
-    """Same as NodeProcessor but for virtual node entities."""
-
-    pass
+        if "p" in comp_result.dtype.names:
+            eg.active_power[indices] = comp_result["p"]
+            eg.reactive_power[indices] = comp_result["q"]
 
 
 # =========================================================================
@@ -206,38 +227,26 @@ class LineProcessor(PGMElementProcessor):
         return arr
 
     def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
         eg = self.entity_group
-        if not len(eg):
-            return
-        line_result = result.get("line")
-        if line_result is None:
-            return
-        result_ids = self.id_manager.get_movici_ids("line", line_result["id"])
-        mask = np.isin(result_ids, eg.index.ids)
-        if not np.any(mask):
-            return
-        indices = eg.get_indices(result_ids[mask])
-        eg.current_from[indices] = _scalar(line_result["i_from"][mask])
-        eg.current_to[indices] = _scalar(line_result["i_to"][mask])
+        eg.current_from[indices] = _scalar(comp_result["i_from"])
+        eg.current_to[indices] = _scalar(comp_result["i_to"])
         # p, q, loading are not available in short circuit results
-        if "p_from" in line_result.dtype.names:
-            eg.power_from[indices] = line_result["p_from"][mask]
-            eg.power_to[indices] = line_result["p_to"][mask]
-            eg.reactive_power_from[indices] = line_result["q_from"][mask]
-            eg.reactive_power_to[indices] = line_result["q_to"][mask]
-            eg.loading[indices] = line_result["loading"][mask]
+        if "p_from" in comp_result.dtype.names:
+            eg.power_from[indices] = comp_result["p_from"]
+            eg.power_to[indices] = comp_result["p_to"]
+            eg.reactive_power_from[indices] = comp_result["q_from"]
+            eg.reactive_power_to[indices] = comp_result["q_to"]
+            eg.loading[indices] = comp_result["loading"]
 
 
-class CableProcessor(LineProcessor):
-    """Same as LineProcessor but for underground cable entities."""
-
-    pass
-
-
-class LinkProcessor(PGMElementProcessor):
+class LinkProcessor(LineProcessor):
     """Converts zero-impedance links to minimal-impedance PGM lines."""
-
-    PGM_COMPONENT = "line"
 
     def build_input_array(self):
         eg = self.entity_group
@@ -260,27 +269,6 @@ class LinkProcessor(PGMElementProcessor):
         arr["tan1"] = np.zeros(n)
         arr["i_n"] = np.full(n, np.nan)
         return arr
-
-    def write_results(self, result: dict):
-        eg = self.entity_group
-        if not len(eg):
-            return
-        line_result = result.get("line")
-        if line_result is None:
-            return
-        result_ids = self.id_manager.get_movici_ids("line", line_result["id"])
-        mask = np.isin(result_ids, eg.index.ids)
-        if not np.any(mask):
-            return
-        indices = eg.get_indices(result_ids[mask])
-        eg.current_from[indices] = _scalar(line_result["i_from"][mask])
-        eg.current_to[indices] = _scalar(line_result["i_to"][mask])
-        if "p_from" in line_result.dtype.names:
-            eg.power_from[indices] = line_result["p_from"][mask]
-            eg.power_to[indices] = line_result["p_to"][mask]
-            eg.reactive_power_from[indices] = line_result["q_from"][mask]
-            eg.reactive_power_to[indices] = line_result["q_to"][mask]
-            eg.loading[indices] = line_result["loading"][mask]
 
 
 class TransformerProcessor(PGMElementProcessor):
@@ -319,23 +307,19 @@ class TransformerProcessor(PGMElementProcessor):
         return arr
 
     def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
         eg = self.entity_group
-        if not len(eg):
-            return
-        trafo_result = result.get("transformer")
-        if trafo_result is None:
-            return
-        result_ids = self.id_manager.get_movici_ids("transformer", trafo_result["id"])
-        mask = np.isin(result_ids, eg.index.ids)
-        if not np.any(mask):
-            return
-        indices = eg.get_indices(result_ids[mask])
-        eg.current_from[indices] = _scalar(trafo_result["i_from"][mask])
-        eg.current_to[indices] = _scalar(trafo_result["i_to"][mask])
-        if "p_from" in trafo_result.dtype.names:
-            eg.power_from[indices] = trafo_result["p_from"][mask]
-            eg.power_to[indices] = trafo_result["p_to"][mask]
-            eg.loading[indices] = trafo_result["loading"][mask]
+        eg.current_from[indices] = _scalar(comp_result["i_from"])
+        eg.current_to[indices] = _scalar(comp_result["i_to"])
+        if "p_from" in comp_result.dtype.names:
+            eg.power_from[indices] = comp_result["p_from"]
+            eg.power_to[indices] = comp_result["p_to"]
+            eg.loading[indices] = comp_result["loading"]
 
 
 class ThreeWindingTransformerProcessor(PGMElementProcessor):
@@ -564,22 +548,11 @@ class PowerSensorProcessor(PGMElementProcessor):
             return None
         pgm_ids = self.id_manager.register_ids("sym_power_sensor", eg.index.ids)
 
-        # Resolve measured_object IDs based on terminal type
-        measured_pgm = np.zeros(len(eg), dtype=np.int32)
-        for i, (obj_id, term_type) in enumerate(
-            zip(eg.measured_object_id.array, eg.measured_terminal_type.array)
-        ):
-            component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
-            for comp_type in component_types:
-                try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
-                    break
-                except (ValueError, KeyError):
-                    continue
-            else:
-                raise ValueError(
-                    f"Cannot find measured_object {obj_id} for terminal_type {term_type}"
-                )
+        measured_pgm = _resolve_measured_objects(
+            self.id_manager,
+            eg.measured_object_id.array,
+            eg.measured_terminal_type.array,
+        )
 
         arr = pgm.initialize_array("input", "sym_power_sensor", len(eg))
         arr["id"] = pgm_ids
@@ -600,22 +573,11 @@ class CurrentSensorProcessor(PGMElementProcessor):
             return None
         pgm_ids = self.id_manager.register_ids("sym_current_sensor", eg.index.ids)
 
-        # Resolve measured_object IDs based on terminal type (same as power sensor)
-        measured_pgm = np.zeros(len(eg), dtype=np.int32)
-        for i, (obj_id, term_type) in enumerate(
-            zip(eg.measured_object_id.array, eg.measured_terminal_type.array)
-        ):
-            component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
-            for comp_type in component_types:
-                try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
-                    break
-                except (ValueError, KeyError):
-                    continue
-            else:
-                raise ValueError(
-                    f"Cannot find measured_object {obj_id} for terminal_type {term_type}"
-                )
+        measured_pgm = _resolve_measured_objects(
+            self.id_manager,
+            eg.measured_object_id.array,
+            eg.measured_terminal_type.array,
+        )
 
         arr = pgm.initialize_array("input", "sym_current_sensor", len(eg))
         arr["id"] = pgm_ids
@@ -684,20 +646,10 @@ class TapRegulatorProcessor(PGMElementProcessor):
             return None
         pgm_ids = self.id_manager.register_ids("transformer_tap_regulator", eg.index.ids)
 
-        # Resolve regulated_object_id to transformer PGM ID
-        regulated_pgm = np.zeros(len(eg), dtype=np.int32)
-        for i, obj_id in enumerate(eg.regulated_object_id.array):
-            # Try both transformer and three_winding_transformer
-            for comp_type in ("transformer", "three_winding_transformer"):
-                try:
-                    regulated_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[
-                        0
-                    ]
-                    break
-                except (ValueError, KeyError):
-                    continue
-            else:
-                raise ValueError(f"Cannot find regulated transformer for ID {obj_id}")
+        regulated_pgm = self.id_manager.resolve_ids(
+            ["transformer", "three_winding_transformer"],
+            eg.regulated_object_id.array,
+        )
 
         arr = pgm.initialize_array("input", "transformer_tap_regulator", len(eg))
         arr["id"] = pgm_ids
@@ -762,9 +714,9 @@ class PowerGridWrapper:
         # 4. Sensors, faults, regulators
         processor_specs = [
             NodeProcessor(self, dataset.nodes),
-            VirtualNodeProcessor(self, dataset.virtual_nodes),
+            NodeProcessor(self, dataset.virtual_nodes),
             LineProcessor(self, dataset.lines),
-            CableProcessor(self, dataset.cables),
+            LineProcessor(self, dataset.cables),
             LinkProcessor(self, dataset.links),
             TransformerProcessor(self, dataset.transformers),
             ThreeWindingTransformerProcessor(self, dataset.three_winding_transformers),
