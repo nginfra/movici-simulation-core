@@ -392,9 +392,7 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         t3w_result = result.get("three_winding_transformer")
         if t3w_result is None:
             return
-        result_ids = self.id_manager.get_movici_ids(
-            "three_winding_transformer", t3w_result["id"]
-        )
+        result_ids = self.id_manager.get_movici_ids("three_winding_transformer", t3w_result["id"])
         indices = eg.get_indices(result_ids)
         eg.current_1[indices] = _scalar(t3w_result["i_1"])
         eg.current_2[indices] = _scalar(t3w_result["i_2"])
@@ -574,9 +572,7 @@ class PowerSensorProcessor(PGMElementProcessor):
             component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
             for comp_type in component_types:
                 try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(
-                        comp_type, np.array([obj_id])
-                    )[0]
+                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
                     break
                 except (ValueError, KeyError):
                     continue
@@ -612,9 +608,7 @@ class CurrentSensorProcessor(PGMElementProcessor):
             component_types = _TERMINAL_TYPE_TO_COMPONENTS.get(int(term_type), [])
             for comp_type in component_types:
                 try:
-                    measured_pgm[i] = self.id_manager.get_pgm_ids(
-                        comp_type, np.array([obj_id])
-                    )[0]
+                    measured_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[0]
                     break
                 except (ValueError, KeyError):
                     continue
@@ -696,16 +690,14 @@ class TapRegulatorProcessor(PGMElementProcessor):
             # Try both transformer and three_winding_transformer
             for comp_type in ("transformer", "three_winding_transformer"):
                 try:
-                    regulated_pgm[i] = self.id_manager.get_pgm_ids(
-                        comp_type, np.array([obj_id])
-                    )[0]
+                    regulated_pgm[i] = self.id_manager.get_pgm_ids(comp_type, np.array([obj_id]))[
+                        0
+                    ]
                     break
                 except (ValueError, KeyError):
                     continue
             else:
-                raise ValueError(
-                    f"Cannot find regulated transformer for ID {obj_id}"
-                )
+                raise ValueError(f"Cannot find regulated transformer for ID {obj_id}")
 
         arr = pgm.initialize_array("input", "transformer_tap_regulator", len(eg))
         arr["id"] = pgm_ids
@@ -731,9 +723,7 @@ class TapRegulatorProcessor(PGMElementProcessor):
             return
         if "tap_pos" not in reg_result.dtype.names:
             return
-        result_ids = self.id_manager.get_movici_ids(
-            "transformer_tap_regulator", reg_result["id"]
-        )
+        result_ids = self.id_manager.get_movici_ids("transformer_tap_regulator", reg_result["id"])
         indices = eg.get_indices(result_ids)
         eg.tap_position[indices] = reg_result["tap_pos"]
 
@@ -795,9 +785,7 @@ class PowerGridWrapper:
                 self.processors.append(proc)
                 comp = proc.PGM_COMPONENT
                 if comp in self.input_data:
-                    self.input_data[comp] = np.concatenate(
-                        [self.input_data[comp], arr]
-                    )
+                    self.input_data[comp] = np.concatenate([self.input_data[comp], arr])
                 else:
                     self.input_data[comp] = arr
 

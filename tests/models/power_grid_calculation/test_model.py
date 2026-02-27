@@ -8,7 +8,6 @@ from movici_simulation_core.models.power_grid_calculation.attributes import Powe
 from movici_simulation_core.testing.model_tester import ModelTester
 from tests.models.conftest import get_dataset
 
-
 DATASET_NAME = "test_grid"
 
 
@@ -102,7 +101,9 @@ class TestPowerFlow:
         nodes = result[DATASET_NAME]["electrical_node_entities"]
         source_idx = nodes["id"].index(1)
         load_idx = nodes["id"].index(2)
-        assert nodes["electrical.voltage_pu"][load_idx] < nodes["electrical.voltage_pu"][source_idx]
+        assert (
+            nodes["electrical.voltage_pu"][load_idx] < nodes["electrical.voltage_pu"][source_idx]
+        )
 
     def test_line_results(self, tester):
         """Line results include current and power flow."""
@@ -394,7 +395,7 @@ class TestMultipleSources:
         """Both virtual nodes should be at reference voltage."""
         result, _ = tester.update(0, None)
         vnodes = result[DATASET_NAME]["electrical_virtual_node_entities"]
-        for i, vid in enumerate(vnodes["id"]):
+        for i, _vid in enumerate(vnodes["id"]):
             assert abs(vnodes["electrical.voltage_pu"][i] - 1.0) < 0.01
 
 
@@ -636,9 +637,9 @@ class TestShunt:
             tester.add_init_data(DATASET_NAME, ds_shunt)
             tester.initialize()
             result_shunt, _ = tester.update(0, None)
-        v_shunt = result_shunt[DATASET_NAME]["electrical_node_entities"][
-            "electrical.voltage_pu"
-        ][1]
+        v_shunt = result_shunt[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][
+            1
+        ]
 
         assert v_shunt > v_no_shunt
 

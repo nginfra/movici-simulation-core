@@ -217,9 +217,7 @@ Electrical_RegulatorControlSide = AttributeSpec(
 Electrical_VoltageSetpoint = AttributeSpec(
     "electrical.voltage_setpoint", DataType(float)
 )  # V (u_set)
-Electrical_VoltageBand = AttributeSpec(
-    "electrical.voltage_band", DataType(float)
-)  # V (u_band)
+Electrical_VoltageBand = AttributeSpec("electrical.voltage_band", DataType(float))  # V (u_band)
 Electrical_LineDropCompensationR = AttributeSpec(
     "electrical.line_drop_compensation_r", DataType(float)
 )  # Ω
