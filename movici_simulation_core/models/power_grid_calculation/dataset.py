@@ -123,6 +123,7 @@ class ElectricalNodeEntity(PointEntity):
     """
 
     __entity_name__ = "electrical_node_entities"
+    __exclude__ = ["x", "y", "z", "reference"]
 
     # Input attributes
     rated_voltage = field(Electrical_RatedVoltage, flags=INIT)
@@ -169,6 +170,7 @@ class ElectricalLineEntity(LinkEntity):
     """
 
     __entity_name__ = "electrical_line_entities"
+    __exclude__ = ["_linestring2d", "_linestring3d", "reference"]
 
     # Input attributes (topology inherited from LinkEntity)
     resistance = field(Electrical_Resistance, flags=INIT)
@@ -197,6 +199,7 @@ class ElectricalCableEntity(LinkEntity):
     """
 
     __entity_name__ = "electrical_cable_entities"
+    __exclude__ = ["_linestring2d", "_linestring3d", "reference"]
 
     # Input attributes (same as ElectricalLineEntity)
     resistance = field(Electrical_Resistance, flags=INIT)
@@ -227,6 +230,7 @@ class ElectricalLinkEntity(LinkEntity):
     """
 
     __entity_name__ = "electrical_link_entities"
+    __exclude__ = ["_linestring2d", "_linestring3d", "reference"]
 
     # Only topology, no electrical parameters
     # from_node_id and to_node_id inherited from LinkEntity
@@ -251,6 +255,7 @@ class ElectricalTransformerEntity(LinkEntity):
     """
 
     __entity_name__ = "electrical_transformer_entities"
+    __exclude__ = ["_linestring2d", "_linestring3d", "reference"]
 
     # Input attributes
     primary_voltage = field(Electrical_PrimaryVoltage, flags=INIT)

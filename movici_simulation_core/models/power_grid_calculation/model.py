@@ -190,7 +190,7 @@ class Model(TrackedModel, name="power_grid_calculation"):
         for f in dataclasses.fields(self.dataset):
             entity = getattr(self.dataset, f.name)
             size = len(entity)
-            for attr_field in entity.all_attributes().values():
+            for attr_field in entity.attributes.values():
                 attr = attr_field.get_for(entity)
                 if attr.flags & PUBLISH and not attr.has_data():
                     attr.initialize(size)
