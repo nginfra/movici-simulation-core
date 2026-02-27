@@ -5,6 +5,7 @@ import geopandas
 import netCDF4
 import numpy as np
 import pandas as pd
+import wntr
 from pyproj import CRS
 
 from movici_simulation_core.attributes import (
@@ -311,8 +312,7 @@ class INPSource(DataSource):
         self.file = Path(file)
         if entity_type not in self.ENTITY_TYPES:
             raise ValueError(
-                f"Unknown entity_type '{entity_type}', "
-                f"must be one of {sorted(self.ENTITY_TYPES)}"
+                f"Unknown entity_type '{entity_type}', must be one of {sorted(self.ENTITY_TYPES)}"
             )
         self.entity_type = entity_type
         self._items: t.Optional[t.List[t.Tuple[str, t.Any]]] = None
@@ -324,8 +324,6 @@ class INPSource(DataSource):
     def _get_model(self):
         key = str(self.file.resolve())
         if key not in self._model_cache:
-            import wntr
-
             self._model_cache[key] = wntr.network.WaterNetworkModel(str(self.file))
         return self._model_cache[key]
 

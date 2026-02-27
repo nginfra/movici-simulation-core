@@ -164,11 +164,13 @@ class TestINPSource:
         assert source.get_bounding_box() is None
 
     def test_from_source_info(self, inp_file):
-        source = INPSource.from_source_info({
-            "source_type": "inp",
-            "path": str(inp_file),
-            "entity_type": "junctions",
-        })
+        source = INPSource.from_source_info(
+            {
+                "source_type": "inp",
+                "path": str(inp_file),
+                "entity_type": "junctions",
+            }
+        )
         assert len(source) == 2
 
     def test_model_caching(self, inp_file):
@@ -267,13 +269,17 @@ class TestINPSourceWithDatasetCreator:
             validate_config=False,
         ).create(config)
 
-        junctions = dataset["data"]["water_junction_entities"]
-        reservoirs = dataset["data"]["water_reservoir_entities"]
+        _junctions = dataset["data"]["water_junction_entities"]
+        _reservoirs = dataset["data"]["water_reservoir_entities"]
         pipes = dataset["data"]["water_pipe_entities"]
 
         # Build name->id lookup from generated IDs
         name_to_id = {}
-        for eg_name in ("water_junction_entities", "water_reservoir_entities", "water_tank_entities"):
+        for eg_name in (
+            "water_junction_entities",
+            "water_reservoir_entities",
+            "water_tank_entities",
+        ):
             eg = dataset["data"][eg_name]
             for name, eid in zip(eg["reference"], eg["id"]):
                 name_to_id[name] = eid
