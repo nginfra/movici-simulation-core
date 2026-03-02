@@ -360,12 +360,10 @@ class Model(TrackedModel, name="rules"):
                 f"rule {i + 1} (if: {rule_specs[i].condition!r})" for i in indices
             )
             logger.warning(
-                "Multiple rules target attribute %r on entity %s in dataset %r: %s. "
-                "Later rules will override earlier ones.",
-                first_spec.output,
-                target_id,
-                first_spec.to_dataset,
-                descriptions,
+                f"Multiple rules target attribute {first_spec.output!r} on entity "
+                f"{target_id} in dataset {first_spec.to_dataset!r}: {descriptions}. "
+                f"Later rules that write to this target will override earlier ones. "
+                f"A rule writes when its condition is true, or when it has an else_value."
             )
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:

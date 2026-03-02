@@ -172,10 +172,11 @@ take precedence over dataset defaults).
 Rule Ordering and Overrides
 ---------------------------
 
-Rules are evaluated sequentially in the order they are defined. When multiple
-rules target the same entity and output attribute, **later rules override earlier
-ones**. This applies regardless of whether conditions are true or false (a later
-rule's ``else_value`` can override an earlier rule's ``value``).
+Rules are evaluated sequentially in the order they are defined. A rule writes to
+its target when its condition is true, or when the condition is false and the rule
+defines an ``else_value``. When multiple rules target the same entity and output
+attribute, the last rule that writes determines the final value. Rules with
+mutually exclusive conditions and no ``else_value`` will not override each other.
 
 When both a rules dataset and inline config rules are present, they are merged in
 this order:

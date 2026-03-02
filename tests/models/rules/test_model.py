@@ -392,30 +392,28 @@ def test_rule_triggered_by_update(rules, dataset_rules, update, expected_pump_sp
         "rules": rules,
     }
 
-    if dataset_rules is not None:
-        config["rules_dataset"] = "my_rules"
+    dataset_rules = dataset_rules or []
+    config["rules_dataset"] = "my_rules"
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("sensors", get_sensors_dataset())
-            tester.add_init_data("actuators", get_actuators_dataset())
-            if dataset_rules is not None:
-                tester.add_init_data(
-                    "my_rules",
-                    {
-                        "name": "my_rules",
-                        "type": "rules",
-                        "data": {
-                            "defaults": {"from_dataset": "sensors", "to_dataset": "actuators"},
-                            "rules": dataset_rules,
-                        },
-                    },
-                )
-            tester.initialize()
+    with set_timeline_info(timeline_info), ModelTester(model, schema=schema) as tester:
+        tester.add_init_data("sensors", get_sensors_dataset())
+        tester.add_init_data("actuators", get_actuators_dataset())
+        tester.add_init_data(
+            "my_rules",
+            {
+                "name": "my_rules",
+                "type": "rules",
+                "data": {
+                    "defaults": {"from_dataset": "sensors", "to_dataset": "actuators"},
+                    "rules": dataset_rules,
+                },
+            },
+        )
+        tester.initialize()
 
-            tester.new_time(0)
-            result, _ = tester.update(0, update)
+        tester.new_time(0)
+        result, _ = tester.update(0, update)
 
     assert result["actuators"]["actuator_entities"]["control.pump_speed"] == expected_pump_speed
 
@@ -448,12 +446,14 @@ def test_overlapping_rules_emit_warning(caplog):
     }
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("sensors", get_sensors_dataset())
-            tester.add_init_data("actuators", get_actuators_dataset())
-            with caplog.at_level(logging.WARNING):
-                tester.initialize()
+    with (
+        set_timeline_info(timeline_info),
+        ModelTester(model, schema=schema) as tester,
+        caplog.at_level(logging.WARNING),
+    ):
+        tester.add_init_data("sensors", get_sensors_dataset())
+        tester.add_init_data("actuators", get_actuators_dataset())
+        tester.initialize()
 
     assert "Multiple rules target" in caplog.text
     assert "control.pump_speed" in caplog.text
@@ -488,11 +488,13 @@ def test_non_overlapping_rules_no_warning(caplog):
     }
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("sensors", get_sensors_dataset())
-            tester.add_init_data("actuators", get_actuators_dataset())
-            with caplog.at_level(logging.WARNING):
-                tester.initialize()
+    with (
+        set_timeline_info(timeline_info),
+        ModelTester(model, schema=schema) as tester,
+        caplog.at_level(logging.WARNING),
+    ):
+        tester.add_init_data("sensors", get_sensors_dataset())
+        tester.add_init_data("actuators", get_actuators_dataset())
+        tester.initialize()
 
-    assert "Multiple rules target" not in caplog.text
+    assert not caplog.text
