@@ -174,6 +174,10 @@ class Model(TrackedModel, name="area_aggregation"):
 
     @staticmethod
     def calculate_weights(mapping: QueryResult, length: int):
+        """Calculate the frequency of every source entity mapping and set its weight to
+        1/frequency. If a source entity occurs in multiple target entities, its contribution to
+        the sum, avg, and integral aggregators is divided equally over the areas it occurs in"""
+
         indices, counts = np.unique(mapping.indices, return_counts=True)
         rv = np.zeros((length,), dtype=float)
         rv[indices] = 1.0 / counts

@@ -461,8 +461,14 @@ def create_model_tester(tmp_path_factory, init_data, global_schema):
             schema = global_schema
 
         tester = ModelTester(model, tmp_dir=tmp_dir, schema=schema, **kwargs)
-        for name, dataset in init_data:
-            tester.add_init_data(name, dataset)
+        for obj in init_data:
+            if isinstance(obj, dict):
+                tester.add_init_data(**obj)
+            elif isinstance(obj, (tuple, list)) and len(obj) == 2:
+                tester.add_init_data(*obj)
+            else:
+                raise TypeError(f"Unknown init_data definition {obj:r}")
+
         testers.append(tester)
         return tester
 
