@@ -7,6 +7,9 @@ on:
     tags:
     - v[0-9]+.[0-9]+.[0-9]+
 
+env:
+  python-version: "3.13"
+
 jobs:
   test-all-platforms:
     strategy:
@@ -19,10 +22,13 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v6
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Set up Python
+      run: uv python install
 
     - name: Install Spatialite
       uses: ./.github/actions/install-spatialite
@@ -30,13 +36,10 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: |
-        pip install .[models,dev]
+      run: uv sync --group dev
 
     - name: Run tests
-      run: |
-        cd tests
-        pytest .
+      run: make test-numba
 
   deploy:
     # We only want to run the deploy job if we've just created a version tag. in `on.push.tags`
@@ -51,16 +54,15 @@ jobs:
     steps:
     - uses: actions/checkout@v5
 
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        python-version: ${{ env.python-version }}
+
     - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.10"
+      run: uv python install
 
-    - name: Build wheel
+    - name: Build and publish
       run: |
-        pip wheel --no-deps --wheel-dir dist/ .
-
-    - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: ${{ vars.PYPI_REPOSITORY_URL }} # leave empty for default
+          uv build --package movici-simulation-core
+          uv publish

@@ -582,7 +582,7 @@ read the data in a ``geopandas.GeoDataFrame`` and perform any operations you wan
 dataframe. You can then hand over the dataframe to a |code_DatasetCreator| and use it to create the
 Movici dataset. Consider the following example:
 
-.. literalinclude:: ../../../examples/custom_datasource.py
+.. literalinclude:: ../../../packages/simulation-core/examples/custom_datasource.py
   :language: python
 
 
