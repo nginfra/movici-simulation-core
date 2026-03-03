@@ -46,7 +46,7 @@ Development
 This project uses `uv <https://docs.astral.sh/uv/>`_ as the project management tool. In order to
 start development on Movici, please install uv first using your favorite install method.
 
-Then you can install this package and all its dependencies using uv
+Then you can install this package and all its dependencies using uv:
 
 .. code-block::
 
