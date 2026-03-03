@@ -43,7 +43,7 @@ be done using ``apt-get install libsqlite3-mod-spatialite``. On Windows, please 
 Development
 -----------
 
-This project uses `uv<https://docs.astral.sh/uv/>`_ as the project management tool. In order to
+This project uses `uv <https://docs.astral.sh/uv/>`_ as the project management tool. In order to
 start development on Movici, please install uv first using your favorite install method.
 
 Then you can install this package and all its dependencies using uv
@@ -55,7 +55,7 @@ Then you can install this package and all its dependencies using uv
   # optional: activate the virtual environment
   source .venv/bin/activate
 
-This project uses `uv workspaces<https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ to
+This project uses `uv workspaces <https://docs.astral.sh/uv/concepts/projects/workspaces/>`_ to
 manage multiple packages. The workspace packages can be found in `packages/`. Currently the
 following packages are included:
 
