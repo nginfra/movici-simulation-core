@@ -50,7 +50,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --extra dev
+      run: uv sync --group dev
 
     - name: Run tests
       run: |
@@ -81,7 +81,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --extra dev
+      run: uv sync --group dev
 
     - name: Run tests with Numba JIT enabled
       run: |
@@ -111,7 +111,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --extra dev
+      run: uv sync --group dev
 
     - name: Run tests with coverage
       run: |
@@ -143,7 +143,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-          uv sync --all-extras
+          uv sync --all-groups
 
     - name: Test docs
       run: |

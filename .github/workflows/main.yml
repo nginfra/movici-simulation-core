@@ -33,7 +33,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --extra dev
+      run: uv sync --group dev
 
     - name: Run tests
       run: make test-numba
