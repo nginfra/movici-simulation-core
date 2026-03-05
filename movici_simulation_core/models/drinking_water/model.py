@@ -134,7 +134,7 @@ class Model(TrackedModel, name="drinking_water"):
         for f in dataclasses.fields(self.dataset):
             entity = getattr(self.dataset, f.name)
             size = len(entity)
-            for attr_name in entity.all_attributes():
+            for attr_name in entity.attributes:
                 attr = getattr(entity, attr_name)
                 if attr.flags & PUBLISH and not attr.has_data():
                     attr.initialize(size)
