@@ -193,14 +193,13 @@ def test_entity_lookup_by_reference():
     }
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("sensors", get_sensors_dataset_with_refs())
-            tester.add_init_data("actuators", get_actuators_dataset_with_refs())
-            tester.initialize()
+    with set_timeline_info(timeline_info), ModelTester(model, schema=schema) as tester:
+        tester.add_init_data("sensors", get_sensors_dataset_with_refs())
+        tester.add_init_data("actuators", get_actuators_dataset_with_refs())
+        tester.initialize()
 
-            tester.new_time(0)
-            result, _ = tester.update(0, None)
+        tester.new_time(0)
+        result, _ = tester.update(0, None)
 
     actuators = result["actuators"]["actuator_entities"]
     # sensor_A level=25 >= 20 -> pump_1 (idx 0): pump_speed=1.5
@@ -231,18 +230,17 @@ def test_clocktime_condition():
     }
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("actuators", get_actuators_dataset())
-            tester.initialize()
+    with set_timeline_info(timeline_info), ModelTester(model, schema=schema) as tester:
+        tester.add_init_data("actuators", get_actuators_dataset())
+        tester.initialize()
 
-            # t=0 -> 00:00 UTC, clocktime < 8:00
-            tester.new_time(0)
-            result_0, next_0 = tester.update(0, None)
+        # t=0 -> 00:00 UTC, clocktime < 8:00
+        tester.new_time(0)
+        result_0, next_0 = tester.update(0, None)
 
-            # t=28800 -> 08:00 UTC, clocktime >= 8:00
-            tester.new_time(28800)
-            result_8h, _ = tester.update(28800, None)
+        # t=28800 -> 08:00 UTC, clocktime >= 8:00
+        tester.new_time(28800)
+        result_8h, _ = tester.update(28800, None)
 
     act_0 = result_0["actuators"]["actuator_entities"]
     assert act_0["control.active"] == [False]
@@ -294,11 +292,10 @@ def test_invalid_rule_raises(rule, actuators_dataset, match):
     config = {"name": "rules_bad", "type": "rules", "rules": [rule]}
 
     model = Model(config)
-    with set_timeline_info(timeline_info):
-        with ModelTester(model, schema=schema) as tester:
-            tester.add_init_data("actuators", actuators_dataset)
-            with pytest.raises((RuleValidationError, ValueError), match=match):
-                tester.initialize()
+    with set_timeline_info(timeline_info), ModelTester(model, schema=schema) as tester:
+        tester.add_init_data("actuators", actuators_dataset)
+        with pytest.raises((RuleValidationError, ValueError), match=match):
+            tester.initialize()
 
 
 @pytest.mark.parametrize(
