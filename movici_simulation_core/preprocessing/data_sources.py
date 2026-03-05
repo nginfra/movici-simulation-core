@@ -5,6 +5,7 @@ import geopandas
 import netCDF4
 import numpy as np
 import pandas as pd
+import wntr
 from pyproj import CRS
 
 from movici_simulation_core.attributes import (
@@ -288,6 +289,97 @@ class NetCDFGridSource(DataSource):
         dict_coords = {(x, y): idx for idx, (x, y) in enumerate(unique_coords)}
         cells = [[dict_coords[(x, y)] for x, y in single_cell] for single_cell in coords]
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
+
+
+class INPSource(DataSource):
+    """DataSource for reading EPANET INP files via WNTR.
+
+    Each instance represents one entity type (junctions, tanks, reservoirs,
+    pipes, pumps, or valves) from an INP file. Multiple instances sharing
+    the same file path reuse a cached WNTR model.
+
+    :param file: Path to the INP file
+    :param entity_type: One of "junctions", "tanks", "reservoirs", "pipes", "pumps", "valves"
+    """
+
+    _model_cache: t.ClassVar[dict] = {}
+
+    ENTITY_TYPES = {"junctions", "tanks", "reservoirs", "pipes", "pumps", "valves"}
+    NODE_TYPES = {"junctions", "tanks", "reservoirs"}
+    LINK_TYPES = {"pipes", "pumps", "valves"}
+
+    def __init__(self, file: t.Union[Path, str], entity_type: str) -> None:
+        self.file = Path(file)
+        if entity_type not in self.ENTITY_TYPES:
+            raise ValueError(
+                f"Unknown entity_type '{entity_type}', must be one of {sorted(self.ENTITY_TYPES)}"
+            )
+        self.entity_type = entity_type
+        self._items: t.Optional[t.List[t.Tuple[str, t.Any]]] = None
+
+    @classmethod
+    def from_source_info(cls, source_info):
+        return cls(file=source_info["path"], entity_type=source_info["entity_type"])
+
+    def _get_model(self):
+        key = str(self.file.resolve())
+        if key not in self._model_cache:
+            self._model_cache[key] = wntr.network.WaterNetworkModel(str(self.file))
+        return self._model_cache[key]
+
+    def _get_items(self) -> t.List[t.Tuple[str, t.Any]]:
+        if self._items is None:
+            wn = self._get_model()
+            self._items = list(getattr(wn, self.entity_type)())
+        return self._items
+
+    def get_attribute(self, name: str):
+        items = self._get_items()
+        result = []
+        for _name, obj in items:
+            if name == "name":
+                result.append(_name)
+            else:
+                val = getattr(obj, name, None)
+                result.append(val)
+        return result
+
+    def get_geometry(self, geometry_type: GeometryType):
+        if self.entity_type in self.NODE_TYPES:
+            items = self._get_items()
+            xs, ys = [], []
+            for _, node in items:
+                coords = node.coordinates if node.coordinates else (0, 0)
+                xs.append(coords[0])
+                ys.append(coords[1])
+            return {Geometry_X.name: xs, Geometry_Y.name: ys}
+        elif self.entity_type in self.LINK_TYPES:
+            wn = self._get_model()
+            items = self._get_items()
+            lines = []
+            for _, link in items:
+                start = wn.get_node(link.start_node_name)
+                end = wn.get_node(link.end_node_name)
+                s = start.coordinates if start.coordinates else (0, 0)
+                e = end.coordinates if end.coordinates else (0, 0)
+                lines.append([[s[0], s[1]], [e[0], e[1]]])
+            return {Geometry_Linestring2d.name: lines}
+        raise ValueError("No geometry available")
+
+    def get_bounding_box(self):
+        if self.entity_type in self.NODE_TYPES:
+            items = self._get_items()
+            if not items:
+                return None
+            coords = [n.coordinates for _, n in items if n.coordinates]
+            if not coords:
+                return None
+            xs, ys = zip(*coords)
+            return (min(xs), min(ys), max(xs), max(ys))
+        return None
+
+    def __len__(self):
+        return len(self._get_items())
 
 
 SourcesDict = t.MutableMapping[str, DataSource]

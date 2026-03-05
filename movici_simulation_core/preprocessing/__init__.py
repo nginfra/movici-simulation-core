@@ -1,6 +1,7 @@
 from .data_sources import (
     DataSource,
     GeopandasSource,
+    INPSource,
     NetCDFGridSource,
     NumpyDataSource,
     PandasDataSource,
@@ -12,6 +13,7 @@ __all__ = [
     "DatasetCreator",
     "DataSource",
     "GeopandasSource",
+    "INPSource",
     "NetCDFGridSource",
     "NumpyDataSource",
     "PandasDataSource",
