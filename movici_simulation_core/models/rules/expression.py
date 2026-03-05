@@ -12,7 +12,7 @@ Parses condition expressions including compound boolean expressions like:
 
 Both sides of a comparison can be an attribute name, a literal value, or a time variable.
 
-Uses pyparsing with infixNotation for proper operator precedence.
+Uses pyparsing with infix_notation for proper operator precedence.
 """
 
 import operator
@@ -344,16 +344,16 @@ def _build_grammar() -> pp.ParserElement:
     :rtype: pp.ParserElement
     """
     # Numeric literals
-    integer = pp.Word(pp.nums).setParseAction(lambda t: int(t[0]))
-    decimal = pp.Combine(pp.Optional(pp.Word(pp.nums)) + "." + pp.Word(pp.nums)).setParseAction(
+    integer = pp.Word(pp.nums).set_parse_action(lambda t: int(t[0]))
+    decimal = pp.Combine(pp.Optional(pp.Word(pp.nums)) + "." + pp.Word(pp.nums)).set_parse_action(
         lambda t: float(t[0])
     )
     number = decimal | integer
 
     # Time expressions: durations (34h, 5m, 1d5h30s) and clock times (12:30, 12:30:45)
-    time_unit = pp.oneOf("h m s d", caseless=True)
+    time_unit = pp.one_of("h m s d", caseless=True)
     single_duration = pp.Combine(pp.Word(pp.nums) + time_unit)
-    duration = pp.Combine(pp.OneOrMore(single_duration)).setParseAction(
+    duration = pp.Combine(pp.OneOrMore(single_duration)).set_parse_action(
         lambda t: parse_duration(t[0])
     )
     # Clock time: H:MM, HH:MM, H:MM:SS, or HH:MM:SS (single-digit hour allowed)
@@ -362,21 +362,21 @@ def _build_grammar() -> pp.ParserElement:
         + ":"
         + pp.Word(pp.nums, exact=2)
         + pp.Optional(":" + pp.Word(pp.nums, exact=2))
-    ).setParseAction(lambda t: parse_clock_time(t[0]))
+    ).set_parse_action(lambda t: parse_clock_time(t[0]))
 
     # Boolean literals
-    boolean = pp.CaselessKeyword("true").setParseAction(lambda: True) | pp.CaselessKeyword(
+    boolean = pp.CaselessKeyword("true").set_parse_action(lambda: True) | pp.CaselessKeyword(
         "false"
-    ).setParseAction(lambda: False)
+    ).set_parse_action(lambda: False)
 
     value = duration | clock_time | number | boolean
 
     # Comparison operators
-    comparison_op = pp.oneOf("== != <= >= < >")
+    comparison_op = pp.one_of("== != <= >= < >")
 
     # Special time variables - simplified patterns
-    simtime_var = pp.Literal("<simtime>").setParseAction(lambda: ExpressionType.SIMTIME)
-    clocktime_var = pp.Literal("<clocktime>").setParseAction(lambda: ExpressionType.CLOCKTIME)
+    simtime_var = pp.Literal("<simtime>").set_parse_action(lambda: ExpressionType.SIMTIME)
+    clocktime_var = pp.Literal("<clocktime>").set_parse_action(lambda: ExpressionType.CLOCKTIME)
 
     # Attribute names: support multiple dots (e.g., "a.b.c.d")
     identifier = pp.Word(pp.alphas + "_", pp.alphanums + "_")
@@ -408,18 +408,18 @@ def _build_grammar() -> pp.ParserElement:
             right=_make_side(tokens[2]),
         )
 
-    comparison = (operand + comparison_op + operand).setParseAction(make_comparison)
+    comparison = (operand + comparison_op + operand).set_parse_action(make_comparison)
 
     # Boolean operators (support both single and double symbols)
     NOT = pp.CaselessKeyword("NOT") | pp.Literal("!")
     AND = pp.CaselessKeyword("AND") | pp.Literal("&&")
     OR = pp.CaselessKeyword("OR") | pp.Literal("||")
 
-    # Build boolean expression with proper operator precedence using infixNotation
+    # Build boolean expression with proper operator precedence using infix_notation
     # The second element in each tuple is the operand count:
     #   1 = unary operator (e.g., NOT takes one operand)
     #   2 = binary operator (e.g., AND/OR take two operands)
-    bool_expr = pp.infixNotation(
+    bool_expr = pp.infix_notation(
         comparison,
         [
             (NOT, 1, pp.opAssoc.RIGHT, _NotExpr),  # 1 operand, right-associative
@@ -454,7 +454,7 @@ def parse_condition(expr_string: str) -> ParsedCondition:
     :raises ValueError: If the expression cannot be parsed
     """
     try:
-        result = _GRAMMAR.parseString(expr_string.strip(), parseAll=True)
+        result = _GRAMMAR.parse_string(expr_string.strip(), parse_all=True)
     except pp.ParseException as e:
         raise ValueError(f"Invalid condition expression: {expr_string!r}") from e
 

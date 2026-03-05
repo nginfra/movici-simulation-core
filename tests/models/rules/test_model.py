@@ -5,6 +5,7 @@ import logging
 
 import pytest
 
+from movici_simulation_core import AttributeSpec
 from movici_simulation_core.attributes import GlobalAttributes
 from movici_simulation_core.core.moment import TimelineInfo, set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
@@ -15,6 +16,8 @@ from movici_simulation_core.testing.model_tester import ModelTester
 def get_schema():
     schema = AttributeSchema()
     schema.use(GlobalAttributes)
+    schema.add_attribute(AttributeSpec("sensor.level", float))
+    schema.add_attribute(AttributeSpec("sensor.threshold", float))
     return schema
 
 
