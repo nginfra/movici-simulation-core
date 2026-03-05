@@ -5,19 +5,15 @@ import tempfile
 import typing as t
 from pathlib import Path
 
-from movici_simulation_core.base_models.simple_model import SimpleModelAdapter
-from movici_simulation_core.base_models.tracked_model import TrackedModel, TrackedModelAdapter
 from movici_simulation_core.core import (
     EntityInitDataFormat,
     Model,
     UpdateDataFormat,
-    dump_update,
-    load_update,
 )
 from movici_simulation_core.core.data_format import dump_dataset_data
 from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec
-from movici_simulation_core.core.types import Extensible, ModelAdapterBase
+from movici_simulation_core.core.types import Extensible
 from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
@@ -33,8 +29,6 @@ from movici_simulation_core.testing.helpers import compare_dataset_dicts
 from movici_simulation_core.types import (
     DataMask,
     NextTime,
-    RawResult,
-    RawUpdateData,
     Result,
     UpdateData,
 )
@@ -49,12 +43,18 @@ class PreProcessor:
         adapter = model.get_adapter()
         self.model = adapter(model, settings, logging.getLogger())
         self.model.set_schema(self.schema)
+        self.parser = EntityInitDataFormat(schema)
 
-    def process_input(self, input_data: UpdateData) -> RawUpdateData:
-        raise NotImplementedError
+    def process_input(self, input_data: UpdateData) -> UpdateData:
+        if input_data is None:
+            return None
+        return self.parser.load_json(input_data)
 
-    def process_result(self, result: RawResult) -> Result:
-        raise NotImplementedError
+    def process_result(self, result: Result) -> Result:
+        data, next_time = result
+        if data is not None:
+            data = dump_dataset_data(data)
+        return data, next_time
 
     def initialize(self, data_handler: InitDataHandler) -> DataMask:
         return self.model.initialize(data_handler)
@@ -72,30 +72,6 @@ class PreProcessor:
 
     def close(self, message: QuitMessage):
         return self.model.close(message)
-
-
-class NumpyPreProcessor(PreProcessor):
-    def __init__(self, model: TrackedModel, settings: Settings, schema=None):
-        super().__init__(model, settings, schema)
-        self.parser = EntityInitDataFormat(schema)
-
-    def process_input(self, input_data: UpdateData) -> RawUpdateData:
-        if input_data is None:
-            return None
-        array_data = self.parser.load_json(input_data)
-        return dump_update(array_data)
-
-    def process_result(self, result: RawResult) -> Result:
-        data, next_time = result
-        if data is not None:
-            data = dump_dataset_data(load_update(data))
-        return data, next_time
-
-
-DEFAULT_PREPROCESSORS: t.Dict[t.Type[ModelAdapterBase], t.Type[PreProcessor]] = {
-    TrackedModelAdapter: NumpyPreProcessor,
-    SimpleModelAdapter: NumpyPreProcessor,
-}
 
 
 class Plugin(t.Protocol):
@@ -151,7 +127,7 @@ class ModelTester:
         self.settings = settings or Settings()
         self.schema = read_schema(schema)
         self._set_default_strategies()
-        self._model = self._try_wrap_model(model)
+        self._model = self._wrap_model(model)
         self.raise_on_premature_shutdown = raise_on_premature_shutdown
 
     @property
@@ -164,11 +140,8 @@ class ModelTester:
         strategies.set(UpdateDataFormat)
         strategies.set(EntityInitDataFormat(schema=self.schema))
 
-    def _try_wrap_model(self, model: Model):
-        adapter = model.get_adapter()
-        if not (preprocessor := DEFAULT_PREPROCESSORS.get(adapter)):
-            raise TypeError(f"Unsupported model adapter {adapter.__name__}")
-        return preprocessor(model, settings=self.settings, schema=self.schema)
+    def _wrap_model(self, model: Model):
+        return PreProcessor(model, settings=self.settings, schema=self.schema)
 
     def __enter__(self):
         return self

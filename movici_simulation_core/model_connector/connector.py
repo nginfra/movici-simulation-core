@@ -24,7 +24,7 @@ from ..messages import (
 from ..model_connector.init_data import InitDataHandler
 from ..networking.client import RequestClient, Sockets
 from ..networking.stream import Stream
-from ..types import DataMask
+from ..types import DataMask, InternalSerializationStrategy, UpdateData
 
 
 @dataclasses.dataclass
@@ -70,6 +70,7 @@ class ModelConnector:
     model: ModelAdapterBase
     updates: UpdateDataClient
     init_data: InitDataHandler
+    serialization: InternalSerializationStrategy
     data_mask: DataMask = dataclasses.field(init=False, default_factory=dict)
     name: t.Optional[str] = None
 
@@ -91,15 +92,18 @@ class ModelConnector:
         result_data, next_time = self.model.update_series(update, data=data_series)
         return self._process_result(result_data, next_time)
 
-    def _get_update_data(self, update: UpdateMessage) -> t.Optional[bytes]:
+    def _get_update_data(self, update: UpdateMessage) -> UpdateData:
         if update.has_data and update.address and update.key:
-            return self.updates.get(
+            raw_data = self.updates.get(
                 address=update.address, key=update.key, mask=self.data_mask.get("sub")
             )
+            return self.serialization.loads(raw_data) if raw_data is not None else None
+
         return None
 
-    def _process_result(self, data: bytes | None, next_time: t.Optional[int]) -> ResultMessage:
-        address, key = self._send_update_data(data)
+    def _process_result(self, data: UpdateData, next_time: t.Optional[int]) -> ResultMessage:
+        result_data = self.serialization.dumps(data) if data is not None else None
+        address, key = self._send_update_data(result_data)
         return ResultMessage(key=key, address=address, next_time=next_time, origin=self.name)
 
     def _send_update_data(

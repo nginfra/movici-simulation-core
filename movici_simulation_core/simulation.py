@@ -508,7 +508,10 @@ class ModelRunner(Runner):
         self.init_data_handler = ServicedInitDataHandler(
             self.settings.name, server=self.settings.service_discovery["init_data"]
         )
-        connector = ModelConnector(model, self.update_handler, self.init_data_handler)
+        serialization = strategies.get_instance(InternalSerializationStrategy)
+        connector = ModelConnector(
+            model, self.update_handler, self.init_data_handler, serialization=serialization
+        )
         stream_handler = ConnectorStreamHandler(connector, stream)
         stream_handler.initialize()
 

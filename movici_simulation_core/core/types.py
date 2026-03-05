@@ -10,7 +10,7 @@ from movici_simulation_core.validate import ModelConfigSchema, validate_and_migr
 from ..messages import NewTimeMessage, QuitMessage, UpdateMessage, UpdateSeriesMessage
 from ..networking.stream import MessageRouterSocket, Stream
 from ..settings import Settings
-from ..types import DataMask, FileType, RawResult, RawUpdateData
+from ..types import DataMask, FileType, Result, UpdateData
 from ..utils.path import DatasetPath
 from .attribute_spec import AttributeSpec
 
@@ -123,13 +123,11 @@ class ModelAdapterBase(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
+    def update(self, message: UpdateMessage, data: UpdateData) -> Result:
         raise NotImplementedError
 
     @abc.abstractmethod
-    def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
-    ) -> RawResult:
+    def update_series(self, message: UpdateSeriesMessage, data: t.Iterable[UpdateData]) -> Result:
         raise NotImplementedError
 
     @abc.abstractmethod

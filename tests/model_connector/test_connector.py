@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from unittest.mock import Mock, call
 
@@ -30,6 +31,7 @@ from movici_simulation_core.model_connector.init_data import (
     InitDataHandler,
 )
 from movici_simulation_core.networking.client import Sockets
+from movici_simulation_core.types import InternalSerializationStrategy
 
 
 @pytest.fixture
@@ -92,6 +94,14 @@ class TestConnectorStreamHandler:
         assert connector.new_time.call_args == call(message)
 
 
+class JsonSerializer(InternalSerializationStrategy):
+    def loads(self, raw_data):
+        return json.loads(raw_data)
+
+    def dumps(self, data):
+        return json.dumps(data).encode()
+
+
 class TestModelConnector:
     @pytest.fixture
     def data_mask(self):
@@ -101,12 +111,12 @@ class TestModelConnector:
     def model(self, data_mask):
         mock = Mock(ModelAdapterBase)
         mock.initialize.return_value = data_mask
-        mock.update.return_value = (b"some_data", None)
+        mock.update.return_value = ({"some": "result"}, None)
         return mock
 
     @pytest.fixture
     def update_data(self):
-        return b"update_data"
+        return json.dumps({"some": "data"})
 
     @pytest.fixture
     def update_handler(self, update_data):
@@ -121,7 +131,12 @@ class TestModelConnector:
 
     @pytest.fixture
     def connector(self, model, update_handler, init_data_handler):
-        return ModelConnector(model, updates=update_handler, init_data=init_data_handler)
+        return ModelConnector(
+            model,
+            updates=update_handler,
+            init_data=init_data_handler,
+            serialization=JsonSerializer(),
+        )
 
     @pytest.fixture
     def initialized_connector(self, connector):
@@ -165,7 +180,7 @@ class TestModelConnector:
 
     def test_update_sends_update_data_to_handler(self, initialized_connector, update_handler):
         initialized_connector.update(UpdateMessage(1))
-        assert update_handler.put.call_args == call(b"some_data")
+        assert update_handler.put.call_args == call(b'{"some": "result"}')
 
     def test_update_series_timestamp_matches(
         self, initialized_connector, model, update_series_message
@@ -179,7 +194,7 @@ class TestModelConnector:
     ):
         def update_series(timestamp, data):
             list(data)
-            return b"some_data", 1
+            return {"some": "result"}, 1
 
         model.update_series.side_effect = update_series
         initialized_connector.update_series(update_series_message)
@@ -188,7 +203,7 @@ class TestModelConnector:
         )
 
     def test_update_series_processes_result(self, initialized_connector, model):
-        model.update_series.return_value = b"some_data", 12
+        model.update_series.return_value = {"some": "result"}, 12
         result = initialized_connector.update_series(UpdateSeriesMessage([]))
         assert result == ResultMessage(key="key", address="address", next_time=12)
 

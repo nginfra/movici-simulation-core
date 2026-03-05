@@ -8,7 +8,6 @@ from movici_simulation_core.core.moment import TimelineInfo, set_timeline_info
 from movici_simulation_core.messages import UpdateMessage
 from movici_simulation_core.testing.dummy import DummyModel
 from movici_simulation_core.testing.model_tester import (
-    DEFAULT_PREPROCESSORS,
     ModelTester,
     compare_results,
 )
@@ -24,9 +23,14 @@ class TranparentProxy:
 
 @pytest.fixture(autouse=True)
 def register_preprocessor():
-    DEFAULT_PREPROCESSORS[TranparentProxy] = TranparentProxy
+    _orig_wrap_model = ModelTester._wrap_model
+
+    def _wrap_model(self, model):
+        return TranparentProxy(model)
+
+    ModelTester._wrap_model = _wrap_model
     yield
-    del DEFAULT_PREPROCESSORS[TranparentProxy]
+    ModelTester._wrap_model = _orig_wrap_model
 
 
 class TestModelTester:

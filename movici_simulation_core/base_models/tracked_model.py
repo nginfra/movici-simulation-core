@@ -18,20 +18,16 @@ from movici_simulation_core.model_connector import InitDataHandler
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.types import (
     FileType,
-    InternalSerializationStrategy,
-    RawResult,
-    RawUpdateData,
+    Result,
     Timestamp,
     UpdateData,
 )
-from movici_simulation_core.utils import strategies
 
 from .common import EntityAwareInitDataHandler
 
 
 class TrackedModelAdapter(ModelAdapterBase):
     model: TrackedModel
-    serialization: InternalSerializationStrategy
 
     def __init__(self, model: TrackedModel, settings: Settings, logger: logging.Logger):
         super().__init__(model, settings, logger)
@@ -40,7 +36,6 @@ class TrackedModelAdapter(ModelAdapterBase):
         self.model_ready_for_update: bool = False
         self.schema: t.Optional[AttributeSchema] = None
         self.next_time: t.Optional[int] = None
-        self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     def set_schema(self, schema: AttributeSchema):
         self.schema = schema
@@ -70,14 +65,12 @@ class TrackedModelAdapter(ModelAdapterBase):
                 + self.format_uninitialized_attributes()
             )
 
-    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
+    def update(self, message: UpdateMessage, data: UpdateData) -> Result:
         should_calculate = self.process_input(data)
         result = self.try_calculate(message.timestamp, should_calculate)
         return self.process_result(result)
 
-    def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
-    ) -> RawResult:
+    def update_series(self, message: UpdateSeriesMessage, data: t.Iterable[UpdateData]) -> Result:
         should_calculate = any([self.process_input(item) for item in data])
         result = self.try_calculate(message.timestamp, should_calculate)
         return self.process_result(result)
@@ -97,7 +90,7 @@ class TrackedModelAdapter(ModelAdapterBase):
     def download_init_data(self, init_data_handler: InitDataHandler):
         for dataset_name, _ in self.state.iter_datasets():
             data_dtype, path = init_data_handler.get(dataset_name)
-            if data_dtype is None:
+            if data_dtype is None or path is None:
                 self.logger.warning(f"Dataset '{dataset_name}' not found")
                 continue
             if data_dtype not in [FileType.JSON, FileType.MSGPACK]:
@@ -115,14 +108,14 @@ class TrackedModelAdapter(ModelAdapterBase):
                 return
             self.model_initialized = True
 
-    def process_input(self, data: RawUpdateData) -> bool:
+    def process_input(self, data: UpdateData) -> bool:
         # Always calculate on a major update
         if data is None:
             return True
 
         # Only calculate on a cascading update if there is actually data for the model
-        if update_dict := self.serialization.loads(data):
-            self.state.receive_update(update_dict)
+        if data:
+            self.state.receive_update(data)
             return True
         return False
 
@@ -157,10 +150,8 @@ class TrackedModelAdapter(ModelAdapterBase):
 
     def process_result(
         self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
-    ) -> RawResult:
+    ) -> Result:
         data, next_time = result
-        if data:
-            data = self.serialization.dumps(data)
         if isinstance(next_time, Moment):
             next_time = next_time.timestamp
         return data, next_time

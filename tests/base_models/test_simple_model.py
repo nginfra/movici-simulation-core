@@ -37,7 +37,7 @@ class TestSimpleModelAdapter:
 
     def test_update(self, adapter, model):
         message = UpdateMessage(12)
-        data = b"data"
+        data = {"some": "data"}
         sentinel = object()
         model.update.return_value = sentinel
         result = adapter.update(message, data)
@@ -45,12 +45,11 @@ class TestSimpleModelAdapter:
             moment=Moment(message.timestamp), data=data, message=message
         )
         assert adapter.process_result.call_count == 1
-        assert adapter.process_input.call_args == call(data)
         assert result == sentinel
 
     def test_update_series(self, adapter, model):
         message = UpdateSeriesMessage([UpdateMessage(12)])
-        data = (b"data",)
+        data = {"some": "data"}
         sentinel = object()
         model.update_series.return_value = sentinel
         result = adapter.update_series(message, data)
