@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/drinking_water/1.0.0",
+  "type": "object",
+  "required": ["dataset"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "description": "Water network dataset name"
+    },
+    "options": {
+      "type": "object",
+      "description": "WNTR solver and time options, keyed by section name (e.g. 'hydraulic')",
+      "properties": {
+        "hydraulic_timestep": {
+          "type": "number",
+          "default": 3600,
+          "description": "Hydraulic timestep in seconds (default: 3600)"
+        },
+        "report_timestep": {
+          "type": "number",
+          "description": "Report timestep in seconds (default: same as hydraulic_timestep)"
+        }
+      },
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}
