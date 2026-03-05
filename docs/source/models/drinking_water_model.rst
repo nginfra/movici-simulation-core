@@ -284,7 +284,7 @@ derive from ``LinkEntity``.
 | ``drinking_water.velocity``            | PUB       | Water velocity (always positive, use flow sign    |
 |                                        |           | for direction)                                    |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,     |
 |                                        |           | 3=CV)                                             |
 +----------------------------------------+-----------+---------------------------------------------------+
 
@@ -332,7 +332,7 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 +----------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow_rate.magnitude`` | PUB       | Absolute flow rate                                |
 +----------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+| ``drinking_water.link_status``         | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,     |
 |                                        |           | 3=CV)                                             |
 +----------------------------------------+-----------+---------------------------------------------------+
 
@@ -386,7 +386,7 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.flow_rate.magnitude``     | PUB       | Absolute flow rate                                |
 +--------------------------------------------+-----------+---------------------------------------------------+
-| ``drinking_water.link_status``             | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,    |
+| ``drinking_water.link_status``             | PUB       | WNTR link status (0=Closed, 1=Open, 2=Active,     |
 |                                            |           | 3=CV)                                             |
 +--------------------------------------------+-----------+---------------------------------------------------+
 
