@@ -148,6 +148,48 @@ def test_model_raises_not_ready_if_lines_have_no_data(model, state):
 
 
 class TestAreaAggregation:
+    def test_datasets_overlap(
+        self,
+        create_model_tester,
+        model_config,
+        model_name,
+        area_dataset_name,
+        road_network_name,
+        knotweed_dataset_name,
+    ):
+        # The area dataset contains two box-like polygons:
+        #  * (0, 0) -> (2000, 2000)
+        #  * (0, 0) -> (0.5, 0.5)
+
+        tester = create_model_tester(Model, model_config)
+        tester.initialize()
+
+        tester.update(
+            0,
+            {
+                road_network_name: {
+                    "road_segment_entities": {
+                        "id": [1, 2, 3],
+                        "source_b": [1, 5, 13],
+                    }
+                },
+            },
+        )
+        model: Model = tester.model
+        knotweed_mapping = list(i.tolist() for i in model.aggregators[0].mapping.iterate())
+        roads_mapping = list(i.tolist() for i in model.aggregators[1].mapping.iterate())
+
+        # The knotweed dataset contains two points:
+        #   * (0, 0) -> maps to both areas
+        #   * (1, 1) -> maps only to the first area
+        assert knotweed_mapping == [[0, 1], [0]]
+
+        # The area dataset contains three roads:
+        # * [[0, -10], [1,-10]] -> not in any area
+        # * [[1.1, 1.0], [1.05, 1.0]] -> In area 0 but not in area 1
+        # * [[0, 0], [0.1, 0.0], [1,1], [-0.9, 1]] -> in both areas
+        assert roads_mapping == [[1, 2], [2]]
+
     def test_area_aggregation_calculation(
         self,
         config,
@@ -200,7 +242,17 @@ class TestAreaAggregation:
                         area_dataset_name: {
                             "area_entities": {
                                 "id": [0, 2],
+                                # target_a is based on source_a which has values [80, 100]
+                                # (see knotweed_dataset knotweed.stem_density)
+                                # area 0 matches both points while area 1 only matches the first
+                                # point. target_a shows the aggregated max
                                 "target_a": [100, 80],
+                                # target_b is based on source_b which has values [1, 5, 13]
+                                # area 0 contains roads 1 and 2
+                                # area 1 contains only road 2
+                                # target_b shows the weighted sum. road 2 is contributing to two
+                                # areas so only counts half for each while road 1 is contributing
+                                # to only 1 area and counts fully for that area
                                 "target_b": [11.5, 6.5],
                             },
                         },
@@ -212,7 +264,11 @@ class TestAreaAggregation:
                         area_dataset_name: {
                             "area_entities": {
                                 "id": [0, 2],
+                                # source_a goes from 100 to 42 for point 0, so the max drops for
+                                # area 0. Area 1 is unaffected, so no change
                                 "target_a": [80, None],
+                                # source_b goes from 13 to 2 for road 3, so it's relative
+                                # ontribution drops to 4/2=2
                                 "target_b": [7, 2],
                             },
                         },
