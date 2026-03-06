@@ -15,6 +15,7 @@ from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.integrations.pgm.network_wrapper import (
+    _TAP_CHANGING_STRATEGIES,
     CalculationMethod,
     CalculationType,
     PowerGridWrapper,
@@ -72,6 +73,9 @@ class Model(TrackedModel, name="power_grid_calculation"):
             CalculationMethod.NEWTON_RAPHSON,
         )
         self.symmetric = self.config.get("symmetric", True)
+        tap_str = self.config.get("tap_changing")
+        # None means auto-detect (wrapper enables any_valid_tap when regulators present)
+        self.tap_changing_strategy = _TAP_CHANGING_STRATEGIES.get(tap_str) if tap_str else None
 
     def setup(self, state: TrackedState, logger: logging.Logger, **_):
         self.logger = logger
@@ -173,7 +177,9 @@ class Model(TrackedModel, name="power_grid_calculation"):
     def _calculate(self) -> dict:
         if self.calc_type == CalculationType.POWER_FLOW:
             return self.wrapper.calculate_power_flow(
-                method=self.calc_method, symmetric=self.symmetric
+                method=self.calc_method,
+                symmetric=self.symmetric,
+                tap_changing_strategy=self.tap_changing_strategy,
             )
         elif self.calc_type == CalculationType.STATE_ESTIMATION:
             return self.wrapper.calculate_state_estimation(symmetric=self.symmetric)

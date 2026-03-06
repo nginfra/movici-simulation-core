@@ -95,6 +95,8 @@ class ComponentIdManager:
             raise ValueError(f"Component type not registered: {component_type}")
 
         comp_pgm = self._pgm_ids[component_type]
+        # searchsorted relies on PGM IDs being monotonically increasing,
+        # which is guaranteed by register_ids using np.arange from _next_id.
         positions = np.searchsorted(comp_pgm, pgm_ids)
 
         # Clamp to valid range for bounds check

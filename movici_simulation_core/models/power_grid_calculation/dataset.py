@@ -280,6 +280,8 @@ class ElectricalTransformerEntity(LinkEntity):
     current_to = field(Electrical_CurrentTo, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
     power_to = field(Electrical_PowerTo, flags=PUB)
+    reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
+    reactive_power_to = field(Electrical_ReactivePowerTo, flags=PUB)
     loading = field(Electrical_Loading, flags=PUB)
 
 

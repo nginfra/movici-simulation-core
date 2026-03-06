@@ -47,6 +47,15 @@ _PGM_CALC_METHODS = {
     CalculationMethod.ITERATIVE_CURRENT: pgm.CalculationMethod.iterative_current,
 }
 
+# PGM TapChangingStrategy string -> enum
+_TAP_CHANGING_STRATEGIES = {
+    "disabled": pgm.TapChangingStrategy.disabled,
+    "any_valid_tap": pgm.TapChangingStrategy.any_valid_tap,
+    "min_voltage_tap": pgm.TapChangingStrategy.min_voltage_tap,
+    "max_voltage_tap": pgm.TapChangingStrategy.max_voltage_tap,
+    "fast_any_tap": pgm.TapChangingStrategy.fast_any_tap,
+}
+
 # PGM MeasuredTerminalType -> component types to search
 _TERMINAL_TYPE_TO_COMPONENTS = {
     0: ["line", "transformer"],  # branch_from
@@ -55,6 +64,7 @@ _TERMINAL_TYPE_TO_COMPONENTS = {
     3: ["shunt"],
     4: ["sym_load"],
     5: ["sym_gen"],
+    9: ["node"],  # node
 }
 
 
@@ -246,7 +256,20 @@ class LineProcessor(PGMElementProcessor):
 
 
 class LinkProcessor(LineProcessor):
-    """Converts zero-impedance links to minimal-impedance PGM lines."""
+    """Converts zero-impedance links to minimal-impedance PGM lines.
+
+    Links have no electrical parameters, so we override the impedance
+    fields with near-zero values after the parent builds the base array.
+    """
+
+    def _get_impedance_fields(self, n: int) -> dict:
+        return {
+            "r1": np.full(n, 1e-6),
+            "x1": np.full(n, 1e-6),
+            "c1": np.full(n, 1e-12),
+            "tan1": np.zeros(n),
+            "i_n": np.full(n, np.nan),
+        }
 
     def build_input_array(self):
         eg = self.entity_group
@@ -263,11 +286,8 @@ class LinkProcessor(LineProcessor):
         arr["to_node"] = to_node_pgm
         arr["from_status"] = _get_status_array(eg.from_status)
         arr["to_status"] = _get_status_array(eg.to_status)
-        arr["r1"] = np.full(n, 1e-6)
-        arr["x1"] = np.full(n, 1e-6)
-        arr["c1"] = np.full(n, 1e-12)
-        arr["tan1"] = np.zeros(n)
-        arr["i_n"] = np.full(n, np.nan)
+        for field, values in self._get_impedance_fields(n).items():
+            arr[field] = values
         return arr
 
 
@@ -319,6 +339,8 @@ class TransformerProcessor(PGMElementProcessor):
         if "p_from" in comp_result.dtype.names:
             eg.power_from[indices] = comp_result["p_from"]
             eg.power_to[indices] = comp_result["p_to"]
+            eg.reactive_power_from[indices] = comp_result["q_from"]
+            eg.reactive_power_to[indices] = comp_result["q_to"]
             eg.loading[indices] = comp_result["loading"]
 
 
@@ -396,84 +418,52 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
 # =========================================================================
 
 
-class LoadProcessor(PGMElementProcessor):
+class ApplianceProcessor(PGMElementProcessor):
+    """Shared base for sym_load and sym_gen processors."""
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        pgm_ids = self.id_manager.register_ids(self.PGM_COMPONENT, eg.index.ids)
+        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
+
+        arr = pgm.initialize_array("input", self.PGM_COMPONENT, len(eg))
+        arr["id"] = pgm_ids
+        arr["node"] = node_pgm
+        arr["status"] = _get_status_array(eg.status)
+        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
+        arr["p_specified"] = eg.p_specified.array
+        arr["q_specified"] = eg.q_specified.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        p_changed = eg.p_specified.has_changes()
+        q_changed = eg.q_specified.has_changes()
+        if not (p_changed or q_changed):
+            return None
+
+        changed = eg.p_specified.changed | eg.q_specified.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
+
+        pgm_ids = self.id_manager.get_pgm_ids(self.PGM_COMPONENT, changed_ids)
+        arr = pgm.initialize_array("update", self.PGM_COMPONENT, len(idx))
+        arr["id"] = pgm_ids
+        arr["p_specified"] = eg.p_specified.array[idx]
+        arr["q_specified"] = eg.q_specified.array[idx]
+        return arr
+
+
+class LoadProcessor(ApplianceProcessor):
     PGM_COMPONENT = "sym_load"
 
-    def build_input_array(self):
-        eg = self.entity_group
-        if not len(eg):
-            return None
-        pgm_ids = self.id_manager.register_ids("sym_load", eg.index.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
 
-        arr = pgm.initialize_array("input", "sym_load", len(eg))
-        arr["id"] = pgm_ids
-        arr["node"] = node_pgm
-        arr["status"] = _get_status_array(eg.status)
-        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
-        arr["p_specified"] = eg.p_specified.array
-        arr["q_specified"] = eg.q_specified.array
-        return arr
-
-    def build_update_array(self):
-        eg = self.entity_group
-        if not len(eg):
-            return None
-        p_changed = eg.p_specified.has_changes()
-        q_changed = eg.q_specified.has_changes()
-        if not (p_changed or q_changed):
-            return None
-
-        changed = eg.p_specified.changed | eg.q_specified.changed
-        idx = np.flatnonzero(changed)
-        changed_ids = eg.index.ids[idx]
-
-        pgm_ids = self.id_manager.get_pgm_ids("sym_load", changed_ids)
-        arr = pgm.initialize_array("update", "sym_load", len(idx))
-        arr["id"] = pgm_ids
-        arr["p_specified"] = eg.p_specified.array[idx]
-        arr["q_specified"] = eg.q_specified.array[idx]
-        return arr
-
-
-class GeneratorProcessor(PGMElementProcessor):
+class GeneratorProcessor(ApplianceProcessor):
     PGM_COMPONENT = "sym_gen"
-
-    def build_input_array(self):
-        eg = self.entity_group
-        if not len(eg):
-            return None
-        pgm_ids = self.id_manager.register_ids("sym_gen", eg.index.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
-
-        arr = pgm.initialize_array("input", "sym_gen", len(eg))
-        arr["id"] = pgm_ids
-        arr["node"] = node_pgm
-        arr["status"] = _get_status_array(eg.status)
-        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
-        arr["p_specified"] = eg.p_specified.array
-        arr["q_specified"] = eg.q_specified.array
-        return arr
-
-    def build_update_array(self):
-        eg = self.entity_group
-        if not len(eg):
-            return None
-        p_changed = eg.p_specified.has_changes()
-        q_changed = eg.q_specified.has_changes()
-        if not (p_changed or q_changed):
-            return None
-
-        changed = eg.p_specified.changed | eg.q_specified.changed
-        idx = np.flatnonzero(changed)
-        changed_ids = eg.index.ids[idx]
-
-        pgm_ids = self.id_manager.get_pgm_ids("sym_gen", changed_ids)
-        arr = pgm.initialize_array("update", "sym_gen", len(idx))
-        arr["id"] = pgm_ids
-        arr["p_specified"] = eg.p_specified.array[idx]
-        arr["q_specified"] = eg.q_specified.array[idx]
-        return arr
 
 
 class SourceProcessor(PGMElementProcessor):
@@ -538,6 +528,20 @@ class VoltageSensorProcessor(PGMElementProcessor):
         arr["u_sigma"] = eg.voltage_sigma.array
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        if not eg.measured_voltage.has_changes():
+            return None
+        idx = np.flatnonzero(eg.measured_voltage.changed)
+        changed_ids = eg.index.ids[idx]
+        pgm_ids = self.id_manager.get_pgm_ids("sym_voltage_sensor", changed_ids)
+        arr = pgm.initialize_array("update", "sym_voltage_sensor", len(idx))
+        arr["id"] = pgm_ids
+        arr["u_measured"] = eg.measured_voltage.array[idx]
+        return arr
+
 
 class PowerSensorProcessor(PGMElementProcessor):
     PGM_COMPONENT = "sym_power_sensor"
@@ -561,6 +565,24 @@ class PowerSensorProcessor(PGMElementProcessor):
         arr["p_measured"] = eg.measured_active_power.array
         arr["q_measured"] = eg.measured_reactive_power.array
         arr["power_sigma"] = eg.power_sigma.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        p_changed = eg.measured_active_power.has_changes()
+        q_changed = eg.measured_reactive_power.has_changes()
+        if not (p_changed or q_changed):
+            return None
+        changed = eg.measured_active_power.changed | eg.measured_reactive_power.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
+        pgm_ids = self.id_manager.get_pgm_ids("sym_power_sensor", changed_ids)
+        arr = pgm.initialize_array("update", "sym_power_sensor", len(idx))
+        arr["id"] = pgm_ids
+        arr["p_measured"] = eg.measured_active_power.array[idx]
+        arr["q_measured"] = eg.measured_reactive_power.array[idx]
         return arr
 
 
@@ -588,6 +610,24 @@ class CurrentSensorProcessor(PGMElementProcessor):
         arr["angle_measurement_type"] = eg.angle_measurement_type.array
         arr["i_angle_measured"] = eg.measured_current_angle.array
         arr["i_angle_sigma"] = eg.current_angle_sigma.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        i_changed = eg.measured_current.has_changes()
+        a_changed = eg.measured_current_angle.has_changes()
+        if not (i_changed or a_changed):
+            return None
+        changed = eg.measured_current.changed | eg.measured_current_angle.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
+        pgm_ids = self.id_manager.get_pgm_ids("sym_current_sensor", changed_ids)
+        arr = pgm.initialize_array("update", "sym_current_sensor", len(idx))
+        arr["id"] = pgm_ids
+        arr["i_measured"] = eg.measured_current.array[idx]
+        arr["i_angle_measured"] = eg.measured_current_angle.array[idx]
         return arr
 
 
@@ -702,7 +742,13 @@ class PowerGridWrapper:
         """Build the PGM model from a PowerGridNetwork.
 
         :param dataset: PowerGridNetwork with entity groups loaded with init data.
+        :raises ValueError: If no source entities are defined.
         """
+        if not len(dataset.sources):
+            raise ValueError(
+                "At least one source (slack bus) is required for power grid calculations"
+            )
+
         self.id_manager.clear()
         self.input_data = {}
         self.processors = []
@@ -761,20 +807,26 @@ class PowerGridWrapper:
         self,
         method: CalculationMethod = CalculationMethod.NEWTON_RAPHSON,
         symmetric: bool = True,
+        tap_changing_strategy: t.Optional[pgm.TapChangingStrategy] = None,
     ) -> dict:
         """Run power flow calculation.
 
+        :param tap_changing_strategy: Strategy for automatic tap changing.
+            When ``None`` (default), uses ``any_valid_tap`` if regulators are
+            present, otherwise ``disabled``.
         :returns: Raw PGM result dictionary.
         """
         if self.model is None:
             raise RuntimeError("Network not built. Call initialize first.")
         calc_method = _PGM_CALC_METHODS.get(method, pgm.CalculationMethod.newton_raphson)
+        if tap_changing_strategy is None and "transformer_tap_regulator" in self.input_data:
+            tap_changing_strategy = pgm.TapChangingStrategy.any_valid_tap
         kwargs: dict[str, t.Any] = {
             "symmetric": symmetric,
             "calculation_method": calc_method,
         }
-        if "transformer_tap_regulator" in self.input_data:
-            kwargs["tap_changing_strategy"] = pgm.TapChangingStrategy.any_valid_tap
+        if tap_changing_strategy is not None:
+            kwargs["tap_changing_strategy"] = tap_changing_strategy
         return self.model.calculate_power_flow(**kwargs)
 
     def calculate_state_estimation(self, symmetric: bool = True) -> dict:
