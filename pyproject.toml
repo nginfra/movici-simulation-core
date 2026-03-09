@@ -54,6 +54,7 @@ models = [
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy",
+  "power-grid-model",
 ]
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 dev = [
@@ -73,6 +74,7 @@ all = [
   "movici-geo-query>=1.1.1",
   "sqlalchemy>=1.4,<3.0",
   "scipy",
+  "power-grid-model",
   "pytest",
   "pytest-cov",
   "mypy",
