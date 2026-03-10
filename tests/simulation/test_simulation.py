@@ -23,13 +23,12 @@ from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import (
     ModelFromInstanceInfo,
     ModelFromTypeInfo,
-    ModelRunner,
     ModelTypeInfo,
     ServiceInfo,
-    ServiceRunner,
     ServiceTypeInfo,
     Simulation,
 )
+from movici_simulation_core.simulation.distributed import ModelRunner, ServiceRunner
 from movici_simulation_core.testing.dummy import DummyModel
 
 
@@ -108,7 +107,7 @@ def temp_output_file(tmp_path):
 
 @pytest.fixture
 def service_info():
-    info = ServiceInfo("dummy", DummyService)
+    info = ServiceInfo("dummy", cls=DummyService, daemon=False)
     yield info
     if info.process is not None:
         info.process.join()
@@ -116,7 +115,7 @@ def service_info():
 
 @pytest.fixture
 def model_info():
-    info = ModelFromTypeInfo("model", DummyModel)
+    info = ModelFromTypeInfo("model", cls=DummyModel, daemon=False)
     yield info
     if info.process is not None:
         info.process.join()
@@ -178,7 +177,14 @@ class TestServiceRunnerEntryPoint:
             setup = Mock()
             run = Mock(return_value=0)
 
-        ServiceRunner(ServiceInfo("service", MockService), settings).entry_point(Mock())
+        ServiceRunner(
+            ServiceInfo(
+                "service",
+                cls=MockService,
+                daemon=False,
+            ),
+            settings,
+        ).entry_point(Mock())
         assert MockService.setup.call_count == 1
         assert MockService.setup.call_count == 1
 
