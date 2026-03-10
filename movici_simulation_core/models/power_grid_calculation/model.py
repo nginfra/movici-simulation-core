@@ -161,16 +161,12 @@ class Model(TrackedModel, name="power_grid_calculation"):
         self.logger.info(f"Power grid network built with {len(self.dataset.nodes)} nodes")
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:
-        # Run calculation with current (old) state
-        result = self._calculate()
-
-        # Apply incoming changes for next calculation
+        # Apply incoming changes before calculating (steady-state model)
         self.wrapper.process_changes()
-
-        # Reset SUBSCRIBE changes after process_changes consumed them
         state.reset_tracked_changes(SUBSCRIBE)
 
-        # Publish results
+        # Calculate and publish results
+        result = self._calculate()
         self.wrapper.write_results(result)
         return None
 

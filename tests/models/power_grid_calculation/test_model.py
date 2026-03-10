@@ -132,23 +132,21 @@ class TestPowerFlow:
 class TestDynamicUpdates:
     """Tests for dynamic load/generator updates.
 
-    Uses two-phase update semantics: changes are applied AFTER the calculation
-    at the current timestep, so results reflect the OLD state. The new load
-    values only affect results on the NEXT update.
+    PGM is a steady-state model: incoming changes are applied before
+    calculation, so results immediately reflect the new state.
     """
 
     def test_increased_load_causes_more_voltage_drop(self, tester):
-        """Doubling load should increase voltage drop after two-phase delay."""
+        """Doubling load should immediately increase voltage drop."""
         # Update 0: initial calculation
         result1, _ = tester.update(0, None)
         nodes1 = result1[DATASET_NAME]["electrical_node_entities"]
         load_idx = nodes1["id"].index(2)
         voltage1 = nodes1["electrical.voltage_pu"][load_idx]
 
-        # Update 1: send load change - PGM calculates with OLD state,
-        # then applies change for next calculation
+        # Update 1: send load change - results immediately reflect new state
         tester.new_time(1)
-        tester.update(
+        result2, _ = tester.update(
             1,
             {
                 DATASET_NAME: {
@@ -160,15 +158,11 @@ class TestDynamicUpdates:
                 }
             },
         )
-
-        # Update 2: now PGM has the updated load, results should differ
-        tester.new_time(2)
-        result3, _ = tester.update(2, None)
-        nodes3 = result3[DATASET_NAME]["electrical_node_entities"]
-        voltage3 = nodes3["electrical.voltage_pu"][load_idx]
+        nodes2 = result2[DATASET_NAME]["electrical_node_entities"]
+        voltage2 = nodes2["electrical.voltage_pu"][load_idx]
 
         # Higher load should cause more voltage drop
-        assert voltage3 < voltage1
+        assert voltage2 < voltage1
 
 
 class TestCalculationMethods:
@@ -677,14 +671,14 @@ class TestGeneratorDynamicUpdates:
         assert i_gen < i_no_gen
 
     def test_generator_dynamic_update(self, tester):
-        """Increasing generator output should reduce voltage drop (two-phase delay)."""
+        """Increasing generator output should immediately reduce voltage drop."""
         # Update 0: initial calculation
         result1, _ = tester.update(0, None)
         v1 = result1[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][1]
 
-        # Update 1: increase generator to fully offset load
+        # Update 1: increase generator - results immediately reflect new state
         tester.new_time(1)
-        tester.update(
+        result2, _ = tester.update(
             1,
             {
                 DATASET_NAME: {
@@ -696,14 +690,10 @@ class TestGeneratorDynamicUpdates:
                 }
             },
         )
-
-        # Update 2: see effect of increased generation
-        tester.new_time(2)
-        result3, _ = tester.update(2, None)
-        v3 = result3[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][1]
+        v2 = result2[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][1]
 
         # More local generation -> less line current -> less voltage drop
-        assert v3 > v1
+        assert v2 > v1
 
 
 class TestThreeWindingTransformer:
