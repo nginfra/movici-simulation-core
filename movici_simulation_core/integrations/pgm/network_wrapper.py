@@ -16,8 +16,6 @@ from enum import IntEnum
 import numpy as np
 import power_grid_model as pgm
 
-from .id_generator import ComponentIdManager
-
 if t.TYPE_CHECKING:
     from movici_simulation_core.models.power_grid_calculation.dataset import PowerGridNetwork
 
@@ -56,17 +54,6 @@ _TAP_CHANGING_STRATEGIES = {
     "fast_any_tap": pgm.TapChangingStrategy.fast_any_tap,
 }
 
-# PGM MeasuredTerminalType -> component types to search
-_TERMINAL_TYPE_TO_COMPONENTS = {
-    0: ["line", "transformer"],  # branch_from
-    1: ["line", "transformer"],  # branch_to
-    2: ["source"],
-    3: ["shunt"],
-    4: ["sym_load"],
-    5: ["sym_gen"],
-    9: ["node"],  # node
-}
-
 
 # =========================================================================
 # Helpers
@@ -99,25 +86,6 @@ def _get_status_array(attr, default: int = 1) -> np.ndarray:
     return np.full(len(attr), default, dtype=np.int8)
 
 
-def _resolve_measured_objects(
-    id_manager: ComponentIdManager, obj_ids: np.ndarray, term_types: np.ndarray
-) -> np.ndarray:
-    """Resolve measured_object IDs to PGM IDs based on terminal type.
-
-    Groups by terminal type and uses vectorized resolve_ids for each group.
-    """
-    result = np.full(len(obj_ids), -1, dtype=np.int32)
-    for term_type, comp_types in _TERMINAL_TYPE_TO_COMPONENTS.items():
-        mask = term_types == term_type
-        if not np.any(mask):
-            continue
-        result[mask] = id_manager.resolve_ids(comp_types, obj_ids[mask])
-    if np.any(result == -1):
-        bad = obj_ids[result == -1]
-        raise ValueError(f"Cannot resolve measured_object IDs: {bad}")
-    return result
-
-
 # =========================================================================
 # Base processor
 # =========================================================================
@@ -128,6 +96,9 @@ class PGMElementProcessor:
 
     Each processor handles one Movici entity type and knows how to build
     PGM input/update arrays and write results back to entity attributes.
+
+    Entity IDs from Movici are used directly as PGM component IDs, since
+    entity IDs are unique within a dataset.
 
     Class attributes:
         PGM_COMPONENT: PGM component type name (e.g. ``"node"``, ``"line"``).
@@ -140,10 +111,6 @@ class PGMElementProcessor:
     def __init__(self, wrapper: PowerGridWrapper, entity_group):
         self.wrapper = wrapper
         self.entity_group = entity_group
-
-    @property
-    def id_manager(self) -> ComponentIdManager:
-        return self.wrapper.id_manager
 
     def build_input_array(self) -> t.Optional[np.ndarray]:
         raise NotImplementedError
@@ -163,11 +130,10 @@ class PGMElementProcessor:
         comp_result = result.get(self.PGM_COMPONENT)
         if comp_result is None:
             return None
-        result_ids = self.id_manager.get_movici_ids(self.PGM_COMPONENT, comp_result["id"])
-        mask = np.isin(result_ids, self.entity_group.index.ids)
+        mask = np.isin(comp_result["id"], self.entity_group.index.ids)
         if not np.any(mask):
             return None
-        indices = self.entity_group.get_indices(result_ids[mask])
+        indices = self.entity_group.get_indices(comp_result["id"][mask])
         return comp_result[mask], indices
 
 
@@ -183,9 +149,8 @@ class NodeProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("node", eg.index.ids)
         arr = pgm.initialize_array("input", "node", len(eg))
-        arr["id"] = pgm_ids
+        arr["id"] = eg.index.ids
         arr["u_rated"] = eg.rated_voltage.array
         return arr
 
@@ -218,14 +183,10 @@ class LineProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("line", eg.index.ids)
-        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
-        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
-
         arr = pgm.initialize_array("input", "line", len(eg))
-        arr["id"] = pgm_ids
-        arr["from_node"] = from_node_pgm
-        arr["to_node"] = to_node_pgm
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
         arr["from_status"] = _get_status_array(eg.from_status)
         arr["to_status"] = _get_status_array(eg.to_status)
         arr["r1"] = eg.resistance.array
@@ -276,14 +237,10 @@ class LinkProcessor(LineProcessor):
         if not len(eg):
             return None
         n = len(eg)
-        pgm_ids = self.id_manager.register_ids("line", eg.index.ids)
-        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
-        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
-
         arr = pgm.initialize_array("input", "line", n)
-        arr["id"] = pgm_ids
-        arr["from_node"] = from_node_pgm
-        arr["to_node"] = to_node_pgm
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
         arr["from_status"] = _get_status_array(eg.from_status)
         arr["to_status"] = _get_status_array(eg.to_status)
         for field, values in self._get_impedance_fields(n).items():
@@ -298,14 +255,10 @@ class TransformerProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("transformer", eg.index.ids)
-        from_node_pgm = self.id_manager.get_pgm_ids("node", eg.from_node_id.array)
-        to_node_pgm = self.id_manager.get_pgm_ids("node", eg.to_node_id.array)
-
         arr = pgm.initialize_array("input", "transformer", len(eg))
-        arr["id"] = pgm_ids
-        arr["from_node"] = from_node_pgm
-        arr["to_node"] = to_node_pgm
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
         arr["from_status"] = _get_status_array(eg.from_status)
         arr["to_status"] = _get_status_array(eg.to_status)
         arr["u1"] = eg.primary_voltage.array
@@ -351,16 +304,11 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("three_winding_transformer", eg.index.ids)
-        node1_pgm = self.id_manager.get_pgm_ids("node", eg.node_1_id.array)
-        node2_pgm = self.id_manager.get_pgm_ids("node", eg.node_2_id.array)
-        node3_pgm = self.id_manager.get_pgm_ids("node", eg.node_3_id.array)
-
         arr = pgm.initialize_array("input", "three_winding_transformer", len(eg))
-        arr["id"] = pgm_ids
-        arr["node_1"] = node1_pgm
-        arr["node_2"] = node2_pgm
-        arr["node_3"] = node3_pgm
+        arr["id"] = eg.index.ids
+        arr["node_1"] = eg.node_1_id.array
+        arr["node_2"] = eg.node_2_id.array
+        arr["node_3"] = eg.node_3_id.array
         arr["status_1"] = _get_status_array(eg.status_1)
         arr["status_2"] = _get_status_array(eg.status_2)
         arr["status_3"] = _get_status_array(eg.status_3)
@@ -398,8 +346,7 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         t3w_result = result.get("three_winding_transformer")
         if t3w_result is None:
             return
-        result_ids = self.id_manager.get_movici_ids("three_winding_transformer", t3w_result["id"])
-        indices = eg.get_indices(result_ids)
+        indices = eg.get_indices(t3w_result["id"])
         eg.current_1[indices] = _scalar(t3w_result["i_1"])
         eg.current_2[indices] = _scalar(t3w_result["i_2"])
         eg.current_3[indices] = _scalar(t3w_result["i_3"])
@@ -425,12 +372,9 @@ class ApplianceProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids(self.PGM_COMPONENT, eg.index.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
-
         arr = pgm.initialize_array("input", self.PGM_COMPONENT, len(eg))
-        arr["id"] = pgm_ids
-        arr["node"] = node_pgm
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
         arr["status"] = _get_status_array(eg.status)
         arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
         arr["p_specified"] = eg.p_specified.array
@@ -450,9 +394,8 @@ class ApplianceProcessor(PGMElementProcessor):
         idx = np.flatnonzero(changed)
         changed_ids = eg.index.ids[idx]
 
-        pgm_ids = self.id_manager.get_pgm_ids(self.PGM_COMPONENT, changed_ids)
         arr = pgm.initialize_array("update", self.PGM_COMPONENT, len(idx))
-        arr["id"] = pgm_ids
+        arr["id"] = changed_ids
         arr["p_specified"] = eg.p_specified.array[idx]
         arr["q_specified"] = eg.q_specified.array[idx]
         return arr
@@ -473,12 +416,9 @@ class SourceProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("source", eg.index.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
-
         arr = pgm.initialize_array("input", "source", len(eg))
-        arr["id"] = pgm_ids
-        arr["node"] = node_pgm
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
         arr["status"] = _get_status_array(eg.status)
         arr["u_ref"] = eg.reference_voltage.array
         arr["u_ref_angle"] = _get_optional_array(eg.reference_angle, default=0.0)
@@ -494,12 +434,9 @@ class ShuntProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("shunt", eg.index.ids)
-        node_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
-
         arr = pgm.initialize_array("input", "shunt", len(eg))
-        arr["id"] = pgm_ids
-        arr["node"] = node_pgm
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
         arr["status"] = _get_status_array(eg.status)
         arr["g1"] = eg.conductance.array
         arr["b1"] = eg.susceptance.array
@@ -518,12 +455,9 @@ class VoltageSensorProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("sym_voltage_sensor", eg.index.ids)
-        measured_pgm = self.id_manager.get_pgm_ids("node", eg.node_id.array)
-
         arr = pgm.initialize_array("input", "sym_voltage_sensor", len(eg))
-        arr["id"] = pgm_ids
-        arr["measured_object"] = measured_pgm
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.node_id.array
         arr["u_measured"] = eg.measured_voltage.array
         arr["u_sigma"] = eg.voltage_sigma.array
         return arr
@@ -536,9 +470,8 @@ class VoltageSensorProcessor(PGMElementProcessor):
             return None
         idx = np.flatnonzero(eg.measured_voltage.changed)
         changed_ids = eg.index.ids[idx]
-        pgm_ids = self.id_manager.get_pgm_ids("sym_voltage_sensor", changed_ids)
         arr = pgm.initialize_array("update", "sym_voltage_sensor", len(idx))
-        arr["id"] = pgm_ids
+        arr["id"] = changed_ids
         arr["u_measured"] = eg.measured_voltage.array[idx]
         return arr
 
@@ -550,17 +483,9 @@ class PowerSensorProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("sym_power_sensor", eg.index.ids)
-
-        measured_pgm = _resolve_measured_objects(
-            self.id_manager,
-            eg.measured_object_id.array,
-            eg.measured_terminal_type.array,
-        )
-
         arr = pgm.initialize_array("input", "sym_power_sensor", len(eg))
-        arr["id"] = pgm_ids
-        arr["measured_object"] = measured_pgm
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.measured_object_id.array
         arr["measured_terminal_type"] = eg.measured_terminal_type.array
         arr["p_measured"] = eg.measured_active_power.array
         arr["q_measured"] = eg.measured_reactive_power.array
@@ -578,9 +503,8 @@ class PowerSensorProcessor(PGMElementProcessor):
         changed = eg.measured_active_power.changed | eg.measured_reactive_power.changed
         idx = np.flatnonzero(changed)
         changed_ids = eg.index.ids[idx]
-        pgm_ids = self.id_manager.get_pgm_ids("sym_power_sensor", changed_ids)
         arr = pgm.initialize_array("update", "sym_power_sensor", len(idx))
-        arr["id"] = pgm_ids
+        arr["id"] = changed_ids
         arr["p_measured"] = eg.measured_active_power.array[idx]
         arr["q_measured"] = eg.measured_reactive_power.array[idx]
         return arr
@@ -593,17 +517,9 @@ class CurrentSensorProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("sym_current_sensor", eg.index.ids)
-
-        measured_pgm = _resolve_measured_objects(
-            self.id_manager,
-            eg.measured_object_id.array,
-            eg.measured_terminal_type.array,
-        )
-
         arr = pgm.initialize_array("input", "sym_current_sensor", len(eg))
-        arr["id"] = pgm_ids
-        arr["measured_object"] = measured_pgm
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.measured_object_id.array
         arr["measured_terminal_type"] = eg.measured_terminal_type.array
         arr["i_measured"] = eg.measured_current.array
         arr["i_sigma"] = eg.current_sigma.array
@@ -623,9 +539,8 @@ class CurrentSensorProcessor(PGMElementProcessor):
         changed = eg.measured_current.changed | eg.measured_current_angle.changed
         idx = np.flatnonzero(changed)
         changed_ids = eg.index.ids[idx]
-        pgm_ids = self.id_manager.get_pgm_ids("sym_current_sensor", changed_ids)
         arr = pgm.initialize_array("update", "sym_current_sensor", len(idx))
-        arr["id"] = pgm_ids
+        arr["id"] = changed_ids
         arr["i_measured"] = eg.measured_current.array[idx]
         arr["i_angle_measured"] = eg.measured_current_angle.array[idx]
         return arr
@@ -643,15 +558,12 @@ class FaultProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("fault", eg.index.ids)
-        fault_object_pgm = self.id_manager.get_pgm_ids("node", eg.fault_object_id.array)
-
         arr = pgm.initialize_array("input", "fault", len(eg))
-        arr["id"] = pgm_ids
+        arr["id"] = eg.index.ids
         arr["status"] = _get_status_array(eg.status)
         arr["fault_type"] = eg.fault_type.array
         arr["fault_phase"] = _get_optional_array(eg.fault_phase, default=0, dtype=np.int8)
-        arr["fault_object"] = fault_object_pgm
+        arr["fault_object"] = eg.fault_object_id.array
         arr["r_f"] = _get_optional_array(eg.fault_resistance, default=0.0)
         arr["x_f"] = _get_optional_array(eg.fault_reactance, default=0.0)
         return arr
@@ -666,8 +578,7 @@ class FaultProcessor(PGMElementProcessor):
         # i_f and i_f_angle are only in short-circuit results
         if "i_f" not in fault_result.dtype.names:
             return
-        result_ids = self.id_manager.get_movici_ids("fault", fault_result["id"])
-        indices = eg.get_indices(result_ids)
+        indices = eg.get_indices(fault_result["id"])
         eg.fault_current[indices] = _scalar(fault_result["i_f"])
         eg.fault_current_angle[indices] = _scalar(fault_result["i_f_angle"])
 
@@ -684,16 +595,9 @@ class TapRegulatorProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        pgm_ids = self.id_manager.register_ids("transformer_tap_regulator", eg.index.ids)
-
-        regulated_pgm = self.id_manager.resolve_ids(
-            ["transformer", "three_winding_transformer"],
-            eg.regulated_object_id.array,
-        )
-
         arr = pgm.initialize_array("input", "transformer_tap_regulator", len(eg))
-        arr["id"] = pgm_ids
-        arr["regulated_object"] = regulated_pgm
+        arr["id"] = eg.index.ids
+        arr["regulated_object"] = eg.regulated_object_id.array
         arr["status"] = _get_status_array(eg.status)
         arr["control_side"] = eg.control_side.array.astype(np.int8)
         arr["u_set"] = eg.voltage_setpoint.array
@@ -715,8 +619,7 @@ class TapRegulatorProcessor(PGMElementProcessor):
             return
         if "tap_pos" not in reg_result.dtype.names:
             return
-        result_ids = self.id_manager.get_movici_ids("transformer_tap_regulator", reg_result["id"])
-        indices = eg.get_indices(result_ids)
+        indices = eg.get_indices(reg_result["id"])
         eg.tap_position[indices] = reg_result["tap_pos"]
 
 
@@ -726,16 +629,11 @@ class TapRegulatorProcessor(PGMElementProcessor):
 
 
 class PowerGridWrapper:
-    """Orchestrates PGM processors and manages the PowerGridModel.
-
-    Processors are created in dependency order (nodes before branches/appliances)
-    so that ID registration works correctly.
-    """
+    """Orchestrates PGM processors and manages the PowerGridModel."""
 
     def __init__(self):
         self.model: t.Optional[pgm.PowerGridModel] = None
         self.input_data: dict[str, np.ndarray] = {}
-        self.id_manager = ComponentIdManager()
         self.processors: list[PGMElementProcessor] = []
 
     def initialize(self, dataset: PowerGridNetwork):
@@ -749,15 +647,9 @@ class PowerGridWrapper:
                 "At least one source (slack bus) is required for power grid calculations"
             )
 
-        self.id_manager.clear()
         self.input_data = {}
         self.processors = []
 
-        # Create processors in dependency order:
-        # 1. Nodes (must be first so branches can look up node IDs)
-        # 2. Branches (lines, cables, links, transformers)
-        # 3. Appliances (loads, generators, sources, shunts)
-        # 4. Sensors, faults, regulators
         processor_specs = [
             NodeProcessor(self, dataset.nodes),
             NodeProcessor(self, dataset.virtual_nodes),
@@ -863,5 +755,4 @@ class PowerGridWrapper:
         """Clean up resources."""
         self.model = None
         self.input_data.clear()
-        self.id_manager.clear()
         self.processors.clear()
