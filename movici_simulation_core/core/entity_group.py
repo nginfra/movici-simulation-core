@@ -37,7 +37,7 @@ class EntityGroup:
         if override_exclude is not None:
             exclude = set(override_exclude)
         else:
-            exclude = set(self.__exclude__ or []) | set(exclude or [])
+            exclude = self._all_excludes() | set(exclude or [])
 
         all_attributes = self._all_attributes()
         non_existing_exclude = exclude - all_attributes.keys()
@@ -116,6 +116,14 @@ class EntityGroup:
     def _all_attributes(cls) -> t.Dict[str, attribute.AttributeField]:
         bases = [c for c in cls.__mro__ if issubclass(c, EntityGroup)]
         return dict(itertools.chain.from_iterable(b._attributes.items() for b in reversed(bases)))
+
+    @classmethod
+    def _all_excludes(cls) -> set[str]:
+        result: set[str] = set()
+        for c in cls.__mro__:
+            if issubclass(c, EntityGroup) and c.__exclude__:
+                result |= set(c.__exclude__)
+        return result
 
     @property
     def index(self) -> Index:
