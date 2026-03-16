@@ -319,6 +319,13 @@ class ReservoirProcessor(NodeProcessor[WaterReservoirEntity]):
                 head *= float(eg.head_factor.array[idx])
             reservoir.base_head = head
 
+    def _write_common_results(
+        self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int
+    ):
+        eg = self.entity_group
+        eg.head.array[:] = results.node["head"].iloc[-1].values[df_begin:df_end]
+        eg.pressure.array[:] = results.node["pressure"].iloc[-1].values[df_begin:df_end]
+
     def _write_results(self, results: wntr.sim.SimulationResults, df_begin: int, df_end: int):
         demands = results.node["demand"].iloc[-1].values[df_begin:df_end]
         self.entity_group.flow.array[:] = -demands

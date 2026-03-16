@@ -52,17 +52,27 @@ from .attributes import (
 class WaterNodeEntity(PointEntity):
     """Base class for water network node entities with common output attributes."""
 
+    __exclude__ = ["x", "y", "z", "reference"]
+
     pressure = field(DrinkingWater_Pressure, flags=PUB)
     head = field(DrinkingWater_Head, flags=PUB)
     demand = field(DrinkingWater_Demand, flags=PUB)
+
+    def is_ready(self):
+        return True
 
 
 class WaterLinkEntity(LinkEntity):
     """Base class for water network link entities with common output attributes."""
 
+    __exclude__ = ["reference", "_linestring2d", "_linestring3d"]
+
     flow = field(DrinkingWater_Flow, flags=PUB)
     flow_rate_magnitude = field(DrinkingWater_FlowRate_Magnitude, flags=PUB)
     link_status = field(DrinkingWater_LinkStatus, flags=PUB)
+
+    def is_ready(self):
+        return True
 
 
 class WaterJunctionEntity(WaterNodeEntity):
@@ -124,6 +134,7 @@ class WaterReservoirEntity(WaterNodeEntity):
     """
 
     __entity_name__ = "water_reservoir_entities"
+    __exclude__ = ["demand"]
 
     # INIT attributes
     base_head = field(DrinkingWater_BaseHead, flags=INIT)
