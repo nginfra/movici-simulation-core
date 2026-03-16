@@ -119,11 +119,11 @@ class EntityGroup:
 
     @classmethod
     def _all_excludes(cls) -> set[str]:
-        result: set[str] = set()
-        for c in cls.__mro__:
-            if issubclass(c, EntityGroup) and c.__exclude__:
-                result |= set(c.__exclude__)
-        return result
+        return set(
+            itertools.chain.from_iterable(
+                c.__exclude__ for c in cls.__mro__ if issubclass(c, EntityGroup) and c.__exclude__
+            )
+        )
 
     @property
     def index(self) -> Index:
