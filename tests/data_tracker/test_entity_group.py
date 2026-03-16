@@ -94,3 +94,14 @@ class TestExcludeAttributes:
 
     def test_override_exclude(self):
         assert self.Derived(override_exclude=["other_attr"]).attributes.keys() == {"attr"}
+
+    def test_exclude_merges_across_mro(self):
+        class Mid(self.BaseEntity):
+            mid_attr = get_attribute(name="mid_attribute")
+            __exclude__ = ["attr"]
+
+        class Leaf(Mid):
+            leaf_attr = get_attribute(name="leaf_attribute")
+            __exclude__ = ["mid_attr"]
+
+        assert Leaf().attributes.keys() == {"leaf_attr"}
