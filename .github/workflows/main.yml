@@ -36,7 +36,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev --locked --frozen
+      run: uv sync --group dev --frozen
 
     - name: Run tests
       run: make test-numba
