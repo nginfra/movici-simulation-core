@@ -8,11 +8,13 @@ from pathlib import Path
 from movici_simulation_core.validate import ModelConfigSchema, validate_and_migrate_config
 
 from ..messages import NewTimeMessage, QuitMessage, UpdateMessage, UpdateSeriesMessage
-from ..networking.stream import MessageRouterSocket, Stream
+from ..networking.stream import BaseStream, MessageRouterSocket
 from ..settings import Settings
 from ..types import DataMask, FileType, Result, UpdateData
 from ..utils.path import DatasetPath
 from .attribute_spec import AttributeSpec
+
+T = t.TypeVar("T")
 
 
 class Plugin:
@@ -29,7 +31,7 @@ class Service(Plugin):
         self,
         *,
         settings: Settings,
-        stream: Stream,
+        stream: BaseStream,
         logger: logging.Logger,
         socket: MessageRouterSocket,
     ):
@@ -115,7 +117,7 @@ class ModelAdapterBase(abc.ABC):
         self.logger = logger
 
     @abc.abstractmethod
-    def initialize(self, init_data_handler: InitDataHandlerBase) -> DataMask:
+    def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -138,9 +140,13 @@ class ModelAdapterBase(abc.ABC):
         pass
 
 
-class InitDataHandlerBase:
-    def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
-        raise NotImplementedError
+class InitDataHandler(t.Protocol):
+    def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]: ...
+    def ensure_ftype(self, name: str, ftype: FileType): ...
 
-    def ensure_ftype(self, name: str, ftype: FileType):
-        raise NotImplementedError
+
+class UpdateDataClientBase(t.Protocol[T]):
+    def get(self, address: str, key: str, mask: t.Optional[dict]) -> T: ...
+    def put(self, data: T) -> t.Tuple[str, str]: ...
+    def clear(self): ...
+    def close(self): ...

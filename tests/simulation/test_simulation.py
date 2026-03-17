@@ -376,8 +376,9 @@ class TestSimulation:
             simulation.register_attributes(attrs)
 
 
-def test_full_simulation_run(temp_output_file, tmp_path):
-    sim = Simulation(data_dir=tmp_path, debug=True)
+@pytest.mark.parametrize("distributed", [False, True])
+def test_full_simulation_run(temp_output_file, tmp_path, distributed):
+    sim = Simulation(data_dir=tmp_path, debug=True, distributed=distributed)
 
     sim.add_model("pub", SimpleModel({"mode": "pub"}))
     sim.add_model(
@@ -395,3 +396,17 @@ def test_full_simulation_run(temp_output_file, tmp_path):
     assert json.loads(temp_output_file.read_text()) == {
         "dataset": {"entity": {"id": [1], "attr": [1.0]}}
     }
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+def test_simulation_failure(tmp_path, distributed):
+    sim = Simulation(data_dir=tmp_path, debug=True, distributed=distributed)
+    model = SimpleModel({"mode": "pub"})
+    model.update = Mock(side_effect=ValueError)
+    sim.add_model("pub", model)
+    sim.add_model("sub", SimpleModel({"mode": "sub", "output": str(temp_output_file)}))
+
+    sim.set_timeline_info(TimelineInfo(reference=0, time_scale=1, start_time=0))
+    sim.run()
+
+    assert sim.exit_code == 1

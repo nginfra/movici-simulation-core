@@ -127,14 +127,13 @@ class Simulation(Extensible):
         """
         self._activate_services()
         self._activate_models()
-        active_modules = list(self.active_modules.values())
         if self.settings.distributed:
             runner = DistributedSimulationRunner(
-                active_modules, self.settings, schema=self.schema, strategies=self.strategies
+                self.active_modules, self.settings, schema=self.schema, strategies=self.strategies
             )
         else:
             runner = SynchronousSimulationRunner(
-                active_modules, self.settings, schema=self.schema, strategies=self.strategies
+                self.active_modules, self.settings, schema=self.schema, strategies=self.strategies
             )
         self.exit_code = runner.run()
         return self.exit_code

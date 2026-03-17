@@ -14,7 +14,7 @@ from movici_simulation_core.messages import ErrorMessage, QuitMessage
 from movici_simulation_core.model_connector import (
     ConnectorStreamHandler,
     ModelConnector,
-    ServicedInitDataHandler,
+    ServicedInitDataClient,
     UpdateDataClient,
 )
 from movici_simulation_core.networking import MessageDealerSocket, MessageRouterSocket, Stream
@@ -49,7 +49,11 @@ class DistributedSimulationRunner(SimulationRunner):
         """
         self._start_services()
         self._start_models()
-        procs = (mod.process for mod in self.modules if mod.process is not None and not mod.daemon)
+        procs = (
+            mod.process
+            for mod in self.modules.values()
+            if mod.process is not None and not mod.daemon
+        )
         self._wait_for_processes(procs)
         return self.exit_code
 
@@ -63,13 +67,15 @@ class DistributedSimulationRunner(SimulationRunner):
     def _start_services(self):
         svc_discovery: t.Dict[str, str] = {}
 
-        for service in (module for module in self.modules if isinstance(module, ServiceInfo)):
+        for service in (
+            module for module in self.modules.values() if isinstance(module, ServiceInfo)
+        ):
             self._start_service(service)
             service.fill_service_discovery(svc_discovery)
         self.settings.service_discovery = svc_discovery
 
     def _start_models(self):
-        for model in (module for module in self.modules if isinstance(module, ModelInfo)):
+        for model in (module for module in self.modules.values() if isinstance(module, ModelInfo)):
             self._start_model(model)
 
     def _start_service(self, service: ServiceInfo):
@@ -198,7 +204,7 @@ class ModelRunner(ProcessRunner):
     """
 
     update_handler: t.Optional[UpdateDataClient] = None
-    init_data_handler: t.Optional[ServicedInitDataHandler] = None
+    init_data_handler: t.Optional[ServicedInitDataClient] = None
     socket: t.Optional[MessageDealerSocket] = None
 
     def __init__(
@@ -271,7 +277,7 @@ class ModelRunner(ProcessRunner):
         self.update_handler = UpdateDataClient(
             self.settings.name, self.settings.service_discovery["update_data"]
         )
-        self.init_data_handler = ServicedInitDataHandler(
+        self.init_data_handler = ServicedInitDataClient(
             self.settings.name, server=self.settings.service_discovery["init_data"]
         )
         serialization = strategies.get_instance(InternalSerializationStrategy)

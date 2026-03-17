@@ -5,7 +5,9 @@ import itertools
 import typing as t
 from functools import singledispatchmethod
 
-from ..core.types import ModelAdapterBase
+from movici_simulation_core.core import InitDataHandler
+
+from ..core.types import ModelAdapterBase, UpdateDataClientBase
 from ..exceptions import StreamDone
 from ..messages import (
     AcknowledgeMessage,
@@ -21,7 +23,6 @@ from ..messages import (
     UpdateMessage,
     UpdateSeriesMessage,
 )
-from ..model_connector.init_data import InitDataHandler
 from ..networking.client import RequestClient, Sockets
 from ..networking.stream import Stream
 from ..types import DataMask, InternalSerializationStrategy, UpdateData
@@ -65,14 +66,17 @@ class ConnectorStreamHandler:
         self.stream.send(resp)
 
 
+T = t.TypeVar("T", bytes, dict)
+
+
 @dataclasses.dataclass
-class ModelConnector:
+class ModelConnector(t.Generic[T]):
     model: ModelAdapterBase
-    updates: UpdateDataClient
+    updates: UpdateDataClientBase[T]
     init_data: InitDataHandler
-    serialization: InternalSerializationStrategy
-    data_mask: DataMask = dataclasses.field(init=False, default_factory=dict)
+    serialization: InternalSerializationStrategy[T]
     name: t.Optional[str] = None
+    data_mask: DataMask = dataclasses.field(init=False, default_factory=dict)
 
     def initialize(self) -> RegistrationMessage:
         self.data_mask = self.model.initialize(self.init_data)
@@ -93,7 +97,7 @@ class ModelConnector:
         return self._process_result(result_data, next_time)
 
     def _get_update_data(self, update: UpdateMessage) -> UpdateData:
-        if update.has_data and update.address and update.key:
+        if update.has_data and update.address is not None and update.key is not None:
             raw_data = self.updates.get(
                 address=update.address, key=update.key, mask=self.data_mask.get("sub")
             )
@@ -107,7 +111,7 @@ class ModelConnector:
         return ResultMessage(key=key, address=address, next_time=next_time, origin=self.name)
 
     def _send_update_data(
-        self, result: t.Optional[bytes]
+        self, result: t.Optional[T]
     ) -> t.Tuple[t.Optional[str], t.Optional[str]]:
         if result is None:
             return None, None
@@ -118,31 +122,35 @@ class ModelConnector:
         self.updates.close()
 
 
-class UpdateDataClient(RequestClient):
+class UpdateDataClient(UpdateDataClientBase[bytes]):
     home_address: str
     counter: t.Iterator[str]
 
     def __init__(self, name: str, home_address: str, sockets: Sockets | None = None):
-        super().__init__(name, sockets)
+        self.client = RequestClient(name, sockets)
+        self.name = name
         self.home_address = home_address
         self.reset_counter()
 
     def get(self, address: str, key: str, mask: t.Optional[dict]) -> bytes:
-        resp = self.request(address, GetDataMessage(key, mask), valid_responses=DataMessage)
+        resp = self.client.request(address, GetDataMessage(key, mask), valid_responses=DataMessage)
         return resp.data
 
     def put(self, data: bytes) -> t.Tuple[str, str]:
         key = next(self.counter)
-        self.request(
+        self.client.request(
             self.home_address, PutDataMessage(key, data), valid_responses=AcknowledgeMessage
         )
         return self.home_address, key
 
     def clear(self):
-        self.request(
+        self.client.request(
             self.home_address, ClearDataMessage(self.name), valid_responses=AcknowledgeMessage
         )
         self.reset_counter()
+
+    def close(self):
+        self.client.close()
 
     def reset_counter(self):
         self.counter = map(lambda num: f"{self.name}_{num}", itertools.count())

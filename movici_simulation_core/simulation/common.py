@@ -68,7 +68,7 @@ ModelInfo = ModelFromTypeInfo | ModelFromInstanceInfo
 class SimulationRunner:
     def __init__(
         self,
-        modules: t.Sequence[ActiveModuleInfo],
+        modules: dict[str, ActiveModuleInfo],
         settings: Settings,
         schema: AttributeSchema,
         strategies: t.Sequence[type],

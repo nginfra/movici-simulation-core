@@ -21,7 +21,7 @@ from movici_simulation_core.messages import (
     UpdateSeriesMessage,
 )
 from movici_simulation_core.model_connector.init_data import (
-    DirectoryInitDataHandler,
+    DirectoryInitDataClient,
     InitDataHandler,
 )
 from movici_simulation_core.settings import Settings
@@ -123,7 +123,7 @@ class ModelTester:
         """
         self.tmp_dir = Path(tmp_dir or tempfile.mkdtemp())
         self.created_tmp_dir = not tmp_dir
-        self.init_data_handler = init_data_handler or DirectoryInitDataHandler(self.tmp_dir)
+        self.init_data_handler = init_data_handler or DirectoryInitDataClient(self.tmp_dir)
         self.settings = settings or Settings()
         self.schema = read_schema(schema)
         self._set_default_strategies()

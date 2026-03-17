@@ -74,9 +74,12 @@ class ExternalSerializationStrategy:
             raise TypeError(f"Unsupported file type '{type}'")
 
 
-class InternalSerializationStrategy(t.Protocol):
-    def dumps(self, data):
+T = t.TypeVar("T", bytes, dict)
+
+
+class InternalSerializationStrategy(t.Protocol[T]):
+    def dumps(self, data: dict) -> T:
         raise NotImplementedError
 
-    def loads(self, raw_data):
+    def loads(self, raw_data: T) -> dict:
         raise NotImplementedError

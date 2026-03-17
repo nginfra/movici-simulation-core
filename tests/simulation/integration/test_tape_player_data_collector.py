@@ -40,8 +40,13 @@ def tapefile(data_dir):
     return name
 
 
-def test_simulation_with_tape_player_and_data_collector(tmp_path, data_dir, storage_dir, tapefile):
-    sim = Simulation(data_dir=data_dir, storage_dir=storage_dir, debug=True)
+@pytest.mark.parametrize("distributed", [False, True])
+def test_simulation_with_tape_player_and_data_collector(
+    tmp_path, data_dir, storage_dir, tapefile, distributed
+):
+    sim = Simulation(
+        data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=distributed
+    )
     sim.add_model("data_collector", DataCollector, {})
     sim.add_model("tape_player", TapePlayer, {"tabular": [tapefile]})
     sim.set_timeline_info(TimelineInfo(0, 1, 0, duration=1))

@@ -26,7 +26,7 @@ from movici_simulation_core.model_connector.connector import (
     UpdateDataClient,
 )
 from movici_simulation_core.model_connector.init_data import (
-    DirectoryInitDataHandler,
+    DirectoryInitDataClient,
     FileType,
     InitDataHandler,
 )
@@ -339,7 +339,7 @@ class TestInitDataHandler:
 
     @pytest.fixture
     def handler(self, tmp_path):
-        return DirectoryInitDataHandler(tmp_path)
+        return DirectoryInitDataClient(tmp_path)
 
     @pytest.mark.parametrize(
         "name, filename, data_type",
