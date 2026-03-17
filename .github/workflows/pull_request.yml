@@ -21,7 +21,7 @@ jobs:
       run: uv python install
 
     - name: Build and install
-      run: uv sync --only-dev
+      run: uv sync --only-dev --locked --frozen
 
     - name: Run linters
       run: make lint
@@ -52,7 +52,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev
+      run: uv sync --group dev --locked --frozen
 
     - name: Run tests
       run: |
@@ -83,7 +83,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev
+      run: uv sync --group dev --locked --frozen
 
     - name: Run tests with Numba JIT enabled
       run: |
