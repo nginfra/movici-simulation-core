@@ -54,6 +54,7 @@ models = [
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy",
+  "wntr>=1.0.0",
 ]
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 all = [
