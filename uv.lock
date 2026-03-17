@@ -1289,6 +1289,7 @@ all = [
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "shapely" },
     { name = "sqlalchemy" },
+    { name = "wntr" },
 ]
 models = [
     { name = "aequilibrae" },
@@ -1334,6 +1335,7 @@ requires-dist = [
     { name = "shapely", marker = "extra == 'models'", specifier = ">=1.7.1" },
     { name = "sqlalchemy", marker = "extra == 'all'", specifier = ">=1.4,<3.0" },
     { name = "sqlalchemy", marker = "extra == 'sqlite'", specifier = ">=1.4,<3.0" },
+    { name = "wntr", marker = "extra == 'all'", specifier = ">=1.0.0" },
     { name = "wntr", marker = "extra == 'models'", specifier = ">=1.0.0" },
 ]
 provides-extras = ["all", "models", "sqlite"]
