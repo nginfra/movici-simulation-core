@@ -73,6 +73,15 @@ class SimpleModel(TrackedModel):
         sim.register_model_type("dummy", cls)
 
 
+class CrashingModel(SimpleModel):
+    def update(self, **_):
+        raise ValueError
+
+    @classmethod
+    def install(cls, sim: Simulation):
+        sim.register_model_type("crashing_dummy", cls)
+
+
 @pytest.fixture(autouse=True)
 def reset_dummy_model_mocks():
     yield
@@ -401,10 +410,8 @@ def test_full_simulation_run(temp_output_file, tmp_path, distributed):
 @pytest.mark.parametrize("distributed", [False, True])
 def test_simulation_failure(tmp_path, distributed):
     sim = Simulation(data_dir=tmp_path, debug=True, distributed=distributed)
-    model = SimpleModel({"mode": "pub"})
-    model.update = Mock(side_effect=ValueError)
-    sim.add_model("pub", model)
-    sim.add_model("sub", SimpleModel({"mode": "sub", "output": str(temp_output_file)}))
+    sim.add_model("pub", CrashingModel({"mode": "pub"}))
+    sim.add_model("sub", SimpleModel({"mode": "pub"}))
 
     sim.set_timeline_info(TimelineInfo(reference=0, time_scale=1, start_time=0))
     sim.run()
