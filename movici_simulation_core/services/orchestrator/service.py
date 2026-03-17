@@ -78,6 +78,13 @@ class Orchestrator(Service):
                 return 1
             return 0
 
+    def restart_model_timer(self, model: str):
+        """Allow resetting a specific model timer. This is used when running synchronously.
+        Orchestrator starts the time by default when it sends out the message, but we need to
+        actually start the timer when we start processing the message
+        """
+        self.context.models[model].timer.restart_current()
+
     @classmethod
     def install(cls, sim: Simulation):
         sim.register_service("orchestrator", cls, auto_use=True, daemon=False)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import itertools
 import traceback
 import typing as t
@@ -18,8 +20,11 @@ from movici_simulation_core.messages import (
 from movici_simulation_core.model_connector import DirectoryInitDataClient, ModelConnector
 from movici_simulation_core.networking.stream import BaseStream
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.types import InternalSerializationStrategy
-from movici_simulation_core.utils import filter_data, get_logger, validate_mask
+from movici_simulation_core.types import (
+    ExternalSerializationStrategy,
+    InternalSerializationStrategy,
+)
+from movici_simulation_core.utils import filter_data, get_logger, strategies, validate_mask
 
 from .common import (
     ActiveModuleInfo,
@@ -30,7 +35,7 @@ from .common import (
 )
 
 if t.TYPE_CHECKING:
-    pass
+    from movici_simulation_core.services import Orchestrator
 
 
 class SynchronousOrchestratorStream(BaseStream[ModelMessage]):
@@ -124,7 +129,16 @@ class SynchronousSimulationRunner(SimulationRunner):
                 ", ".join(unsupported_services)
             )
 
-    def _start_orchestrator(self) -> SynchronousOrchestratorStream:
+    def _configure_strategies(self):
+        if self.strategies is not None:
+            for strat in self.strategies:
+                strategies.set(strat)
+
+        # Ensure we have the strategies properly instantiated
+        strategies.get_instance(ExternalSerializationStrategy, schema=self.schema)
+        strategies.get_instance(InternalSerializationStrategy)
+
+    def _start_orchestrator(self) -> tuple[SynchronousOrchestratorStream, Orchestrator]:
         service_info = t.cast(ServiceInfo, self.modules["orchestrator"])
 
         # Would like to cast this as Orchestrator, but can't because of circular import
@@ -136,7 +150,7 @@ class SynchronousSimulationRunner(SimulationRunner):
 
         orchestrator.setup(settings=self.settings, stream=stream, logger=logger)
         orchestrator.run()
-        return stream
+        return stream, orchestrator
 
     def _setup_models(self) -> dict[str, ModelConnector]:
         update_client = SynchronousUpdateDataClient()
@@ -180,14 +194,16 @@ class SynchronousSimulationRunner(SimulationRunner):
         )
 
     def run(self) -> int:
+        self._configure_strategies()
         set_timeline_info(self.settings.timeline_info)
-        orchestrator = self._start_orchestrator()
+        stream, orchestrator = self._start_orchestrator()
         models = self._setup_models()
         for name in self.model_names:
             model = models[name]
+            orchestrator.restart_model_timer(name)
             response = model.initialize()
             try:
-                orchestrator.handle_message((name, response))
+                stream.handle_message((name, response))
             except FSMDone:
                 return 0
             except FSMError:
@@ -195,16 +211,17 @@ class SynchronousSimulationRunner(SimulationRunner):
 
         while True:
             for name in self.model_names:
-                command = orchestrator.pending_commands.pop(name, None)
+                command = stream.pending_commands.pop(name, None)
                 if not command:
                     continue
                 self._get_logger("orchestrator").debug(f"Sending: {command}")
 
                 model = models[name]
+                orchestrator.restart_model_timer(name)
                 response = self.handle_model_command(model, command)
                 self._get_logger(name).debug(f"Sending: {response}")
                 try:
-                    orchestrator.handle_message((name, response))
+                    stream.handle_message((name, response))
                 except FSMDone:
                     return 0
                 except FSMError:
