@@ -361,7 +361,7 @@ class ServiceRunner(Runner):
     can be easily terminated
     """
 
-    TIMEOUT = 5
+    TIMEOUT = 20 if sys.platform == "win32" else 5
 
     def __init__(
         self,
