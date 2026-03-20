@@ -189,12 +189,12 @@ The shape and volume of the tank can either be of constant diameter for cylindri
 volume can be defined by a volume curve. Either is valid, so they must be ``OPT`` attributes.
 If neither a diameter nor a volume curve is provided, WNTR will use default values (diameter=0).
 
-.. note:: Tank Overflow Behavior
+.. warning:: Tank Overflow Not Supported
 
-   If a tank is set to overflow (``drinking_water.overflow = True``), water added when at max_level
-   is lost (spilled). If overflow is ``False`` and the tank reaches max_level, the connected pipe
-   flows and pump operations are constrained — the network will find a new equilibrium where
-   inflow matches outflow, potentially causing backpressure or pump shutoffs.
+   The ``drinking_water.overflow`` attribute exists but has no effect — WNTR does not support
+   tank overflow. Regardless of the overflow setting, when a tank reaches ``max_level`` all inflow
+   links are closed. The network will find a new equilibrium where inflow matches outflow,
+   potentially causing backpressure or pump shutoffs.
 
 .. note:: Tank Level vs Volume Attributes
 
@@ -345,7 +345,26 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 .. note:: Pump power / speed
 
    ``power`` pumps can operate at a fixed power, although this power can be updated during a simulation.
-   ``head`` pumps can only be turned on or off. When on, they operate according to their head curve
+   Speed is ignored for power pumps — the WNTRSimulator always reports speed=1.
+
+   ``head`` pumps can only be turned on or off. When on, they operate according to their head curve.
+   Variable speed (speed != 1.0) is **not supported** by the WNTRSimulator and will raise a
+   ``NotImplementedError``. Note that the WNTR ``Pump`` class does expose ``base_speed`` and
+   ``speed_timeseries`` attributes, but these cannot be used with the WNTRSimulator.
+
+.. note:: Head pump curve fitting
+
+   WNTR fits head pump curves to the equation ``H = A - B * Q^C``. The coefficients depend on
+   the number of points in the curve:
+
+   - **1-point curve**: ``C = 2``, giving ``H = A - B * Q^2`` (parabolic)
+   - **2-point curve**: ``C = 1``, giving ``H = A - B * Q`` (linear in flow)
+   - **3+ point curve**: all three coefficients are fitted using least-squares optimization
+
+   The equation naturally extends beyond the defined curve domain — there is no clamping.
+   If flow exceeds the maximum defined flow, WNTR extrapolates using the same equation, which
+   can produce negative head values. A warning is issued after the fact but the simulation
+   is not stopped.
 
 Valves
 ^^^^^^
@@ -373,7 +392,7 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 |                                            |           | valve type                                        |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.valve_loss_coefficient``  | OPT       | Loss coefficient for ``TCV``. Required for this   |
-|                                            |           | valve type. Must be higher than its minor loss    |
+|                                            |           | valve type                                        |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.minor_loss``              | OPT       | Minor loss coefficient (Default: 0). Head loss    |
 |                                            |           | when the valve is fully open, proportional to     |
@@ -399,7 +418,10 @@ each operate in their own way. Valves derive from ``LinkEntity``.
    - **PRV** (Pressure Reducing): Limits downstream pressure to the set value
    - **PSV** (Pressure Sustaining): Maintains upstream pressure at the set value
    - **FCV** (Flow Control): Limits flow to the set value
-   - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient
+   - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient. When the
+     valve is Active, the ``valve_loss_coefficient`` is used as the head loss coefficient. When
+     the valve is Open (fully open), ``minor_loss`` is used instead. These are independent — WNTR
+     does not enforce that the loss coefficient must be larger than the minor loss
 
 .. note:: Valve Status
 
