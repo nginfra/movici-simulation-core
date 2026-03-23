@@ -28,8 +28,7 @@ from movici_simulation_core.utils import filter_data, get_logger, strategies, va
 
 from .common import (
     ActiveModuleInfo,
-    ModelFromInstanceInfo,
-    ModelFromTypeInfo,
+    ModelInfo,
     ServiceInfo,
     SimulationRunner,
 )
@@ -38,18 +37,14 @@ if t.TYPE_CHECKING:
     from movici_simulation_core.services import Orchestrator
 
 
-class SynchronousOrchestratorStream(BaseStream[ModelMessage]):
-    """SynchronousOrchestratorStream is a small implementation of BaseStream so that the
-    orchestrator can run in syncrhonous mode. Different from a regular Stream, it is not the means
+class InProcessOrchestratorStream(BaseStream[ModelMessage]):
+    """InProcessOrchestratorStream is a small implementation of BaseStream so that the
+    orchestrator can run in in-process mode. Different from a regular Stream, it is not the means
     to a long running process, ie. its run() method returns quickly
     """
 
     def __init__(self):
         self.pending_commands: dict[str, Message] = {}
-
-    def run(self):
-        """Just a noop"""
-        pass
 
     def send(self, payload: ModelMessage):
         ident, message = payload
@@ -71,7 +66,7 @@ class NoopSerializer(InternalSerializationStrategy[dict]):
         return raw_data
 
 
-class SynchronousUpdateDataClient(UpdateDataClientBase[dict]):
+class InProcessUpdateDataClient(UpdateDataClientBase[dict]):
     counter: t.Iterator[str]
 
     def __init__(self):
@@ -102,9 +97,9 @@ class SynchronousUpdateDataClient(UpdateDataClientBase[dict]):
         self.counter = map(str, itertools.count())
 
 
-class SynchronousSimulationRunner(SimulationRunner):
+class InProcessSimulationRunner(SimulationRunner):
     """A SimulationRunner that connects all models and services in a single process, as opposed to
-    the DistributedSimulationRunner that sets up models and services that run in a separate proces
+    the DistributedSimulationRunner that sets up models and services that run in a separate process
     each and have them connect through TCP"""
 
     def __init__(
@@ -138,27 +133,29 @@ class SynchronousSimulationRunner(SimulationRunner):
         strategies.get_instance(ExternalSerializationStrategy, schema=self.schema)
         strategies.get_instance(InternalSerializationStrategy)
 
-    def _start_orchestrator(self) -> tuple[SynchronousOrchestratorStream, Orchestrator]:
+    def _start_orchestrator(self) -> tuple[InProcessOrchestratorStream, Orchestrator]:
         service_info = t.cast(ServiceInfo, self.modules["orchestrator"])
 
         # Would like to cast this as Orchestrator, but can't because of circular import
         orchestrator_cls = t.cast(t.Any, service_info.cls)
         orchestrator = orchestrator_cls()
 
-        stream = SynchronousOrchestratorStream()
+        stream = InProcessOrchestratorStream()
         logger = self._get_logger("orchestrator")
 
         orchestrator.setup(settings=self.settings, stream=stream, logger=logger)
-        orchestrator.run()
+
+        # Start the orchestrator without starting the (long-running) stream, which would block
+        orchestrator.start()
         return stream, orchestrator
 
     def _setup_models(self) -> dict[str, ModelConnector]:
-        update_client = SynchronousUpdateDataClient()
+        update_client = InProcessUpdateDataClient()
         init_data_client = DirectoryInitDataClient(self.settings.data_dir)
         serializer = NoopSerializer()
         return {
             name: self._setup_model(
-                self.modules[name],
+                t.cast(ModelInfo, self.modules[name]),
                 update_client=update_client,
                 init_data_client=init_data_client,
                 serializer=serializer,
@@ -168,17 +165,14 @@ class SynchronousSimulationRunner(SimulationRunner):
 
     def _setup_model(
         self,
-        model_info: ActiveModuleInfo,
-        update_client: SynchronousUpdateDataClient,
+        model_info: ModelInfo,
+        update_client: InProcessUpdateDataClient,
         init_data_client: DirectoryInitDataClient,
         serializer: NoopSerializer,
     ):
-        if isinstance(model_info, ModelFromInstanceInfo):
-            model = model_info.instance
-        elif isinstance(model_info, ModelFromTypeInfo):
-            model = model_info.cls(model_info.config or {})
-        else:
-            raise ValueError("Unsupported ModelInfo")
+        if not isinstance(model_info, ModelInfo):
+            raise ValueError(f"Unsupported module type {model_info.__class__.__name__}")
+        model = model_info.get_instance()
 
         logger = self._get_logger(model_info.name)
         adapter = model.get_adapter()

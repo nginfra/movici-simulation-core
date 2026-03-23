@@ -25,7 +25,7 @@ from movici_simulation_core.utils import strategies
 
 from ..settings import Settings
 from .distributed import DistributedSimulationRunner
-from .synchronous import SynchronousSimulationRunner
+from .in_process import InProcessSimulationRunner
 
 
 class Simulation(Extensible):
@@ -132,7 +132,7 @@ class Simulation(Extensible):
                 self.active_modules, self.settings, schema=self.schema, strategies=self.strategies
             )
         else:
-            runner = SynchronousSimulationRunner(
+            runner = InProcessSimulationRunner(
                 self.active_modules, self.settings, schema=self.schema, strategies=self.strategies
             )
         self.exit_code = runner.run()

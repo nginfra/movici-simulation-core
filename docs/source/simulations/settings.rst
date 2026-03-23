@@ -14,7 +14,7 @@ has drawbacks. It leads to communication overhead and some models may not functi
 a multiprocessing environment on certain operating systems (most notably the
 ``traffic_assignment`` model on MacOS). To provide an alternative calculation environment, a
 |code_Simulation| can be instantiated with the ``distributed=False`` setting. Running in a
-non-distributed/synchronous environment has the following benefits:
+non-distributed/in-process environment has the following benefits:
 
 - Reduce overhead. Data is not serialized/deserialized between models. Also, in a distributed the
   number of processes that are created can sometimes reach 50+ for certain scenarios. This is

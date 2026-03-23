@@ -8,7 +8,7 @@ from multiprocessing import Process
 import zmq
 from zmq import Socket
 
-from movici_simulation_core.core import AttributeSchema, Model, ModelAdapterBase, set_timeline_info
+from movici_simulation_core.core import AttributeSchema, ModelAdapterBase, set_timeline_info
 from movici_simulation_core.exceptions import StartupFailure
 from movici_simulation_core.messages import ErrorMessage, QuitMessage
 from movici_simulation_core.model_connector import (
@@ -27,8 +27,6 @@ from movici_simulation_core.utils import get_logger, strategies
 
 from .common import (
     DEFAULT_SERVICE_ADDRESS,
-    ModelFromInstanceInfo,
-    ModelFromTypeInfo,
     ModelInfo,
     ServiceInfo,
     SimulationRunner,
@@ -255,19 +253,11 @@ class ModelRunner(ProcessRunner):
             self.close()
 
     def _get_model(self, logger):
-        model = self._ensure_model()
+        model = self.model_info.get_instance()
         adapter = model.get_adapter()
         wrapped = adapter(model=model, settings=self.settings, logger=logger)
         wrapped.set_schema(self.schema)
         return wrapped
-
-    def _ensure_model(self) -> Model:
-        if isinstance(self.model_info, ModelFromInstanceInfo):
-            return self.model_info.instance
-        elif isinstance(self.model_info, ModelFromTypeInfo):
-            return self.model_info.cls(self.model_info.config or {})
-        else:
-            raise ValueError("Unsupported ModelInfo")
 
     def _setup_model(
         self,

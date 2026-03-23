@@ -71,17 +71,21 @@ class Orchestrator(Service):
 
     def run(self):
         try:
-            self.fsm.start()
+            self.start()
             self.stream.run()
         except (FSMDone, FSMError):
             if self.context.failed:
                 return 1
             return 0
 
+    def start(self):
+        """Start the orchestrator FSM but do not run the stream (yet)"""
+        self.fsm.start()
+
     def restart_model_timer(self, model: str):
-        """Allow resetting a specific model timer. This is used when running synchronously.
-        Orchestrator starts the time by default when it sends out the message, but we need to
-        actually start the timer when we start processing the message
+        """Allow resetting a specific model timer. This is used when running using the
+        InProcessSimulationRunner. Orchestrator starts the time by default when it sends out the
+        message, but we need to actually start the timer when we start processing the message
         """
         self.context.models[model].timer.restart_current()
 

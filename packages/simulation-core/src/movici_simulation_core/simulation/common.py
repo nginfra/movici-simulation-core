@@ -51,18 +51,28 @@ class ServiceInfo(ActiveModuleInfo):
         self.address = f"{DEFAULT_SERVICE_ADDRESS}:{port}"
 
 
+class ModelInfo:
+    name: str
+
+    def get_instance(self) -> Model:
+        raise NotImplementedError
+
+
 @dataclasses.dataclass
-class ModelFromTypeInfo(ActiveModuleInfo):
+class ModelFromTypeInfo(ActiveModuleInfo, ModelInfo):
     cls: t.Type[Model]
     config: t.Optional[dict] = None
 
+    def get_instance(self):
+        return self.cls(self.config or {})
+
 
 @dataclasses.dataclass
-class ModelFromInstanceInfo(ActiveModuleInfo):
+class ModelFromInstanceInfo(ActiveModuleInfo, ModelInfo):
     instance: Model
 
-
-ModelInfo = ModelFromTypeInfo | ModelFromInstanceInfo
+    def get_instance(self):
+        return self.instance
 
 
 class SimulationRunner:
