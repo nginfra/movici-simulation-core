@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "movici"
 dynamic = ["version"]
 requires-python = ">=3.10,<3.14"
-dependencies = ["movici-simulation-core"]
+dependencies = ["movici-simulation-core", "movici-sim-drinking-water"]
 
 [dependency-groups]
 dev = [
@@ -33,6 +33,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
+movici-sim-drinking-water = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]

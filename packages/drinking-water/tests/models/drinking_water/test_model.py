@@ -10,8 +10,8 @@ import pytest
 import wntr
 from jsonschema import ValidationError
 
+from movici_sim_drinking_water.model import Model
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.models.drinking_water.model import Model
 from movici_simulation_core.testing.model_tester import ModelTester
 
 
@@ -813,7 +813,7 @@ class TestValveStatus(TestDrinkingWaterModelBase):
         assert (abs(valves["drinking_water.flow"][0]) > 1e-10) is expected_open
 
     @pytest.mark.parametrize("valve_open", [False])  # a single parametrization to change fixture
-    def test_valve_status_change_reopens(self, tester):
+    def test_valve_status_change_reopens(self, tester, valve_open):
         """Changing valve status from closed to active should restore flow."""
 
         tester.initialize()

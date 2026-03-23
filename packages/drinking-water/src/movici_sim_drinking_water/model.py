@@ -20,7 +20,6 @@ from movici_simulation_core.core.attribute import PUBLISH, SUBSCRIBE
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
-from movici_simulation_core.json_schemas import SCHEMA_PATH
 
 from . import attributes
 from .dataset import (
@@ -32,6 +31,7 @@ from .dataset import (
     WaterTankEntity,
     WaterValveEntity,
 )
+from .json_schemas import SCHEMA_PATH
 from .network_wrapper import NetworkWrapper
 
 
@@ -64,7 +64,7 @@ class Model(TrackedModel, name="drinking_water"):
        Controls are handled by the Movici Rules Model, not internally.
     """
 
-    __model_config_schema__ = SCHEMA_PATH / "models/drinking_water.json"
+    __model_config_schema__ = SCHEMA_PATH / "drinking_water.json"
     auto_reset = PUBLISH
 
     @classmethod
