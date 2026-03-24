@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[project]
+name = "movici-data-core"
+dynamic = ["version"]
+description = "Shared library for reading/writing movici data using SQL databases"
+readme = "README.rst"
+requires-python = ">=3.10,<3.14"
+license = { text = "Movici Public License" }
+authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: Free for non-commercial use",
+  "License :: Other/Proprietary License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Database",
+]
+
+dependencies = ["sqlalchemy"]
+
+[project.urls]
+Homepage = "https://github.com/nginfra/movici-simulation-core"
+Documentation = "https://docs.movici.nl/en/latest/index.html"
+Repository = "https://github.com/nginfra/movici-simulation-core"
+Issues = "https://github.com/nginfra/movici-simulation-core/issues"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
+
+[dependency-groups]
+dev = ["pytest-asyncio>=1.3.0"]
+sqlite = ["aiosqlite>=0.22.1"]
