@@ -18,6 +18,7 @@ resolution-markers = [
 members = [
     "movici",
     "movici-drinking-water-model",
+    "movici-sim-transport-assignment",
     "movici-simulation-core",
 ]
 
@@ -1185,6 +1186,7 @@ name = "movici"
 source = { editable = "." }
 dependencies = [
     { name = "movici-drinking-water-model" },
+    { name = "movici-sim-transport-assignment" },
     { name = "movici-simulation-core" },
 ]
 
@@ -1210,6 +1212,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "movici-drinking-water-model", editable = "packages/drinking-water" },
+    { name = "movici-sim-transport-assignment", editable = "packages/transport-assignment" },
     { name = "movici-simulation-core", editable = "packages/simulation-core" },
 ]
 
@@ -1274,6 +1277,26 @@ wheels = [
 ]
 
 [[package]]
+name = "movici-sim-transport-assignment"
+source = { editable = "packages/transport-assignment" }
+dependencies = [
+    { name = "aequilibrae" },
+    { name = "movici-simulation-core" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aequilibrae", specifier = ">=1" },
+    { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "numpy" },
+    { name = "pyproj", specifier = ">=3.0.1" },
+]
+
+[[package]]
 name = "movici-simulation-core"
 source = { editable = "packages/simulation-core" }
 dependencies = [
@@ -1301,7 +1324,6 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "aequilibrae" },
     { name = "movici-geo-query" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1311,7 +1333,6 @@ all = [
     { name = "sqlalchemy" },
 ]
 models = [
-    { name = "aequilibrae" },
     { name = "movici-geo-query" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1325,8 +1346,6 @@ sqlite = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aequilibrae", marker = "extra == 'all'", specifier = ">=1" },
-    { name = "aequilibrae", marker = "extra == 'models'", specifier = ">=1" },
     { name = "click" },
     { name = "fiona", specifier = ">=1.9" },
     { name = "geopandas" },

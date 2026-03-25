@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[project]
+name = "movici-sim-transport-assignment"
+dynamic = ["version"]
+description = "Traffic assignment simulation model for Movici using aequilibrae"
+requires-python = ">=3.10,<3.14"
+license = { text = "Movici Public License" }
+authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+
+dependencies = [
+  "movici-simulation-core",
+  "numpy",
+  "aequilibrae>=1",
+  "pyproj>=3.0.1",
+]
+
+[project.entry-points."movici.plugins"]
+traffic_assignment_calculation = "movici_sim_transport_assignment.traffic_assignment.model:Model"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "movici_simulation_core",
+  "movici_sim_transport_assignment",
+]

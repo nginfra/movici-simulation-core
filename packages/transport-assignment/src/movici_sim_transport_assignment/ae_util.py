@@ -3,14 +3,15 @@ import typing as t
 import numpy as np
 
 from movici_simulation_core.core import UniformAttribute
-from movici_simulation_core.integrations.ae.collections import LinkCollection, NodeCollection
-from movici_simulation_core.integrations.ae.point_generator import PointGenerator
-from movici_simulation_core.integrations.ae.project import ProjectWrapper
 from movici_simulation_core.models.common.entity_groups import (
     PointEntity,
     TransportSegmentEntity,
     VirtualLinkEntity,
 )
+
+from .integrations.collections import LinkCollection, NodeCollection
+from .integrations.point_generator import PointGenerator
+from .integrations.project import ProjectWrapper
 
 # This epsilon isn't very small, but making it smaller breaks aequilibrae
 eps = 5 * 1e-5

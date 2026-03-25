@@ -1,7 +1,7 @@
 import pytest
 
+from movici_sim_transport_assignment.traffic_assignment.model import Model
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.models.traffic_assignment_calculation.model import Model
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.testing.model_tester import ModelTester
 

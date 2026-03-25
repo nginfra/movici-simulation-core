@@ -11,18 +11,19 @@ from movici_simulation_core.core.attribute import UniformAttribute
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSpec, attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
-from movici_simulation_core.integrations.ae.collections import AssignmentResultCollection
-from movici_simulation_core.integrations.ae.project import AssignmentParameters, ProjectWrapper
-from movici_simulation_core.json_schemas import SCHEMA_PATH
-from movici_simulation_core.models.common import ae_util, model_util
+from movici_simulation_core.models.common import model_util
 from movici_simulation_core.models.common.entity_groups import PointEntity, VirtualLinkEntity
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.validate import ModelConfigSchema
 
+from .. import ae_util
+from ..integrations.collections import AssignmentResultCollection
+from ..integrations.project import AssignmentParameters, ProjectWrapper
+from ..json_schemas import SCHEMA_PATH
 from . import dataset as ds
 
-MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "models/traffic_assignment_calculation.json"
-MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "models/legacy/traffic_assignment_calculation.json"
+MODEL_CONFIG_SCHEMA_PATH = SCHEMA_PATH / "traffic_assignment_calculation.json"
+MODEL_CONFIG_SCHEMA_LEGACY_PATH = SCHEMA_PATH / "legacy/traffic_assignment_calculation.json"
 
 
 def convert_v1_v2(config):
