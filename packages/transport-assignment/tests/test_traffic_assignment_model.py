@@ -1,9 +1,9 @@
 import pytest
 
-from movici_sim_transport_assignment.traffic_assignment.model import Model
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.testing.helpers import assert_dataset_dicts_equal
 from movici_simulation_core.testing.model_tester import ModelTester
+from movici_transport_assignment_model.traffic_assignment.model import Model
 
 
 @pytest.fixture(autouse=True)

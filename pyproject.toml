@@ -9,7 +9,7 @@ requires-python = ">=3.10,<3.14"
 dependencies = [
   "movici-simulation-core",
   "movici-drinking-water-model",
-  "movici-sim-transport-assignment",
+  "movici-transport-assignment-model",
 ]
 
 [dependency-groups]
@@ -38,7 +38,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
 movici-drinking-water-model = { workspace = true }
-movici-sim-transport-assignment = { workspace = true }
+movici-transport-assignment-model = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -92,9 +92,14 @@ ignore = [
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
 "packages/drinking-water/tests/*" = ["S"]
+"packages/transport-assignment/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["movici_simulation_core", "movici_drinking_water_model"]
+known-first-party = [
+  "movici_simulation_core",
+  "movici_drinking_water_model",
+  "movici_transport_assignment_model",
+]
 
 [tool.ruff.format]
 docstring-code-format = true

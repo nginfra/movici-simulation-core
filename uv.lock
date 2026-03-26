@@ -18,8 +18,8 @@ resolution-markers = [
 members = [
     "movici",
     "movici-drinking-water-model",
-    "movici-sim-transport-assignment",
     "movici-simulation-core",
+    "movici-transport-assignment-model",
 ]
 
 [[package]]
@@ -1186,8 +1186,8 @@ name = "movici"
 source = { editable = "." }
 dependencies = [
     { name = "movici-drinking-water-model" },
-    { name = "movici-sim-transport-assignment" },
     { name = "movici-simulation-core" },
+    { name = "movici-transport-assignment-model" },
 ]
 
 [package.dev-dependencies]
@@ -1212,8 +1212,8 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "movici-drinking-water-model", editable = "packages/drinking-water" },
-    { name = "movici-sim-transport-assignment", editable = "packages/transport-assignment" },
     { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "movici-transport-assignment-model", editable = "packages/transport-assignment" },
 ]
 
 [package.metadata.requires-dev]
@@ -1274,26 +1274,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/19/8d/5ce5f4c2f8c3c797c13b585ce960e2116d285992186f7321b37b8d3d5e96/movici_geo_query-1.4.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6b8320ee2390eb67ba6bea9b0132af1d5404f5dbe58ac64473239c195d906840", size = 563127, upload-time = "2025-11-17T14:36:33.291Z" },
     { url = "https://files.pythonhosted.org/packages/4a/64/5b177b98d01282734830531befecc3a43132ef45c9316d350476a25a4083/movici_geo_query-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7ee5331400cb8e21941b974e407e2b738eb841145a2c0ff637bf3a29da259a3c", size = 646540, upload-time = "2025-11-17T14:36:34.943Z" },
     { url = "https://files.pythonhosted.org/packages/15/66/ab4b38178296161a389cf363455750070642d1c0e52fe69c90fadb3f5758/movici_geo_query-1.4.0-cp313-cp313-win_amd64.whl", hash = "sha256:69690bf0a15274702616398c932a52bfb2436f396e0aa5a7e3ecc938defef898", size = 358696, upload-time = "2025-11-17T14:36:36.889Z" },
-]
-
-[[package]]
-name = "movici-sim-transport-assignment"
-source = { editable = "packages/transport-assignment" }
-dependencies = [
-    { name = "aequilibrae" },
-    { name = "movici-simulation-core" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aequilibrae", specifier = ">=1" },
-    { name = "movici-simulation-core", editable = "packages/simulation-core" },
-    { name = "numpy" },
-    { name = "pyproj", specifier = ">=3.0.1" },
 ]
 
 [[package]]
@@ -1374,6 +1354,26 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'sqlite'", specifier = ">=1.4,<3.0" },
 ]
 provides-extras = ["all", "models", "sqlite"]
+
+[[package]]
+name = "movici-transport-assignment-model"
+source = { editable = "packages/transport-assignment" }
+dependencies = [
+    { name = "aequilibrae" },
+    { name = "movici-simulation-core" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aequilibrae", specifier = ">=1" },
+    { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "numpy" },
+    { name = "pyproj", specifier = ">=3.0.1" },
+]
 
 [[package]]
 name = "msgpack"

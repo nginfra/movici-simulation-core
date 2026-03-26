@@ -3,12 +3,30 @@ requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [project]
-name = "movici-sim-transport-assignment"
+name = "movici-transport-assignment-model"
 dynamic = ["version"]
 description = "Traffic assignment simulation model for Movici using aequilibrae"
+readme = "README.rst"
 requires-python = ">=3.10,<3.14"
 license = { text = "Movici Public License" }
 authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: Free for non-commercial use",
+  "License :: Other/Proprietary License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: GIS",
+]
 
 dependencies = [
   "movici-simulation-core",
@@ -18,22 +36,10 @@ dependencies = [
 ]
 
 [project.entry-points."movici.plugins"]
-traffic_assignment_calculation = "movici_sim_transport_assignment.traffic_assignment.model:Model"
+traffic_assignment_calculation = "movici_transport_assignment_model.traffic_assignment.model:Model"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 
 [tool.uv-dynamic-versioning]
 fallback-version = "0.0.0"
-
-[tool.ruff]
-extend = "../../pyproject.toml"
-
-[tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S"]
-
-[tool.ruff.lint.isort]
-known-first-party = [
-  "movici_simulation_core",
-  "movici_sim_transport_assignment",
-]

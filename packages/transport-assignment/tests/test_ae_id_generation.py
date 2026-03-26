@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from movici_sim_transport_assignment.integrations.id_generator import IdGenerator
+from movici_transport_assignment_model.integrations.id_generator import IdGenerator
 
 
 @pytest.fixture
