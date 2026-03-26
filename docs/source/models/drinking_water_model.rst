@@ -145,6 +145,14 @@ nodes. Junctions derive from ``PointEntity``.
 | ``drinking_water.head``                | PUB       | Total head at the node (elevation + pressure)     |
 +----------------------------------------+-----------+---------------------------------------------------+
 
+.. tip:: Calculating Demand Deficit
+
+   In Pressure-Dependent Demand (``"PDA"``) simulations, junctions may receive less water than
+   requested when pressure is insufficient. The model publishes the actual delivered
+   ``drinking_water.demand`` but does not publish a demand deficit. To obtain the shortfall,
+   compare the effective demand (``base_demand * demand_factor``) with the published
+   ``drinking_water.demand`` for each junction.
+
 Tanks
 ^^^^^
 
@@ -186,15 +194,23 @@ model — as a simulation progresses, tanks may fill up or empty over time. Tank
 +----------------------------------------+-----------+---------------------------------------------------+
 
 The shape and volume of the tank can either be of constant diameter for cylindrical tanks, or the
-volume can be defined by a volume curve. Either is valid, so they must be ``OPT`` attributes.
+volume can be defined by a volume curve. These are **mutually exclusive** — when a volume curve is
+defined, the ``diameter`` attribute is ignored. Either is valid, so they must be ``OPT`` attributes.
 If neither a diameter nor a volume curve is provided, WNTR will use default values (diameter=0).
 
-.. note:: Tank Overflow Behavior
+.. warning:: Tank Overflow Not Supported
 
-   If a tank is set to overflow (``drinking_water.overflow = True``), water added when at max_level
-   is lost (spilled). If overflow is ``False`` and the tank reaches max_level, the connected pipe
-   flows and pump operations are constrained — the network will find a new equilibrium where
-   inflow matches outflow, potentially causing backpressure or pump shutoffs.
+   The ``drinking_water.overflow`` attribute exists but has no effect — WNTR does not support
+   tank overflow. Regardless of the overflow setting, when a tank reaches ``max_level`` all inflow
+   links are closed. The network will find a new equilibrium where inflow matches outflow,
+   potentially causing backpressure or pump shutoffs.
+
+.. note:: Tank Level Boundaries
+
+   WNTR enforces tank level boundaries in both directions: when a tank reaches ``max_level``,
+   inflow is blocked; when it reaches ``min_level``, outflow is blocked. In both cases, the tank
+   acts as a closed boundary for the restricted direction while flow in the other direction
+   remains permitted.
 
 .. note:: Tank Level vs Volume Attributes
 
@@ -345,7 +361,26 @@ node (reservoir, tank, junction) to another. Pumps derive from ``LinkEntity``.
 .. note:: Pump power / speed
 
    ``power`` pumps can operate at a fixed power, although this power can be updated during a simulation.
-   ``head`` pumps can only be turned on or off. When on, they operate according to their head curve
+   Speed is ignored for power pumps — the WNTRSimulator always reports speed=1.
+
+   ``head`` pumps can only be turned on or off. When on, they operate according to their head curve.
+   Variable speed (speed != 1.0) is **not supported** by the WNTRSimulator and will raise a
+   ``NotImplementedError``. Note that the WNTR ``Pump`` class does expose ``base_speed`` and
+   ``speed_timeseries`` attributes, but these cannot be used with the WNTRSimulator.
+
+.. note:: Head pump curve fitting
+
+   WNTR fits head pump curves to the equation ``H = A - B * Q^C``. The coefficients depend on
+   the number of points in the curve:
+
+   - **1-point curve**: ``C = 2``, giving ``H = A - B * Q^2`` (parabolic)
+   - **2-point curve**: ``C = 1``, giving ``H = A - B * Q`` (linear in flow)
+   - **3+ point curve**: all three coefficients are fitted using least-squares optimization
+
+   The equation naturally extends beyond the defined curve domain — there is no clamping.
+   If flow exceeds the maximum defined flow, WNTR extrapolates using the same equation, which
+   can produce negative head values. A warning is issued after the fact but the simulation
+   is not stopped.
 
 Valves
 ^^^^^^
@@ -373,7 +408,7 @@ each operate in their own way. Valves derive from ``LinkEntity``.
 |                                            |           | valve type                                        |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.valve_loss_coefficient``  | OPT       | Loss coefficient for ``TCV``. Required for this   |
-|                                            |           | valve type. Must be higher than its minor loss    |
+|                                            |           | valve type                                        |
 +--------------------------------------------+-----------+---------------------------------------------------+
 | ``drinking_water.minor_loss``              | OPT       | Minor loss coefficient (Default: 0). Head loss    |
 |                                            |           | when the valve is fully open, proportional to     |
@@ -399,7 +434,10 @@ each operate in their own way. Valves derive from ``LinkEntity``.
    - **PRV** (Pressure Reducing): Limits downstream pressure to the set value
    - **PSV** (Pressure Sustaining): Maintains upstream pressure at the set value
    - **FCV** (Flow Control): Limits flow to the set value
-   - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient
+   - **TCV** (Throttle Control): Simulates partially closed valve via loss coefficient. When the
+     valve is Active, the ``valve_loss_coefficient`` is used as the head loss coefficient. When
+     the valve is Open (fully open), ``minor_loss`` is used instead. These are independent — WNTR
+     does not enforce that the loss coefficient must be larger than the minor loss
 
 .. note:: Valve Status
 
@@ -410,11 +448,42 @@ each operate in their own way. Valves derive from ``LinkEntity``.
    the valve to "Open" (which in WNTR terminology means the valve acts as a fully open pipe,
    ignoring its setting).
 
+.. warning:: Valve Placement Rules
+
+   WNTR enforces that **PRV, PSV, and FCV valves cannot connect directly to a reservoir or
+   tank** — an intermediate pipe must be placed between them. This is validated at network
+   construction and raises an error if violated.
+
+   Additionally, the EPANET specification defines these topology guidelines (not enforced by
+   WNTR, but violating them may produce unexpected simulation results):
+
+   - PRVs should not share the same downstream node or be daisy-chained
+   - PSVs should not share the same upstream node or be connected in series
+   - A PSV should not connect to the downstream node of a PRV
+
 Controls
 ^^^^^^^^
 
 Controls are not handled by the drinking water model directly, but are instead handed over to
-the :ref:`rules-model`.
+the :ref:`rules-model`. EPANET ``.inp`` files contain ``[CONTROLS]`` and ``[RULES]`` sections
+that define time-based or conditional operations (e.g. closing a pump when a tank level exceeds
+a threshold). In Movici, these are expressed as rules in the Rules Model.
+
+For example, an EPANET control that closes a pump when a tank level reaches 23 m translates to:
+
+.. code-block:: json
+
+    {
+        "from_reference": "some tank",
+        "if": "drinking_water.level >= 23",
+        "to_reference": "some pump",
+        "output": "operational.status",
+        "value": false,
+        "else_value": true
+    }
+
+See the :ref:`rules-model` documentation for the full condition syntax, including support for
+``<simtime>``, ``<clocktime>``, boolean operators, and attribute comparisons.
 
 Configuration Options
 ---------------------
