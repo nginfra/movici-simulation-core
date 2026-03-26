@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "movici"
 dynamic = ["version"]
 requires-python = ">=3.10,<3.14"
-dependencies = ["movici-simulation-core", "movici-sim-drinking-water"]
+dependencies = ["movici-simulation-core", "movici-drinking-water-model"]
 
 [dependency-groups]
 dev = [
@@ -33,7 +33,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
-movici-sim-drinking-water = { workspace = true }
+movici-drinking-water-model = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -86,9 +86,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
+"packages/drinking-water/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["movici_simulation_core"]
+known-first-party = ["movici_simulation_core", "movici_drinking_water_model"]
 
 [tool.ruff.format]
 docstring-code-format = true

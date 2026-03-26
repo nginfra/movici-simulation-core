@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import pathlib
 import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
@@ -31,8 +32,9 @@ from .dataset import (
     WaterTankEntity,
     WaterValveEntity,
 )
-from .json_schemas import SCHEMA_PATH
 from .network_wrapper import NetworkWrapper
+
+_PACKAGE_DIR = pathlib.Path(__file__).parent
 
 
 def _deep_merge(a: dict, b: dict) -> dict:
@@ -64,7 +66,7 @@ class Model(TrackedModel, name="drinking_water"):
        Controls are handled by the Movici Rules Model, not internally.
     """
 
-    __model_config_schema__ = SCHEMA_PATH / "drinking_water.json"
+    __model_config_schema__ = _PACKAGE_DIR / "drinking_water.json"
     auto_reset = PUBLISH
 
     @classmethod

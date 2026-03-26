@@ -10,7 +10,7 @@ import pytest
 import wntr
 from jsonschema import ValidationError
 
-from movici_sim_drinking_water.model import Model
+from movici_drinking_water_model.model import Model
 from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.testing.model_tester import ModelTester
 

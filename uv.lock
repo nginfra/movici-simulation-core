@@ -17,7 +17,7 @@ resolution-markers = [
 [manifest]
 members = [
     "movici",
-    "movici-sim-drinking-water",
+    "movici-drinking-water-model",
     "movici-simulation-core",
 ]
 
@@ -1184,7 +1184,7 @@ wheels = [
 name = "movici"
 source = { editable = "." }
 dependencies = [
-    { name = "movici-sim-drinking-water" },
+    { name = "movici-drinking-water-model" },
     { name = "movici-simulation-core" },
 ]
 
@@ -1209,7 +1209,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "movici-sim-drinking-water", editable = "packages/drinking-water" },
+    { name = "movici-drinking-water-model", editable = "packages/drinking-water" },
     { name = "movici-simulation-core", editable = "packages/simulation-core" },
 ]
 
@@ -1228,6 +1228,25 @@ docs = [
     { name = "sphinx" },
     { name = "sphinxcontrib-mermaid" },
     { name = "sphinxcontrib-plantuml" },
+]
+
+[[package]]
+name = "movici-drinking-water-model"
+source = { editable = "packages/drinking-water" }
+dependencies = [
+    { name = "movici-simulation-core" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "setuptools", marker = "python_full_version < '3.12'" },
+    { name = "wntr" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "numpy" },
+    { name = "setuptools", marker = "python_full_version < '3.12'", specifier = "<81" },
+    { name = "wntr", specifier = ">=1.0.0" },
 ]
 
 [[package]]
@@ -1252,25 +1271,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/19/8d/5ce5f4c2f8c3c797c13b585ce960e2116d285992186f7321b37b8d3d5e96/movici_geo_query-1.4.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6b8320ee2390eb67ba6bea9b0132af1d5404f5dbe58ac64473239c195d906840", size = 563127, upload-time = "2025-11-17T14:36:33.291Z" },
     { url = "https://files.pythonhosted.org/packages/4a/64/5b177b98d01282734830531befecc3a43132ef45c9316d350476a25a4083/movici_geo_query-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7ee5331400cb8e21941b974e407e2b738eb841145a2c0ff637bf3a29da259a3c", size = 646540, upload-time = "2025-11-17T14:36:34.943Z" },
     { url = "https://files.pythonhosted.org/packages/15/66/ab4b38178296161a389cf363455750070642d1c0e52fe69c90fadb3f5758/movici_geo_query-1.4.0-cp313-cp313-win_amd64.whl", hash = "sha256:69690bf0a15274702616398c932a52bfb2436f396e0aa5a7e3ecc938defef898", size = 358696, upload-time = "2025-11-17T14:36:36.889Z" },
-]
-
-[[package]]
-name = "movici-sim-drinking-water"
-source = { editable = "packages/drinking-water" }
-dependencies = [
-    { name = "movici-simulation-core" },
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "setuptools", marker = "python_full_version < '3.12'" },
-    { name = "wntr" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "movici-simulation-core", editable = "packages/simulation-core" },
-    { name = "numpy" },
-    { name = "setuptools", marker = "python_full_version < '3.12'", specifier = "<81" },
-    { name = "wntr", specifier = ">=1.0.0" },
 ]
 
 [[package]]
