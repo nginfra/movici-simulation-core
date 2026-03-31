@@ -127,7 +127,7 @@ class ServiceRunner(ProcessRunner):
     * Fills the ServiceInfo object
     * Raising an exception if it fails to announce the port in time
 
-    By creating the process as deamon=True, services cannot spawn their own subprocesses but they
+    By creating the process as daemon=True, services cannot spawn their own subprocesses but they
     can be easily terminated
     """
 
@@ -198,7 +198,7 @@ class ModelRunner(ProcessRunner):
 
     * Fills the ModelInfo object
 
-    By creating the process as deamon=False, models can spawn their own subprocesses
+    By creating the process as daemon=False, models can spawn their own subprocesses
     """
 
     update_handler: t.Optional[UpdateDataClient] = None

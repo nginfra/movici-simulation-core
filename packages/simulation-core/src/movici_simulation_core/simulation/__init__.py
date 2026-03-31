@@ -89,7 +89,7 @@ class Simulation(Extensible):
     def add_model(self, name: str, model: t.Union[Model, t.Type[Model]], config=None):
         """
         Manually add a model to a Simulation. A model can be added as an instance, or as
-        class. When added as a class, instantiation is of the model is done inside its subprocess,
+        class. When added as a class, instantiation of the model is done inside its subprocess,
         which, depending on the model, could help with certain forking issues
 
         :param name: the model name, a model name must be unique within a simulation
@@ -110,7 +110,7 @@ class Simulation(Extensible):
 
     def set_timeline_info(self, timeline_info: TimelineInfo):
         """
-        When configuring the Simulation manually, use this  method to add timeline information
+        When configuring the Simulation manually, use this method to add timeline information
         the simulation.
 
         :param timeline_info: the `TimelineInfo` object for this simulation

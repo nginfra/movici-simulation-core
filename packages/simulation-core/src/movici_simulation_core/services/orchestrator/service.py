@@ -84,7 +84,7 @@ class Orchestrator(Service):
 
     def restart_model_timer(self, model: str):
         """Allow resetting a specific model timer. This is used when running using the
-        InProcessSimulationRunner. Orchestrator starts the time by default when it sends out the
+        InProcessSimulationRunner. Orchestrator starts the timer by default when it sends out the
         message, but we need to actually start the timer when we start processing the message
         """
         self.context.models[model].timer.restart_current()
