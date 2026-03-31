@@ -4,11 +4,10 @@ import typing as t
 from uuid import UUID
 
 from movici_data_core.database import model as db
-from movici_data_core.database.model import NamedResource, to_domain_or_none
+from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
 from movici_data_core.domain_model import Workspace
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.base import Options
 
 T_dom = t.TypeVar("T_dom")
 

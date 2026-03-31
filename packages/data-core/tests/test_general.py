@@ -1,16 +1,13 @@
-import pytest
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.general import get_options, get_version, initialize_database
 
 
-@pytest.mark.asyncio
 async def test_initialize_db_sets_default_version(session):
     await initialize_database(session, mode=DatabaseMode.SINGLE_SCENARIO)
     await session.flush()
     assert (await get_version(session)) == "v1"
 
 
-@pytest.mark.asyncio
 async def test_initialize_db_for_single_scenario_sets_flags(session):
     await initialize_database(session, mode=DatabaseMode.SINGLE_SCENARIO)
     options = await get_options(session)
@@ -23,7 +20,6 @@ async def test_initialize_db_for_single_scenario_sets_flags(session):
     assert not options.STRICT_MODEL_CONFIGS
 
 
-@pytest.mark.asyncio
 async def test_initialize_db_for_single_scenario_creates_default_workspace(session):
     await initialize_database(session, mode=DatabaseMode.SINGLE_SCENARIO)
     options = await get_options(session)
@@ -33,7 +29,6 @@ async def test_initialize_db_for_single_scenario_creates_default_workspace(sessi
     assert options.default_workspace.display_name == "__default__"
 
 
-@pytest.mark.asyncio
 async def test_initialize_db_for_multiple_workspaces_sets_flags(session):
     await initialize_database(session, mode=DatabaseMode.MULTIPLE_WORKSPACES)
     options = await get_options(session)
@@ -46,7 +41,6 @@ async def test_initialize_db_for_multiple_workspaces_sets_flags(session):
     assert options.STRICT_MODEL_CONFIGS
 
 
-@pytest.mark.asyncio
 async def test_initialize_db_for_multiple_workspaces_does_not_create_default_workspace(session):
     await initialize_database(session, mode=DatabaseMode.MULTIPLE_WORKSPACES)
     options = await get_options(session)
