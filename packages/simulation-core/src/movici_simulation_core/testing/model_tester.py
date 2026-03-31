@@ -10,14 +10,13 @@ from movici_simulation_core.base_models.tracked_model import TrackedModel, Track
 from movici_simulation_core.core import (
     EntityInitDataFormat,
     Model,
+    ModelAdapterBase,
     UpdateDataFormat,
-    dump_update,
-    load_update,
 )
 from movici_simulation_core.core.data_format import dump_dataset_data
 from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec
-from movici_simulation_core.core.types import Extensible, ModelAdapterBase
+from movici_simulation_core.core.types import Extensible
 from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
@@ -25,7 +24,7 @@ from movici_simulation_core.messages import (
     UpdateSeriesMessage,
 )
 from movici_simulation_core.model_connector.init_data import (
-    DirectoryInitDataHandler,
+    DirectoryInitDataClient,
     InitDataHandler,
 )
 from movici_simulation_core.settings import Settings
@@ -33,8 +32,6 @@ from movici_simulation_core.testing.helpers import compare_dataset_dicts
 from movici_simulation_core.types import (
     DataMask,
     NextTime,
-    RawResult,
-    RawUpdateData,
     Result,
     UpdateData,
 )
@@ -50,10 +47,10 @@ class PreProcessor:
         self.model = adapter(model, settings, logging.getLogger())
         self.model.set_schema(self.schema)
 
-    def process_input(self, input_data: UpdateData) -> RawUpdateData:
+    def process_input(self, input_data: UpdateData) -> UpdateData:
         raise NotImplementedError
 
-    def process_result(self, result: RawResult) -> Result:
+    def process_result(self, result: Result) -> Result:
         raise NotImplementedError
 
     def initialize(self, data_handler: InitDataHandler) -> DataMask:
@@ -79,16 +76,15 @@ class NumpyPreProcessor(PreProcessor):
         super().__init__(model, settings, schema)
         self.parser = EntityInitDataFormat(schema)
 
-    def process_input(self, input_data: UpdateData) -> RawUpdateData:
+    def process_input(self, input_data: UpdateData) -> UpdateData:
         if input_data is None:
             return None
-        array_data = self.parser.load_json(input_data)
-        return dump_update(array_data)
+        return self.parser.load_json(input_data)
 
-    def process_result(self, result: RawResult) -> Result:
+    def process_result(self, result: Result) -> Result:
         data, next_time = result
         if data is not None:
-            data = dump_dataset_data(load_update(data))
+            data = dump_dataset_data(data)
         return data, next_time
 
 
@@ -147,7 +143,7 @@ class ModelTester:
         """
         self.tmp_dir = Path(tmp_dir or tempfile.mkdtemp())
         self.created_tmp_dir = not tmp_dir
-        self.init_data_handler = init_data_handler or DirectoryInitDataHandler(self.tmp_dir)
+        self.init_data_handler = init_data_handler or DirectoryInitDataClient(self.tmp_dir)
         self.settings = settings or Settings()
         self.schema = read_schema(schema)
         self._set_default_strategies()

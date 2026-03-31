@@ -1,14 +1,14 @@
 import typing as t
 
-from movici_simulation_core.model_connector import InitDataHandler
+from movici_simulation_core.model_connector import InitDataClient
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 from movici_simulation_core.utils import strategies
 from movici_simulation_core.utils.path import DatasetPath
 
 
-class EntityAwareInitDataHandler(InitDataHandler):
+class EntityAwareInitDataHandler(InitDataClient):
     def __init__(
-        self, handler: InitDataHandler, strategy: t.Optional[ExternalSerializationStrategy] = None
+        self, handler: InitDataClient, strategy: t.Optional[ExternalSerializationStrategy] = None
     ):
         self.handler = handler
         self.strategy = strategy or strategies.get_instance(ExternalSerializationStrategy)

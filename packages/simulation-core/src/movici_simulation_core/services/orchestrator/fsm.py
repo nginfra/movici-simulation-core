@@ -5,20 +5,10 @@ import inspect
 import typing as t
 from abc import ABC, abstractmethod
 
+from movici_simulation_core.exceptions import FSMDone, FSMError, FSMException, FSMStarted
+
 T = t.TypeVar("T")
 E = t.TypeVar("E")
-
-
-class FSMError(Exception):
-    pass
-
-
-class FSMStarted(FSMError):
-    pass
-
-
-class FSMDone(FSMError):
-    pass
 
 
 def send_silent(coro: t.Generator, value: t.Any):
@@ -52,6 +42,7 @@ class FSM(t.Generic[T, E]):
         self.runner = None
         self.started = False
         self.done = False
+        self.failure = False
         self.raise_on_done = raise_on_done
 
     @not_done
@@ -69,8 +60,11 @@ class FSM(t.Generic[T, E]):
                 else:
                     self.state.run()
                 self.transition()
-        except FSMDone:
+        except FSMException as e:
             self.done = True
+            if isinstance(e, FSMError):
+                self.failure = True
+
             if self.raise_on_done:
                 raise
 

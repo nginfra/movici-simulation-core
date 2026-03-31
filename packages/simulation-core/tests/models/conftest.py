@@ -10,7 +10,7 @@ import pytest
 from movici_simulation_core.core import Model
 from movici_simulation_core.core.moment import TimelineInfo
 from movici_simulation_core.core.schema import AttributeSchema
-from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
+from movici_simulation_core.model_connector.init_data import DirectoryInitDataClient
 from movici_simulation_core.models.common.attributes import CommonAttributes
 from movici_simulation_core.testing.model_tester import ModelTester
 
@@ -44,7 +44,7 @@ def global_schema(global_schema):
 @pytest.fixture
 def init_data_handler(tmp_path_factory):
     root = tmp_path_factory.mktemp("init_data_handler")
-    return DirectoryInitDataHandler(root)
+    return DirectoryInitDataClient(root)
 
 
 @pytest.fixture

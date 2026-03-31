@@ -2,11 +2,10 @@ import logging
 from functools import singledispatchmethod
 from pathlib import Path
 
-from movici_simulation_core.core import Service
+from movici_simulation_core.core import Extensible, Service
 from movici_simulation_core.messages import ErrorMessage, GetDataMessage, ModelMessage, PathMessage
 from movici_simulation_core.networking.stream import MessageRouterSocket, Stream
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.simulation import Simulation
 
 
 class InitDataService(Service):
@@ -16,8 +15,8 @@ class InitDataService(Service):
     root: Path
 
     @classmethod
-    def install(cls, sim: Simulation):
-        sim.register_service("init_data", cls, auto_use=True)
+    def install(cls, obj: Extensible):
+        obj.register_service("init_data", cls, auto_use=True)
 
     def setup(self, *, stream: Stream, logger: logging.Logger, settings: Settings, **_):
         self.stream = stream
