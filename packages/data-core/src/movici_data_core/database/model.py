@@ -10,18 +10,37 @@ This schema provides efficient storage for simulation updates with:
 
 from __future__ import annotations
 
+import datetime
 import enum
+import typing as t
 import uuid
 
+from movici_data_core import domain_model
+from movici_data_core.domain_model import DatasetFormat
 from sqlalchemy import (
+    JSON,
     ForeignKey,
     String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from movici_data_core.domain_model import DatasetFormat
-
 from .db_types import GUID
+
+T_dom = t.TypeVar("T_dom", covariant=True)
+
+
+class NamedResource(t.Protocol[T_dom]):
+    id: Mapped[uuid.UUID]
+    name: Mapped[str]
+
+    def to_domain(self) -> T_dom: ...
+
+
+def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
+    return obj.to_domain() if obj is not None else None
 
 
 class Base(DeclarativeBase):
@@ -77,8 +96,13 @@ class Options(Base):
 class Workspace(Base):
     __tablename__ = "workspace"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(unique=True)
     display_name: Mapped[str]
+    datasets: Mapped[list[Dataset]] = relationship(back_populates="workspace")
+    scenarios: Mapped[list[Scenario]] = relationship(back_populates="workspace")
+
+    def to_domain(self):
+        return domain_model.Workspace(id=self.id, name=self.name, display_name=self.display_name)
 
 
 class DatasetType(Base):
@@ -87,6 +111,82 @@ class DatasetType(Base):
     name: Mapped[str]
     format: Mapped[DatasetFormat]
     mimetype: Mapped[str | None]
+
+    def to_domain(self):
+        return domain_model.DatasetType(
+            id=self.id, name=self.name, format=self.format, mimetype=self.mimetype
+        )
+
+
+class Dataset(Base):
+    __tablename__ = "dataset"
+    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
+    workspace: Mapped[Workspace] = relationship(back_populates="datasets")
+
+    name: Mapped[str]
+    display_name: Mapped[str]
+
+    dataset_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("dataset_type.id", ondelete="RESTRICT")
+    )
+    dataset_type: Mapped[DatasetType] = relationship()
+
+    general: Mapped[dict | None] = mapped_column(JSON)
+    epsg_code: Mapped[int | None]
+    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSON)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    def to_domain(self) -> domain_model.Dataset:
+        return domain_model.Dataset(
+            id=self.id,
+            name=self.name,
+            display_name=self.display_name,
+            dataset_type=self.dataset_type.to_domain(),
+            workspace=self.workspace.to_domain(),
+            general=self.general,
+            espg_code=self.epsg_code,
+            bounding_box=self.bounding_box,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+        )
+
+
+class Scenario(Base):
+    __tablename__ = "scenario"
+    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
+    workspace: Mapped[Workspace] = relationship(back_populates="scenarios")
+
+    name: Mapped[str]
+    display_name: Mapped[str]
+    description: Mapped[str] = mapped_column(Text)
+    simulation_info: Mapped[dict] = mapped_column(JSON)
+
+    epsg_code: Mapped[int]
+    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSON)
+
+    created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    def to_domain(self) -> domain_model.Scenario:
+        return domain_model.Scenario(
+            id=self.id,
+            workspace=self.workspace.to_domain(),
+            name=self.name,
+            display_name=self.display_name,
+            description=self.description,
+            simulation_info=self.simulation_info,
+            epsg_code=self.epsg_code,
+            bounding_box=self.bounding_box,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+        )
 
 
 #

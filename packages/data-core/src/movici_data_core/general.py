@@ -2,8 +2,7 @@ from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
-from movici_data_core.model import (
+from movici_data_core.database.model import (
     DEFAULT_SCHEMA_VERSION,
     DEFAULT_WORKSPACE_NAME,
     DatabaseMode,
@@ -11,6 +10,7 @@ from movici_data_core.model import (
     Options,
     Workspace,
 )
+from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
 
 
 async def initialize_database(session: AsyncSession, mode: DatabaseMode):
