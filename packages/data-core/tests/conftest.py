@@ -41,4 +41,4 @@ async def a_workspace(session: AsyncSession):
     workspace = Workspace(name="default", display_name="Default Workspace")
     session.add(workspace)
     await session.flush()
-    return workspace
+    return workspace.to_domain()
