@@ -5,7 +5,8 @@ from uuid import UUID
 
 from movici_data_core.database import model as db
 from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
-from movici_data_core.domain_model import Workspace
+from movici_data_core.domain_model import DatasetFormat, DatasetType, Workspace
+from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +22,10 @@ class SQLAlchemyRepository:
     @property
     def workspaces(self):
         return WorkspaceRepository(self.session, self)
+
+    @property
+    def dataset_types(self):
+        return DatasetTypeRepository(self.session, self)
 
 
 class GenericResourceRepository(t.Generic[T_dom]):
@@ -75,4 +80,36 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         # We do not allow updating the workspace name
         await self.session.execute(
             update(db.Workspace).where(db.Workspace.id == id).values(display_name=obj.display_name)
+        )
+
+
+class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
+    __resource__ = db.DatasetType
+
+    async def create(self, obj: DatasetType) -> DatasetType:
+        return (
+            t.cast(
+                db.DatasetType,
+                await self.session.scalar(
+                    insert(db.DatasetType)
+                    .values(name=obj.name, format=obj.format, mimetype=obj.mimetype)
+                    .returning(db.DatasetType)
+                ),
+            )
+        ).to_domain()
+
+    async def update(self, id: UUID, obj: DatasetType):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("dataset_type", id=id)
+        if current.format != obj.format:
+            raise InvalidAction("Cannot update dataset type format")
+
+        mimetype = obj.mimetype if obj.format == DatasetFormat.BINARY else None
+
+        # We do not allow updating the workspace name
+        await self.session.execute(
+            update(db.DatasetType)
+            .where(db.DatasetType.id == id)
+            .values(name=obj.name, mimetype=mimetype)
         )
