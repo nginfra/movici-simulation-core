@@ -8,11 +8,10 @@ Resilience).
 Features
 --------
 
-- Hydraulic simulation of water distribution networks
+- Hydraulic simulation of water distribution networks using WNTR
+- Demand-driven (DDA) and pressure-dependent demand (PDA) analysis
 - Support for junctions, tanks, reservoirs, pipes, pumps, and valves
-- Pressure-dependent demand (PDD) modelling
-- Pause/restart simulation pattern for integrating external control changes
-- CSR curve data for pump head curves and tank volume curves
+- Pressure, head, flow, velocity, and demand output per network element
 
 Installation
 ------------
