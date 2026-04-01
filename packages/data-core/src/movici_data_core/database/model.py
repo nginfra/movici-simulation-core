@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime
 import enum
-import io
 import typing as t
 import uuid
 
@@ -189,23 +188,12 @@ class RawData(Base):
 
 
 class RawDataChunk(Base):
-    DEFAULT_CHUNK_SIZE = 100_000_000  # 100MB
     __tablename__ = "raw_data_chunk"
-    __table_args__ = (UniqueConstraint("dataset_id", "sequence"),)
+    __table_args__ = (UniqueConstraint("raw_data_id", "sequence"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    raw_data_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("raw_data.id", ondelete="CASCADE"))
     sequence: Mapped[int]
     bytes: Mapped[bytes]
-
-    @classmethod
-    def from_file(cls, file: io.BytesIO, dataset_id: uuid.UUID, chunk_size=0):
-        chunk_size = chunk_size or cls.DEFAULT_CHUNK_SIZE
-        if chunk_size <= 0:
-            raise ValueError("Chunk size must be greater than 0")
-        seq = 0
-        while chunk := file.read(chunk_size):
-            seq += 1
-            yield cls(dataset_id=dataset_id, sequence=seq, bytes=chunk)
 
 
 #

@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import contextlib
+import io
+import pathlib
 import typing as t
 from uuid import UUID
 
+import orjson
 from movici_data_core.database import model as db
-from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
-from movici_data_core.domain_model import Dataset, DatasetFormat, DatasetType, Workspace
+from movici_data_core.database.model import (
+    NamedResource,
+    Options,
+    RawData,
+    RawDataChunk,
+    to_domain_or_none,
+)
+from movici_data_core.domain_model import (
+    Dataset,
+    DatasetData,
+    DatasetFormat,
+    DatasetType,
+    Workspace,
+)
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
@@ -193,6 +209,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
 
 
 class DatasetRepository(ScopedResourceRepository[Dataset]):
+    RAW_DATA_CHUNK_SIZE = 100_000_000  # MB
     __resource__ = db.Dataset
     __parent_ref__ = db.Dataset.workspace_id
     __select_in_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
@@ -239,5 +256,93 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
             .values(name=obj.name, display_name=obj.display_name)
         )
 
-    async def _load_raw_data(self, id: UUID):
-        pass
+    async def has_data(self, id: UUID):
+        return bool(
+            await self.session.scalar(
+                select(func.count(RawData.id)).where(RawData.dataset_id == id)
+            )
+        )  # TODO: add check for entity data
+
+    async def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
+        raw_data = await self.session.scalar(
+            select(RawData).where(RawData.dataset_id == id).limit(1)
+        )
+        if raw_data is None:
+            raise ResourceDoesNotExist("dataset_data", id=id)
+
+        async for chunk in await self.session.stream_scalars(
+            select(RawDataChunk.bytes)
+            .execution_options(yield_per=yield_per)
+            .where(RawDataChunk.raw_data_id == raw_data.id)
+            .order_by(RawDataChunk.sequence.asc())
+        ):
+            yield chunk
+
+    async def store_data(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
+        """Store dataset data for a dataset. The dataset must currently not contain any data
+
+        :param id: A dataset id
+        :param data: The dataset data as dict, bytes, BytesIO or pathlib.Path
+        :param format: The dataset's ``DatasetFormat``
+        :param chunk_size: The maximum chunk size in bytes to store data. By default set to the
+            value of DatasetRepository.RAW_DATA_CHUNK_SIZE. This parameter is ignore when the
+            dataset format is DatasetFormat.ENTITY_BASED
+        """
+
+        if await self.has_data(id):
+            raise InvalidResource("dataset", id=id, message="Dataset already has data")
+
+        if format == DatasetFormat.ENTITY_BASED:
+            raise NotImplementedError("Entity based data not yet supported")
+
+        await self._store_raw_data(id, data, chunk_size=chunk_size)
+
+    async def _store_raw_data(self, id: UUID, data: DatasetData, chunk_size=0):
+        chunk_size = chunk_size or self.RAW_DATA_CHUNK_SIZE
+        with self._data_as_bytesio(data) as (encoding, raw_reader):
+            raw_data_id = t.cast(
+                UUID,
+                await self.session.scalar(
+                    insert(db.RawData)
+                    .values(
+                        dataset_id=id,
+                        encoding=encoding,
+                    )
+                    .returning(db.RawData.id)
+                ),
+            )
+            for seq, chunk in self._raw_data_chunks(raw_reader, chunk_size):
+                await self.session.execute(
+                    insert(db.RawDataChunk).values(
+                        raw_data_id=raw_data_id, sequence=seq, bytes=chunk
+                    )
+                )
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _data_as_bytesio(data: DatasetData):
+        encoding = None
+        finalizer = None
+        if isinstance(data, dict):
+            data = orjson.dumps(data)
+            encoding = "json"
+        if isinstance(data, bytes):
+            data = io.BytesIO(data)
+        if isinstance(data, pathlib.Path):
+            data = open(data, "rb")
+            finalizer = data.close
+
+        try:
+            yield encoding, data
+        finally:
+            if finalizer is not None:
+                finalizer()
+
+    @staticmethod
+    def _raw_data_chunks(file: t.BinaryIO, chunk_size: int):
+        if chunk_size <= 0:
+            raise ValueError("Chunk size must be greater than 0")
+        seq = 0
+        while chunk := file.read(chunk_size):
+            seq += 1
+            yield seq, chunk

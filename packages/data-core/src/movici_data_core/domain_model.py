@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import enum
 import pathlib
+import typing as t
 from uuid import UUID
 
 
@@ -39,6 +40,9 @@ class DatasetType:
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
+DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
+
+
 @dataclasses.dataclass
 class Dataset:
     name: str
@@ -53,7 +57,7 @@ class Dataset:
     created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
     updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
 
-    data: dict | bytes | pathlib.Path | None = None
+    data: DatasetData | None = None
 
 
 @dataclasses.dataclass

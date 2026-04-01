@@ -169,3 +169,16 @@ class TestDatasetRepository:
         assert dataset is not None
         assert dataset.dataset_type.name == "new"
         assert dataset.dataset_type.id is not None
+
+    async def test_store_and_retrieve_raw_data(self, repository: SQLAlchemyRepository, a_dataset):
+        data = b"somethingbinarydata"
+        await repository.datasets.store_data(
+            a_dataset.id, data, format=DatasetFormat.BINARY, chunk_size=2
+        )
+        result = b""
+        n_chunks = 0
+        async for chunk in repository.datasets.stream_binary_data(a_dataset.id):
+            result += chunk
+            n_chunks += 1
+        assert n_chunks == len(data) // 2 + 1
+        assert result == data
