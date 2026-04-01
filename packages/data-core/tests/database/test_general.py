@@ -1,5 +1,12 @@
+import pytest
 from movici_data_core.database.general import get_options, get_version, initialize_database
 from movici_data_core.database.model import DatabaseMode
+
+
+@pytest.fixture
+def initialized_db():
+    """Override initialized_db fixture to be a noop"""
+    return
 
 
 async def test_initialize_db_sets_default_version(session):

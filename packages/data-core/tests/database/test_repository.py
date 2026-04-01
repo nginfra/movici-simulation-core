@@ -3,108 +3,122 @@ import uuid
 
 import pytest
 from movici_data_core.database.repository import (
-    DatasetTypeRepository,
     SQLAlchemyRepository,
-    WorkspaceRepository,
 )
-from movici_data_core.domain_model import DatasetFormat, DatasetType, Workspace
+from movici_data_core.domain_model import Dataset, DatasetFormat, DatasetType, Workspace
 from movici_data_core.exceptions import InvalidAction
 
 
-class TestWorkspaceRepository:
-    @pytest.fixture
-    def repository(self, repository: SQLAlchemyRepository):
-        return repository.workspaces
-
-    async def test_get_workspace_by_id(self, repository: WorkspaceRepository, a_workspace):
+class TestSQLAlchemyRepository:
+    async def test_get_workspace_by_id(self, repository: SQLAlchemyRepository, a_workspace):
         assert a_workspace.id is not None
-        found = await repository.get_by_id(a_workspace.id)
+        found = await repository.workspaces.get_by_id(a_workspace.id)
         assert a_workspace == found
 
-    async def test_get_workspace_by_name(self, repository: WorkspaceRepository, a_workspace):
-        found = await repository.get_by_name(a_workspace.name)
+    async def test_get_workspace_by_name(self, repository: SQLAlchemyRepository, a_workspace):
+        found = await repository.workspaces.get_by_name(a_workspace.name)
         assert a_workspace == found
 
-    async def test_get_non_existing_workspace_by_name(self, repository: WorkspaceRepository):
-        assert (await repository.get_by_name("invalid")) is None
+    async def test_get_non_existing_workspace_by_name(self, repository: SQLAlchemyRepository):
+        assert (await repository.workspaces.get_by_name("invalid")) is None
 
-    async def test_get_non_existing_workspace_by_id(self, repository: WorkspaceRepository):
-        assert (await repository.get_by_id(uuid.uuid4())) is None
+    async def test_get_non_existing_workspace_by_id(self, repository: SQLAlchemyRepository):
+        assert (await repository.workspaces.get_by_id(uuid.uuid4())) is None
 
     async def test_created_workspace_gets_a_uuid(self, repository):
-        workspace = await repository.create(
+        workspace = await repository.workspaces.create(
             Workspace(name="some_workspace", display_name="Some Workspace")
         )
         assert int(workspace.id) > 0
 
-    async def test_create_and_delete_a_workspace(self, repository: WorkspaceRepository):
-        assert len(await repository.list()) == 0
-        workspace = await repository.create(
+    async def test_create_and_delete_a_workspace(self, repository: SQLAlchemyRepository):
+        assert len(await repository.workspaces.list()) == 0
+        workspace = await repository.workspaces.create(
             Workspace(name="some_workspace", display_name="Some Workspace")
         )
         assert workspace.id is not None
-        assert len(await repository.list()) == 1
+        assert len(await repository.workspaces.list()) == 1
 
-        await repository.delete(workspace.id)
+        await repository.workspaces.delete(workspace.id)
 
-        assert len(await repository.list()) == 0
+        assert len(await repository.workspaces.list()) == 0
 
-    async def test_update_workspace(self, repository: WorkspaceRepository, a_workspace: Workspace):
+    async def test_update_workspace(
+        self, repository: SQLAlchemyRepository, a_workspace: Workspace
+    ):
         assert a_workspace.id is not None
         assert a_workspace.display_name != "New Name"
 
-        await repository.update(
+        await repository.workspaces.update(
             a_workspace.id, dataclasses.replace(a_workspace, display_name="New Name")
         )
-        updated = await repository.get_by_id(a_workspace.id)
+        updated = await repository.workspaces.get_by_id(a_workspace.id)
         assert updated is not None
         assert updated.display_name == "New Name"
 
 
 class TestDatasetTypeRepository:
-    @pytest.fixture
-    def repository(self, repository: SQLAlchemyRepository):
-        return repository.dataset_types
-
-    async def test_create_and_delete_a_dataset_type(self, repository: DatasetTypeRepository):
-        assert len(await repository.list()) == 0
-        dataset_type = await repository.create(
+    async def test_create_and_delete_a_dataset_type(self, repository: SQLAlchemyRepository):
+        assert len(await repository.dataset_types.list()) == 0
+        dataset_type = await repository.dataset_types.create(
             DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
         )
         assert dataset_type.id is not None
-        assert len(await repository.list()) == 1
+        assert len(await repository.dataset_types.list()) == 1
 
-        await repository.delete(dataset_type.id)
+        await repository.dataset_types.delete(dataset_type.id)
 
-        assert len(await repository.list()) == 0
+        assert len(await repository.dataset_types.list()) == 0
 
-    async def test_update_dataset_type(self, repository: DatasetTypeRepository):
-        dataset_type = await repository.create(
+    async def test_update_dataset_type(self, repository: SQLAlchemyRepository):
+        dataset_type = await repository.dataset_types.create(
             DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
         )
         assert dataset_type.id is not None
 
-        await repository.update(
+        await repository.dataset_types.update(
             dataset_type.id, dataclasses.replace(dataset_type, name="new_name")
         )
-        updated = await repository.get_by_id(dataset_type.id)
+        updated = await repository.dataset_types.get_by_id(dataset_type.id)
         assert updated is not None
         assert updated.name == "new_name"
 
-    async def test_cannot_change_format(self, repository: DatasetTypeRepository):
-        dataset_type = await repository.create(
+    async def test_cannot_change_format(self, repository: SQLAlchemyRepository):
+        dataset_type = await repository.dataset_types.create(
             DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
         )
         assert dataset_type.id
 
         dataset_type.format = DatasetFormat.UNSTRUCTURED
         with pytest.raises(InvalidAction):
-            await repository.update(
+            await repository.dataset_types.update(
                 dataset_type.id, dataclasses.replace(dataset_type, name="new_name")
             )
 
 
 class TestDatasetRepository:
-    @pytest.fixture
-    def repository(self, repository: SQLAlchemyRepository):
-        return repository.datasets
+    async def test_get_dataset_with_workspace_and_dataset_type(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+        dataset = await repository.datasets.get_by_id(a_dataset.id)
+        assert dataset is not None
+        assert isinstance(dataset.workspace, Workspace)
+        assert isinstance(dataset.dataset_type, DatasetType)
+
+    async def test_create_dataset(
+        self, repository: SQLAlchemyRepository, a_workspace, a_dataset_type
+    ):
+        dataset = await repository.datasets.create(
+            a_workspace.id,
+            Dataset("another_dataset", "Another Dataset", dataset_type=a_dataset_type),
+        )
+        assert dataset is not None and dataset.id is not None
+        assert int(dataset.id) > 0
+
+    async def test_update_dataset(self, repository: SQLAlchemyRepository, a_dataset):
+        await repository.datasets.update(
+            a_dataset.id, dataclasses.replace(a_dataset, name="new_name")
+        )
+        updated = await repository.datasets.get_by_id(a_dataset.id)
+        assert updated is not None
+        assert updated.name == "new_name"

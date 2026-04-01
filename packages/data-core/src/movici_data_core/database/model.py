@@ -1,17 +1,8 @@
-"""SQLite Schema for Intermediate Simulation Data Storage.
-
-This schema provides efficient storage for simulation updates with:
-
-* Numpy array storage with dtype preservation
-* CSR sparse array support via indptr
-* Time-series update tracking
-* Entity-attribute data model
-"""
-
 from __future__ import annotations
 
 import datetime
 import enum
+import io
 import typing as t
 import uuid
 
@@ -128,14 +119,14 @@ class Dataset(Base):
     name: Mapped[str]
     display_name: Mapped[str]
 
-    dataset_type_id: Mapped[uuid.UUID | None] = mapped_column(
+    dataset_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("dataset_type.id", ondelete="RESTRICT")
     )
-    dataset_type: Mapped[DatasetType] = relationship()
+    dataset_type: Mapped[DatasetType] = relationship(DatasetType)
 
     general: Mapped[dict | None] = mapped_column(JSON)
     epsg_code: Mapped[int | None]
-    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSON)
+    bounding_box: Mapped[tuple[float, float, float, float] | None] = mapped_column(JSON)
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
@@ -187,6 +178,34 @@ class Scenario(Base):
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
+
+
+class RawData(Base):
+    __tablename__ = "raw_data"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    encoding: Mapped[str | None]
+    compresion: Mapped[str | None]
+
+
+class RawDataChunk(Base):
+    DEFAULT_CHUNK_SIZE = 100_000_000  # 100MB
+    __tablename__ = "raw_data_chunk"
+    __table_args__ = (UniqueConstraint("dataset_id", "sequence"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    sequence: Mapped[int]
+    bytes: Mapped[bytes]
+
+    @classmethod
+    def from_file(cls, file: io.BytesIO, dataset_id: uuid.UUID, chunk_size=0):
+        chunk_size = chunk_size or cls.DEFAULT_CHUNK_SIZE
+        if chunk_size <= 0:
+            raise ValueError("Chunk size must be greater than 0")
+        seq = 0
+        while chunk := file.read(chunk_size):
+            seq += 1
+            yield cls(dataset_id=dataset_id, sequence=seq, bytes=chunk)
 
 
 #

@@ -28,7 +28,7 @@ def utcnow():
 class Workspace:
     name: str
     display_name: str
-    id: UUID | None = None
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
@@ -36,7 +36,7 @@ class DatasetType:
     name: str
     format: DatasetFormat
     mimetype: str | None = None
-    id: UUID | None = None
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
