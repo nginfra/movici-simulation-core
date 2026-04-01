@@ -238,3 +238,6 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
             .where(db.Dataset.id == id)
             .values(name=obj.name, display_name=obj.display_name)
         )
+
+    async def _load_raw_data(self, id: UUID):
+        pass

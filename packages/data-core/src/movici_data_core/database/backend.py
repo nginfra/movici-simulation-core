@@ -40,7 +40,29 @@ class SQLAlchemyBackend:
     def __init__(self, session: AsyncSession, options: Options):
         self.session = session
         self.options = options
-        self.repository = SQLAlchemyRepository(session, options)
+
+    @property
+    def repository(self):
+        return SQLAlchemyRepository(self.session, self.options)
+
+    def set_options(
+        self,
+        strict_dataset_types: bool | None = None,
+        strict_entity_types: bool | None = None,
+        strict_attributes: bool | None = None,
+        strict_models: bool | None = None,
+        strict_model_configs: bool | None = None,
+    ):
+        if strict_dataset_types is not None:
+            self.options.STRICT_DATASET_TYPES = strict_dataset_types
+        if strict_entity_types is not None:
+            self.options.STRICT_ENTITY_TYPES = strict_entity_types
+        if strict_attributes is not None:
+            self.options.STRICT_ATTRIBUTES = strict_attributes
+        if strict_models is not None:
+            self.options.STRICT_MODELS = strict_models
+        if strict_model_configs is not None:
+            self.options.STRICT_MODEL_CONFIGS = strict_model_configs
 
 
 class MultipleWorkspacesBackend(SQLAlchemyBackend):

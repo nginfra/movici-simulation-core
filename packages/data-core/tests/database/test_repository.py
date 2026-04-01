@@ -6,7 +6,7 @@ from movici_data_core.database.repository import (
     SQLAlchemyRepository,
 )
 from movici_data_core.domain_model import Dataset, DatasetFormat, DatasetType, Workspace
-from movici_data_core.exceptions import InvalidAction
+from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 
 
 class TestSQLAlchemyRepository:
@@ -122,3 +122,50 @@ class TestDatasetRepository:
         updated = await repository.datasets.get_by_id(a_dataset.id)
         assert updated is not None
         assert updated.name == "new_name"
+
+    async def test_raises_on_invalid_dataset_type_when_strict(
+        self, repository: SQLAlchemyRepository, a_workspace, a_dataset_type
+    ):
+        repository.options.STRICT_DATASET_TYPES = True
+
+        with pytest.raises(InvalidResource):
+            await repository.datasets.create(
+                a_workspace.id,
+                Dataset(
+                    "some_dataset",
+                    "some dataset",
+                    dataset_type=DatasetType(a_dataset_type.name, format=DatasetFormat.BINARY),
+                ),
+            )
+
+    async def test_raises_on_non_existing_dataset_type_when_strict(
+        self, repository: SQLAlchemyRepository, a_workspace
+    ):
+        repository.options.STRICT_DATASET_TYPES = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.datasets.create(
+                a_workspace.id,
+                Dataset(
+                    "some_dataset",
+                    "some dataset",
+                    dataset_type=DatasetType("new", format=DatasetFormat.ENTITY_BASED),
+                ),
+            )
+
+    async def test_automatically_creates_dataset_type_when_not_strict(
+        self, repository: SQLAlchemyRepository, a_workspace
+    ):
+        repository.options.STRICT_DATASET_TYPES = False
+
+        dataset = await repository.datasets.create(
+            a_workspace.id,
+            Dataset(
+                "some_dataset",
+                "some dataset",
+                dataset_type=DatasetType("new", format=DatasetFormat.ENTITY_BASED),
+            ),
+        )
+        assert dataset is not None
+        assert dataset.dataset_type.name == "new"
+        assert dataset.dataset_type.id is not None

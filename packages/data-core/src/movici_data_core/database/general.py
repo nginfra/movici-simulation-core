@@ -7,7 +7,7 @@ from movici_data_core.database.model import (
     Workspace,
 )
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -51,6 +51,10 @@ async def get_options(session: AsyncSession):
     if not options:
         raise DatabaseNotYetInitialized
     return options
+
+
+async def set_options(session: AsyncSession, **options):
+    await session.execute(update(Options).values(**options))
 
 
 def _default_flags(mode: DatabaseMode):

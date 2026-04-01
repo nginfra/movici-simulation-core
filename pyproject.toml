@@ -87,8 +87,8 @@ ignore = [
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
 
-"packages/data-core/tests/*" = ["S"]
 "packages/data-core/*" = ["S101", "B011"]
+"packages/data-core/tests/*" = ["S"]
 "packages/data-core/examples/*" = ["T20"]
 
 [tool.ruff.lint.isort]
