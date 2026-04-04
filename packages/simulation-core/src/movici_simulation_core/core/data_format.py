@@ -10,7 +10,6 @@ from movici_simulation_core.types import (
     FileType,
     NumpyAttributeData,
 )
-from movici_simulation_core.utils import lifecycle
 from movici_simulation_core.utils.unicode import get_unicode_dtype
 
 from .arrays import TrackedCSRArray
@@ -25,7 +24,6 @@ from .schema import (
 )
 
 
-@lifecycle.has_deprecations
 class EntityInitDataFormat(ExternalSerializationStrategy):
     schema: AttributeSchema
 
@@ -42,17 +40,14 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
     def supported_file_types(self) -> t.Sequence[FileType]:
         return (FileType.JSON, FileType.MSGPACK)
 
-    @lifecycle.deprecated(alternative="EntityInitDataFormat.loads")
-    def load_bytes(self, raw: t.Union[str, bytes], **kwargs):
-        return self.loads(raw, FileType.JSON)
-
     def loads(self, raw_data, type: FileType):
         self.supported_file_type_or_raise(type)
         if type is FileType.JSON:
             list_data = json.loads(raw_data)
         elif type is FileType.MSGPACK:
             list_data = msgpack.unpackb(raw_data)
-
+        else:
+            raise ValueError("type parameter must be FileType.JSON or FileType.MSGPACK")
         return self.load_json(list_data)
 
     def load_json(self, obj: dict):
@@ -67,7 +62,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
             for key, val in obj.items()
         }
 
-    def load_data_section(self, data: dict) -> dict:
+    def load_data_section(self, data: dict | None) -> dict:
         rv = {}
         if data is None:
             return rv
@@ -90,22 +85,24 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
                 except TypeError as e:
                     raise TypeError(f"Error when parsing data for '{name}'") from e
 
-            data_type = self.schema.get_spec(name, infer_datatype, cache=True).data_type
+            spec = self.schema.get_spec(name, default_data_type=infer_datatype, cache=True)
+            # spec cannot be None because we have supplied a default_data_type argument
+            assert spec is not None
+            data_type = spec.data_type
 
-            return parse_list(attr_data, data_type)
+            return t.cast(dict, parse_list(attr_data, data_type))
 
         else:
             raise TypeError("attribute data must be list")
 
-    def dumps(
-        self, dataset: dict, filetype: t.Optional[FileType] = FileType.JSON, **kwargs
-    ) -> str:
+    def dumps(self, dataset: dict, filetype: FileType = FileType.JSON, **kwargs) -> bytes:
         self.supported_file_type_or_raise(filetype)
         list_data = self.dump_dict(dataset)
         if filetype is FileType.JSON:
-            return json.dumps(self.dump_dict(dataset), **kwargs)
+            return json.dumps(list_data, **kwargs)
         if filetype is FileType.MSGPACK:
-            return msgpack.packb(list_data, **kwargs)
+            return t.cast(bytes, msgpack.packb(list_data, **kwargs))
+        raise ValueError(f"Unsupported file type {filetype}")
 
     def dump_dict(self, dataset: dict):
         return {
