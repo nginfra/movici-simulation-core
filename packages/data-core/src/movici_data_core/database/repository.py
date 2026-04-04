@@ -16,16 +16,23 @@ from movici_data_core.database.model import (
     to_domain_or_none,
 )
 from movici_data_core.domain_model import (
+    AttributeDataType,
+    AttributeType,
     Dataset,
     DatasetData,
     DatasetFormat,
     DatasetType,
+    EntityType,
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
+
+from movici_simulation_core.core import AttributeSchema
+from movici_simulation_core.core.data_format import EntityInitDataFormat
+from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 T_dom = t.TypeVar("T_dom")
 
@@ -43,6 +50,14 @@ class SQLAlchemyRepository:
     @property
     def dataset_types(self):
         return DatasetTypeRepository(self.session, self.options, self)
+
+    @property
+    def entity_types(self):
+        return EntityTypeRepository(self.session, self.options, self)
+
+    @property
+    def attribute_types(self):
+        return AttributeTypeRepository(self.session, self.options, self)
 
     @property
     def datasets(self):
@@ -208,8 +223,103 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         return existing
 
 
+class EntityTypeRepository(GenericResourceRepository[EntityType]):
+    __resource__ = db.EntityType
+
+    async def create(self, obj: EntityType) -> EntityType:
+        return (
+            t.cast(
+                db.EntityType,
+                await self.session.scalar(
+                    insert(db.EntityType).values(name=obj.name).returning(db.EntityType)
+                ),
+            )
+        ).to_domain()
+
+    async def update(self, id: UUID, obj: EntityType):
+        await self.session.execute(
+            update(db.EntityType).where(db.EntityType.id == id).values(name=obj.name)
+        )
+
+    async def ensure_entity_type(self, entity_type: EntityType) -> EntityType:
+        existing = await self.get_by_name(entity_type.name)
+        if not existing:
+            if self.options.STRICT_ENTITY_TYPES:
+                raise ResourceDoesNotExist("entity_type", name=entity_type.name)
+            existing = await self.create(entity_type)
+        return existing
+
+
+class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
+    __resource__ = db.AttributeType
+
+    async def create(self, obj: AttributeType) -> AttributeType:
+        return (
+            t.cast(
+                db.AttributeType,
+                await self.session.scalar(
+                    insert(db.AttributeType)
+                    .values(
+                        name=obj.name,
+                        has_rowptr=obj.data_type.csr,
+                        unit_type=self.db_unit_type(obj.data_type.py_type),
+                        unit_shape=obj.data_type.unit_shape,
+                        unit=obj.unit,
+                        description=obj.description,
+                    )
+                    .returning(db.AttributeType)
+                ),
+            )
+        ).to_domain()
+
+    def db_unit_type(self, py_type: AttributeDataType):
+        return {
+            bool: db.AttributeDataType.BOOL,
+            int: db.AttributeDataType.INT,
+            float: db.AttributeDataType.FLOAT,
+            str: db.AttributeDataType.STR,
+        }[py_type]
+
+    async def update(self, id: UUID, obj: AttributeType):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("attribute_type", id=id)
+        in_use = await self.session.scalar(
+            select(db.Attribute.id).where(db.Attribute.attribute_type_id == id).limit(1)
+        )
+
+        if in_use and not current.data_type == obj.data_type:
+            raise InvalidAction("cannot change attribute data type when it is in use")
+
+        await self.session.execute(
+            update(db.AttributeType)
+            .where(db.AttributeType.id == id)
+            .values(
+                name=obj.name,
+                has_rowptr=obj.data_type.csr,
+                unit_type=self.db_unit_type(obj.data_type.py_type),
+                unit_shape=obj.data_type.unit_shape,
+                unit=obj.unit,
+                description=obj.description,
+            )
+        )
+
+    async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
+        existing = await self.get_by_name(attribute_type.name)
+        if not existing:
+            if self.options.STRICT_ATTRIBUTES:
+                raise ResourceDoesNotExist("attribute_type", name=attribute_type.name)
+            existing = await self.create(attribute_type)
+        if not existing.data_type == attribute_type.data_type:
+            raise InvalidResource(
+                "attribute_type",
+                name=attribute_type.name,
+                message="incompatible attribute_type already exists",
+            )
+        return existing
+
+
 class DatasetRepository(ScopedResourceRepository[Dataset]):
-    RAW_DATA_CHUNK_SIZE = 100_000_000  # MB
     __resource__ = db.Dataset
     __parent_ref__ = db.Dataset.workspace_id
     __select_in_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
@@ -263,21 +373,6 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
             )
         )  # TODO: add check for entity data
 
-    async def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
-        raw_data = await self.session.scalar(
-            select(RawData).where(RawData.dataset_id == id).limit(1)
-        )
-        if raw_data is None:
-            raise ResourceDoesNotExist("dataset_data", id=id)
-
-        async for chunk in await self.session.stream_scalars(
-            select(RawDataChunk.bytes)
-            .execution_options(yield_per=yield_per)
-            .where(RawDataChunk.raw_data_id == raw_data.id)
-            .order_by(RawDataChunk.sequence.asc())
-        ):
-            yield chunk
-
     async def store_data(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data
 
@@ -295,9 +390,93 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
         if format == DatasetFormat.ENTITY_BASED:
             raise NotImplementedError("Entity based data not yet supported")
 
-        await self._store_raw_data(id, data, chunk_size=chunk_size)
+        if format == DatasetFormat.UNSTRUCTURED:
+            raise NotImplementedError("Unstructured data is not yet supported")
+        if format == DatasetFormat.BINARY:
+            await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
 
-    async def _store_raw_data(self, id: UUID, data: DatasetData, chunk_size=0):
+    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
+        return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
+
+    def get_unstructured_data(self, id: UUID):
+        return _RawDataHandler(self.session).get_dict(id)
+
+    def get_entity_data(self):
+        pass
+
+
+class _EntityDataHandler:
+    def __init__(
+        self,
+        session: AsyncSession,
+        all_data: SQLAlchemyRepository,
+        serializer: ExternalSerializationStrategy,
+        schema: AttributeSchema | None = None,
+    ):
+        self.session = session
+        self.all_data = all_data
+        self.serializer = serializer
+        self.schema = schema
+
+    async def store(self, id: UUID, data: dict):
+        """
+        :param id: dataset UUID
+        :param data: dataset data section in numpy format
+        """
+        for entity_group, attributes in data.items():
+            for attr_name, attr_data in attributes.items():
+                numpy_data = NumpyArray.from_array(data_array)
+
+                numpy_indptr = None
+                if "row_ptr" in attr_data or "indptr" in attr_data:
+                    indptr_key = "row_ptr" if "row_ptr" in attr_data else "indptr"
+                    indptr_array = np.asarray(attr_data[indptr_key])
+                    numpy_indptr = NumpyArray.from_array(indptr_array)
+                    session.add(numpy_indptr)
+
+                attr_data_record = AttributeData(
+                    entity_group=entity_group,
+                    attribute_name=attr_name,
+                    data=numpy_data,
+                    indptr=numpy_indptr,
+                )
+                session.add(attr_data_record)
+
+                update_attr = UpdateAttribute(update=update, attribute_data=attr_data_record)
+                session.add(update_attr)
+
+    #
+
+    async def get(self, id: UUID):
+        pass
+
+    # TODO: Move this function somewhere else. The backend maybe?
+    def _data_as_numpy_dict(self, data: dict, filetype: FileType, data_is_numpy=False):
+        ""
+        finalizer = None
+
+        if isinstance(data, dict):
+            if data_is_numpy:
+                return data
+            if "data" not in data.keys():
+                data = {"data": data}
+            return EntityInitDataFormat(self.schema).load_json(data)["data"]
+
+        if isinstance(data, pathlib.Path):
+            data = data.read_bytes()
+        if isinstance(data, t.BinaryIO):
+            data = data.read()
+
+        return self.serializer.loads(data, type=filetype)["data"]
+
+
+class _RawDataHandler:
+    RAW_DATA_CHUNK_SIZE = 100_000_000  # MB
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def store(self, id: UUID, data: DatasetData, chunk_size=0):
         chunk_size = chunk_size or self.RAW_DATA_CHUNK_SIZE
         with self._data_as_bytesio(data) as (encoding, raw_reader):
             raw_data_id = t.cast(
@@ -317,6 +496,14 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
                         raw_data_id=raw_data_id, sequence=seq, bytes=chunk
                     )
                 )
+
+    async def _ensure_raw_data(self, id: UUID):
+        raw_data = await self.session.scalar(
+            select(RawData).where(RawData.dataset_id == id).limit(1)
+        )
+        if raw_data is None:
+            raise ResourceDoesNotExist("dataset_data", id=id)
+        return raw_data
 
     @staticmethod
     @contextlib.contextmanager
@@ -346,3 +533,33 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
         while chunk := file.read(chunk_size):
             seq += 1
             yield seq, chunk
+
+    async def stream_bytes(
+        self, id: UUID | None = None, raw_data: RawData | None = None, yield_per=1
+    ) -> t.AsyncGenerator[bytes]:
+        if not ((id is None) ^ (raw_data is None)):
+            raise ValueError("Supply one of id and raw_data, but not both")
+
+        raw_data = raw_data or await self._ensure_raw_data(t.cast(UUID, id))
+
+        async for chunk in await self.session.stream_scalars(
+            select(RawDataChunk.bytes)
+            .execution_options(yield_per=yield_per)
+            .where(RawDataChunk.raw_data_id == raw_data.id)
+            .order_by(RawDataChunk.sequence.asc())
+        ):
+            yield chunk
+
+    async def get(self, id: UUID | None = None, raw_data: RawData | None = None) -> bytearray:
+        result = bytearray()
+
+        async for chunk in self.stream_bytes(id, raw_data):
+            result += chunk
+        return result
+
+    async def get_dict(self, id: UUID) -> dict:
+        raw_data = await self._ensure_raw_data(id)
+        if raw_data.encoding != "json":
+            raise ValueError(f"Expected dataset encoding 'json', got {raw_data.encoding}")
+        raw_bytes = await self.get(id)
+        return orjson.loads(raw_bytes)

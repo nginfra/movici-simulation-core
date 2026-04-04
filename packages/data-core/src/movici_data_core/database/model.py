@@ -5,6 +5,7 @@ import enum
 import typing as t
 import uuid
 
+import numpy as np
 from movici_data_core import domain_model
 from movici_data_core.domain_model import DatasetFormat
 from sqlalchemy import (
@@ -17,7 +18,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from .db_types import GUID
+from movici_simulation_core.core import DataType
+
+from .db_types import GUID, JSONTuple, TZDateTime
 
 T_dom = t.TypeVar("T_dom", covariant=True)
 
@@ -34,9 +37,7 @@ def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
 
 
 class Base(DeclarativeBase):
-    type_annotation_map = {
-        uuid.UUID: GUID,
-    }
+    type_annotation_map = {uuid.UUID: GUID, datetime.datetime: TZDateTime, tuple: JSONTuple}
 
 
 class DatabaseMode(enum.Enum):
@@ -53,6 +54,13 @@ class DatabaseMode(enum.Enum):
     SINGLE_SCENARIO = "single_scenario"
     SINGLE_WORKSPACE = "single_workspace"
     MULTIPLE_WORKSPACES = "multiple_workspaces"
+
+
+class AttributeDataType(enum.Enum):
+    BOOL = "bool"
+    INT = "int"
+    FLOAT = "float"
+    STR = "str"
 
 
 DEFAULT_SCHEMA_VERSION = "v1"
@@ -125,7 +133,9 @@ class Dataset(Base):
 
     general: Mapped[dict | None] = mapped_column(JSON)
     epsg_code: Mapped[int | None]
-    bounding_box: Mapped[tuple[float, float, float, float] | None] = mapped_column(JSON)
+    bounding_box: Mapped[tuple[float, float, float, float] | None] = mapped_column(
+        JSONTuple(length=4)
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
@@ -159,7 +169,7 @@ class Scenario(Base):
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
     epsg_code: Mapped[int]
-    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSON)
+    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSONTuple(length=4))
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
@@ -177,6 +187,108 @@ class Scenario(Base):
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
+
+
+class EntityType(Base):
+    MAX_NAME_LENGTH = 50
+    __tablename__ = "entity_type"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH))
+
+    def to_domain(self):
+        return domain_model.EntityType(name=self.name, id=self.id)
+
+
+class AttributeType(Base):
+    MAX_NAME_LENGTH = 100
+    MAX_UNIT_LENGTH = 20
+    __tablename__ = "attribute_type"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    has_rowptr: Mapped[bool]
+    unit_type: Mapped[AttributeDataType]
+    unit_shape: Mapped[tuple[int, ...]] = mapped_column(JSONTuple)
+    unit: Mapped[str] = mapped_column(String(MAX_UNIT_LENGTH))
+    description: Mapped[str]
+
+    @property
+    def data_type(self):
+        py_type = {
+            AttributeDataType.BOOL: bool,
+            AttributeDataType.INT: int,
+            AttributeDataType.FLOAT: float,
+            AttributeDataType.STR: str,
+        }[self.unit_type]
+        return DataType(py_type, unit_shape=self.unit_shape, csr=self.has_rowptr)
+
+    def to_domain(self):
+        return domain_model.AttributeType(
+            id=self.id,
+            name=self.name,
+            data_type=self.data_type,
+            unit=self.unit,
+            description=self.description,
+        )
+
+
+class NumpyArray(Base):
+    __tablename__ = "numpy_array"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dtype: Mapped[str] = mapped_column(String(20))
+    shape: Mapped[tuple] = mapped_column(JSON)
+    data: Mapped[bytes]
+
+    @classmethod
+    def from_array(cls, arr: np.ndarray) -> NumpyArray:
+        """Create NumpyArray record from numpy array.
+
+        :param arr: NumPy array to store
+        :return: NumpyArray instance
+        """
+        return cls(dtype=arr.dtype.str, shape=arr.shape, data=arr.tobytes())
+
+    def to_array(self) -> np.ndarray:
+        """Reconstruct numpy array from stored data.
+
+        :return: Reconstructed NumPy array
+        """
+        return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+
+
+class Attribute(Base):
+    __tablename__ = "attribute"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    entity_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("entity_type.id", ondelete="RESTRICT")
+    )
+    attribute_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute_type.id", ondelete="RESTRICT")
+    )
+    data_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("numpy_array.id", ondelete="RESTRICT"))
+    rowptr_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("numpy_array.id", ondelete="RESTRICT")
+    )
+
+    min_val: Mapped[float | None]
+    max_val: Mapped[float | None]
+
+    entity_type: Mapped[EntityType] = relationship()
+    attribute_type: Mapped[AttributeType] = relationship()
+    data: Mapped[NumpyArray] = relationship(foreign_keys=[data_id])
+    rowptr: Mapped[NumpyArray | None] = relationship(foreign_keys=[rowptr_id])
+
+
+class DatasetAttribute(Base):
+    __tablename__ = "dataset_attribute"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+
+    dataset: Mapped[Dataset] = relationship()
+    attribute: Mapped[Attribute] = relationship()
 
 
 class RawData(Base):

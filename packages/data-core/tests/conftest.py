@@ -3,8 +3,16 @@ from movici_data_core.database import model as db_model
 from movici_data_core.database.general import get_options, initialize_database
 from movici_data_core.database.model import Base, DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
-from movici_data_core.domain_model import Dataset, DatasetFormat, DatasetType
+from movici_data_core.domain_model import (
+    AttributeType,
+    Dataset,
+    DatasetFormat,
+    DatasetType,
+    EntityType,
+)
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from movici_simulation_core.core import DataType
 
 
 @pytest.fixture
@@ -12,7 +20,8 @@ async def db():
     engine = create_async_engine("sqlite+aiosqlite://", echo=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    return engine
+    yield engine
+    await engine.dispose()
 
 
 @pytest.fixture
@@ -56,6 +65,23 @@ async def a_workspace(session: AsyncSession):
 async def a_dataset_type(repository: SQLAlchemyRepository):
     return await repository.dataset_types.create(
         DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
+    )
+
+
+@pytest.fixture
+async def an_entity_type(repository: SQLAlchemyRepository):
+    return await repository.entity_types.create(EntityType("roads"))
+
+
+@pytest.fixture
+async def an_attribute_type(repository: SQLAlchemyRepository):
+    return await repository.attribute_types.create(
+        AttributeType(
+            name="some.attribute",
+            data_type=DataType(float),
+            unit="m/s",
+            description="a description",
+        )
     )
 
 

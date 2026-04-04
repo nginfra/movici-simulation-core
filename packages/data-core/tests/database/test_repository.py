@@ -1,12 +1,20 @@
 import dataclasses
 import uuid
+from io import BytesIO
 
 import pytest
-from movici_data_core.database.repository import (
-    SQLAlchemyRepository,
+from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.domain_model import (
+    AttributeType,
+    Dataset,
+    DatasetFormat,
+    DatasetType,
+    EntityType,
+    Workspace,
 )
-from movici_data_core.domain_model import Dataset, DatasetFormat, DatasetType, Workspace
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
+
+from movici_simulation_core.core import DataType
 
 
 class TestSQLAlchemyRepository:
@@ -95,6 +103,191 @@ class TestDatasetTypeRepository:
                 dataset_type.id, dataclasses.replace(dataset_type, name="new_name")
             )
 
+    async def test_returns_existing_dataset_type_when_compatible(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        repository.options.STRICT_DATASET_TYPES = True
+        found = await repository.dataset_types.ensure_dataset_type(
+            DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
+        )
+        assert found is not None
+        assert found.id == a_dataset_type.id
+
+    async def test_raises_on_non_existing_dataset_type_when_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_DATASET_TYPES = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.dataset_types.ensure_dataset_type(
+                DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
+            )
+
+    async def test_automatically_creates_dataset_type_when_not_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_DATASET_TYPES = False
+
+        dataset_type = await repository.dataset_types.ensure_dataset_type(
+            DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
+        )
+
+        assert dataset_type is not None
+        assert dataset_type.name == "transport_network"
+        assert dataset_type.id is not None
+
+    async def test_raises_on_incompatible_existing_dataset_type(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        repository.options.STRICT_DATASET_TYPES = False
+
+        with pytest.raises(InvalidResource):
+            await repository.dataset_types.ensure_dataset_type(
+                DatasetType(name="transport_network", format=DatasetFormat.BINARY)
+            )
+
+
+class TestEntityTypeRepository:
+    async def test_create_and_delete_an_entity_type(self, repository: SQLAlchemyRepository):
+        assert len(await repository.entity_types.list()) == 0
+        entity_type = await repository.entity_types.create(EntityType(name="some_entity_type"))
+        assert entity_type.id is not None
+        assert len(await repository.entity_types.list()) == 1
+
+        await repository.entity_types.delete(entity_type.id)
+
+        assert len(await repository.entity_types.list()) == 0
+
+    async def test_update_entity_type(
+        self, repository: SQLAlchemyRepository, an_entity_type: EntityType
+    ):
+        assert an_entity_type.id is not None
+
+        await repository.entity_types.update(
+            an_entity_type.id, dataclasses.replace(an_entity_type, name="new_name")
+        )
+        updated = await repository.entity_types.get_by_id(an_entity_type.id)
+        assert updated is not None
+        assert updated.name == "new_name"
+
+    async def test_returns_existing_entity_type_when_compatible(
+        self, repository: SQLAlchemyRepository, an_entity_type
+    ):
+        repository.options.STRICT_ENTITY_TYPES = True
+        found = await repository.entity_types.ensure_entity_type(EntityType(an_entity_type.name))
+        assert found is not None
+        assert found.id == an_entity_type.id
+
+    async def test_raises_on_non_existing_entity_type_when_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_ENTITY_TYPES = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.entity_types.ensure_entity_type(EntityType("new_type"))
+
+    async def test_automatically_creates_entity_type_when_not_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_ENTITY_TYPES = False
+
+        entity_type = await repository.entity_types.ensure_entity_type(EntityType("new_type"))
+
+        assert entity_type is not None
+        assert entity_type.name == "new_type"
+        assert entity_type.id is not None
+
+
+class TestAttributeTypeRepository:
+    async def test_created_attribute_type_has_data_type(self, repository: SQLAlchemyRepository):
+        data_type = DataType(int, (2,), csr=True)
+        await repository.attribute_types.create(
+            AttributeType("attribute_type", data_type=data_type)
+        )
+        attribute_type = await repository.attribute_types.get_by_name("attribute_type")
+        assert attribute_type is not None
+        assert attribute_type.data_type == data_type
+
+    async def test_create_and_delete_an_attribute_type(self, repository: SQLAlchemyRepository):
+        assert len(await repository.attribute_types.list()) == 0
+        attribute_type = await repository.attribute_types.create(
+            AttributeType(name="some_attribute_type", data_type=DataType(float))
+        )
+        assert attribute_type.id is not None
+        assert len(await repository.attribute_types.list()) == 1
+
+        await repository.attribute_types.delete(attribute_type.id)
+
+        assert len(await repository.attribute_types.list()) == 0
+
+    async def test_update_attribute_type(
+        self, repository: SQLAlchemyRepository, an_attribute_type: AttributeType
+    ):
+        assert an_attribute_type.id is not None
+
+        await repository.attribute_types.update(
+            an_attribute_type.id, dataclasses.replace(an_attribute_type, name="new_name")
+        )
+        updated = await repository.attribute_types.get_by_id(an_attribute_type.id)
+        assert updated is not None
+        assert updated.name == "new_name"
+
+    # TODO: implement
+    @pytest.mark.xfail(strict=True, reason="no exisiting data yet")
+    async def test_cannot_update_data_type_if_in_use(
+        self, repository: SQLAlchemyRepository, an_attribute_type: AttributeType
+    ):
+        assert an_attribute_type.id is not None
+
+        with pytest.raises(InvalidAction):
+            await repository.attribute_types.update(
+                an_attribute_type.id,
+                dataclasses.replace(an_attribute_type, data_type=DataType(int)),
+            )
+
+    async def test_returns_existing_attribute_type_when_compatible(
+        self, repository: SQLAlchemyRepository, an_attribute_type
+    ):
+        repository.options.STRICT_ATTRIBUTES = True
+        found = await repository.attribute_types.ensure_attribute_type(
+            AttributeType("some.attribute", data_type=DataType(float))
+        )
+        assert found is not None
+        assert found.id == an_attribute_type.id
+
+    async def test_raises_on_non_existing_attribute_type_when_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_ATTRIBUTES = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.attribute_types.ensure_attribute_type(
+                AttributeType("some.attribute", data_type=DataType(float))
+            )
+
+    async def test_automatically_creates_attribute_type_when_not_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_ATTRIBUTES = False
+
+        attribute_type = await repository.attribute_types.ensure_attribute_type(
+            AttributeType("some.attribute", data_type=DataType(float))
+        )
+
+        assert attribute_type is not None
+        assert attribute_type.name == "some.attribute"
+        assert attribute_type.id is not None
+
+    async def test_raises_on_incompatible_existing_attribute_type(
+        self, repository: SQLAlchemyRepository, an_attribute_type
+    ):
+        repository.options.STRICT_ATTRIBUTES = False
+
+        with pytest.raises(InvalidResource):
+            await repository.attribute_types.ensure_attribute_type(
+                AttributeType("some.attribute", data_type=DataType(int))
+            )
+
 
 class TestDatasetRepository:
     async def test_get_dataset_with_workspace_and_dataset_type(
@@ -138,40 +331,21 @@ class TestDatasetRepository:
                 ),
             )
 
-    async def test_raises_on_non_existing_dataset_type_when_strict(
-        self, repository: SQLAlchemyRepository, a_workspace
+    @pytest.mark.parametrize("method", ["path", "bytes", "bytesio"])
+    async def test_store_and_retrieve_raw_data_bytes(
+        self, repository: SQLAlchemyRepository, a_dataset, method, tmp_path
     ):
-        repository.options.STRICT_DATASET_TYPES = True
+        raw_bytes = b"somethingbinarydata"
+        data = None
+        if method == "path":
+            data = tmp_path / "data.bin"
+            data.write_bytes(raw_bytes)
+        elif method == "bytes":
+            data = raw_bytes
+        elif method == "bytesio":
+            data = BytesIO(raw_bytes)
+        assert data is not None
 
-        with pytest.raises(ResourceDoesNotExist):
-            await repository.datasets.create(
-                a_workspace.id,
-                Dataset(
-                    "some_dataset",
-                    "some dataset",
-                    dataset_type=DatasetType("new", format=DatasetFormat.ENTITY_BASED),
-                ),
-            )
-
-    async def test_automatically_creates_dataset_type_when_not_strict(
-        self, repository: SQLAlchemyRepository, a_workspace
-    ):
-        repository.options.STRICT_DATASET_TYPES = False
-
-        dataset = await repository.datasets.create(
-            a_workspace.id,
-            Dataset(
-                "some_dataset",
-                "some dataset",
-                dataset_type=DatasetType("new", format=DatasetFormat.ENTITY_BASED),
-            ),
-        )
-        assert dataset is not None
-        assert dataset.dataset_type.name == "new"
-        assert dataset.dataset_type.id is not None
-
-    async def test_store_and_retrieve_raw_data(self, repository: SQLAlchemyRepository, a_dataset):
-        data = b"somethingbinarydata"
         await repository.datasets.store_data(
             a_dataset.id, data, format=DatasetFormat.BINARY, chunk_size=2
         )
@@ -180,5 +354,5 @@ class TestDatasetRepository:
         async for chunk in repository.datasets.stream_binary_data(a_dataset.id):
             result += chunk
             n_chunks += 1
-        assert n_chunks == len(data) // 2 + 1
-        assert result == data
+        assert n_chunks == len(raw_bytes) // 2 + 1
+        assert result == raw_bytes

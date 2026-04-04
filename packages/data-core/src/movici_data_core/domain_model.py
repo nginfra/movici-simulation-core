@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import dataclasses
 import datetime
 import enum
 import pathlib
 import typing as t
 from uuid import UUID
+
+from movici_simulation_core.core import AttributeSpec, DataType
 
 
 class DatasetFormat(str, enum.Enum):
@@ -19,6 +23,9 @@ class DatasetFormat(str, enum.Enum):
     ENTITY_BASED = "entity_based"
     UNSTRUCTURED = "unstructured"
     BINARY = "binary"
+
+
+AttributeDataType = type[bool | int | float | str]
 
 
 def utcnow():
@@ -38,6 +45,27 @@ class DatasetType:
     format: DatasetFormat
     mimetype: str | None = None
     id: UUID | None = dataclasses.field(compare=False, default=None)
+
+
+@dataclasses.dataclass
+class EntityType:
+    name: str
+    id: UUID | None = dataclasses.field(compare=False, default=None)
+
+
+@dataclasses.dataclass
+class AttributeType:
+    name: str
+    data_type: DataType
+
+    id: UUID | None = dataclasses.field(compare=False, default=None)
+
+    unit: str = ""
+    description: str = ""
+
+    @classmethod
+    def from_attribute_spec(cls, spec: AttributeSpec):
+        return cls(name=spec.name, data_type=spec.data_type)
 
 
 DatasetData = dict | bytes | t.BinaryIO | pathlib.Path

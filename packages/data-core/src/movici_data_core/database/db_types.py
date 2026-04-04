@@ -1,7 +1,8 @@
 import datetime
 import uuid
+from collections.abc import Sequence
 
-from sqlalchemy import DateTime
+from sqlalchemy import JSON, DateTime
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import CHAR, TypeDecorator
@@ -60,4 +61,26 @@ class TZDateTime(TypeDecorator):
     def process_result_value(self, value, dialect):
         if value is not None:
             value = value.replace(tzinfo=datetime.timezone.utc)
+        return value
+
+
+class JSONTuple(TypeDecorator):
+    impl = JSON
+    cache_ok = True
+
+    def __init__(self, *args, length: int | None = None, **kwargs):
+        self.length = length
+        super().__init__(*args, **kwargs)
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            if not isinstance(value, Sequence):
+                raise TypeError("must be a sequence")
+            if self.length is not None and len(value) != self.length:
+                raise TypeError(f"must be of length {self.length}")
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            value = tuple(value)
         return value
