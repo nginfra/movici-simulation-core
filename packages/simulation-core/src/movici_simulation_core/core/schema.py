@@ -140,7 +140,7 @@ def get_rowptr(d: dict):
         return None
 
 
-def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
+def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]) -> DataType:
     """given array data, either as an np.ndarray, TrackedCSRArray or a "data"/"row_ptr" dictionary
     infer the `DataType` of that array data
     """

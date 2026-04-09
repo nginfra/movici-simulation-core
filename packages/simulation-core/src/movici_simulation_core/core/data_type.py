@@ -36,6 +36,18 @@ class DataType(t.Generic[T]):
             return compare_scalar
         return compare_array
 
+    def get_min_max(self, data: np.ndarray) -> tuple[T | None, T | None]:
+        data = np.asarray(data)
+        if self.py_type is str:
+            return None, None
+        undefineds = self.is_undefined(data)
+        defined = data[~undefineds]
+        if len(defined) == 0:
+            return None, None
+        if self.py_type is bool:
+            return False, True  # type: ignore
+        return np.nanmin(defined).item(), np.nanmax(defined).item()
+
 
 UNDEFINED = {
     bool: np.iinfo(np.dtype("<i1")).min,
