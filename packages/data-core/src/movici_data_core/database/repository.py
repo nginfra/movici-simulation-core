@@ -10,13 +10,8 @@ import numpy as np
 import orjson
 from movici_data_core.database import model as db
 from movici_data_core.database.model import (
-    Attribute,
-    DatasetAttribute,
     NamedResource,
-    NumpyArray,
     Options,
-    RawData,
-    RawDataChunk,
     to_domain_or_none,
 )
 from movici_data_core.domain_model import (
@@ -27,7 +22,7 @@ from movici_data_core.domain_model import (
     DatasetFormat,
     DatasetType,
     EntityType,
-    NumpyDatasetData,
+    ModelType,
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
@@ -35,16 +30,11 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
-from movici_simulation_core.core import (
-    get_rowptr,
-    infer_data_type_from_array,
-)
+from movici_simulation_core.core import get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
-from movici_simulation_core.types import (
-    FileType,
-    NumpyAttributeData,
-)
+from movici_simulation_core.types import DatasetData as NumpyDatasetData
+from movici_simulation_core.types import FileType, NumpyAttributeData
 
 T_dom = t.TypeVar("T_dom")
 
@@ -72,6 +62,10 @@ class SQLAlchemyRepository:
         return AttributeTypeRepository(self.session, self.options, self)
 
     @property
+    def model_types(self):
+        return ModelTypeRepository(self.session, self.options, self)
+
+    @property
     def datasets(self):
         return DatasetRepository(self.session, self.options, self)
 
@@ -89,47 +83,6 @@ class ResourceSelector(t.Generic[T_dom]):
 
     def _selectinload(self):
         yield from (selectinload(col) for col in self.__select_in_load__)
-
-
-class ScopedResourceRepository(ResourceSelector[T_dom]):
-    __parent_ref__: InstrumentedAttribute[UUID]
-
-    def __init__(self, session: AsyncSession, options: Options, all_data: SQLAlchemyRepository):
-        self.session = session
-        self.all_data = all_data
-        self.options = options
-
-    async def list(self, parent: UUID) -> t.Sequence[T_dom]:
-        result = await self.session.scalars(
-            self.selector.where(type(self).__parent_ref__ == parent)
-        )
-        return [obj.to_domain() for obj in result]
-
-    async def get_by_name(self, parent: UUID, name: str) -> T_dom | None:
-        return to_domain_or_none(
-            await self.session.scalar(
-                self.selector.where(
-                    self.__resource__.name == name, type(self).__parent_ref__ == parent
-                ).limit(1)
-            )
-        )
-
-    async def get_by_id(self, id: UUID) -> T_dom | None:
-        get_kwargs: dict[str, t.Any] = (
-            dict(options=list(self._selectinload())) if self.__select_in_load__ else {}
-        )
-        return to_domain_or_none(await self.session.get(self.__resource__, id, **get_kwargs))
-
-    async def delete(self, id: UUID):
-        return await self.session.execute(
-            delete(self.__resource__).where(self.__resource__.id == id)
-        )
-
-    async def create(self, parent: UUID, obj: T_dom) -> T_dom:
-        raise NotImplementedError
-
-    async def update(self, id: UUID, obj: T_dom):
-        raise NotImplementedError
 
 
 class GenericResourceRepository(ResourceSelector[T_dom]):
@@ -161,6 +114,47 @@ class GenericResourceRepository(ResourceSelector[T_dom]):
         )
 
     async def create(self, obj: T_dom) -> T_dom:
+        raise NotImplementedError
+
+    async def update(self, id: UUID, obj: T_dom):
+        raise NotImplementedError
+
+
+class ScopedResourceRepository(ResourceSelector[T_dom]):
+    __parent_ref__: InstrumentedAttribute[UUID]
+
+    def __init__(self, session: AsyncSession, options: Options, all_data: SQLAlchemyRepository):
+        self.session = session
+        self.all_data = all_data
+        self.options = options
+
+    async def list(self, parent: UUID) -> t.Sequence[T_dom]:
+        result = await self.session.scalars(
+            self.selector.where(type(self).__parent_ref__ == parent)
+        )
+        return [obj.to_domain() for obj in result]
+
+    async def get_by_name(self, parent: UUID, name: str) -> T_dom | None:
+        return to_domain_or_none(
+            await self.session.scalar(
+                select(self.__resource__)
+                .where(self.__resource__.name == name, type(self).__parent_ref__ == parent)
+                .options(*self._selectinload())
+                .limit(1)
+            )
+        )
+
+    async def get_by_id(self, id: UUID) -> T_dom | None:
+        return to_domain_or_none(
+            await self.session.get(self.__resource__, id, options=list(self._selectinload()))
+        )
+
+    async def delete(self, id: UUID):
+        return await self.session.execute(
+            delete(self.__resource__).where(self.__resource__.id == id)
+        )
+
+    async def create(self, parent: UUID, obj: T_dom) -> T_dom:
         raise NotImplementedError
 
     async def update(self, id: UUID, obj: T_dom):
@@ -331,25 +325,50 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         return existing
 
 
+class ModelTypeRepository(GenericResourceRepository[ModelType]):
+    __resource__ = db.ModelType
+
+    async def create(self, obj: ModelType) -> ModelType:
+        return (
+            t.cast(
+                db.ModelType,
+                await self.session.scalar(
+                    insert(db.ModelType)
+                    .values(name=obj.name, jsonschema=obj.jsonschema)
+                    .returning(db.ModelType)
+                ),
+            )
+        ).to_domain()
+
+    async def update(self, id: UUID, obj: ModelType):
+        await self.session.execute(
+            update(db.ModelType)
+            .where(db.ModelType.id == id)
+            .values(name=obj.name, jsonschema=obj.jsonschema)
+        )
+
+    async def ensure_model_type(self, model_type: ModelType) -> ModelType:
+        existing = await self.get_by_name(model_type.name)
+        if not existing:
+            if self.options.STRICT_MODELS:
+                raise ResourceDoesNotExist("model_type", name=model_type.name)
+            existing = await self.create(model_type)
+        return existing
+
+    @staticmethod
+    def default_jsonschema(name: str):
+        return {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": f"/{name}/1.0.0",
+            "type": "object",
+            "additionalProperties": True,
+        }
+
+
 class DatasetRepository(ScopedResourceRepository[Dataset]):
     __resource__ = db.Dataset
     __parent_ref__ = db.Dataset.workspace_id
     __select_in_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
-
-    async def get_by_name(self, parent: UUID, name: str) -> Dataset | None:
-        return to_domain_or_none(
-            await self.session.scalar(
-                select(self.__resource__)
-                .where(self.__resource__.name == name, type(self).__parent_ref__ == parent)
-                .options(*self._selectinload())
-                .limit(1)
-            )
-        )
-
-    async def get_by_id(self, id: UUID) -> Dataset | None:
-        return to_domain_or_none(
-            await self.session.get(self.__resource__, id, options=list(self._selectinload()))
-        )
 
     async def create(self, parent: UUID, obj: Dataset) -> Dataset:
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
@@ -379,11 +398,13 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
         )
 
     async def has_data(self, id: UUID):
-        return bool(
-            await self.session.scalar(
-                select(func.count(RawData.id)).where(RawData.dataset_id == id)
-            )
-        )  # TODO: add check for entity data
+        raw_data = await self.session.scalar(
+            select(func.count(db.RawData.id)).where(db.RawData.dataset_id == id)
+        )
+        entity_data = await self.session.scalar(
+            select(func.count(db.DatasetAttribute.id)).where(db.DatasetAttribute.dataset_id == id)
+        )
+        return bool(raw_data) or bool(entity_data)
 
     async def store_data(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data
@@ -454,7 +475,7 @@ class _EntityDataHandler:
 
                 min_val, max_val = data_type.get_min_max(data_array)
                 attribute_id = await self.session.scalar(
-                    insert(Attribute)
+                    insert(db.Attribute)
                     .values(
                         entity_type_id=entity_type.id,
                         attribute_type_id=attribute_type.id,
@@ -463,25 +484,25 @@ class _EntityDataHandler:
                         min_val=min_val,
                         max_val=max_val,
                     )
-                    .returning(Attribute.id)
+                    .returning(db.Attribute.id)
                 )
 
                 await self.session.execute(
-                    insert(DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
+                    insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
                 )
 
     async def get(self, id: UUID) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
         for attribute in (
             await self.session.scalars(
-                select(Attribute)
-                .join(DatasetAttribute)
-                .where(DatasetAttribute.dataset_id == id)
+                select(db.Attribute)
+                .join(db.DatasetAttribute)
+                .where(db.DatasetAttribute.dataset_id == id)
                 .options(
-                    selectinload(Attribute.data),
-                    selectinload(Attribute.rowptr),
-                    selectinload(Attribute.entity_type),
-                    selectinload(Attribute.attribute_type),
+                    selectinload(db.Attribute.data),
+                    selectinload(db.Attribute.rowptr),
+                    selectinload(db.Attribute.entity_type),
+                    selectinload(db.Attribute.attribute_type),
                 )
             )
         ).all():
@@ -496,9 +517,9 @@ class _EntityDataHandler:
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(NumpyArray)
+                insert(db.NumpyArray)
                 .values(dtype=arr.dtype.str, shape=arr.shape, data=arr.tobytes())
-                .returning(NumpyArray.id)
+                .returning(db.NumpyArray.id)
             ),
         )
 
@@ -506,7 +527,7 @@ class _EntityDataHandler:
     # else. The backend maybe?
     def _data_as_numpy_dict(self, data: dict, filetype: FileType, data_is_numpy=False):
         ""
-        finalizer = None
+        finalizer = None  # noqa: F841
 
         if isinstance(data, dict):
             if data_is_numpy:
@@ -552,7 +573,7 @@ class _RawDataHandler:
 
     async def _ensure_raw_data(self, id: UUID):
         raw_data = await self.session.scalar(
-            select(RawData).where(RawData.dataset_id == id).limit(1)
+            select(db.RawData).where(db.RawData.dataset_id == id).limit(1)
         )
         if raw_data is None:
             raise ResourceDoesNotExist("dataset_data", id=id)
@@ -588,7 +609,7 @@ class _RawDataHandler:
             yield seq, chunk
 
     async def stream_bytes(
-        self, id: UUID | None = None, raw_data: RawData | None = None, yield_per=1
+        self, id: UUID | None = None, raw_data: db.RawData | None = None, yield_per=1
     ) -> t.AsyncGenerator[bytes]:
         if not ((id is None) ^ (raw_data is None)):
             raise ValueError("Supply one of id and raw_data, but not both")
@@ -596,14 +617,14 @@ class _RawDataHandler:
         raw_data = raw_data or await self._ensure_raw_data(t.cast(UUID, id))
 
         async for chunk in await self.session.stream_scalars(
-            select(RawDataChunk.bytes)
+            select(db.RawDataChunk.bytes)
             .execution_options(yield_per=yield_per)
-            .where(RawDataChunk.raw_data_id == raw_data.id)
-            .order_by(RawDataChunk.sequence.asc())
+            .where(db.RawDataChunk.raw_data_id == raw_data.id)
+            .order_by(db.RawDataChunk.sequence.asc())
         ):
             yield chunk
 
-    async def get(self, id: UUID | None = None, raw_data: RawData | None = None) -> bytearray:
+    async def get(self, id: UUID | None = None, raw_data: db.RawData | None = None) -> bytearray:
         result = bytearray()
 
         async for chunk in self.stream_bytes(id, raw_data):

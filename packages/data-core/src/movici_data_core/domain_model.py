@@ -68,6 +68,14 @@ class AttributeType:
         return cls(name=spec.name, data_type=spec.data_type)
 
 
+@dataclasses.dataclass
+class ModelType:
+    name: str
+    jsonschema: dict
+
+    id: UUID | None = dataclasses.field(compare=False, default=None)
+
+
 DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
 
 

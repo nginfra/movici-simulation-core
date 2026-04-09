@@ -48,9 +48,52 @@ async def session(session_factory, initialized_db):
 
 
 @pytest.fixture
-async def repository(session):
+def default_dataset_types():
+    return [
+        DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED),
+        DatasetType(
+            name="flooding_tape", format=DatasetFormat.BINARY, mimetype="application/x-netcdf"
+        ),
+        DatasetType(name="tabular", format=DatasetFormat.UNSTRUCTURED),
+    ]
+
+
+@pytest.fixture
+def default_entity_types():
+    return [
+        EntityType("roads"),
+        EntityType("transport_nodes"),
+        EntityType("virtual_nodes"),
+        EntityType("virtual_links"),
+    ]
+
+
+@pytest.fixture
+def default_attribute_types():
+    return [
+        AttributeType("id", DataType(int), description="Entity ID"),
+        AttributeType("geometry.x", DataType(float)),
+        AttributeType("geometry.y", DataType(float)),
+        AttributeType("geometry.linestring_2d", DataType(float, unit_shape=(2,), csr=True)),
+        AttributeType("topology.from_node_id", DataType(float)),
+        AttributeType("topology.to_node_id", DataType(float)),
+        AttributeType("transport.capacity", DataType(float)),
+    ]
+
+
+@pytest.fixture
+async def repository(
+    session, default_dataset_types, default_entity_types, default_attribute_types
+):
     options = await get_options(session)
-    return SQLAlchemyRepository(session, options)
+    repository = SQLAlchemyRepository(session, options)
+    for dataset_type in default_dataset_types:
+        await repository.dataset_types.create(dataset_type)
+    for entity_type in default_entity_types:
+        await repository.entity_types.create(entity_type)
+    for attribute_type in default_attribute_types:
+        await repository.attribute_types.create(attribute_type)
+    return repository
 
 
 @pytest.fixture
@@ -63,14 +106,12 @@ async def a_workspace(session: AsyncSession):
 
 @pytest.fixture
 async def a_dataset_type(repository: SQLAlchemyRepository):
-    return await repository.dataset_types.create(
-        DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
-    )
+    return await repository.dataset_types.get_by_name("transport_network")
 
 
 @pytest.fixture
 async def an_entity_type(repository: SQLAlchemyRepository):
-    return await repository.entity_types.create(EntityType("roads"))
+    return await repository.entity_types.get_by_name("roads")
 
 
 @pytest.fixture

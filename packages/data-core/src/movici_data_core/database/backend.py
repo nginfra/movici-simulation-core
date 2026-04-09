@@ -1,7 +1,7 @@
 import contextlib
 
 from movici_data_core.domain_model import Workspace
-from movici_data_core.exceptions import InconsistentDatabase
+from movici_data_core.exceptions import InconsistentDatabase, InvalidAction
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .general import get_options
@@ -61,7 +61,13 @@ class SQLAlchemyBackend:
             self.options.STRICT_ATTRIBUTES = strict_attributes
         if strict_models is not None:
             self.options.STRICT_MODELS = strict_models
+            if not strict_models:
+                self.options.STRICT_MODEL_CONFIGS = False
         if strict_model_configs is not None:
+            if strict_model_configs and not self.options.STRICT_MODELS:
+                raise InvalidAction(
+                    "Can only set strict_model_configs if strict_models is also set"
+                )
             self.options.STRICT_MODEL_CONFIGS = strict_model_configs
 
 

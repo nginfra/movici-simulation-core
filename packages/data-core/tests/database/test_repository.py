@@ -11,6 +11,7 @@ from movici_data_core.domain_model import (
     DatasetFormat,
     DatasetType,
     EntityType,
+    ModelType,
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
@@ -69,16 +70,16 @@ class TestSQLAlchemyRepository:
 
 class TestDatasetTypeRepository:
     async def test_create_and_delete_a_dataset_type(self, repository: SQLAlchemyRepository):
-        assert len(await repository.dataset_types.list()) == 0
+        existing = len(await repository.dataset_types.list())
         dataset_type = await repository.dataset_types.create(
             DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
         )
         assert dataset_type.id is not None
-        assert len(await repository.dataset_types.list()) == 1
+        assert len(await repository.dataset_types.list()) == existing + 1
 
         await repository.dataset_types.delete(dataset_type.id)
 
-        assert len(await repository.dataset_types.list()) == 0
+        assert len(await repository.dataset_types.list()) == existing
 
     async def test_update_dataset_type(self, repository: SQLAlchemyRepository):
         dataset_type = await repository.dataset_types.create(
@@ -122,7 +123,7 @@ class TestDatasetTypeRepository:
 
         with pytest.raises(ResourceDoesNotExist):
             await repository.dataset_types.ensure_dataset_type(
-                DatasetType(name="transport_network", format=DatasetFormat.ENTITY_BASED)
+                DatasetType(name="non-existing", format=DatasetFormat.ENTITY_BASED)
             )
 
     async def test_automatically_creates_dataset_type_when_not_strict(
@@ -151,14 +152,14 @@ class TestDatasetTypeRepository:
 
 class TestEntityTypeRepository:
     async def test_create_and_delete_an_entity_type(self, repository: SQLAlchemyRepository):
-        assert len(await repository.entity_types.list()) == 0
+        existing = len(await repository.entity_types.list())
         entity_type = await repository.entity_types.create(EntityType(name="some_entity_type"))
         assert entity_type.id is not None
-        assert len(await repository.entity_types.list()) == 1
+        assert len(await repository.entity_types.list()) == existing + 1
 
         await repository.entity_types.delete(entity_type.id)
 
-        assert len(await repository.entity_types.list()) == 0
+        assert len(await repository.entity_types.list()) == existing
 
     async def test_update_entity_type(
         self, repository: SQLAlchemyRepository, an_entity_type: EntityType
@@ -211,16 +212,16 @@ class TestAttributeTypeRepository:
         assert attribute_type.data_type == data_type
 
     async def test_create_and_delete_an_attribute_type(self, repository: SQLAlchemyRepository):
-        assert len(await repository.attribute_types.list()) == 0
+        existing = len(await repository.attribute_types.list())
         attribute_type = await repository.attribute_types.create(
             AttributeType(name="some_attribute_type", data_type=DataType(float))
         )
         assert attribute_type.id is not None
-        assert len(await repository.attribute_types.list()) == 1
+        assert len(await repository.attribute_types.list()) == existing + 1
 
         await repository.attribute_types.delete(attribute_type.id)
 
-        assert len(await repository.attribute_types.list()) == 0
+        assert len(await repository.attribute_types.list()) == existing
 
     async def test_update_attribute_type(
         self, repository: SQLAlchemyRepository, an_attribute_type: AttributeType
@@ -234,13 +235,26 @@ class TestAttributeTypeRepository:
         assert updated is not None
         assert updated.name == "new_name"
 
-    # TODO: implement
-    @pytest.mark.xfail(strict=True, reason="no exisiting data yet")
     async def test_cannot_update_data_type_if_in_use(
-        self, repository: SQLAlchemyRepository, an_attribute_type: AttributeType
+        self,
+        repository: SQLAlchemyRepository,
+        an_attribute_type: AttributeType,
+        a_dataset,
+        an_entity_type,
     ):
         assert an_attribute_type.id is not None
 
+        await repository.datasets.store_data(
+            a_dataset.id,
+            {
+                an_entity_type.name: {
+                    an_attribute_type.name: {
+                        "data": np.array([1.0, 2.0]),
+                    },
+                }
+            },
+            format=DatasetFormat.ENTITY_BASED,
+        )
         with pytest.raises(InvalidAction):
             await repository.attribute_types.update(
                 an_attribute_type.id,
@@ -291,6 +305,14 @@ class TestAttributeTypeRepository:
             )
 
 
+class TestModelTypeRepository:
+    async def test_created_model_type_has_schema(self, repository: SQLAlchemyRepository):
+        model_type = await repository.model_types.create(
+            ModelType("some_model", {"some": "schema"})
+        )
+        assert model_type.schema == {"some": "schema"}
+
+
 class TestDatasetRepository:
     async def test_get_dataset_with_workspace_and_dataset_type(
         self, repository: SQLAlchemyRepository, a_dataset
@@ -337,6 +359,7 @@ class TestDatasetRepository:
     async def test_store_and_retrieve_raw_data_bytes(
         self, repository: SQLAlchemyRepository, a_dataset, method, tmp_path
     ):
+        assert not await repository.datasets.has_data(a_dataset.id)
         raw_bytes = b"somethingbinarydata"
         data = None
         if method == "path":
@@ -351,6 +374,7 @@ class TestDatasetRepository:
         await repository.datasets.store_data(
             a_dataset.id, data, format=DatasetFormat.BINARY, chunk_size=2
         )
+        assert await repository.datasets.has_data(a_dataset.id)
         result = b""
         n_chunks = 0
         async for chunk in repository.datasets.stream_binary_data(a_dataset.id):
@@ -362,8 +386,10 @@ class TestDatasetRepository:
     async def test_store_and_retrieve_unstructured_data(
         self, repository: SQLAlchemyRepository, a_dataset
     ):
+        assert not await repository.datasets.has_data(a_dataset.id)
         data = {"some": "data"}
         await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.UNSTRUCTURED)
+        assert await repository.datasets.has_data(a_dataset.id)
         result = await repository.datasets.get_unstructured_data(a_dataset.id)
         assert result == data
 
@@ -375,6 +401,7 @@ class TestDatasetRepository:
         an_attribute_type,
         a_csr_attribute_type,
     ):
+        assert not await repository.datasets.has_data(a_dataset.id)
         data = {
             an_entity_type.name: {
                 an_attribute_type.name: {
@@ -387,6 +414,7 @@ class TestDatasetRepository:
             }
         }
         await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        assert await repository.datasets.has_data(a_dataset.id)
         result = await repository.datasets.get_entity_data(a_dataset.id)
         assert_dataset_dicts_equal(data, result)
 

@@ -104,9 +104,10 @@ class Workspace(Base):
 
 
 class DatasetType(Base):
+    MAX_NAME_LENGTH = 50
     __tablename__ = "dataset_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
     format: Mapped[DatasetFormat]
     mimetype: Mapped[str | None]
 
@@ -159,7 +160,7 @@ class EntityType(Base):
     MAX_NAME_LENGTH = 50
     __tablename__ = "entity_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH))
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
 
     def to_domain(self):
         return domain_model.EntityType(name=self.name, id=self.id)
@@ -204,15 +205,6 @@ class NumpyArray(Base):
     dtype: Mapped[str] = mapped_column(String(20))
     shape: Mapped[tuple] = mapped_column(JSON)
     data: Mapped[bytes]
-
-    @classmethod
-    def from_array(cls, arr: np.ndarray) -> NumpyArray:
-        """Create NumpyArray record from numpy array.
-
-        :param arr: NumPy array to store
-        :return: NumpyArray instance
-        """
-        return cls(dtype=arr.dtype.str, shape=arr.shape, data=arr.tobytes())
 
     def to_array(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
@@ -274,6 +266,17 @@ class RawDataChunk(Base):
     bytes: Mapped[bytes]
 
 
+class ModelType(Base):
+    __tablename__ = "model_type"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str]
+    jsonschema: Mapped[dict] = mapped_column(JSON)
+
+    def to_domain(self):
+        return domain_model.ModelType(name=self.name, jsonschema=self.jsonschema)
+
+
 class Scenario(Base):
     __tablename__ = "scenario"
     __table_args__ = (UniqueConstraint("workspace_id", "name"),)
@@ -293,7 +296,7 @@ class Scenario(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
-    datasets: Mapped[Dataset] = relationship()
+    datasets: Mapped[list[ScenarioDataset]] = relationship()
 
     def to_domain(self) -> domain_model.Scenario:
         return domain_model.Scenario(
@@ -312,10 +315,14 @@ class Scenario(Base):
 
 class ScenarioDataset(Base):
     __tablename__ = "scenario_dataset"
-    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id"), primary_key=True)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenario.id", ondelete="CASCADE"), primary_key=True
+    )
+    dataset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dataset.id", ondelete="RESTRICT"), primary_key=True
+    )
     scenario: Mapped[Scenario] = relationship(Scenario, back_populates="datasets")
-    dataset: Mapped[Scenario] = relationship(Dataset, back_populates="scenarios")
+    dataset: Mapped[Scenario] = relationship(Dataset)
 
 
 class Update(Base):
