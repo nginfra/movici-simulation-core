@@ -2,6 +2,7 @@ import dataclasses
 import uuid
 from io import BytesIO
 
+import numpy as np
 import pytest
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
@@ -15,6 +16,7 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 
 from movici_simulation_core.core import DataType
+from movici_simulation_core.testing import assert_dataset_dicts_equal
 
 
 class TestSQLAlchemyRepository:
@@ -356,3 +358,70 @@ class TestDatasetRepository:
             n_chunks += 1
         assert n_chunks == len(raw_bytes) // 2 + 1
         assert result == raw_bytes
+
+    async def test_store_and_retrieve_unstructured_data(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+        data = {"some": "data"}
+        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.UNSTRUCTURED)
+        result = await repository.datasets.get_unstructured_data(a_dataset.id)
+        assert result == data
+
+    async def test_store_and_retrieve_entity_data(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        an_entity_type,
+        an_attribute_type,
+        a_csr_attribute_type,
+    ):
+        data = {
+            an_entity_type.name: {
+                an_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                },
+                a_csr_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                    "indptr": np.array([0, 2, 2]),
+                },
+            }
+        }
+        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        result = await repository.datasets.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(data, result)
+
+    async def test_store_multiple_entity_data_retrieve_one(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        an_entity_type,
+        an_attribute_type,
+        a_csr_attribute_type,
+    ):
+        another_dataset = await repository.datasets.create(
+            a_dataset.workspace.id,
+            Dataset("another_dataset", "Another Dataset", a_dataset.dataset_type),
+        )
+        assert another_dataset.id is not None
+        data = {
+            an_entity_type.name: {
+                an_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                }
+            }
+        }
+        await repository.datasets.store_data(
+            another_dataset.id,
+            {
+                an_entity_type.name: {
+                    a_csr_attribute_type.name: {
+                        "data": np.array([1.0, 2.0]),
+                        "indptr": np.array([0, 2, 2]),
+                    },
+                }
+            },
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        result = await repository.datasets.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(data, result)

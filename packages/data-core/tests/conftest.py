@@ -86,6 +86,18 @@ async def an_attribute_type(repository: SQLAlchemyRepository):
 
 
 @pytest.fixture
+async def a_csr_attribute_type(repository: SQLAlchemyRepository):
+    return await repository.attribute_types.create(
+        AttributeType(
+            name="csr.attribute",
+            data_type=DataType(float, csr=True),
+            unit="m/s",
+            description="a description",
+        )
+    )
+
+
+@pytest.fixture
 async def a_dataset(repository: SQLAlchemyRepository, a_workspace, a_dataset_type):
     return await repository.datasets.create(
         a_workspace.id,

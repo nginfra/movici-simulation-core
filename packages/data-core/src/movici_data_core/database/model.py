@@ -155,40 +155,6 @@ class Dataset(Base):
         )
 
 
-class Scenario(Base):
-    __tablename__ = "scenario"
-    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
-    workspace: Mapped[Workspace] = relationship(back_populates="scenarios")
-
-    name: Mapped[str]
-    display_name: Mapped[str]
-    description: Mapped[str] = mapped_column(Text)
-    simulation_info: Mapped[dict] = mapped_column(JSON)
-
-    epsg_code: Mapped[int]
-    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSONTuple(length=4))
-
-    created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
-    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
-
-    def to_domain(self) -> domain_model.Scenario:
-        return domain_model.Scenario(
-            id=self.id,
-            workspace=self.workspace.to_domain(),
-            name=self.name,
-            display_name=self.display_name,
-            description=self.description,
-            simulation_info=self.simulation_info,
-            epsg_code=self.epsg_code,
-            bounding_box=self.bounding_box,
-            created_at=self.created_at,
-            updated_at=self.updated_at,
-        )
-
-
 class EntityType(Base):
     MAX_NAME_LENGTH = 50
     __tablename__ = "entity_type"
@@ -306,6 +272,67 @@ class RawDataChunk(Base):
     raw_data_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("raw_data.id", ondelete="CASCADE"))
     sequence: Mapped[int]
     bytes: Mapped[bytes]
+
+
+class Scenario(Base):
+    __tablename__ = "scenario"
+    __table_args__ = (UniqueConstraint("workspace_id", "name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
+    workspace: Mapped[Workspace] = relationship(back_populates="scenarios")
+
+    name: Mapped[str]
+    display_name: Mapped[str]
+    description: Mapped[str] = mapped_column(Text)
+    simulation_info: Mapped[dict] = mapped_column(JSON)
+
+    epsg_code: Mapped[int]
+    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSONTuple(length=4))
+
+    created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    datasets: Mapped[Dataset] = relationship()
+
+    def to_domain(self) -> domain_model.Scenario:
+        return domain_model.Scenario(
+            id=self.id,
+            workspace=self.workspace.to_domain(),
+            name=self.name,
+            display_name=self.display_name,
+            description=self.description,
+            simulation_info=self.simulation_info,
+            epsg_code=self.epsg_code,
+            bounding_box=self.bounding_box,
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+        )
+
+
+class ScenarioDataset(Base):
+    __tablename__ = "scenario_dataset"
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id"), primary_key=True)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id"), primary_key=True)
+    scenario: Mapped[Scenario] = relationship(Scenario, back_populates="datasets")
+    dataset: Mapped[Scenario] = relationship(Dataset, back_populates="scenarios")
+
+
+class Update(Base):
+    __tablename__ = "update"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+
+class UpdateAttribute(Base):
+    __tablename__ = "update_attribute"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    update_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("update.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+
+    update: Mapped[Update] = relationship()
+    attribute: Mapped[Attribute] = relationship()
 
 
 #
