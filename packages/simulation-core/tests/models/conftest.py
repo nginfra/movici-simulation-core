@@ -1,5 +1,4 @@
 import dataclasses
-import itertools
 import json
 import shutil
 import typing as t
@@ -7,27 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from movici_simulation_core.core import Model
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
-from movici_simulation_core.models.common.attributes import CommonAttributes
-from movici_simulation_core.testing.model_tester import ModelTester
 
-
-@pytest.fixture
-def model_name():
-    return "some_model"
-
-
-@pytest.fixture
-def init_data():
-    return []
-
-
-@pytest.fixture
-def time_scale():
-    return 1
+# Shared fixtures (global_schema, create_model_tester, init_data, clean_strategies,
+# etc.) are provided by the movici_testing pytest plugin. This conftest provides
+# model-test-specific overrides and data fixtures.
 
 
 @pytest.fixture
@@ -36,9 +20,13 @@ def global_timeline_info():
 
 
 @pytest.fixture
-def global_schema(global_schema):
-    global_schema.use(CommonAttributes)
-    return global_schema
+def model_name():
+    return "some_model"
+
+
+@pytest.fixture
+def time_scale():
+    return 1
 
 
 @pytest.fixture
@@ -440,40 +428,3 @@ def railway_network_for_traffic(railway_network_name):
             },
         },
     }
-
-
-@pytest.fixture
-def create_model_tester(tmp_path_factory, init_data, global_schema):
-    testers: t.List[ModelTester] = []
-    counter = itertools.count()
-
-    def _create(
-        model_type: t.Type[Model],
-        config,
-        tmp_dir: Path = None,
-        schema: AttributeSchema = None,
-        **kwargs,
-    ):
-        model = model_type(config)
-        if tmp_dir is None:
-            tmp_dir = tmp_path_factory.mktemp(f"init_data_{next(counter)}")
-        if schema is None:
-            schema = global_schema
-
-        tester = ModelTester(model, tmp_dir=tmp_dir, schema=schema, **kwargs)
-        for obj in init_data:
-            if isinstance(obj, dict):
-                tester.add_init_data(**obj)
-            elif isinstance(obj, (tuple, list)) and len(obj) == 2:
-                tester.add_init_data(*obj)
-            else:
-                raise TypeError(f"Unknown init_data definition {obj:r}")
-
-        testers.append(tester)
-        return tester
-
-    yield _create
-
-    for tester in testers:
-        tester.close()
-        tester.cleanup()
