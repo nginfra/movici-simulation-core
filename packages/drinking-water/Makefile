@@ -16,8 +16,3 @@ test-numba:
 
 mypy:
 	- mypy $(MODULE_NAME)
-
-bump-version:
-	bumpversion  --config-file .bumpversion.app $(level)
-	@NEW_VERSION=$$(tail -1 VERSION);\
-	echo New version: $$NEW_VERSION

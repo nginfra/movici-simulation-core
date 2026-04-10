@@ -48,7 +48,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-models = ["shapely>=1.7.1", "pyproj>=3.0.1", "movici-geo-query>=1.1.1", "scipy"]
+models = [
+  "shapely>=1.7.1",
+  "pyproj>=3.0.1",
+  "movici-geo-query>=1.1.1",
+  "scipy",
+]
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 all = [
   "shapely>=1.7.1",
