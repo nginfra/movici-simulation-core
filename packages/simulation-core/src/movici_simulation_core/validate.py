@@ -10,6 +10,8 @@ from jsonschema import exceptions, validators
 
 import movici_simulation_core.core.schema as schema
 
+MoviciTypeStr = t.Literal["dataset", "entityGroup", "attribute"]
+
 
 @dataclasses.dataclass
 class ModelConfigSchema:
@@ -24,14 +26,14 @@ class MoviciTypeReport(exceptions.ValidationError):
     raised as actual errors
     """
 
-    def __init__(self, movici_type: str, instance: str) -> None:
-        self.movici_type = movici_type
+    def __init__(self, movici_type: MoviciTypeStr, instance: str) -> None:
+        self.movici_type: MoviciTypeStr = movici_type
         super().__init__(message=f"<{movici_type}>{instance}", instance=instance)
 
-    def asinfo(
-        self,
-    ):
-        return MoviciDataRefInfo(path=self.path, movici_type=self.movici_type, value=self.instance)
+    def asinfo(self):
+        return MoviciDataRefInfo(
+            path=tuple(self.path), value=self.instance, movici_type=self.movici_type
+        )
 
 
 def movici_dataset_type(lookup):
@@ -250,9 +252,18 @@ def movici_validator(schema, lookup: MoviciTypeLookup | None = None):
 
 @dataclasses.dataclass
 class MoviciDataRefInfo:
-    path: t.Tuple[t.Union[str, int], ...]
-    movici_type: t.Literal["dataset", "entityGroup", "attribute"]
-    value: str
+    path: tuple[str | int, ...]
+    value: t.Any
+    movici_type: MoviciTypeStr | None = None
+
+    @classmethod
+    def from_path_string(
+        cls,
+        path: str,
+        value: t.Any,
+        movici_type: t.Literal["dataset", "entityGroup", "attribute", None] = None,
+    ):
+        return cls(path=cls._parse_json_path(path), value=value, movici_type=movici_type)
 
     def __post_init__(self):
         if isinstance(self.path, tuple):
