@@ -12,6 +12,7 @@ from movici_data_core.domain_model import (
     DatasetType,
     EntityType,
     ModelType,
+    ScenarioDataset,
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
@@ -306,11 +307,60 @@ class TestAttributeTypeRepository:
 
 
 class TestModelTypeRepository:
-    async def test_created_model_type_has_schema(self, repository: SQLAlchemyRepository):
-        model_type = await repository.model_types.create(
-            ModelType("some_model", {"some": "schema"})
+    @pytest.fixture
+    async def a_model_type(self, repository: SQLAlchemyRepository):
+        return await repository.model_types.create(
+            ModelType(name="some_model", jsonschema={"some": "schema"})
         )
-        assert model_type.schema == {"some": "schema"}
+
+    async def test_created_model_type_has_schema(self, a_model_type):
+        assert a_model_type.jsonschema == {"some": "schema"}
+
+    async def test_update_model_type(
+        self, a_model_type: ModelType, repository: SQLAlchemyRepository
+    ):
+        assert a_model_type.id is not None
+
+        await repository.model_types.update(
+            a_model_type.id, ModelType("another_name", {"some": "othershema"})
+        )
+
+        updated = await repository.model_types.get_by_name("another_name")
+        assert updated is not None
+        assert updated.jsonschema == {"some": "othershema"}
+
+    async def test_returns_existing_model_type(
+        self, repository: SQLAlchemyRepository, a_model_type
+    ):
+        repository.options.STRICT_MODEL_TYPES = True
+        found = await repository.model_types.ensure_model_types(["some_model"])
+        assert found == [a_model_type]
+
+    async def test_raises_on_non_existing_model_type_when_strict(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_MODEL_TYPES = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.model_types.ensure_model_types(["non-existing"])
+
+    async def test_automatically_creates_model_type_with_passall_schema_when_not_strict(
+        self, repository: SQLAlchemyRepository, a_model_type
+    ):
+        repository.options.STRICT_MODEL_TYPES = False
+
+        created, existing = await repository.model_types.ensure_model_types(
+            ["new", a_model_type.name]
+        )
+        assert existing == a_model_type
+        assert created is not None
+        assert created.name == "new"
+        assert created.jsonschema == {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "$id": "/new/1.0.0",
+            "type": "object",
+            "additionalProperties": True,
+        }
 
 
 class TestDatasetRepository:
@@ -453,3 +503,77 @@ class TestDatasetRepository:
         await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
         result = await repository.datasets.get_entity_data(a_dataset.id)
         assert_dataset_dicts_equal(data, result)
+
+    async def test_returns_existing_datasets(self, repository: SQLAlchemyRepository, a_dataset):
+        repository.options.STRICT_SCENARIO_DATASETS = True
+        another_dataset = await repository.datasets.create(
+            a_dataset.workspace.id,
+            Dataset(
+                "another_dataset",
+                "another_dataset",
+                DatasetType("tabular", format=DatasetFormat.UNSTRUCTURED),
+            ),
+        )
+        assert another_dataset.id is not None
+
+        found = await repository.datasets.ensure_scenario_datasets(
+            a_dataset.workspace.id,
+            [
+                ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+                ScenarioDataset(another_dataset.name, another_dataset.dataset_type.name),
+            ],
+        )
+        assert [ds.id for ds in found] == [a_dataset.id, another_dataset.id]
+
+    async def test_raises_on_missing_dataset_when_strict(
+        self, repository: SQLAlchemyRepository, a_workspace
+    ):
+        repository.options.STRICT_SCENARIO_DATASETS = True
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.datasets.ensure_scenario_datasets(
+                a_workspace.id,
+                [ScenarioDataset("non-existing", type="transport_network")],
+            )
+
+    async def test_automatically_creates_dataset_stubs_when_not_strict(
+        self, repository: SQLAlchemyRepository, a_workspace, a_dataset
+    ):
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        scenario_datasets = await repository.datasets.ensure_scenario_datasets(
+            a_workspace.id,
+            [
+                ScenarioDataset("new", "transport_network"),
+                ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+                ScenarioDataset("new_tapefile", "tabular"),
+            ],
+        )
+        assert [ds.name for ds in scenario_datasets] == ["new", a_dataset.name, "new_tapefile"]
+        assert [ds.type for ds in scenario_datasets] == [
+            "transport_network",
+            a_dataset.dataset_type.name,
+            "tabular",
+        ]
+        assert None not in [ds.id for ds in scenario_datasets]
+
+    async def test_raises_on_missing_dataset_type(
+        self, repository: SQLAlchemyRepository, a_workspace
+    ):
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        with pytest.raises(ResourceDoesNotExist):
+            await repository.datasets.ensure_scenario_datasets(
+                a_workspace.id, [ScenarioDataset("new", "unknown_type")]
+            )
+
+    async def test_raises_on_existing_dataset_with_incorrect_type(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        with pytest.raises(InvalidResource):
+            await repository.datasets.ensure_scenario_datasets(
+                a_dataset.workspace.id, [ScenarioDataset(name=a_dataset.name, type="tabular")]
+            )

@@ -64,7 +64,7 @@ def _default_flags(mode: DatabaseMode):
             "STRICT_ATTRIBUTES": True,
             "STRICT_DATASET_TYPES": True,
             "STRICT_ENTITY_TYPES": True,
-            "STRICT_MODELS": True,
-            "STRICT_MODEL_CONFIGS": True,
+            "STRICT_MODEL_TYPES": True,
+            "STRICT_SCENARIO_DATASETS": True,
         }
     return {}

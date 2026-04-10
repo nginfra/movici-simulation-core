@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import contextlib
+import copy
+import dataclasses
 import io
 import pathlib
 import typing as t
@@ -23,9 +25,15 @@ from movici_data_core.domain_model import (
     DatasetType,
     EntityType,
     ModelType,
+    Scenario,
+    ScenarioDataset,
     Workspace,
 )
-from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
+from movici_data_core.exceptions import (
+    InvalidAction,
+    InvalidResource,
+    ResourceDoesNotExist,
+)
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
@@ -35,12 +43,13 @@ from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
 from movici_simulation_core.types import FileType, NumpyAttributeData
+from movici_simulation_core.validate import MoviciDataRefInfo
 
 T_dom = t.TypeVar("T_dom")
 
 
 class SQLAlchemyRepository:
-    def __init__(self, session: AsyncSession, options: Options):
+    def __init__(self, session: AsyncSession, options: Options, dataset_schema: DatasetSchema):
         self.session = session
         self.options = options
 
@@ -68,6 +77,10 @@ class SQLAlchemyRepository:
     @property
     def datasets(self):
         return DatasetRepository(self.session, self.options, self)
+
+    @property
+    def scenarios(self):
+        return ScenarioRepository(self.session, self.options, self)
 
 
 class ResourceSelector(t.Generic[T_dom]):
@@ -347,13 +360,32 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             .values(name=obj.name, jsonschema=obj.jsonschema)
         )
 
-    async def ensure_model_type(self, model_type: ModelType) -> ModelType:
-        existing = await self.get_by_name(model_type.name)
-        if not existing:
-            if self.options.STRICT_MODELS:
-                raise ResourceDoesNotExist("model_type", name=model_type.name)
-            existing = await self.create(model_type)
-        return existing
+    async def ensure_model_types(self, model_types: t.Sequence[str]) -> list[ModelType]:
+        existing_model_types = {
+            tp.name: t.cast(db.ModelType, tp)
+            for tp in await self.session.scalars(
+                self.selector.where(
+                    db.ModelType.name.in_(model_types),
+                )
+            )
+        }
+        to_create = []
+        for model_type in model_types:
+            if model_type not in existing_model_types:
+                if self.options.STRICT_MODEL_TYPES:
+                    raise ResourceDoesNotExist("model_type", name=model_type)
+                to_create.append(model_type)
+                continue
+
+        if to_create:
+            created = await self.session.scalars(
+                insert(db.ModelType).returning(db.ModelType),
+                [{"name": tp, "jsonschema": self.default_jsonschema(tp)} for tp in to_create],
+            )
+
+            existing_model_types.update((tp.name, tp) for tp in created)
+
+        return [existing_model_types[tp].to_domain() for tp in model_types]
 
     @staticmethod
     def default_jsonschema(name: str):
@@ -439,6 +471,58 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
 
     def get_entity_data(self, id: UUID):
         return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
+
+    async def ensure_scenario_datasets(
+        self, parent: UUID, datasets: t.Sequence[ScenarioDataset]
+    ) -> list[ScenarioDataset]:
+        existing_datasets = {
+            ds.name: t.cast(db.Dataset, ds)
+            for ds in await self.session.scalars(
+                self.selector.where(
+                    db.Dataset.workspace_id == parent,
+                    db.Dataset.name.in_(ds.name for ds in datasets),
+                )
+            )
+        }
+        to_create = []
+        for scenario_dataset in datasets:
+            name = scenario_dataset.name
+            if name not in existing_datasets:
+                if self.options.STRICT_SCENARIO_DATASETS:
+                    raise ResourceDoesNotExist("dataset", name=name)
+                to_create.append(scenario_dataset)
+                continue
+            if scenario_dataset.type != existing_datasets[name].dataset_type.name:
+                raise InvalidResource(
+                    "dataset",
+                    name=name,
+                    message="incompatible dataset already exists",
+                )
+        if to_create:
+            existing_types = {tp.name: tp for tp in await self.all_data.dataset_types.list()}
+            for scenario_dataset in to_create:
+                if scenario_dataset.type not in existing_types:
+                    raise ResourceDoesNotExist("dataset_type", name=scenario_dataset.type)
+
+            created = await self.session.scalars(
+                insert(db.Dataset).returning(db.Dataset),
+                [
+                    {
+                        "name": ds.name,
+                        "display_name": ds.name,
+                        "dataset_type_id": existing_types[ds.type].id,
+                        "workspace_id": parent,
+                    }
+                    for ds in to_create
+                ],
+            )
+
+            existing_datasets.update((ds.name, ds) for ds in created)
+
+        return [
+            ScenarioDataset(name=ds.name, type=ds.type, id=existing_datasets[ds.name].id)
+            for ds in datasets
+        ]
 
 
 class _EntityDataHandler:
@@ -637,3 +721,128 @@ class _RawDataHandler:
             raise ValueError(f"Expected dataset encoding 'json', got {raw_data.encoding}")
         raw_bytes = await self.get(id)
         return orjson.loads(raw_bytes)
+
+
+class ScenarioRepository:
+    def __init__(self, session: AsyncSession, options: Options, all_data: SQLAlchemyRepository):
+        self.session = session
+        self.all_data = all_data
+        self.options = options
+
+    async def list(self, parent: UUID) -> t.Sequence[Scenario]:
+        result = await self.session.scalars(
+            select(db.Scenario).where(db.Scenario.workspace_id == parent)
+        )
+        return [obj.to_domain() for obj in result]
+
+    @property
+    def selector(self):
+        return select(db.Scenario).options(
+            selectinload(db.Scenario.datasets).selectinload(db.Dataset.dataset_type),
+            selectinload(db.Scenario.models).options(
+                selectinload(db.ScenarioModel.model_type),
+                selectinload(db.ScenarioModel.references).options(
+                    selectinload(db.ScenarioModelReference.dataset),
+                    selectinload(db.ScenarioModelReference.entity_type),
+                    selectinload(db.ScenarioModelReference.attribute_type),
+                ),
+            ),
+        )
+
+    async def get_by_name(self, parent: UUID, name: str) -> Scenario | None:
+        record = await self.session.scalar(
+            self.selector.where(db.Scenario.name == name, db.Scenario.workspace_id == parent)
+        )
+        if record is None:
+            return None
+        return self.load_full_scenario(record)
+
+    async def get_by_id(self, id: UUID) -> Scenario | None:
+        record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
+        if record is None:
+            return None
+        return self.load_full_scenario(record)
+
+    async def delete(self, id: UUID):
+        return await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
+
+    async def create(self, parent: UUID, obj: Scenario) -> Scenario:
+        result = await self.session.scalar(
+            insert(db.Scenario)
+            .values(
+                workpace_id=parent,
+                name=obj.name,
+                display_name=obj.display_name,
+                description=obj.description,
+                status=obj.status,
+                simulation_info=obj.simulation_info,
+                epsg_code=obj.epsg_code,
+            )
+            .returning(db.Scenario)
+        )
+        scenario_datasets = await self.all_data.datasets.ensure_scenario_datasets(
+            parent, obj.datasets
+        )
+        await self.session.execute(
+            insert(db.ScenarioDataset),
+            [
+                {"scenario_id": obj.id, "dataset_id": ds.id, "sequence": idx}
+                for idx, ds in enumerate(scenario_datasets)
+            ],
+        )
+
+        model_types = await self.all_data.model_types.ensure_model_types(
+            [m.name for m in obj.models]
+        )
+
+        for scenario_dataset in Scenario.datasets:
+            dataset = to_insert_datasets.append()
+
+        return t.cast(Scenario, to_domain_or_none(result))
+
+    async def update(self, id: UUID, obj: T_dom):
+        raise NotImplementedError
+
+    @classmethod
+    def load_full_scenario(cls, scenario: db.Scenario):
+        return dataclasses.replace(
+            scenario.to_domain(),
+            datasets=[
+                cls._load_scenario_dataset(ds)
+                for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
+            ],
+            models=[
+                cls._load_scenario_model(model)
+                for model in sorted(scenario.models, key=lambda model: model.sequence)
+            ],
+        )
+
+    @staticmethod
+    def _load_scenario_dataset(scenario_dataset: db.ScenarioDataset):
+        return {
+            "id": scenario_dataset.dataset_id,
+            "name": scenario_dataset.dataset.name,
+            "type": scenario_dataset.dataset.dataset_type.name,
+        }
+
+    @classmethod
+    def _load_scenario_model(cls, scenario_model: db.ScenarioModel):
+        result = copy.deepcopy(scenario_model.config)
+        for data_ref in scenario_model.references:
+            value = None
+            if data_ref.dataset is not None:
+                value = data_ref.dataset.name
+            elif data_ref.entity_type is not None:
+                value = data_ref.entity_type.name
+            elif data_ref.attribute_type is not None:
+                value = data_ref.attribute_type.name
+            MoviciDataRefInfo.from_path_string(data_ref.path, value).set_value(result)
+
+        result["name"] = scenario_model.name
+        result["type"] = scenario_model.model_type.name
+        return result
+
+    @classmethod
+    def _prepare_scenario_model_reference(cls, ref_info: MoviciDataRefInfo) -> dict:
+
+        return {}

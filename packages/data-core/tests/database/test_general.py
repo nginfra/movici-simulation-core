@@ -23,8 +23,8 @@ async def test_initialize_db_for_single_scenario_sets_flags(session):
     assert not options.STRICT_DATASET_TYPES
     assert not options.STRICT_ENTITY_TYPES
     assert not options.STRICT_ATTRIBUTES
-    assert not options.STRICT_MODELS
-    assert not options.STRICT_MODEL_CONFIGS
+    assert not options.STRICT_MODEL_TYPES
+    assert not options.STRICT_SCENARIO_DATASETS
 
 
 async def test_initialize_db_for_single_scenario_creates_default_workspace(session):
@@ -44,8 +44,8 @@ async def test_initialize_db_for_multiple_workspaces_sets_flags(session):
     assert options.STRICT_DATASET_TYPES
     assert options.STRICT_ENTITY_TYPES
     assert options.STRICT_ATTRIBUTES
-    assert options.STRICT_MODELS
-    assert options.STRICT_MODEL_CONFIGS
+    assert options.STRICT_MODEL_TYPES
+    assert options.STRICT_SCENARIO_DATASETS
 
 
 async def test_initialize_db_for_multiple_workspaces_does_not_create_default_workspace(session):

@@ -7,7 +7,7 @@ import uuid
 
 import numpy as np
 from movici_data_core import domain_model
-from movici_data_core.domain_model import DatasetFormat
+from movici_data_core.domain_model import DatasetFormat, ScenarioStatus
 from sqlalchemy import (
     JSON,
     ForeignKey,
@@ -37,7 +37,12 @@ def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
 
 
 class Base(DeclarativeBase):
-    type_annotation_map = {uuid.UUID: GUID, datetime.datetime: TZDateTime, tuple: JSONTuple}
+    type_annotation_map = {
+        uuid.UUID: GUID,
+        datetime.datetime: TZDateTime,
+        tuple: JSONTuple,
+        dict: JSON,
+    }
 
 
 class DatabaseMode(enum.Enum):
@@ -82,8 +87,8 @@ class Options(Base):
     STRICT_DATASET_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_ENTITY_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_ATTRIBUTES: Mapped[bool] = mapped_column(default=False)
-    STRICT_MODELS: Mapped[bool] = mapped_column(default=False)
-    STRICT_MODEL_CONFIGS: Mapped[bool] = mapped_column(default=False)
+    STRICT_MODEL_TYPES: Mapped[bool] = mapped_column(default=False)
+    STRICT_SCENARIO_DATASETS: Mapped[bool] = mapped_column(default=False)
 
     default_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="RESTRICT")
@@ -270,11 +275,11 @@ class ModelType(Base):
     __tablename__ = "model_type"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str]
+    name: Mapped[str] = mapped_column(unique=True)
     jsonschema: Mapped[dict] = mapped_column(JSON)
 
     def to_domain(self):
-        return domain_model.ModelType(name=self.name, jsonschema=self.jsonschema)
+        return domain_model.ModelType(id=self.id, name=self.name, jsonschema=self.jsonschema)
 
 
 class Scenario(Base):
@@ -288,15 +293,17 @@ class Scenario(Base):
     name: Mapped[str]
     display_name: Mapped[str]
     description: Mapped[str] = mapped_column(Text)
+    status: Mapped[ScenarioStatus]
+
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
     epsg_code: Mapped[int]
-    bounding_box: Mapped[tuple[float, float, float, float]] = mapped_column(JSONTuple(length=4))
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
     datasets: Mapped[list[ScenarioDataset]] = relationship()
+    models: Mapped[list[ScenarioModel]] = relationship()
 
     def to_domain(self) -> domain_model.Scenario:
         return domain_model.Scenario(
@@ -307,7 +314,6 @@ class Scenario(Base):
             description=self.description,
             simulation_info=self.simulation_info,
             epsg_code=self.epsg_code,
-            bounding_box=self.bounding_box,
             created_at=self.created_at,
             updated_at=self.updated_at,
         )
@@ -315,14 +321,56 @@ class Scenario(Base):
 
 class ScenarioDataset(Base):
     __tablename__ = "scenario_dataset"
+    __table_args__ = (UniqueConstraint("scenario_id", "sequence"),)
     scenario_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("scenario.id", ondelete="CASCADE"), primary_key=True
     )
     dataset_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("dataset.id", ondelete="RESTRICT"), primary_key=True
     )
+    sequence: Mapped[int] = mapped_column()
     scenario: Mapped[Scenario] = relationship(Scenario, back_populates="datasets")
-    dataset: Mapped[Scenario] = relationship(Dataset)
+    dataset: Mapped[Dataset] = relationship(Dataset)
+
+
+class ScenarioModel(Base):
+    MAX_NAME_LENGTH = 50
+    __tablename__ = "scenario_model"
+    __table_args__ = (
+        UniqueConstraint("scenario_id", "sequence"),
+        UniqueConstraint("scenario_id", "name"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
+    model_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("model_type.id", ondelete="RESTRICT")
+    )
+    sequence: Mapped[int]
+    config: Mapped[dict]
+    references: Mapped[list[ScenarioModelReference]] = relationship()
+
+    model_type: Mapped[ModelType] = relationship()
+
+
+class ScenarioModelReference(Base):
+    __tablename__ = "scenario_model_reference"
+    __table_args__ = (UniqueConstraint("scenario_model_id", "path"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_model_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenario_model.id", ondelete="CASCADE")
+    )
+    path: Mapped[str]
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="RESTRICT"))
+    entity_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("entity_type.id", ondelete="RESTRICT")
+    )
+    attribute_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute_type.id", ondelete="RESTRICT")
+    )
+    dataset: Mapped[Dataset] = relationship()
+    entity_type: Mapped[EntityType] = relationship()
+    attribute_type: Mapped[AttributeType] = relationship()
 
 
 class Update(Base):

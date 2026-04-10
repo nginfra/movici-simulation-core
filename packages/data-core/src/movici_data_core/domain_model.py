@@ -8,6 +8,7 @@ import typing as t
 from uuid import UUID
 
 from movici_simulation_core.core import AttributeSpec, DataType
+from movici_simulation_core.validate import MoviciDataRefInfo
 
 
 class DatasetFormat(str, enum.Enum):
@@ -23,6 +24,14 @@ class DatasetFormat(str, enum.Enum):
     ENTITY_BASED = "entity_based"
     UNSTRUCTURED = "unstructured"
     BINARY = "binary"
+
+
+class ScenarioStatus(str, enum.Enum):
+    FAILED = "Failed"
+    INVALID = "Invalid"
+    READY = "Ready"
+    RUNNING = "Running"
+    SUCCEEDED = "Succeeded"
 
 
 AttributeDataType = type[bool | int | float | str]
@@ -97,6 +106,18 @@ class Dataset:
 
 
 @dataclasses.dataclass
+class ShortScenario:
+    name: str
+    display_name: str
+    status: ScenarioStatus = ScenarioStatus.READY
+
+    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+
+    id: UUID | None = None
+
+
+@dataclasses.dataclass
 class Scenario:
     name: str
     display_name: str
@@ -105,10 +126,26 @@ class Scenario:
     epsg_code: int
     bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
     simulation_info: dict = dataclasses.field(default_factory=dict)
+    status: ScenarioStatus = ScenarioStatus.READY
 
     id: UUID | None = None
     workspace: Workspace | None = None
     created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
     updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    models: list[dict] = dataclasses.field(default_factory=list)
-    datasets: list[dict] = dataclasses.field(default_factory=list)
+    models: list[ScenarioModel] = dataclasses.field(default_factory=list)
+    datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
+class ScenarioDataset:
+    name: str
+    type: str
+    id: UUID | None = None
+
+
+@dataclasses.dataclass
+class ScenarioModel:
+    name: str
+    type: str
+    config: dict
+    references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list)
