@@ -629,3 +629,27 @@ class TestScenarioRepository:
         for ds in result.datasets:
             ds.pop("id")
         assert result.datasets == scenario.datasets
+
+    async def test_update_scenario(
+        self,
+        repository: SQLAlchemyRepository,
+        scenario: Scenario,
+        get_scenario_model_validator,
+        a_workspace,
+    ):
+
+        validator = await get_scenario_model_validator()
+        scenario = await repository.scenarios.create(a_workspace.id, scenario, validator)
+
+        assert scenario is not None
+        assert scenario.id is not None
+
+        scenario.name = "new_name"
+        scenario.models = list(reversed(scenario.models))
+        await repository.scenarios.update(scenario.id, scenario, validator)
+
+        result = await repository.scenarios.get_by_id(scenario.id)
+
+        assert result is not None
+        assert result.name == scenario.name
+        assert result.models == scenario.models

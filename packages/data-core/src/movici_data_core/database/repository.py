@@ -424,7 +424,7 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
     async def update(self, id: UUID, obj: Dataset):
         current = await self.get_by_id(id)
         if current is None:
-            raise ResourceDoesNotExist("dataset_type", id=id)
+            raise ResourceDoesNotExist("dataset", id=id)
         await self.session.execute(
             update(db.Dataset)
             .where(db.Dataset.id == id)
@@ -788,9 +788,40 @@ class ScenarioRepository:
             .returning(db.Scenario.id)
         )
         assert scenario_id is not None
-
         obj.id = scenario_id
+        await self._store_scenario_details(parent, scenario_id, obj, validator)
+        return obj
 
+    async def update(self, id: UUID, obj: Scenario, validator: ModelConfigValidator):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("scenario", id=id)
+        assert current.workspace is not None
+        assert current.workspace.id is not None
+
+        await self.session.execute(
+            update(db.Scenario)
+            .where(db.Scenario.id == id)
+            .values(
+                name=obj.name,
+                display_name=obj.display_name,
+                description=obj.description,
+                simulation_info=obj.simulation_info,
+                epsg_code=obj.epsg_code,
+            )
+        )
+        await self.session.execute(
+            delete(db.ScenarioDataset).where(db.ScenarioDataset.scenario_id == id)
+        )
+        await self.session.execute(
+            delete(db.ScenarioModel).where(db.ScenarioModel.scenario_id == id)
+        )
+
+        await self._store_scenario_details(current.workspace.id, id, obj, validator)
+
+    async def _store_scenario_details(
+        self, parent: UUID, scenario_id: UUID, obj: Scenario, validator: ModelConfigValidator
+    ):
         scenario_datasets = await self.all_data.datasets.ensure_scenario_datasets(
             parent, [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
         )
@@ -843,13 +874,8 @@ class ScenarioRepository:
         if refs_to_add:
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
-        return obj
-
-    async def update(self, id: UUID, obj: Scenario):
-        raise NotImplementedError
-
     @classmethod
-    def load_full_scenario(cls, scenario: db.Scenario):
+    def load_full_scenario(cls, scenario: db.Scenario) -> Scenario:
         return dataclasses.replace(
             scenario.to_domain(),
             datasets=[

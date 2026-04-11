@@ -61,6 +61,9 @@ class SQLAlchemyBackend:
         if strict_model_types is not None:
             self.options.STRICT_MODEL_TYPES = strict_model_types
 
+    def get_dataset_schema(self):
+        pass
+
 
 class MultipleWorkspacesBackend(SQLAlchemyBackend):
     def for_workspace(self, workspace: Workspace):
@@ -77,8 +80,3 @@ class SingleScenarioBackend(SQLAlchemyBackend):
     def __init__(self, session: AsyncSession, options: Options, workspace: Workspace):
         super().__init__(session, options)
         self.workspace = workspace
-
-
-class ScenarioService:
-    def validate_model_config(self, config) -> ScenarioModel:
-        pass
