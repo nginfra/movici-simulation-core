@@ -12,6 +12,7 @@ from movici_data_core.domain_model import (
     DatasetType,
     EntityType,
     ModelType,
+    Scenario,
     ScenarioDataset,
     Workspace,
 )
@@ -577,3 +578,54 @@ class TestDatasetRepository:
             await repository.datasets.ensure_scenario_datasets(
                 a_dataset.workspace.id, [ScenarioDataset(name=a_dataset.name, type="tabular")]
             )
+
+
+class TestScenarioRepository:
+    @pytest.fixture
+    def scenario(self, default_model_types, a_dataset):
+        return Scenario(
+            name="a_scenario",
+            display_name="A Scenario",
+            description="Scenario for testing",
+            epsg_code=28992,
+            simulation_info={"some": "info"},
+            datasets=[
+                {
+                    "name": a_dataset.name,
+                    "type": a_dataset.dataset_type.name,
+                }
+            ],
+            models=[
+                {
+                    "name": "model1",
+                    "type": default_model_types[0].name,
+                    "dataset": a_dataset.name,
+                    "entity_group": "transport_nodes",
+                    "attribute": "id",
+                },
+                {
+                    "name": "model2",
+                    "type": default_model_types[1].name,
+                    "field": "value",
+                },
+            ],
+        )
+
+    async def test_scenario_round_trip(
+        self,
+        repository: SQLAlchemyRepository,
+        scenario: Scenario,
+        get_scenario_model_validator,
+        a_workspace,
+    ):
+        validator = await get_scenario_model_validator()
+        await repository.scenarios.create(a_workspace.id, scenario, validator)
+        result = await repository.scenarios.get_by_name(a_workspace.id, scenario.name)
+
+        assert result is not None
+        assert result.name == scenario.name
+        assert result.models == scenario.models
+
+        for ds in result.datasets:
+            ds.pop("id")
+        assert result.datasets == scenario.datasets

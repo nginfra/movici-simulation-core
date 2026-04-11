@@ -132,20 +132,20 @@ class Scenario:
     workspace: Workspace | None = None
     created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
     updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    models: list[ScenarioModel] = dataclasses.field(default_factory=list)
-    datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
+    models: list[dict] = dataclasses.field(default_factory=list)
+    datasets: list[dict] = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
 class ScenarioDataset:
     name: str
     type: str
-    id: UUID | None = None
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
 class ScenarioModel:
     name: str
-    type: str
+    type: ModelType
     config: dict
-    references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list)
+    references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)

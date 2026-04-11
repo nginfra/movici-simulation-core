@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from movici_data_core.database import model as db_model
 from movici_data_core.database.general import get_options, initialize_database
@@ -9,7 +11,10 @@ from movici_data_core.domain_model import (
     DatasetFormat,
     DatasetType,
     EntityType,
+    ModelType,
+    Workspace,
 )
+from movici_data_core.validators import ModelConfigValidator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from movici_simulation_core.core import DataType
@@ -82,8 +87,38 @@ def default_attribute_types():
 
 
 @pytest.fixture
+def default_model_types():
+    return [
+        ModelType(
+            "model_a",
+            jsonschema={
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {
+                    "dataset": {"type": "string", "movici.type": "dataset"},
+                    "entity_group": {"type": "string", "movici.type": "entityGroup"},
+                    "attribute": {"type": "string", "movici.type": "attribute"},
+                },
+            },
+        ),
+        ModelType(
+            "model_b",
+            jsonschema={
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "type": "object",
+                "properties": {"field": {"type": "string"}},
+            },
+        ),
+    ]
+
+
+@pytest.fixture
 async def repository(
-    session, default_dataset_types, default_entity_types, default_attribute_types
+    session,
+    default_dataset_types,
+    default_entity_types,
+    default_attribute_types,
+    default_model_types,
 ):
     options = await get_options(session)
     repository = SQLAlchemyRepository(session, options)
@@ -93,7 +128,22 @@ async def repository(
         await repository.entity_types.create(entity_type)
     for attribute_type in default_attribute_types:
         await repository.attribute_types.create(attribute_type)
+    for model_type in default_model_types:
+        await repository.model_types.create(model_type)
     return repository
+
+
+@pytest.fixture
+async def get_scenario_model_validator(repository: SQLAlchemyRepository, a_workspace: Workspace):
+    async def _get_validator_for_workspace(workspace_id: UUID | None = None):
+        workspace_id = workspace_id or a_workspace.id
+        assert workspace_id is not None
+        return ModelConfigValidator.from_list_data(
+            attribute_types=await repository.attribute_types.list(),
+            entity_types=await repository.entity_types.list(),
+        )
+
+    return _get_validator_for_workspace
 
 
 @pytest.fixture

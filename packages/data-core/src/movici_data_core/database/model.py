@@ -361,11 +361,13 @@ class ScenarioModelReference(Base):
         ForeignKey("scenario_model.id", ondelete="CASCADE")
     )
     path: Mapped[str]
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="RESTRICT"))
-    entity_type_id: Mapped[uuid.UUID] = mapped_column(
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("dataset.id", ondelete="RESTRICT")
+    )
+    entity_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("entity_type.id", ondelete="RESTRICT")
     )
-    attribute_type_id: Mapped[uuid.UUID] = mapped_column(
+    attribute_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
     dataset: Mapped[Dataset] = relationship()

@@ -27,6 +27,7 @@ from movici_data_core.domain_model import (
     ModelType,
     Scenario,
     ScenarioDataset,
+    ScenarioModel,
     Workspace,
 )
 from movici_data_core.exceptions import (
@@ -34,6 +35,7 @@ from movici_data_core.exceptions import (
     InvalidResource,
     ResourceDoesNotExist,
 )
+from movici_data_core.validators import ModelConfigValidator
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
@@ -49,7 +51,7 @@ T_dom = t.TypeVar("T_dom")
 
 
 class SQLAlchemyRepository:
-    def __init__(self, session: AsyncSession, options: Options, dataset_schema: DatasetSchema):
+    def __init__(self, session: AsyncSession, options: Options):
         self.session = session
         self.options = options
 
@@ -738,7 +740,10 @@ class ScenarioRepository:
     @property
     def selector(self):
         return select(db.Scenario).options(
-            selectinload(db.Scenario.datasets).selectinload(db.Dataset.dataset_type),
+            selectinload(db.Scenario.workspace),
+            selectinload(db.Scenario.datasets)
+            .selectinload(db.ScenarioDataset.dataset)
+            .selectinload(db.Dataset.dataset_type),
             selectinload(db.Scenario.models).options(
                 selectinload(db.ScenarioModel.model_type),
                 selectinload(db.ScenarioModel.references).options(
@@ -766,11 +771,13 @@ class ScenarioRepository:
     async def delete(self, id: UUID):
         return await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
-    async def create(self, parent: UUID, obj: Scenario) -> Scenario:
-        result = await self.session.scalar(
+    async def create(
+        self, parent: UUID, obj: Scenario, validator: ModelConfigValidator
+    ) -> Scenario:
+        scenario_id = await self.session.scalar(
             insert(db.Scenario)
             .values(
-                workpace_id=parent,
+                workspace_id=parent,
                 name=obj.name,
                 display_name=obj.display_name,
                 description=obj.description,
@@ -778,29 +785,67 @@ class ScenarioRepository:
                 simulation_info=obj.simulation_info,
                 epsg_code=obj.epsg_code,
             )
-            .returning(db.Scenario)
+            .returning(db.Scenario.id)
         )
+        assert scenario_id is not None
+
+        obj.id = scenario_id
+
         scenario_datasets = await self.all_data.datasets.ensure_scenario_datasets(
-            parent, obj.datasets
+            parent, [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
         )
         await self.session.execute(
             insert(db.ScenarioDataset),
             [
-                {"scenario_id": obj.id, "dataset_id": ds.id, "sequence": idx}
+                {"scenario_id": scenario_id, "dataset_id": ds.id, "sequence": idx}
                 for idx, ds in enumerate(scenario_datasets)
             ],
         )
 
         model_types = await self.all_data.model_types.ensure_model_types(
-            [m.name for m in obj.models]
+            [model["type"] for model in obj.models if "name" in model]
         )
 
-        for scenario_dataset in Scenario.datasets:
-            dataset = to_insert_datasets.append()
+        validator = validator.for_scenario(scenario_datasets, model_types)
+        scenario_models = validator.process_model_configs(obj.models)
+        scenario_model_records = await self.session.scalars(
+            insert(db.ScenarioModel).returning(db.ScenarioModel),
+            [
+                {
+                    "name": model.name,
+                    "scenario_id": scenario_id,
+                    "model_type_id": model_type.id,
+                    "sequence": idx,
+                    "config": self.stripped_config(model),
+                }
+                for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
+            ],
+        )
+        refs_to_add = []
+        for scenario_model, record in zip(
+            scenario_models, sorted(scenario_model_records, key=lambda r: r.sequence)
+        ):
+            for ref in scenario_model.references:
+                ref_data = {
+                    "scenario_model_id": record.id,
+                    "path": ref.json_path,
+                }
+                if ref.movici_type == "attribute":
+                    ref_data["attribute_type_id"] = validator.attribute_types[ref.value].id
+                elif ref.movici_type == "entityGroup":
+                    ref_data["entity_type_id"] = validator.entity_types[ref.value].id
+                elif ref.movici_type == "dataset":
+                    ref_data["dataset_id"] = (
+                        validator.datasets[ref.value].id if validator.datasets else None
+                    )
+                refs_to_add.append(ref_data)
 
-        return t.cast(Scenario, to_domain_or_none(result))
+        if refs_to_add:
+            await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
-    async def update(self, id: UUID, obj: T_dom):
+        return obj
+
+    async def update(self, id: UUID, obj: Scenario):
         raise NotImplementedError
 
     @classmethod
@@ -842,7 +887,30 @@ class ScenarioRepository:
         result["type"] = scenario_model.model_type.name
         return result
 
-    @classmethod
-    def _prepare_scenario_model_reference(cls, ref_info: MoviciDataRefInfo) -> dict:
+    @staticmethod
+    def stripped_config(scenario_model: ScenarioModel):
+        result = copy.deepcopy(scenario_model.config)
+        result.pop("name", None)
+        result.pop("type", None)
+        for ref in scenario_model.references:
+            ref.unset_value(result)
+        return result
 
-        return {}
+    @staticmethod
+    def prepare_scenario_model_references(
+        id: UUID, scenario_model: ScenarioModel, schema: ModelConfigValidator
+    ):
+        result = []
+        for ref in scenario_model.references:
+            ref_data = {
+                "scenario_model_id": id,
+                "path": ref.json_path,
+            }
+            if ref.movici_type == "attribute":
+                ref_data["attribute_type_id"] = schema.attribute_types[ref.value].id
+            elif ref.movici_type == "entityGroup":
+                ref_data["entity_type_id"] = schema.entity_types[ref.value].id
+            elif ref.movici_type == "dataset":
+                ref_data["dataset_id"] = schema.datasets[ref.value].id if schema.datasets else None
+            result.append(ref_data)
+        return result
