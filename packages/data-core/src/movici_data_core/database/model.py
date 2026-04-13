@@ -203,20 +203,43 @@ class AttributeType(Base):
         )
 
 
-class NumpyArray(Base):
-    __tablename__ = "numpy_array"
+class DataArray(Base):
+    __tablename__ = "data_array"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     dtype: Mapped[str] = mapped_column(String(20))
     shape: Mapped[tuple] = mapped_column(JSON)
     data: Mapped[bytes]
 
-    def to_array(self) -> np.ndarray:
+    min_val: Mapped[float | None]
+    max_val: Mapped[float | None]
+
+    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute: Mapped[Attribute] = relationship(back_populates="data")
+
+    def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
         :return: Reconstructed NumPy array
         """
         return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+
+
+class RowptrArray(Base):
+    __tablename__ = "rowptr_array"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    data: Mapped[bytes]
+
+    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
+
+    def to_numpy(self) -> np.ndarray:
+        """Reconstruct numpy array from stored data.
+
+        :return: Reconstructed NumPy array
+        """
+        return np.frombuffer(self.data, dtype=int)
 
 
 class Attribute(Base):
@@ -229,18 +252,11 @@ class Attribute(Base):
     attribute_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
-    data_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("numpy_array.id", ondelete="RESTRICT"))
-    rowptr_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("numpy_array.id", ondelete="RESTRICT")
-    )
-
-    min_val: Mapped[float | None]
-    max_val: Mapped[float | None]
 
     entity_type: Mapped[EntityType] = relationship()
     attribute_type: Mapped[AttributeType] = relationship()
-    data: Mapped[NumpyArray] = relationship(foreign_keys=[data_id])
-    rowptr: Mapped[NumpyArray | None] = relationship(foreign_keys=[rowptr_id])
+    data: Mapped[DataArray] = relationship()
+    rowptr: Mapped[RowptrArray | None] = relationship()
 
 
 class DatasetAttribute(Base):

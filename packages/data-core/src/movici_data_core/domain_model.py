@@ -89,35 +89,6 @@ DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
 
 
 @dataclasses.dataclass
-class Dataset:
-    name: str
-    display_name: str
-    dataset_type: DatasetType
-    id: UUID | None = None
-    workspace: Workspace | None = None
-
-    general: dict | None = None
-    espg_code: int | None = None
-    bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
-    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-
-    data: DatasetData | None = None
-
-
-@dataclasses.dataclass
-class ShortScenario:
-    name: str
-    display_name: str
-    status: ScenarioStatus = ScenarioStatus.READY
-
-    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-
-    id: UUID | None = None
-
-
-@dataclasses.dataclass
 class Scenario:
     name: str
     display_name: str
@@ -147,5 +118,32 @@ class ScenarioDataset:
 class ScenarioModel:
     name: str
     type: ModelType
-    config: dict
+    config: dict = dataclasses.field(default_factory=dict)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
+
+
+@dataclasses.dataclass
+class Dataset:
+    name: str
+    display_name: str
+    dataset_type: DatasetType
+    id: UUID | None = None
+    workspace: Workspace | None = None
+
+    general: dict | None = None
+    espg_code: int | None = None
+    bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
+    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+
+    data: DatasetData | None = None
+
+
+@dataclasses.dataclass
+class Update:
+    scenario: Scenario
+    model: ScenarioModel
+    dataset: ScenarioDataset
+    timestamp: int
+    iteration: int
+    data: DatasetData | None = None

@@ -28,6 +28,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     Workspace,
 )
 from movici_data_core.exceptions import (
@@ -40,7 +41,7 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
-from movici_simulation_core.core import get_rowptr, infer_data_type_from_array
+from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
@@ -81,6 +82,10 @@ class SQLAlchemyRepository:
         return DatasetRepository(self.session, self.options, self)
 
     @property
+    def dataset_data(self):
+        return DatasetDataRepository(self.session, self.options, self)
+
+    @property
     def scenarios(self):
         return ScenarioRepository(self.session, self.options, self)
 
@@ -100,13 +105,15 @@ class ResourceSelector(t.Generic[T_dom]):
         yield from (selectinload(col) for col in self.__select_in_load__)
 
 
-class GenericResourceRepository(ResourceSelector[T_dom]):
-    __resource__: type[NamedResource[T_dom]]
-
+class Repository:
     def __init__(self, session: AsyncSession, options: Options, all_data: SQLAlchemyRepository):
         self.session = session
         self.options = options
         self.all_data = all_data
+
+
+class GenericResourceRepository(Repository, ResourceSelector[T_dom]):
+    __resource__: type[NamedResource[T_dom]]
 
     async def list(self) -> t.Sequence[T_dom]:
         result = await self.session.scalars(self.selector)
@@ -135,13 +142,8 @@ class GenericResourceRepository(ResourceSelector[T_dom]):
         raise NotImplementedError
 
 
-class ScopedResourceRepository(ResourceSelector[T_dom]):
+class ScopedResourceRepository(Repository, ResourceSelector[T_dom]):
     __parent_ref__: InstrumentedAttribute[UUID]
-
-    def __init__(self, session: AsyncSession, options: Options, all_data: SQLAlchemyRepository):
-        self.session = session
-        self.all_data = all_data
-        self.options = options
 
     async def list(self, parent: UUID) -> t.Sequence[T_dom]:
         result = await self.session.scalars(
@@ -431,48 +433,9 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
             .values(name=obj.name, display_name=obj.display_name)
         )
 
-    async def has_data(self, id: UUID):
-        raw_data = await self.session.scalar(
-            select(func.count(db.RawData.id)).where(db.RawData.dataset_id == id)
-        )
-        entity_data = await self.session.scalar(
-            select(func.count(db.DatasetAttribute.id)).where(db.DatasetAttribute.dataset_id == id)
-        )
-        return bool(raw_data) or bool(entity_data)
-
-    async def store_data(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
-        """Store dataset data for a dataset. The dataset must currently not contain any data
-
-        :param id: A dataset id
-        :param data: The dataset data as dict, bytes, BytesIO or pathlib.Path
-        :param format: The dataset's ``DatasetFormat``
-        :param chunk_size: The maximum chunk size in bytes to store data. By default set to the
-            value of DatasetRepository.RAW_DATA_CHUNK_SIZE. This parameter is ignore when the
-            dataset format is DatasetFormat.ENTITY_BASED
-        """
-
-        if await self.has_data(id):
-            raise InvalidResource("dataset", id=id, message="Dataset already has data")
-
-        if format == DatasetFormat.ENTITY_BASED:
-            if not isinstance(data, dict):
-                raise ValueError("Entity based data must be provided as a dictionary")
-            await _EntityDataHandler(self.session, self.all_data).store(id, data)
-
-        if format == DatasetFormat.UNSTRUCTURED:
-            await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
-
-        if format == DatasetFormat.BINARY:
-            await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
-
-    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
-        return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
-
-    def get_unstructured_data(self, id: UUID):
-        return _RawDataHandler(self.session).get_dict(id)
-
-    def get_entity_data(self, id: UUID):
-        return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
+    async def delete(self, id: UUID):
+        await self.all_data.dataset_data.delete(id)
+        return await super().delete(id)
 
     async def ensure_scenario_datasets(
         self, parent: UUID, datasets: t.Sequence[ScenarioDataset]
@@ -527,6 +490,68 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
         ]
 
 
+class DatasetDataRepository(Repository):
+    async def exists_for(self, id: UUID):
+        raw_data = await self.session.scalar(
+            select(func.count(db.RawData.id)).where(db.RawData.dataset_id == id)
+        )
+        entity_data = await self.session.scalar(
+            select(func.count(db.DatasetAttribute.id)).where(db.DatasetAttribute.dataset_id == id)
+        )
+        return bool(raw_data) or bool(entity_data)
+
+    async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
+        """Store dataset data for a dataset. The dataset must currently not contain any data
+
+        :param id: A dataset id
+        :param data: The dataset data as dict, bytes, BytesIO or pathlib.Path
+        :param format: The dataset's ``DatasetFormat``
+        :param chunk_size: The maximum chunk size in bytes to store data. By default set to the
+            value of DatasetRepository.RAW_DATA_CHUNK_SIZE. This parameter is ignore when the
+            dataset format is DatasetFormat.ENTITY_BASED
+        """
+
+        if await self.exists_for(id):
+            raise InvalidResource("dataset", id=id, message="Dataset already has data")
+
+        if format == DatasetFormat.ENTITY_BASED:
+            if not isinstance(data, dict):
+                raise ValueError("Entity based data must be provided as a dictionary")
+            await _EntityDataHandler(self.session, self.all_data).store(id, data)
+
+        if format == DatasetFormat.UNSTRUCTURED:
+            await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
+
+        if format == DatasetFormat.BINARY:
+            await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
+
+    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
+        return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
+
+    def get_unstructured_data(self, id: UUID):
+        return _RawDataHandler(self.session).get_dict(id)
+
+    def get_entity_data(self, id: UUID):
+        return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
+
+    async def delete(self, id: UUID):
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.DatasetAttribute.attribute_id).where(
+                        db.DatasetAttribute.dataset_id == id
+                    )
+                )
+            )
+        )
+        await self.session.execute(delete(db.RawData).where(db.RawData.dataset_id == id))
+        await self.session.execute(
+            update(db.Dataset)
+            .where(db.Dataset.id == id)
+            .values(general=None, epsg_code=None, bounding_box=None)
+        )
+
+
 class _EntityDataHandler:
     def __init__(
         self,
@@ -535,47 +560,6 @@ class _EntityDataHandler:
     ):
         self.session = session
         self.all_data = all_data
-
-    async def store(self, id: UUID, data: NumpyDatasetData):
-        """
-        :param id: dataset UUID
-        :param data: dataset data section in numpy format
-        """
-        for entity_group, attributes in data.items():
-            entity_type = await self.all_data.entity_types.ensure_entity_type(
-                EntityType(entity_group)
-            )
-            for attr_name, attr_data in attributes.items():
-                data_type = infer_data_type_from_array(t.cast(dict, attr_data))
-                attribute_type = await self.all_data.attribute_types.ensure_attribute_type(
-                    AttributeType(attr_name, data_type=data_type)
-                )
-
-                data_array: np.ndarray = attr_data["data"]  # type: ignore
-                data_id = await self._store_array(data_array)
-
-                rowptr_id = None
-                rowptr = get_rowptr(t.cast(dict, attr_data))
-                if rowptr is not None:
-                    rowptr_id = await self._store_array(rowptr)
-
-                min_val, max_val = data_type.get_min_max(data_array)
-                attribute_id = await self.session.scalar(
-                    insert(db.Attribute)
-                    .values(
-                        entity_type_id=entity_type.id,
-                        attribute_type_id=attribute_type.id,
-                        data_id=data_id,
-                        rowptr_id=rowptr_id,
-                        min_val=min_val,
-                        max_val=max_val,
-                    )
-                    .returning(db.Attribute.id)
-                )
-
-                await self.session.execute(
-                    insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
-                )
 
     async def get(self, id: UUID) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
@@ -593,20 +577,64 @@ class _EntityDataHandler:
             )
         ).all():
             entity_group = result.setdefault(attribute.entity_type.name, {})
-            attr_data: NumpyAttributeData = {"data": attribute.data.to_array()}
+            attr_data: NumpyAttributeData = {"data": attribute.data.to_numpy()}
             if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_array()
+                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
             entity_group[attribute.attribute_type.name] = attr_data
         return result
 
-    async def _store_array(self, arr: np.ndarray) -> UUID:
-        return t.cast(
-            UUID,
-            await self.session.scalar(
-                insert(db.NumpyArray)
-                .values(dtype=arr.dtype.str, shape=arr.shape, data=arr.tobytes())
-                .returning(db.NumpyArray.id)
-            ),
+    async def store(self, id: UUID, data: NumpyDatasetData):
+        """
+        :param id: dataset UUID
+        :param data: dataset data section in numpy format
+        """
+        for entity_group, attributes in data.items():
+            entity_type = await self.all_data.entity_types.ensure_entity_type(
+                EntityType(entity_group)
+            )
+            for attr_name, attr_data in attributes.items():
+                data_type = infer_data_type_from_array(t.cast(dict, attr_data))
+                attribute_type = await self.all_data.attribute_types.ensure_attribute_type(
+                    AttributeType(attr_name, data_type=data_type)
+                )
+
+                attribute_id = await self.session.scalar(
+                    insert(db.Attribute)
+                    .values(
+                        entity_type_id=entity_type.id,
+                        attribute_type_id=attribute_type.id,
+                    )
+                    .returning(db.Attribute.id)
+                )
+                assert attribute_id is not None
+
+                data_array: np.ndarray = attr_data["data"]  # type: ignore
+                await self._store_data_array(data_array, attribute_id, data_type=data_type)
+
+                rowptr = get_rowptr(t.cast(dict, attr_data))
+                if rowptr is not None:
+                    await self._store_rowptr_array(rowptr, attribute_id)
+
+                await self.session.execute(
+                    insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
+                )
+
+    async def _store_data_array(self, arr: np.ndarray, attribute_id: UUID, data_type: DataType):
+        min_val, max_val = data_type.get_min_max(arr)
+        await self.session.execute(
+            insert(db.DataArray).values(
+                attribute_id=attribute_id,
+                dtype=arr.dtype.str,
+                shape=arr.shape,
+                data=arr.tobytes(),
+                min_val=min_val,
+                max_val=max_val,
+            )
+        )
+
+    async def _store_rowptr_array(self, arr: np.ndarray, attribute_id: UUID):
+        await self.session.execute(
+            insert(db.RowptrArray).values(data=arr.tobytes(), attribute_id=attribute_id)
         )
 
     # TODO: We already expect to have numpy data here, so we need to move this function somewhere
@@ -818,6 +846,11 @@ class ScenarioRepository:
         )
 
         await self._store_scenario_details(current.workspace.id, id, obj, validator)
+
+    async def set_status(self, id: UUID, status: ScenarioStatus):
+        await self.session.execute(
+            update(db.Scenario).where(db.Scenario.id == id).values(status=status)
+        )
 
     async def _store_scenario_details(
         self, parent: UUID, scenario_id: UUID, obj: Scenario, validator: ModelConfigValidator

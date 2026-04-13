@@ -1,10 +1,12 @@
 import dataclasses
 import uuid
 from io import BytesIO
+from unittest.mock import patch
 
 import numpy as np
 import pytest
-from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.database.model import Attribute, RawData
+from movici_data_core.database.repository import DatasetDataRepository, SQLAlchemyRepository
 from movici_data_core.domain_model import (
     AttributeType,
     Dataset,
@@ -17,6 +19,7 @@ from movici_data_core.domain_model import (
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
+from sqlalchemy import func, select
 
 from movici_simulation_core.core import DataType
 from movici_simulation_core.testing import assert_dataset_dicts_equal
@@ -246,7 +249,7 @@ class TestAttributeTypeRepository:
     ):
         assert an_attribute_type.id is not None
 
-        await repository.datasets.store_data(
+        await repository.dataset_data.create(
             a_dataset.id,
             {
                 an_entity_type.name: {
@@ -406,104 +409,10 @@ class TestDatasetRepository:
                 ),
             )
 
-    @pytest.mark.parametrize("method", ["path", "bytes", "bytesio"])
-    async def test_store_and_retrieve_raw_data_bytes(
-        self, repository: SQLAlchemyRepository, a_dataset, method, tmp_path
-    ):
-        assert not await repository.datasets.has_data(a_dataset.id)
-        raw_bytes = b"somethingbinarydata"
-        data = None
-        if method == "path":
-            data = tmp_path / "data.bin"
-            data.write_bytes(raw_bytes)
-        elif method == "bytes":
-            data = raw_bytes
-        elif method == "bytesio":
-            data = BytesIO(raw_bytes)
-        assert data is not None
-
-        await repository.datasets.store_data(
-            a_dataset.id, data, format=DatasetFormat.BINARY, chunk_size=2
-        )
-        assert await repository.datasets.has_data(a_dataset.id)
-        result = b""
-        n_chunks = 0
-        async for chunk in repository.datasets.stream_binary_data(a_dataset.id):
-            result += chunk
-            n_chunks += 1
-        assert n_chunks == len(raw_bytes) // 2 + 1
-        assert result == raw_bytes
-
-    async def test_store_and_retrieve_unstructured_data(
-        self, repository: SQLAlchemyRepository, a_dataset
-    ):
-        assert not await repository.datasets.has_data(a_dataset.id)
-        data = {"some": "data"}
-        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.UNSTRUCTURED)
-        assert await repository.datasets.has_data(a_dataset.id)
-        result = await repository.datasets.get_unstructured_data(a_dataset.id)
-        assert result == data
-
-    async def test_store_and_retrieve_entity_data(
-        self,
-        repository: SQLAlchemyRepository,
-        a_dataset,
-        an_entity_type,
-        an_attribute_type,
-        a_csr_attribute_type,
-    ):
-        assert not await repository.datasets.has_data(a_dataset.id)
-        data = {
-            an_entity_type.name: {
-                an_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                },
-                a_csr_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                    "indptr": np.array([0, 2, 2]),
-                },
-            }
-        }
-        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
-        assert await repository.datasets.has_data(a_dataset.id)
-        result = await repository.datasets.get_entity_data(a_dataset.id)
-        assert_dataset_dicts_equal(data, result)
-
-    async def test_store_multiple_entity_data_retrieve_one(
-        self,
-        repository: SQLAlchemyRepository,
-        a_dataset,
-        an_entity_type,
-        an_attribute_type,
-        a_csr_attribute_type,
-    ):
-        another_dataset = await repository.datasets.create(
-            a_dataset.workspace.id,
-            Dataset("another_dataset", "Another Dataset", a_dataset.dataset_type),
-        )
-        assert another_dataset.id is not None
-        data = {
-            an_entity_type.name: {
-                an_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                }
-            }
-        }
-        await repository.datasets.store_data(
-            another_dataset.id,
-            {
-                an_entity_type.name: {
-                    a_csr_attribute_type.name: {
-                        "data": np.array([1.0, 2.0]),
-                        "indptr": np.array([0, 2, 2]),
-                    },
-                }
-            },
-            format=DatasetFormat.ENTITY_BASED,
-        )
-        await repository.datasets.store_data(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
-        result = await repository.datasets.get_entity_data(a_dataset.id)
-        assert_dataset_dicts_equal(data, result)
+    async def test_delete_dataset_deletes_data(self, repository: SQLAlchemyRepository, a_dataset):
+        with patch.object(DatasetDataRepository, "delete") as mock:
+            await repository.datasets.delete(a_dataset.id)
+            mock.assert_awaited_once_with(a_dataset.id)
 
     async def test_returns_existing_datasets(self, repository: SQLAlchemyRepository, a_dataset):
         repository.options.STRICT_SCENARIO_DATASETS = True
@@ -578,6 +487,138 @@ class TestDatasetRepository:
             await repository.datasets.ensure_scenario_datasets(
                 a_dataset.workspace.id, [ScenarioDataset(name=a_dataset.name, type="tabular")]
             )
+
+
+class TestDatasetDataRepository:
+    @pytest.mark.parametrize("method", ["path", "bytes", "bytesio"])
+    async def test_store_and_retrieve_raw_data_bytes(
+        self, repository: SQLAlchemyRepository, a_dataset, method, tmp_path
+    ):
+        assert not await repository.dataset_data.exists_for(a_dataset.id)
+        raw_bytes = b"somethingbinarydata"
+        data = None
+        if method == "path":
+            data = tmp_path / "data.bin"
+            data.write_bytes(raw_bytes)
+        elif method == "bytes":
+            data = raw_bytes
+        elif method == "bytesio":
+            data = BytesIO(raw_bytes)
+        assert data is not None
+
+        await repository.dataset_data.create(
+            a_dataset.id, data, format=DatasetFormat.BINARY, chunk_size=2
+        )
+        assert await repository.dataset_data.exists_for(a_dataset.id)
+        result = b""
+        n_chunks = 0
+        async for chunk in repository.dataset_data.stream_binary_data(a_dataset.id):
+            result += chunk
+            n_chunks += 1
+        assert n_chunks == len(raw_bytes) // 2 + 1
+        assert result == raw_bytes
+
+    async def test_store_and_retrieve_unstructured_data(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+        assert not await repository.dataset_data.exists_for(a_dataset.id)
+        data = {"some": "data"}
+        await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.UNSTRUCTURED)
+        assert await repository.dataset_data.exists_for(a_dataset.id)
+        result = await repository.dataset_data.get_unstructured_data(a_dataset.id)
+        assert result == data
+
+    async def test_store_and_retrieve_entity_data(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        an_entity_type,
+        an_attribute_type,
+        a_csr_attribute_type,
+    ):
+        assert not await repository.dataset_data.exists_for(a_dataset.id)
+        data = {
+            an_entity_type.name: {
+                an_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                },
+                a_csr_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                    "indptr": np.array([0, 2, 2]),
+                },
+            }
+        }
+        await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        assert await repository.dataset_data.exists_for(a_dataset.id)
+        result = await repository.dataset_data.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(data, result)
+
+    async def test_store_multiple_entity_data_retrieve_one(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        an_entity_type,
+        an_attribute_type,
+        a_csr_attribute_type,
+    ):
+        another_dataset = await repository.datasets.create(
+            a_dataset.workspace.id,
+            Dataset("another_dataset", "Another Dataset", a_dataset.dataset_type),
+        )
+        assert another_dataset.id is not None
+        data = {
+            an_entity_type.name: {
+                an_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                }
+            }
+        }
+        await repository.dataset_data.create(
+            another_dataset.id,
+            {
+                an_entity_type.name: {
+                    a_csr_attribute_type.name: {
+                        "data": np.array([1.0, 2.0]),
+                        "indptr": np.array([0, 2, 2]),
+                    },
+                }
+            },
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        result = await repository.dataset_data.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(data, result)
+
+    async def test_deletes_entity_data(
+        self, repository: SQLAlchemyRepository, a_dataset, an_entity_type, an_attribute_type
+    ):
+        data = {
+            an_entity_type.name: {
+                an_attribute_type.name: {
+                    "data": np.array([1.0, 2.0]),
+                }
+            }
+        }
+        await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
+        attribute_count = await repository.session.scalar(select(func.count(Attribute.id)))
+        assert attribute_count != 0
+
+        await repository.dataset_data.delete(a_dataset.id)
+
+        attribute_count = await repository.session.scalar(select(func.count(Attribute.id)))
+        assert attribute_count == 0
+
+    async def test_deletes_raw_data(self, repository: SQLAlchemyRepository, a_dataset):
+        raw_bytes = b"somethingbinarydata"
+
+        await repository.dataset_data.create(a_dataset.id, raw_bytes, format=DatasetFormat.BINARY)
+        data_count = await repository.session.scalar(select(func.count(RawData.id)))
+        assert data_count != 0
+
+        await repository.dataset_data.delete(a_dataset.id)
+
+        data_count = await repository.session.scalar(select(func.count(RawData.id)))
+        assert data_count == 0
 
 
 class TestScenarioRepository:
