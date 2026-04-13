@@ -1,5 +1,5 @@
 import pathlib
 
-SCHEMA_PATH = PATH = pathlib.Path(__file__).parent
+SCHEMA_PATH = pathlib.Path(__file__).parent
 
-__all__ = ["SCHEMA_PATH", "PATH"]
+__all__ = ["SCHEMA_PATH"]

@@ -1,76 +1,14 @@
 import dataclasses
-import json
-import shutil
 import typing as t
-from pathlib import Path
 
 import pytest
 
 from movici_simulation_core.core.moment import TimelineInfo
-from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
-
-# Shared fixtures (global_schema, create_model_tester, init_data, clean_strategies,
-# etc.) are provided by the movici_testing pytest plugin. This conftest provides
-# model-test-specific overrides and data fixtures.
 
 
 @pytest.fixture
 def global_timeline_info():
     return TimelineInfo(0, 1, 0)
-
-
-@pytest.fixture
-def model_name():
-    return "some_model"
-
-
-@pytest.fixture
-def time_scale():
-    return 1
-
-
-@pytest.fixture
-def init_data_handler(tmp_path_factory):
-    root = tmp_path_factory.mktemp("init_data_handler")
-    return DirectoryInitDataHandler(root)
-
-
-@pytest.fixture
-def add_init_data(init_data_handler):
-    root = init_data_handler.root
-
-    def _add_init_data(name, data: t.Union[dict, str, Path]):
-        if isinstance(data, dict):
-            root.joinpath(f"{name}.json").write_text(json.dumps(data))
-            return
-        path = Path(data)
-        if not path.is_file():
-            raise ValueError(f"{data} is not a valid file")
-        target = (root / name).with_suffix(path.suffix)
-        shutil.copyfile(path, target)
-
-    return _add_init_data
-
-
-@pytest.fixture
-def config(
-    model_config,
-    init_data,
-    time_scale,
-):
-    return {
-        "config": {
-            "version": 4,
-            "simulation_info": {
-                "reference_time": 1_577_833_200,
-                "start_time": 0,
-                "time_scale": time_scale,
-                "duration": 730,
-            },
-            "models": [model_config],
-        },
-        "init_data": init_data,
-    }
 
 
 @pytest.fixture

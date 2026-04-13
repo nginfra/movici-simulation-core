@@ -6,6 +6,8 @@ making these fixtures automatically available to any test suite that depends on
 """
 
 import itertools
+import json
+import shutil
 import typing as t
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.serialization import UpdateDataFormat
+from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
 from movici_simulation_core.models.common.attributes import CommonAttributes
 from movici_simulation_core.testing.model_tester import ModelTester
 from movici_simulation_core.utils import strategies
@@ -64,6 +67,60 @@ def clean_strategies(global_schema):
 @pytest.fixture
 def init_data():
     return []
+
+
+@pytest.fixture
+def model_name():
+    return "some_model"
+
+
+@pytest.fixture
+def time_scale():
+    return 1
+
+
+@pytest.fixture
+def init_data_handler(tmp_path_factory):
+    root = tmp_path_factory.mktemp("init_data_handler")
+    return DirectoryInitDataHandler(root)
+
+
+@pytest.fixture
+def add_init_data(init_data_handler):
+    root = init_data_handler.root
+
+    def _add_init_data(name, data: t.Union[dict, str, Path]):
+        if isinstance(data, dict):
+            root.joinpath(f"{name}.json").write_text(json.dumps(data))
+            return
+        path = Path(data)
+        if not path.is_file():
+            raise ValueError(f"{data} is not a valid file")
+        target = (root / name).with_suffix(path.suffix)
+        shutil.copyfile(path, target)
+
+    return _add_init_data
+
+
+@pytest.fixture
+def config(
+    model_config,
+    init_data,
+    time_scale,
+):
+    return {
+        "config": {
+            "version": 4,
+            "simulation_info": {
+                "reference_time": 1_577_833_200,
+                "start_time": 0,
+                "time_scale": time_scale,
+                "duration": 730,
+            },
+            "models": [model_config],
+        },
+        "init_data": init_data,
+    }
 
 
 @pytest.fixture
