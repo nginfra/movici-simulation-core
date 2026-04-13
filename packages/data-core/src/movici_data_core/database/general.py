@@ -1,3 +1,5 @@
+import contextlib
+
 from movici_data_core.database.model import (
     DEFAULT_SCHEMA_VERSION,
     DEFAULT_WORKSPACE_NAME,
@@ -7,9 +9,19 @@ from movici_data_core.database.model import (
     Workspace,
 )
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
-from sqlalchemy import func, insert, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, insert, select, text, update
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload
+
+
+@contextlib.asynccontextmanager
+async def get_engine(dbapi_url: str, **kwargs):
+    engine = create_async_engine(dbapi_url, **kwargs)
+    if "sqlite" in dbapi_url:
+        async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA foreign_keys=ON"))
+    yield engine
+    await engine.dispose()
 
 
 async def initialize_database(session: AsyncSession, mode: DatabaseMode):

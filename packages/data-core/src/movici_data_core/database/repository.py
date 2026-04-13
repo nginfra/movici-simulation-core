@@ -500,6 +500,15 @@ class DatasetDataRepository(Repository):
         )
         return bool(raw_data) or bool(entity_data)
 
+    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
+        return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
+
+    def get_unstructured_data(self, id: UUID):
+        return _RawDataHandler(self.session).get_dict(id)
+
+    def get_entity_data(self, id: UUID):
+        return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
+
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data
 
@@ -524,15 +533,6 @@ class DatasetDataRepository(Repository):
 
         if format == DatasetFormat.BINARY:
             await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
-
-    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
-        return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
-
-    def get_unstructured_data(self, id: UUID):
-        return _RawDataHandler(self.session).get_dict(id)
-
-    def get_entity_data(self, id: UUID):
-        return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
 
     async def delete(self, id: UUID):
         await self.session.execute(
@@ -664,6 +664,36 @@ class _RawDataHandler:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def get(self, id: UUID | None = None, raw_data: db.RawData | None = None) -> bytearray:
+        result = bytearray()
+
+        async for chunk in self.stream_bytes(id, raw_data):
+            result += chunk
+        return result
+
+    async def stream_bytes(
+        self, id: UUID | None = None, raw_data: db.RawData | None = None, yield_per=1
+    ) -> t.AsyncGenerator[bytes]:
+        if not ((id is None) ^ (raw_data is None)):
+            raise ValueError("Supply one of id and raw_data, but not both")
+
+        raw_data = raw_data or await self._ensure_raw_data(t.cast(UUID, id))
+
+        async for chunk in await self.session.stream_scalars(
+            select(db.RawDataChunk.bytes)
+            .execution_options(yield_per=yield_per)
+            .where(db.RawDataChunk.raw_data_id == raw_data.id)
+            .order_by(db.RawDataChunk.sequence.asc())
+        ):
+            yield chunk
+
+    async def get_dict(self, id: UUID) -> dict:
+        raw_data = await self._ensure_raw_data(id)
+        if raw_data.encoding != "json":
+            raise ValueError(f"Expected dataset encoding 'json', got {raw_data.encoding}")
+        raw_bytes = await self.get(id)
+        return orjson.loads(raw_bytes)
+
     async def store(self, id: UUID, data: DatasetData, chunk_size=0):
         chunk_size = chunk_size or self.RAW_DATA_CHUNK_SIZE
         with self._data_as_bytesio(data) as (encoding, raw_reader):
@@ -721,36 +751,6 @@ class _RawDataHandler:
         while chunk := file.read(chunk_size):
             seq += 1
             yield seq, chunk
-
-    async def stream_bytes(
-        self, id: UUID | None = None, raw_data: db.RawData | None = None, yield_per=1
-    ) -> t.AsyncGenerator[bytes]:
-        if not ((id is None) ^ (raw_data is None)):
-            raise ValueError("Supply one of id and raw_data, but not both")
-
-        raw_data = raw_data or await self._ensure_raw_data(t.cast(UUID, id))
-
-        async for chunk in await self.session.stream_scalars(
-            select(db.RawDataChunk.bytes)
-            .execution_options(yield_per=yield_per)
-            .where(db.RawDataChunk.raw_data_id == raw_data.id)
-            .order_by(db.RawDataChunk.sequence.asc())
-        ):
-            yield chunk
-
-    async def get(self, id: UUID | None = None, raw_data: db.RawData | None = None) -> bytearray:
-        result = bytearray()
-
-        async for chunk in self.stream_bytes(id, raw_data):
-            result += chunk
-        return result
-
-    async def get_dict(self, id: UUID) -> dict:
-        raw_data = await self._ensure_raw_data(id)
-        if raw_data.encoding != "json":
-            raise ValueError(f"Expected dataset encoding 'json', got {raw_data.encoding}")
-        raw_bytes = await self.get(id)
-        return orjson.loads(raw_bytes)
 
 
 class ScenarioRepository:

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from movici_data_core.database.model import Attribute, RawData
+from movici_data_core.database import model as db
 from movici_data_core.database.repository import DatasetDataRepository, SQLAlchemyRepository
 from movici_data_core.domain_model import (
     AttributeType,
@@ -600,32 +600,37 @@ class TestDatasetDataRepository:
             }
         }
         await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
-        attribute_count = await repository.session.scalar(select(func.count(Attribute.id)))
+        attribute_count = await repository.session.scalar(select(func.count(db.Attribute.id)))
         assert attribute_count != 0
 
         await repository.dataset_data.delete(a_dataset.id)
 
-        attribute_count = await repository.session.scalar(select(func.count(Attribute.id)))
+        attribute_count = await repository.session.scalar(select(func.count(db.Attribute.id)))
         assert attribute_count == 0
 
     async def test_deletes_raw_data(self, repository: SQLAlchemyRepository, a_dataset):
         raw_bytes = b"somethingbinarydata"
 
         await repository.dataset_data.create(a_dataset.id, raw_bytes, format=DatasetFormat.BINARY)
-        data_count = await repository.session.scalar(select(func.count(RawData.id)))
+        data_count = await repository.session.scalar(select(func.count(db.RawData.id)))
         assert data_count != 0
 
         await repository.dataset_data.delete(a_dataset.id)
 
-        data_count = await repository.session.scalar(select(func.count(RawData.id)))
+        data_count = await repository.session.scalar(select(func.count(db.RawData.id)))
         assert data_count == 0
 
 
 class TestScenarioRepository:
     @pytest.fixture
-    def scenario(self, default_model_types, a_dataset):
-        return Scenario(
+    async def validator(self, get_scenario_model_validator):
+        return await get_scenario_model_validator()
+
+    @pytest.fixture
+    async def scenario(self, default_model_types, a_dataset, repository, validator):
+        scenario = Scenario(
             name="a_scenario",
+            workspace=a_dataset.workspace,
             display_name="A Scenario",
             description="Scenario for testing",
             epsg_code=28992,
@@ -651,16 +656,14 @@ class TestScenarioRepository:
                 },
             ],
         )
+        return await repository.scenarios.create(a_dataset.workspace.id, scenario, validator)
 
     async def test_scenario_round_trip(
         self,
         repository: SQLAlchemyRepository,
         scenario: Scenario,
-        get_scenario_model_validator,
         a_workspace,
     ):
-        validator = await get_scenario_model_validator()
-        await repository.scenarios.create(a_workspace.id, scenario, validator)
         result = await repository.scenarios.get_by_name(a_workspace.id, scenario.name)
 
         assert result is not None
@@ -672,15 +675,8 @@ class TestScenarioRepository:
         assert result.datasets == scenario.datasets
 
     async def test_update_scenario(
-        self,
-        repository: SQLAlchemyRepository,
-        scenario: Scenario,
-        get_scenario_model_validator,
-        a_workspace,
+        self, repository: SQLAlchemyRepository, scenario: Scenario, validator
     ):
-
-        validator = await get_scenario_model_validator()
-        scenario = await repository.scenarios.create(a_workspace.id, scenario, validator)
 
         assert scenario is not None
         assert scenario.id is not None
@@ -694,3 +690,30 @@ class TestScenarioRepository:
         assert result is not None
         assert result.name == scenario.name
         assert result.models == scenario.models
+
+    async def test_delete_scenario_deletes_scenario_datasets(
+        self, repository: SQLAlchemyRepository, scenario
+    ):
+        query = (
+            select(func.count())
+            .select_from(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == scenario.id)
+        )
+        assert (await repository.session.scalar(query)) != 0
+        await repository.scenarios.delete(scenario.id)
+        assert len(await repository.scenarios.list(scenario.workspace.id)) == 0
+        assert (await repository.session.scalar(query)) == 0
+
+    async def test_delete_scenario_deletes_scenario_models(
+        self, repository: SQLAlchemyRepository, scenario
+    ):
+        query = (
+            select(func.count())
+            .select_from(db.ScenarioModel)
+            .where(db.ScenarioModel.scenario_id == scenario.id)
+        )
+        assert (await repository.session.scalar(query)) != 0
+        await repository.scenarios.delete(scenario.id)
+        await repository.session.commit()
+        assert len(await repository.scenarios.list(scenario.workspace.id)) == 0
+        assert (await repository.session.scalar(query)) == 0

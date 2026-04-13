@@ -2,7 +2,7 @@ from uuid import UUID
 
 import pytest
 from movici_data_core.database import model as db_model
-from movici_data_core.database.general import get_options, initialize_database
+from movici_data_core.database.general import get_engine, get_options, initialize_database
 from movici_data_core.database.model import Base, DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
@@ -15,18 +15,20 @@ from movici_data_core.domain_model import (
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from movici_simulation_core.core import DataType
 
 
-@pytest.fixture
+@pytest.fixture()
 async def db():
-    engine = create_async_engine("sqlite+aiosqlite://", echo=True)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    await engine.dispose()
+    async with get_engine("sqlite+aiosqlite://", echo=True) as engine:
+        async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA foreign_keys=ON"))
+            await conn.run_sync(Base.metadata.create_all)
+        yield engine
+        await engine.dispose()
 
 
 @pytest.fixture
