@@ -29,17 +29,19 @@ from movici_data_core.domain_model import (
     ScenarioDataset,
     ScenarioModel,
     ScenarioStatus,
+    Update,
     Workspace,
 )
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    MoviciValidationError,
     ResourceDoesNotExist,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import Insert, Select, delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, joinedload, selectinload
 
 from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.data_format import EntityInitDataFormat
@@ -89,6 +91,10 @@ class SQLAlchemyRepository:
     def scenarios(self):
         return ScenarioRepository(self.session, self.options, self)
 
+    @property
+    def updates(self):
+        return UpdateRepository(self.session, self.options, self)
+
 
 class ResourceSelector(t.Generic[T_dom]):
     __resource__: type[NamedResource[T_dom]]
@@ -115,7 +121,7 @@ class Repository:
 class GenericResourceRepository(Repository, ResourceSelector[T_dom]):
     __resource__: type[NamedResource[T_dom]]
 
-    async def list(self) -> t.Sequence[T_dom]:
+    async def list(self) -> list[T_dom]:
         result = await self.session.scalars(self.selector)
         return [obj.to_domain() for obj in result]
 
@@ -135,7 +141,7 @@ class GenericResourceRepository(Repository, ResourceSelector[T_dom]):
             delete(self.__resource__).where(self.__resource__.id == id)
         )
 
-    async def create(self, obj: T_dom) -> T_dom:
+    async def create(self, obj: T_dom) -> UUID:
         raise NotImplementedError
 
     async def update(self, id: UUID, obj: T_dom):
@@ -145,7 +151,7 @@ class GenericResourceRepository(Repository, ResourceSelector[T_dom]):
 class ScopedResourceRepository(Repository, ResourceSelector[T_dom]):
     __parent_ref__: InstrumentedAttribute[UUID]
 
-    async def list(self, parent: UUID) -> t.Sequence[T_dom]:
+    async def list(self, parent: UUID) -> list[T_dom]:
         result = await self.session.scalars(
             self.selector.where(type(self).__parent_ref__ == parent)
         )
@@ -171,7 +177,7 @@ class ScopedResourceRepository(Repository, ResourceSelector[T_dom]):
             delete(self.__resource__).where(self.__resource__.id == id)
         )
 
-    async def create(self, parent: UUID, obj: T_dom) -> T_dom:
+    async def create(self, parent: UUID, obj: T_dom) -> UUID:
         raise NotImplementedError
 
     async def update(self, id: UUID, obj: T_dom):
@@ -181,17 +187,16 @@ class ScopedResourceRepository(Repository, ResourceSelector[T_dom]):
 class WorkspaceRepository(GenericResourceRepository[Workspace]):
     __resource__ = db.Workspace
 
-    async def create(self, obj: Workspace) -> Workspace:
-        return (
-            t.cast(
-                db.Workspace,
-                await self.session.scalar(
-                    insert(db.Workspace)
-                    .values(name=obj.name, display_name=obj.display_name)
-                    .returning(db.Workspace)
-                ),
-            )
-        ).to_domain()
+    async def create(self, obj: Workspace) -> UUID:
+
+        return t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.Workspace)
+                .values(name=obj.name, display_name=obj.display_name)
+                .returning(db.Workspace.id)
+            ),
+        )
 
     async def update(self, id: UUID, obj: Workspace):
         # We do not allow updating the workspace name
@@ -203,17 +208,15 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
 class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource__ = db.DatasetType
 
-    async def create(self, obj: DatasetType) -> DatasetType:
-        return (
-            t.cast(
-                db.DatasetType,
-                await self.session.scalar(
-                    insert(db.DatasetType)
-                    .values(name=obj.name, format=obj.format, mimetype=obj.mimetype)
-                    .returning(db.DatasetType)
-                ),
-            )
-        ).to_domain()
+    async def create(self, obj: DatasetType) -> UUID:
+        return t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.DatasetType)
+                .values(name=obj.name, format=obj.format, mimetype=obj.mimetype)
+                .returning(db.DatasetType.id)
+            ),
+        )
 
     async def update(self, id: UUID, obj: DatasetType):
         current = await self.get_by_id(id)
@@ -236,28 +239,28 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         if not existing:
             if self.options.STRICT_DATASET_TYPES:
                 raise ResourceDoesNotExist("dataset_type", name=dataset_type.name)
-            existing = await self.create(dataset_type)
+            dataset_type_id = await self.create(dataset_type)
+            existing = await self.get_by_id(dataset_type_id)
+
         if existing != dataset_type:
             raise InvalidResource(
                 "dataset_type",
                 name=dataset_type.name,
                 message="incompatible dataset_type already exists",
             )
-        return existing
+        return t.cast(DatasetType, existing)
 
 
 class EntityTypeRepository(GenericResourceRepository[EntityType]):
     __resource__ = db.EntityType
 
-    async def create(self, obj: EntityType) -> EntityType:
-        return (
-            t.cast(
-                db.EntityType,
-                await self.session.scalar(
-                    insert(db.EntityType).values(name=obj.name).returning(db.EntityType)
-                ),
-            )
-        ).to_domain()
+    async def create(self, obj: EntityType) -> UUID:
+        return t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.EntityType).values(name=obj.name).returning(db.EntityType.id)
+            ),
+        )
 
     async def update(self, id: UUID, obj: EntityType):
         await self.session.execute(
@@ -269,31 +272,32 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
         if not existing:
             if self.options.STRICT_ENTITY_TYPES:
                 raise ResourceDoesNotExist("entity_type", name=entity_type.name)
-            existing = await self.create(entity_type)
-        return existing
+
+            entity_type_id = await self.create(entity_type)
+            existing = await self.get_by_id(entity_type_id)
+
+        return t.cast(EntityType, existing)
 
 
 class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource__ = db.AttributeType
 
-    async def create(self, obj: AttributeType) -> AttributeType:
-        return (
-            t.cast(
-                db.AttributeType,
-                await self.session.scalar(
-                    insert(db.AttributeType)
-                    .values(
-                        name=obj.name,
-                        has_rowptr=obj.data_type.csr,
-                        unit_type=self.db_unit_type(obj.data_type.py_type),
-                        unit_shape=obj.data_type.unit_shape,
-                        unit=obj.unit,
-                        description=obj.description,
-                    )
-                    .returning(db.AttributeType)
-                ),
-            )
-        ).to_domain()
+    async def create(self, obj: AttributeType) -> UUID:
+        return t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.AttributeType)
+                .values(
+                    name=obj.name,
+                    has_rowptr=obj.data_type.csr,
+                    unit_type=self.db_unit_type(obj.data_type.py_type),
+                    unit_shape=obj.data_type.unit_shape,
+                    unit=obj.unit,
+                    description=obj.description,
+                )
+                .returning(db.AttributeType.id)
+            ),
+        )
 
     def db_unit_type(self, py_type: AttributeDataType):
         return {
@@ -332,7 +336,9 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         if not existing:
             if self.options.STRICT_ATTRIBUTES:
                 raise ResourceDoesNotExist("attribute_type", name=attribute_type.name)
-            existing = await self.create(attribute_type)
+            attribute_type_id = await self.create(attribute_type)
+            existing = t.cast(AttributeType, await self.get_by_id(attribute_type_id))
+
         if not existing.data_type == attribute_type.data_type:
             raise InvalidResource(
                 "attribute_type",
@@ -345,17 +351,15 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
 class ModelTypeRepository(GenericResourceRepository[ModelType]):
     __resource__ = db.ModelType
 
-    async def create(self, obj: ModelType) -> ModelType:
-        return (
-            t.cast(
-                db.ModelType,
-                await self.session.scalar(
-                    insert(db.ModelType)
-                    .values(name=obj.name, jsonschema=obj.jsonschema)
-                    .returning(db.ModelType)
-                ),
-            )
-        ).to_domain()
+    async def create(self, obj: ModelType) -> UUID:
+        return t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.ModelType)
+                .values(name=obj.name, jsonschema=obj.jsonschema)
+                .returning(db.ModelType.id)
+            ),
+        )
 
     async def update(self, id: UUID, obj: ModelType):
         await self.session.execute(
@@ -406,9 +410,9 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
     __parent_ref__ = db.Dataset.workspace_id
     __select_in_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
 
-    async def create(self, parent: UUID, obj: Dataset) -> Dataset:
+    async def create(self, parent: UUID, obj: Dataset) -> UUID:
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
-        dataset_id = t.cast(
+        return t.cast(
             UUID,
             await self.session.scalar(
                 insert(db.Dataset)
@@ -421,7 +425,6 @@ class DatasetRepository(ScopedResourceRepository[Dataset]):
                 .returning(db.Dataset.id)
             ),
         )
-        return t.cast(Dataset, await self.get_by_id(dataset_id))
 
     async def update(self, id: UUID, obj: Dataset):
         current = await self.get_by_id(id)
@@ -507,7 +510,9 @@ class DatasetDataRepository(Repository):
         return _RawDataHandler(self.session).get_dict(id)
 
     def get_entity_data(self, id: UUID):
-        return _EntityDataHandler(self.session, all_data=self.all_data).get(id)
+        return _EntityDataHandler(
+            self.session, all_data=self.all_data, selector=DatasetDataSelector()
+        ).get(id)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data
@@ -526,7 +531,9 @@ class DatasetDataRepository(Repository):
         if format == DatasetFormat.ENTITY_BASED:
             if not isinstance(data, dict):
                 raise ValueError("Entity based data must be provided as a dictionary")
-            await _EntityDataHandler(self.session, self.all_data).store(id, data)
+            await _EntityDataHandler(
+                self.session, self.all_data, selector=DatasetDataSelector()
+            ).store(id, data)
 
         if format == DatasetFormat.UNSTRUCTURED:
             await _RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
@@ -552,23 +559,134 @@ class DatasetDataRepository(Repository):
         )
 
 
+class UpdateRepository(Repository):
+    @staticmethod
+    def selector():
+        return select(db.Update).options(
+            joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
+            joinedload(db.Update.model_type),
+        )
+
+    async def list(self, parent: UUID) -> list[Update]:
+        result = await self.session.scalars(
+            select(db.Update)
+            .options(
+                joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
+                joinedload(db.Update.model_type),
+            )
+            .where(db.Update.scenario_id == parent)
+            .order_by(db.Update.timestamp, db.Update.iteration)
+        )
+        return [update.to_domain() for update in result]
+
+    async def get_by_id(self, id: UUID) -> Update | None:
+        record = await self.session.scalar(
+            select(db.Update)
+            .options(
+                selectinload(db.Update.dataset).selectinload(db.Dataset.dataset_type),
+                selectinload(db.Update.model_type),
+            )
+            .where(db.Update.id == id)
+        )
+        if record is None:
+            return None
+        return dataclasses.replace(
+            record.to_domain(),
+            data=_EntityDataHandler(
+                self.session, all_data=self.all_data, selector=UpdateDataSelector()
+            ).get(id),
+        )
+
+    async def create(self, parent: UUID, obj: Update) -> Update:
+        """
+        :param parent: A Scenario id
+        """
+        if not isinstance(obj.data, dict):
+            raise InvalidAction("update data must be a numpy dataset dict")
+        model_type_id = await self.session.scalar(
+            select(db.ModelType.id)
+            .join(db.ScenarioModel)
+            .where(db.ScenarioModel.scenario_id == parent)
+            .where(db.ScenarioModel.name == obj.model_name)
+        )
+        if model_type_id is None:
+            raise MoviciValidationError(
+                f"{obj.model_name} is not a valid model for this scenario", "model_name"
+            )
+        dataset = await self.session.scalar(
+            select(db.Dataset)
+            .options(selectinload(db.Dataset.dataset_type))
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == parent)
+            .where(db.Dataset.name == obj.dataset.name)
+        )
+        if dataset is None:
+            raise ResourceDoesNotExist("dataset", name=obj.dataset.name)
+
+        result = await self.session.scalar(
+            insert(db.Update)
+            .values(
+                scenario_id=parent,
+                timestamp=obj.timestamp,
+                iteration=obj.iteration,
+                model_type_id=model_type_id,
+                model_name=obj.model_name,
+                dataset_id=dataset.id,
+            )
+            .returning(db.Update)
+        )
+        assert result is not None
+        assert result.id is not None
+        result.dataset = None
+        await _EntityDataHandler(self.session, self.all_data, UpdateDataSelector()).store(
+            result.id, obj.data
+        )
+        return result.to_domain()
+
+    async def delete_for_scenario(self, parent: UUID):
+        await self.session.execute(delete(Update).where(db.Update.scenario_id == parent))
+
+
+class EntityDataSelector(t.Protocol):
+    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]: ...
+    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert: ...
+
+
+class DatasetDataSelector:
+    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
+        return (
+            select(db.Attribute)
+            .join(db.DatasetAttribute)
+            .where(db.DatasetAttribute.dataset_id == id)
+        )
+
+    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
+        return insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
+
+
+class UpdateDataSelector:
+    def select_linked_attribute(self, id: UUID):
+        return (
+            select(db.Attribute).join(db.UpdateAttribute).where(db.UpdateAttribute.update_id == id)
+        )
+
+    def insert_linked_attribute(self, id: UUID, attribute_id: UUID):
+        return insert(db.UpdateAttribute).values(update_id=id, attribute_id=attribute_id)
+
+
 class _EntityDataHandler:
     def __init__(
-        self,
-        session: AsyncSession,
-        all_data: SQLAlchemyRepository,
+        self, session: AsyncSession, all_data: SQLAlchemyRepository, selector: EntityDataSelector
     ):
         self.session = session
         self.all_data = all_data
+        self.selector = selector
 
     async def get(self, id: UUID) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
         for attribute in (
             await self.session.scalars(
-                select(db.Attribute)
-                .join(db.DatasetAttribute)
-                .where(db.DatasetAttribute.dataset_id == id)
-                .options(
+                self.selector.select_linked_attribute(id).options(
                     selectinload(db.Attribute.data),
                     selectinload(db.Attribute.rowptr),
                     selectinload(db.Attribute.entity_type),
@@ -616,7 +734,7 @@ class _EntityDataHandler:
                     await self._store_rowptr_array(rowptr, attribute_id)
 
                 await self.session.execute(
-                    insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
+                    self.selector.insert_linked_attribute(id=id, attribute_id=attribute_id)
                 )
 
     async def _store_data_array(self, arr: np.ndarray, attribute_id: UUID, data_type: DataType):
@@ -759,7 +877,7 @@ class ScenarioRepository:
         self.all_data = all_data
         self.options = options
 
-    async def list(self, parent: UUID) -> t.Sequence[Scenario]:
+    async def list(self, parent: UUID) -> list[Scenario]:
         result = await self.session.scalars(
             select(db.Scenario).where(db.Scenario.workspace_id == parent)
         )
@@ -799,9 +917,7 @@ class ScenarioRepository:
     async def delete(self, id: UUID):
         return await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
-    async def create(
-        self, parent: UUID, obj: Scenario, validator: ModelConfigValidator
-    ) -> Scenario:
+    async def create(self, parent: UUID, obj: Scenario, validator: ModelConfigValidator) -> UUID:
         scenario_id = await self.session.scalar(
             insert(db.Scenario)
             .values(
@@ -816,9 +932,8 @@ class ScenarioRepository:
             .returning(db.Scenario.id)
         )
         assert scenario_id is not None
-        obj.id = scenario_id
         await self._store_scenario_details(parent, scenario_id, obj, validator)
-        return obj
+        return scenario_id
 
     async def update(self, id: UUID, obj: Scenario, validator: ModelConfigValidator):
         current = await self.get_by_id(id)

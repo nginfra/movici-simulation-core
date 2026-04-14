@@ -141,9 +141,12 @@ class Dataset:
 
 @dataclasses.dataclass
 class Update:
-    scenario: Scenario
-    model: ScenarioModel
     dataset: ScenarioDataset
     timestamp: int
     iteration: int
+
+    model_name: str
+    model_type: str | None = None
+
+    id: UUID | None = None
     data: DatasetData | None = None

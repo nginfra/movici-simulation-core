@@ -9,7 +9,7 @@ from movici_data_core.database.model import (
     Workspace,
 )
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
-from sqlalchemy import func, insert, select, text, update
+from sqlalchemy import event, func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import selectinload
 
@@ -17,9 +17,14 @@ from sqlalchemy.orm import selectinload
 @contextlib.asynccontextmanager
 async def get_engine(dbapi_url: str, **kwargs):
     engine = create_async_engine(dbapi_url, **kwargs)
+
     if "sqlite" in dbapi_url:
-        async with engine.begin() as conn:
-            await conn.execute(text("PRAGMA foreign_keys=ON"))
+        # enable foreign keys for every sqlite connection
+        @event.listens_for(engine.sync_engine, "engine_connect")
+        def engine_connect(conn, branch):
+            with conn.begin():
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+
     yield engine
     await engine.dispose()
 

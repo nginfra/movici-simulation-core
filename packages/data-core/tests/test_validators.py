@@ -15,8 +15,8 @@ def scenario_datasets():
 
 
 @pytest.fixture
-async def validator(default_model_types, scenario_datasets, get_scenario_model_validator):
-    return (await get_scenario_model_validator()).for_scenario(
+async def validator(default_model_types, scenario_datasets, get_model_config_validator):
+    return (await get_model_config_validator()).for_scenario(
         scenario_datasets, default_model_types
     )
 

@@ -1,3 +1,4 @@
+import typing as t
 from uuid import UUID
 
 import pytest
@@ -12,23 +13,21 @@ from movici_data_core.domain_model import (
     DatasetType,
     EntityType,
     ModelType,
+    Scenario,
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from movici_simulation_core.core import DataType
 
 
-@pytest.fixture()
+@pytest.fixture
 async def db():
     async with get_engine("sqlite+aiosqlite://", echo=True) as engine:
         async with engine.begin() as conn:
-            await conn.execute(text("PRAGMA foreign_keys=ON"))
             await conn.run_sync(Base.metadata.create_all)
         yield engine
-        await engine.dispose()
 
 
 @pytest.fixture
@@ -136,7 +135,7 @@ async def repository(
 
 
 @pytest.fixture
-async def get_scenario_model_validator(repository: SQLAlchemyRepository, a_workspace: Workspace):
+async def get_model_config_validator(repository: SQLAlchemyRepository, a_workspace: Workspace):
     async def _get_validator_for_workspace(workspace_id: UUID | None = None):
         workspace_id = workspace_id or a_workspace.id
         assert workspace_id is not None
@@ -167,8 +166,8 @@ async def an_entity_type(repository: SQLAlchemyRepository):
 
 
 @pytest.fixture
-async def an_attribute_type(repository: SQLAlchemyRepository):
-    return await repository.attribute_types.create(
+async def an_attribute_type(repository: SQLAlchemyRepository) -> AttributeType:
+    attribute_id = await repository.attribute_types.create(
         AttributeType(
             name="some.attribute",
             data_type=DataType(float),
@@ -176,11 +175,12 @@ async def an_attribute_type(repository: SQLAlchemyRepository):
             description="a description",
         )
     )
+    return t.cast(AttributeType, await repository.attribute_types.get_by_id(attribute_id))
 
 
 @pytest.fixture
-async def a_csr_attribute_type(repository: SQLAlchemyRepository):
-    return await repository.attribute_types.create(
+async def a_csr_attribute_type(repository: SQLAlchemyRepository) -> AttributeType:
+    attribute_id = await repository.attribute_types.create(
         AttributeType(
             name="csr.attribute",
             data_type=DataType(float, csr=True),
@@ -188,11 +188,12 @@ async def a_csr_attribute_type(repository: SQLAlchemyRepository):
             description="a description",
         )
     )
+    return t.cast(AttributeType, await repository.attribute_types.get_by_id(attribute_id))
 
 
 @pytest.fixture
 async def a_dataset(repository: SQLAlchemyRepository, a_workspace, a_dataset_type):
-    return await repository.datasets.create(
+    dataset_id = await repository.datasets.create(
         a_workspace.id,
         Dataset(
             name="a_transport_network",
@@ -200,3 +201,42 @@ async def a_dataset(repository: SQLAlchemyRepository, a_workspace, a_dataset_typ
             dataset_type=a_dataset_type,
         ),
     )
+
+    return t.cast(Dataset, await repository.datasets.get_by_id(dataset_id))
+
+
+@pytest.fixture
+async def a_scenario(
+    default_model_types, a_dataset, repository: SQLAlchemyRepository, get_model_config_validator
+):
+    validator = await get_model_config_validator()
+    scenario = Scenario(
+        name="a_scenario",
+        workspace=a_dataset.workspace,
+        display_name="A Scenario",
+        description="Scenario for testing",
+        epsg_code=28992,
+        simulation_info={"some": "info"},
+        datasets=[
+            {
+                "name": a_dataset.name,
+                "type": a_dataset.dataset_type.name,
+            }
+        ],
+        models=[
+            {
+                "name": "model1",
+                "type": default_model_types[0].name,
+                "dataset": a_dataset.name,
+                "entity_group": "transport_nodes",
+                "attribute": "id",
+            },
+            {
+                "name": "model2",
+                "type": default_model_types[1].name,
+                "field": "value",
+            },
+        ],
+    )
+    scenario_id = await repository.scenarios.create(a_dataset.workspace.id, scenario, validator)
+    return t.cast(Scenario, await repository.scenarios.get_by_id(scenario_id))

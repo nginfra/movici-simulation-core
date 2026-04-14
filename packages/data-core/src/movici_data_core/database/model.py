@@ -72,6 +72,13 @@ DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"
 
 
+DEFAULT_NAME_MAX_LENGTH = 50
+DEFAULT_DISPLAY_NAME_MAX_LENGTH = 50
+
+ATTRIBUTE_NAME_MAX_LENGTH = 100
+ATTRIBUTE_UNIT_MAX_LENGTH = 20
+
+
 class Metadata(Base):
     __tablename__ = "metadata"
 
@@ -99,8 +106,8 @@ class Options(Base):
 class Workspace(Base):
     __tablename__ = "workspace"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(unique=True)
-    display_name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
     datasets: Mapped[list[Dataset]] = relationship(back_populates="workspace")
     scenarios: Mapped[list[Scenario]] = relationship(back_populates="workspace")
 
@@ -109,10 +116,9 @@ class Workspace(Base):
 
 
 class DatasetType(Base):
-    MAX_NAME_LENGTH = 50
     __tablename__ = "dataset_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
     format: Mapped[DatasetFormat]
     mimetype: Mapped[str | None]
 
@@ -129,8 +135,8 @@ class Dataset(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
     workspace: Mapped[Workspace] = relationship(back_populates="datasets")
 
-    name: Mapped[str]
-    display_name: Mapped[str]
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
+    display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
 
     dataset_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("dataset_type.id", ondelete="RESTRICT")
@@ -162,25 +168,22 @@ class Dataset(Base):
 
 
 class EntityType(Base):
-    MAX_NAME_LENGTH = 50
     __tablename__ = "entity_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
 
     def to_domain(self):
         return domain_model.EntityType(name=self.name, id=self.id)
 
 
 class AttributeType(Base):
-    MAX_NAME_LENGTH = 100
-    MAX_UNIT_LENGTH = 20
     __tablename__ = "attribute_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(String(ATTRIBUTE_NAME_MAX_LENGTH), unique=True)
     has_rowptr: Mapped[bool]
     unit_type: Mapped[AttributeDataType]
     unit_shape: Mapped[tuple[int, ...]] = mapped_column(JSONTuple)
-    unit: Mapped[str] = mapped_column(String(MAX_UNIT_LENGTH))
+    unit: Mapped[str] = mapped_column(String(ATTRIBUTE_UNIT_MAX_LENGTH))
     description: Mapped[str]
 
     @property
@@ -291,7 +294,7 @@ class ModelType(Base):
     __tablename__ = "model_type"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(unique=True)
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
     jsonschema: Mapped[dict] = mapped_column(JSON)
 
     def to_domain(self):
@@ -350,14 +353,13 @@ class ScenarioDataset(Base):
 
 
 class ScenarioModel(Base):
-    MAX_NAME_LENGTH = 50
     __tablename__ = "scenario_model"
     __table_args__ = (
         UniqueConstraint("scenario_id", "sequence"),
         UniqueConstraint("scenario_id", "name"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(MAX_NAME_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     model_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("model_type.id", ondelete="RESTRICT")
@@ -393,8 +395,39 @@ class ScenarioModelReference(Base):
 
 class Update(Base):
     __tablename__ = "update"
-
+    __table_args__ = (UniqueConstraint("scenario_id", "timestamp", "iteration"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
+    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="RESTRICT"))
+    model_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("model_type.id", ondelete="RESTRICT")
+    )
+
+    # For the model name we could link to the associated ScenarioModel. However, any
+    # changes to the scenario would recreate all ScenarioModels, which would break this link.
+    # Instead, we denormalize model_name and store a copy directly in the Update
+    # table
+    model_name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
+
+    timestamp: Mapped[int]
+    iteration: Mapped[int]
+    created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
+
+    scenario: Mapped[Scenario] = relationship()
+    dataset: Mapped[Dataset] = relationship()
+    model_type: Mapped[ModelType] = relationship()
+
+    def to_domain(self):
+        return domain_model.Update(
+            id=self.id,
+            dataset=domain_model.ScenarioDataset(
+                self.dataset.name, self.dataset.dataset_type.name, id=self.dataset_id
+            ),
+            model_name=self.model_name,
+            model_type=self.model_type.name,
+            timestamp=self.timestamp,
+            iteration=self.iteration,
+        )
 
 
 class UpdateAttribute(Base):
