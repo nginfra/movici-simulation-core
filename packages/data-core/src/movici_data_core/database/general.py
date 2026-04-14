@@ -21,7 +21,7 @@ async def get_engine(dbapi_url: str, **kwargs):
     if "sqlite" in dbapi_url:
         # enable foreign keys for every sqlite connection
         @event.listens_for(engine.sync_engine, "engine_connect")
-        def engine_connect(conn, branch):
+        def engine_connect(conn):
             with conn.begin():
                 conn.execute(text("PRAGMA foreign_keys=ON"))
 

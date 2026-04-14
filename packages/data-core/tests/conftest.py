@@ -148,6 +148,17 @@ async def get_model_config_validator(repository: SQLAlchemyRepository, a_workspa
 
 
 @pytest.fixture
+def create_scenario(repository: SQLAlchemyRepository, a_workspace, get_model_config_validator):
+    async def _create_scenario(scenario: Scenario, workspace_id=None):
+        workspace_id = workspace_id or a_workspace.id
+        return await repository.scenarios.create(
+            workspace_id, scenario, await get_model_config_validator()
+        )
+
+    return _create_scenario
+
+
+@pytest.fixture
 async def a_workspace(session: AsyncSession):
     workspace = db_model.Workspace(name="default", display_name="Default Workspace")
     session.add(workspace)
@@ -207,12 +218,10 @@ async def a_dataset(repository: SQLAlchemyRepository, a_workspace, a_dataset_typ
 
 @pytest.fixture
 async def a_scenario(
-    default_model_types, a_dataset, repository: SQLAlchemyRepository, get_model_config_validator
+    default_model_types, a_dataset, repository: SQLAlchemyRepository, create_scenario
 ):
-    validator = await get_model_config_validator()
     scenario = Scenario(
         name="a_scenario",
-        workspace=a_dataset.workspace,
         display_name="A Scenario",
         description="Scenario for testing",
         epsg_code=28992,
@@ -238,5 +247,5 @@ async def a_scenario(
             },
         ],
     )
-    scenario_id = await repository.scenarios.create(a_dataset.workspace.id, scenario, validator)
+    scenario_id = await create_scenario(scenario)
     return t.cast(Scenario, await repository.scenarios.get_by_id(scenario_id))

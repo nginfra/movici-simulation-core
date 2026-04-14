@@ -98,17 +98,17 @@ class SQLAlchemyRepository:
 
 class ResourceSelector(t.Generic[T_dom]):
     __resource__: type[NamedResource[T_dom]]
-    __select_in_load__: tuple[InstrumentedAttribute, ...] = ()
+    __joined_load__: tuple[InstrumentedAttribute, ...] = ()
 
     @property
     def selector(self):
         selector = select(self.__resource__)
-        if self.__select_in_load__:
-            selector = selector.options(*self._selectinload())
+        if self.__joined_load__:
+            selector = selector.options(*self._joinedload())
         return selector
 
-    def _selectinload(self):
-        yield from (selectinload(col) for col in self.__select_in_load__)
+    def _joinedload(self):
+        yield from (joinedload(col) for col in self.__joined_load__)
 
 
 class Repository:
@@ -132,7 +132,7 @@ class GenericResourceRepository(Repository, ResourceSelector[T_dom]):
 
     async def get_by_id(self, id: UUID) -> T_dom | None:
         get_kwargs: dict[str, t.Any] = (
-            dict(options=list(self._selectinload())) if self.__select_in_load__ else {}
+            dict(options=list(self._joinedload())) if self.__joined_load__ else {}
         )
         return to_domain_or_none(await self.session.get(self.__resource__, id, **get_kwargs))
 
@@ -162,14 +162,14 @@ class ScopedResourceRepository(Repository, ResourceSelector[T_dom]):
             await self.session.scalar(
                 select(self.__resource__)
                 .where(self.__resource__.name == name, type(self).__parent_ref__ == parent)
-                .options(*self._selectinload())
+                .options(*self._joinedload())
                 .limit(1)
             )
         )
 
     async def get_by_id(self, id: UUID) -> T_dom | None:
         return to_domain_or_none(
-            await self.session.get(self.__resource__, id, options=list(self._selectinload()))
+            await self.session.get(self.__resource__, id, options=list(self._joinedload()))
         )
 
     async def delete(self, id: UUID):
@@ -408,7 +408,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
 class DatasetRepository(ScopedResourceRepository[Dataset]):
     __resource__ = db.Dataset
     __parent_ref__ = db.Dataset.workspace_id
-    __select_in_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
+    __joined_load__ = (db.Dataset.workspace, db.Dataset.dataset_type)
 
     async def create(self, parent: UUID, obj: Dataset) -> UUID:
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
@@ -560,8 +560,8 @@ class DatasetDataRepository(Repository):
 
 
 class UpdateRepository(Repository):
-    @staticmethod
-    def selector():
+    @property
+    def selector(self):
         return select(db.Update).options(
             joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
             joinedload(db.Update.model_type),
@@ -569,13 +569,9 @@ class UpdateRepository(Repository):
 
     async def list(self, parent: UUID) -> list[Update]:
         result = await self.session.scalars(
-            select(db.Update)
-            .options(
-                joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
-                joinedload(db.Update.model_type),
+            self.selector.where(db.Update.scenario_id == parent).order_by(
+                db.Update.timestamp, db.Update.iteration
             )
-            .where(db.Update.scenario_id == parent)
-            .order_by(db.Update.timestamp, db.Update.iteration)
         )
         return [update.to_domain() for update in result]
 
@@ -583,8 +579,8 @@ class UpdateRepository(Repository):
         record = await self.session.scalar(
             select(db.Update)
             .options(
-                selectinload(db.Update.dataset).selectinload(db.Dataset.dataset_type),
-                selectinload(db.Update.model_type),
+                joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
+                joinedload(db.Update.model_type),
             )
             .where(db.Update.id == id)
         )
@@ -592,12 +588,12 @@ class UpdateRepository(Repository):
             return None
         return dataclasses.replace(
             record.to_domain(),
-            data=_EntityDataHandler(
+            data=await _EntityDataHandler(
                 self.session, all_data=self.all_data, selector=UpdateDataSelector()
             ).get(id),
         )
 
-    async def create(self, parent: UUID, obj: Update) -> Update:
+    async def create(self, parent: UUID, obj: Update) -> UUID:
         """
         :param parent: A Scenario id
         """
@@ -615,7 +611,7 @@ class UpdateRepository(Repository):
             )
         dataset = await self.session.scalar(
             select(db.Dataset)
-            .options(selectinload(db.Dataset.dataset_type))
+            .options(joinedload(db.Dataset.dataset_type))
             .join(db.ScenarioDataset)
             .where(db.ScenarioDataset.scenario_id == parent)
             .where(db.Dataset.name == obj.dataset.name)
@@ -623,28 +619,28 @@ class UpdateRepository(Repository):
         if dataset is None:
             raise ResourceDoesNotExist("dataset", name=obj.dataset.name)
 
-        result = await self.session.scalar(
-            insert(db.Update)
-            .values(
-                scenario_id=parent,
-                timestamp=obj.timestamp,
-                iteration=obj.iteration,
-                model_type_id=model_type_id,
-                model_name=obj.model_name,
-                dataset_id=dataset.id,
-            )
-            .returning(db.Update)
+        update_id = t.cast(
+            UUID,
+            await self.session.scalar(
+                insert(db.Update)
+                .values(
+                    scenario_id=parent,
+                    timestamp=obj.timestamp,
+                    iteration=obj.iteration,
+                    model_type_id=model_type_id,
+                    model_name=obj.model_name,
+                    dataset_id=dataset.id,
+                )
+                .returning(db.Update.id)
+            ),
         )
-        assert result is not None
-        assert result.id is not None
-        result.dataset = None
         await _EntityDataHandler(self.session, self.all_data, UpdateDataSelector()).store(
-            result.id, obj.data
+            update_id, obj.data
         )
-        return result.to_domain()
+        return update_id
 
     async def delete_for_scenario(self, parent: UUID):
-        await self.session.execute(delete(Update).where(db.Update.scenario_id == parent))
+        await self.session.execute(delete(db.Update).where(db.Update.scenario_id == parent))
 
 
 class EntityDataSelector(t.Protocol):
@@ -687,10 +683,10 @@ class _EntityDataHandler:
         for attribute in (
             await self.session.scalars(
                 self.selector.select_linked_attribute(id).options(
-                    selectinload(db.Attribute.data),
-                    selectinload(db.Attribute.rowptr),
-                    selectinload(db.Attribute.entity_type),
-                    selectinload(db.Attribute.attribute_type),
+                    joinedload(db.Attribute.rowptr),
+                    joinedload(db.Attribute.data),
+                    joinedload(db.Attribute.entity_type),
+                    joinedload(db.Attribute.attribute_type),
                 )
             )
         ).all():
@@ -886,16 +882,16 @@ class ScenarioRepository:
     @property
     def selector(self):
         return select(db.Scenario).options(
-            selectinload(db.Scenario.workspace),
+            joinedload(db.Scenario.workspace),
             selectinload(db.Scenario.datasets)
-            .selectinload(db.ScenarioDataset.dataset)
-            .selectinload(db.Dataset.dataset_type),
+            .joinedload(db.ScenarioDataset.dataset)
+            .joinedload(db.Dataset.dataset_type),
             selectinload(db.Scenario.models).options(
-                selectinload(db.ScenarioModel.model_type),
+                joinedload(db.ScenarioModel.model_type),
                 selectinload(db.ScenarioModel.references).options(
-                    selectinload(db.ScenarioModelReference.dataset),
-                    selectinload(db.ScenarioModelReference.entity_type),
-                    selectinload(db.ScenarioModelReference.attribute_type),
+                    joinedload(db.ScenarioModelReference.dataset),
+                    joinedload(db.ScenarioModelReference.entity_type),
+                    joinedload(db.ScenarioModelReference.attribute_type),
                 ),
             ),
         )

@@ -101,8 +101,8 @@ class Scenario:
 
     id: UUID | None = None
     workspace: Workspace | None = None
-    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+    created_at: datetime.datetime | None = None
+    updated_at: datetime.datetime | None = None
     models: list[dict] = dataclasses.field(default_factory=list)
     datasets: list[dict] = dataclasses.field(default_factory=list)
 
@@ -133,8 +133,8 @@ class Dataset:
     general: dict | None = None
     espg_code: int | None = None
     bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
-    created_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
-    updated_at: datetime.datetime = dataclasses.field(default_factory=utcnow)
+    created_at: datetime.datetime | None = None
+    updated_at: datetime.datetime | None = None
 
     data: DatasetData | None = None
 

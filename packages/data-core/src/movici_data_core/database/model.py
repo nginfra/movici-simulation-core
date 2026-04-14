@@ -359,7 +359,7 @@ class ScenarioModel(Base):
         UniqueConstraint("scenario_id", "name"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     model_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("model_type.id", ondelete="RESTRICT")

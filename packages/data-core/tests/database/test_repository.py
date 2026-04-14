@@ -622,12 +622,58 @@ class TestScenarioRepository:
     async def test_scenario_round_trip(
         self,
         repository: SQLAlchemyRepository,
+        a_dataset,
+        default_model_types,
         a_scenario: Scenario,
         a_workspace,
+        get_model_config_validator,
     ):
-        result = await repository.scenarios.get_by_name(a_workspace.id, a_scenario.name)
+        validator = await get_model_config_validator()
+        scenario = Scenario(
+            name="some_scenario",
+            workspace=a_dataset.workspace,
+            display_name="Some Scenario",
+            description="Scenario for testing",
+            epsg_code=28992,
+            simulation_info={"some": "info"},
+            datasets=[
+                {
+                    "name": a_dataset.name,
+                    "type": a_dataset.dataset_type.name,
+                }
+            ],
+            models=[
+                {
+                    "name": "model1",
+                    "type": default_model_types[0].name,
+                    "dataset": a_dataset.name,
+                    "entity_group": "transport_nodes",
+                    "attribute": "id",
+                },
+                {
+                    "name": "model2",
+                    "type": default_model_types[1].name,
+                    "field": "value",
+                },
+            ],
+        )
+        scenario_id = await repository.scenarios.create(
+            a_dataset.workspace.id, scenario, validator
+        )
+        result = await repository.scenarios.get_by_id(scenario_id)
+        assert result is not None
 
-        assert result == a_scenario
+        assert result.id is not None
+        assert result.created_at is not None
+        assert result.updated_at is not None
+        assert result.datasets[0].pop("id") == a_dataset.id
+        assert dataclasses.replace(result, id=None, created_at=None, updated_at=None) == scenario
+
+    async def test_get_scenario_by_name(
+        self, repository: SQLAlchemyRepository, a_workspace, a_scenario
+    ):
+        result = repository.scenarios.get_by_name(a_workspace.id, a_scenario.id)
+        assert result is not None
 
     async def test_update_scenario(
         self, repository: SQLAlchemyRepository, a_scenario: Scenario, get_model_config_validator
@@ -678,26 +724,91 @@ class TestScenarioRepository:
 
 class TestUpdateRepository:
     @pytest.fixture
-    def an_update(self, a_scenario, a_dataset, an_entity_type, an_attribute_type):
-        return Update(
+    async def create_update(
+        self, repository, a_scenario, a_dataset, an_attribute_type, an_entity_type
+    ):
+        async def _create_update(timestamp, iteration, ids, array, scenario_id=None):
+            scenario_id = scenario_id or a_scenario.id
+            update = Update(
+                dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+                timestamp=timestamp,
+                iteration=iteration,
+                model_name=a_scenario.models[0]["name"],
+                model_type=a_scenario.models[0]["type"],
+                data={
+                    an_entity_type.name: {
+                        "id": {"data": np.asarray(ids)},
+                        an_attribute_type.name: {"data": np.asarray(array)},
+                    }
+                },
+            )
+
+            return await repository.updates.create(scenario_id, update)
+
+        return _create_update
+
+    async def test_update_round_trip(
+        self,
+        a_scenario,
+        a_dataset,
+        an_entity_type,
+        an_attribute_type,
+        repository: SQLAlchemyRepository,
+    ):
+        update = Update(
             dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
-            timestamp=0,
-            iteration=0,
+            timestamp=12,
+            iteration=2,
             model_name=a_scenario.models[0]["name"],
+            model_type=a_scenario.models[0]["type"],
             data={
                 an_entity_type.name: {
-                    "id": {"data": np.array([0, 1])},
-                    an_attribute_type.name: {"data": np.array([1.0, 2.0])},
+                    "id": {"data": np.asarray([0, 1])},
+                    an_attribute_type.name: {"data": np.asarray([1.0, 2.0])},
                 }
             },
         )
 
-    async def test_update_round_trip(
-        self, a_scenario, an_update, repository: SQLAlchemyRepository
-    ):
-        update_id = (await repository.updates.create(a_scenario.id, an_update)).id
-        assert update_id is not None
+        update_id = await repository.updates.create(a_scenario.id, update)
+
         result = await repository.updates.get_by_id(update_id)
         assert result is not None
-        assert dataclasses.replace(an_update, data=None) == dataclasses.replace(result, data=None)
-        assert_dataset_dicts_equal(an_update.data, result.data)
+        assert dataclasses.replace(update, data=None, id=update_id) == dataclasses.replace(
+            result, data=None
+        )
+        assert_dataset_dicts_equal(update.data, result.data)
+
+    async def test_gets_all_updates_in_order(
+        self, a_scenario, create_update, repository: SQLAlchemyRepository
+    ):
+        update1 = await create_update(timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0])
+        update4 = await create_update(timestamp=6, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        update2 = await create_update(timestamp=2, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        update3 = await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
+        all_updates = await repository.updates.list(a_scenario.id)
+        assert [upd.id for upd in all_updates] == [update1, update2, update3, update4]
+
+    async def test_deletes_all_updates_for_scenario_but_not_others(
+        self,
+        a_scenario,
+        create_update,
+        repository: SQLAlchemyRepository,
+        create_scenario,
+    ):
+        another_scenario_id = await create_scenario(
+            dataclasses.replace(a_scenario, name="another_scenario")
+        )
+        await create_update(timestamp=6, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(timestamp=2, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(
+            scenario_id=another_scenario_id, timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0]
+        )
+
+        assert len(await repository.updates.list(a_scenario.id)) == 3
+        assert len(await repository.updates.list(another_scenario_id)) == 1
+
+        await repository.updates.delete_for_scenario(a_scenario.id)
+
+        assert len(await repository.updates.list(a_scenario.id)) == 0
+        assert len(await repository.updates.list(another_scenario_id)) == 1
