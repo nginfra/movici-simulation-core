@@ -70,6 +70,7 @@ class AttributeDataType(enum.Enum):
 
 DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"
+DEFAULT_SCENARIO_NAME = "default_scenario"
 
 
 DEFAULT_NAME_MAX_LENGTH = 50
@@ -100,7 +101,11 @@ class Options(Base):
     default_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="RESTRICT")
     )
+    default_scenario_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("scenario.id", ondelete="RESTRICT")
+    )
     default_workspace: Mapped[Workspace | None] = relationship()
+    default_scenario: Mapped[Scenario | None] = relationship()
 
 
 class Workspace(Base):
@@ -441,171 +446,6 @@ class UpdateAttribute(Base):
     attribute: Mapped[Attribute] = relationship()
 
 
-#
-#
-# class NumpyArray(Base):
-#     """Store numpy arrays efficiently as binary data with metadata.
-#
-#     Supports both regular and sparse (CSR) array storage.
-#     """
-#
-#     __tablename__ = "numpy_array"
-#
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     dtype = Column(String(20), nullable=False)
-#     shape = Column(String, nullable=False)  # JSON string: "[100, 5]"
-#     data = Column(LargeBinary, nullable=False)
-#
-#     @classmethod
-#     def from_array(cls, arr: np.ndarray) -> NumpyArray:
-#         """Create NumpyArray record from numpy array.
-#
-#         :param arr: NumPy array to store
-#         :return: NumpyArray instance
-#         """
-#         return cls(dtype=arr.dtype.str, shape=json.dumps(list(arr.shape)), data=arr.tobytes())
-#
-#     def to_array(self) -> np.ndarray:
-#         """Reconstruct numpy array from stored data.
-#
-#         :return: Reconstructed NumPy array
-#         """
-#         shape = tuple(json.loads(self.shape))
-#         return np.frombuffer(self.data, dtype=self.dtype).reshape(shape)
-#
-#
-# class Update(Base):
-#     """Represents a simulation update at a specific timestamp and iteration."""
-#
-#     __tablename__ = "update"
-#     __table_args__ = (
-#         UniqueConstraint("timestamp", "iteration", "dataset_name", name="uq_update"),
-#         Index("idx_update_time", "timestamp", "iteration"),
-#         Index("idx_update_dataset", "dataset_name"),
-#     )
-#
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     timestamp = Column(Integer, nullable=False)
-#     iteration = Column(Integer, nullable=False)
-#     dataset_name = Column(String, nullable=False)
-#     origin = Column(String)  # Optional: model that produced this update
-#
-#     # Relationships
-#     attributes = relationship(
-#         "AttributeData", secondary="update_attribute", back_populates="updates"
-#     )
-#
-#
-# class AttributeData(Base):
-#     """Stores entity attribute data with support for both uniform and CSR sparse arrays."""
-#
-#     __tablename__ = "attribute_data"
-#     __table_args__ = (
-#         Index("idx_attr_entity_group", "entity_group"),
-#         Index("idx_attr_name", "attribute_name"),
-#     )
-#
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     entity_group = Column(String, nullable=False)
-#     attribute_name = Column(String, nullable=False)
-#
-#     # Foreign keys to numpy arrays
-#     data_id = Column(Integer, ForeignKey("numpy_array.id", ondelete="CASCADE"), nullable=False)
-#     indptr_id = Column(Integer, ForeignKey("numpy_array.id", ondelete="CASCADE"))
-#
-#     # Optional metadata for optimization
-#     min_val = Column(Float)
-#     max_val = Column(Float)
-#
-#     # Relationships
-#     data = relationship("NumpyArray", foreign_keys=[data_id])
-#     indptr = relationship("NumpyArray", foreign_keys=[indptr_id])
-#     updates = relationship("Update", secondary="update_attribute", back_populates="attributes")
-#     initial_datasets = relationship(
-#         "InitialDataset", secondary="initial_dataset_attribute", back_populates="attributes"
-#     )
-#
-#     @property
-#     def is_sparse(self) -> bool:
-#         """Check if this attribute uses CSR sparse representation.
-#
-#         :return: True if sparse, False otherwise
-#         """
-#         return self.indptr_id is not None
-#
-#     def get_data(self) -> dict:
-#         """Get attribute data in movici format.
-#
-#         :return: Dictionary with 'data' key and optionally 'row_ptr' for sparse arrays
-#         """
-#         result = {"data": self.data.to_array()}
-#         if self.is_sparse:
-#             result["row_ptr"] = self.indptr.to_array()
-#         return result
-#
-#
-# class UpdateAttribute(Base):
-#     """Junction table linking updates to their attribute data."""
-#
-#     __tablename__ = "update_attribute"
-#     __table_args__ = (UniqueConstraint("update_id", "attribute_data_id", name="uq_update_attr"),)
-#
-#     update_id = Column(Integer, ForeignKey("update.id", ondelete="CASCADE"), primary_key=True)
-#     attribute_data_id = Column(
-#         Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
-#     )
-#
-#     update = relationship("Update", overlaps="attributes,updates")
-#     attribute_data = relationship("AttributeData", overlaps="attributes,updates")
-#
-#
-# class InitialDatasetAttribute(Base):
-#     """Junction table linking initial datasets (entity_based format) to their attribute data."""
-#
-#     __tablename__ = "initial_dataset_attribute"
-#     __table_args__ = (
-#         UniqueConstraint(
-#             "initial_dataset_id", "attribute_data_id", name="uq_initial_dataset_attr"
-#         ),
-#     )
-#
-#     initial_dataset_id = Column(
-#         Integer, ForeignKey("initial_dataset.id", ondelete="CASCADE"), primary_key=True
-#     )
-#     attribute_data_id = Column(
-#         Integer, ForeignKey("attribute_data.id", ondelete="CASCADE"), primary_key=True
-#     )
-#
-#     initial_dataset = relationship("InitialDataset", overlaps="attributes,initial_datasets")
-#     attribute_data = relationship("AttributeData", overlaps="attributes,initial_datasets")
-#
-#
-# class InitialDataset(Base):
-#     """Stores initial dataset snapshots for self-contained database archives.
-#
-#     This allows the database to be a complete simulation record without
-#     requiring separate init_data directory.
-#
-#     Supports three storage formats:
-#
-#     * ``ENTITY_BASED``: Destructured into entity groups and attributes (references AttributeData)
-#     * ``UNSTRUCTURED``: JSON blob, loadable but not queryable by attribute
-#     * ``BINARY``: Raw binary blob, passed transparently to consumers
-#     """
-#
-#     __tablename__ = "initial_dataset"
-#     __table_args__ = (Index("idx_initial_dataset_name", "dataset_name"),)
-#
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     dataset_name = Column(String, unique=True, nullable=False)
-#     format = Column(Enum(DatasetFormat), nullable=False)
-#     data = Column(LargeBinary)
-#
-#     attributes = relationship(
-#         "AttributeData", secondary="initial_dataset_attribute", back_populates="initial_datasets"
-#     )
-#
-#
 # class SimulationDatabase:
 #     """High-level interface for storing and retrieving simulation data.
 #

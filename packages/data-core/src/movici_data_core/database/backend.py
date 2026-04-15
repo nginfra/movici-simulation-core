@@ -1,11 +1,11 @@
 import contextlib
+from uuid import UUID
 
-from movici_data_core.domain_model import Workspace
 from movici_data_core.exceptions import InconsistentDatabase
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from .general import get_options
-from .model import DatabaseMode, Options, to_domain_or_none
+from .model import DatabaseMode, Options
 from .repository import SQLAlchemyRepository
 
 
@@ -25,13 +25,15 @@ class SQLAlchemyBackendFactory:
         if options.mode == DatabaseMode.MULTIPLE_WORKSPACES:
             return MultipleWorkspacesBackend(session, options)
 
-        if (workspace := to_domain_or_none(options.default_workspace)) is None:
+        if (workspace_id := options.default_workspace_id) is None:
             raise InconsistentDatabase("a default workspace is required")
 
         if options.mode == DatabaseMode.SINGLE_WORKSPACE:
-            return SingleWorkspaceBackend(session, options, workspace=workspace)
+            return SingleWorkspaceBackend(session, options, workspace_id=workspace_id)
         if options.mode == DatabaseMode.SINGLE_SCENARIO:
-            return SingleScenarioBackend(session, options, workspace=workspace)
+            if (scenario_id := options.default_scenario_id) is None:
+                raise InconsistentDatabase("a default scenario is required")
+            return SingleScenarioBackend(session, options, scenario_id=scenario_id)
 
         assert False, f"Unknown database mode {options.mode}"
 
@@ -66,17 +68,34 @@ class SQLAlchemyBackend:
 
 
 class MultipleWorkspacesBackend(SQLAlchemyBackend):
-    def for_workspace(self, workspace: Workspace):
-        return SingleWorkspaceBackend(self.session, self.options, workspace=workspace)
+    def for_workspace(self, workspace_id: UUID):
+        return SingleWorkspaceBackend(self.session, self.options, workspace_id=workspace_id)
 
 
 class SingleWorkspaceBackend(SQLAlchemyBackend):
-    def __init__(self, session: AsyncSession, options: Options, workspace: Workspace):
+    def __init__(self, session: AsyncSession, options: Options, workspace_id: UUID):
         super().__init__(session, options)
-        self.workspace = workspace
+        self.workspace_id = workspace_id
 
 
 class SingleScenarioBackend(SQLAlchemyBackend):
-    def __init__(self, session: AsyncSession, options: Options, workspace: Workspace):
+    def __init__(self, session: AsyncSession, options: Options, scenario_id: UUID):
         super().__init__(session, options)
-        self.workspace = workspace
+        self.scenario_id = scenario_id
+
+
+class ScenarioService:
+    def __init__(self, repository: SQLAlchemyRepository, workspace_id: UUID | None = None):
+        self.repository = repository
+        self.workspace_id = workspace_id
+
+    async def list(self, workspace_id: UUID | None):
+        workspace_id = workspace_id or self.workspace_id
+        if workspace_id is None:
+            raise ValueError("A workspace id must be given")
+        return await self.repository.for_workspace(workspace_id).scenarios.list()
+
+    async def get(
+        self, name: str | None = None, id: UUID | None = None, workspace_id: UUID | None = None
+    ):
+        pass

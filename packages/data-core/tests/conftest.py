@@ -120,6 +120,7 @@ async def repository(
     default_entity_types,
     default_attribute_types,
     default_model_types,
+    a_workspace,
 ):
     options = await get_options(session)
     repository = SQLAlchemyRepository(session, options)
@@ -131,7 +132,7 @@ async def repository(
         await repository.attribute_types.create(attribute_type)
     for model_type in default_model_types:
         await repository.model_types.create(model_type)
-    return repository
+    return repository.for_workspace(a_workspace.id)
 
 
 @pytest.fixture
@@ -151,8 +152,8 @@ async def get_model_config_validator(repository: SQLAlchemyRepository, a_workspa
 def create_scenario(repository: SQLAlchemyRepository, a_workspace, get_model_config_validator):
     async def _create_scenario(scenario: Scenario, workspace_id=None):
         workspace_id = workspace_id or a_workspace.id
-        return await repository.scenarios.create(
-            workspace_id, scenario, await get_model_config_validator()
+        return await repository.for_workspace(workspace_id).scenarios.create(
+            scenario, await get_model_config_validator()
         )
 
     return _create_scenario
@@ -203,9 +204,8 @@ async def a_csr_attribute_type(repository: SQLAlchemyRepository) -> AttributeTyp
 
 
 @pytest.fixture
-async def a_dataset(repository: SQLAlchemyRepository, a_workspace, a_dataset_type):
+async def a_dataset(repository: SQLAlchemyRepository, a_dataset_type):
     dataset_id = await repository.datasets.create(
-        a_workspace.id,
         Dataset(
             name="a_transport_network",
             display_name="A Transport Network",
