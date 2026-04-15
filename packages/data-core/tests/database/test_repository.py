@@ -89,13 +89,16 @@ class TestWorkspaceRepository:
         self, repository: SQLAlchemyRepository, a_workspace: Workspace
     ):
         assert a_workspace.id is not None
+        assert a_workspace.name != "new_name"
         assert a_workspace.display_name != "New Name"
 
         await repository.workspaces.update(
-            a_workspace.id, dataclasses.replace(a_workspace, display_name="New Name")
+            a_workspace.id,
+            dataclasses.replace(a_workspace, name="new_name", display_name="New Name"),
         )
         updated = await repository.workspaces.get_by_id(a_workspace.id)
         assert updated is not None
+        assert updated.name == "new_name"
         assert updated.display_name == "New Name"
 
 

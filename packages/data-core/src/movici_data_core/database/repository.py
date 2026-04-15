@@ -220,9 +220,10 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         )
 
     async def update(self, id: UUID, obj: Workspace):
-        # We do not allow updating the workspace name
         await self.session.execute(
-            update(db.Workspace).where(db.Workspace.id == id).values(display_name=obj.display_name)
+            update(db.Workspace)
+            .where(db.Workspace.id == id)
+            .values(name=obj.name, display_name=obj.display_name)
         )
 
 
@@ -248,7 +249,6 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
 
         mimetype = obj.mimetype if obj.format == DatasetFormat.BINARY else None
 
-        # We do not allow updating the workspace name
         await self.session.execute(
             update(db.DatasetType)
             .where(db.DatasetType.id == id)
