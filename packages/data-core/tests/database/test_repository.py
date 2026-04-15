@@ -27,14 +27,33 @@ from movici_simulation_core.testing import assert_dataset_dicts_equal
 
 
 class TestWorkspaceRepository:
-    async def test_get_workspace_by_id(self, repository: SQLAlchemyRepository, a_workspace):
-        assert a_workspace.id is not None
-        found = await repository.workspaces.get_by_id(a_workspace.id)
-        assert a_workspace == found
+    @pytest.fixture
+    async def filled_workspace(
+        self, repository: SQLAlchemyRepository, a_workspace, a_dataset, a_scenario
+    ):
+        await repository.datasets.create(dataclasses.replace(a_dataset, name="another_dataset"))
+        return await repository.workspaces.get_by_id(a_workspace.id)
 
-    async def test_get_workspace_by_name(self, repository: SQLAlchemyRepository, a_workspace):
-        found = await repository.workspaces.get_by_name(a_workspace.name)
-        assert a_workspace == found
+    async def test_list_workspaces_with_counts(
+        self, repository: SQLAlchemyRepository, filled_workspace
+    ):
+        result = await repository.workspaces.list()
+        assert len(result) == 1
+        assert result[0].dataset_count == 2
+        assert result[0].scenario_count == 1
+
+    async def filled_workspace_has_counts(self, filled_workspace):
+        assert filled_workspace.dataset_count == 2
+        assert filled_workspace.scenario_count == 1
+
+    async def test_get_workspace_by_id(self, repository: SQLAlchemyRepository, filled_workspace):
+        assert filled_workspace.id is not None
+        found = await repository.workspaces.get_by_id(filled_workspace.id)
+        assert filled_workspace == found
+
+    async def test_get_workspace_by_name(self, repository: SQLAlchemyRepository, filled_workspace):
+        found = await repository.workspaces.get_by_name(filled_workspace.name)
+        assert filled_workspace == found
 
     async def test_get_non_existing_workspace_by_name(self, repository: SQLAlchemyRepository):
         assert (await repository.workspaces.get_by_name("invalid")) is None

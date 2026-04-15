@@ -39,7 +39,7 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy import Insert, Select, delete, exists, insert, select, update
+from sqlalchemy import Insert, Select, delete, exists, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -158,6 +158,55 @@ class GenericResourceRepository(Repository, t.Generic[T_dom]):
 
 class WorkspaceRepository(GenericResourceRepository[Workspace]):
     __resource__ = db.Workspace
+
+    async def list(self) -> list[Workspace]:
+        result = await super().list()
+
+        dataset_counts: dict[UUID, int] = {
+            k: v
+            for k, v in await self.session.execute(
+                select(db.Workspace.id, func.count(db.Dataset.id))
+                .join(db.Dataset)
+                .group_by(db.Workspace.id)
+            )
+        }
+        scenario_counts: dict[UUID, int] = {
+            k: v
+            for k, v in await self.session.execute(
+                select(db.Workspace.id, func.count(db.Scenario.id))
+                .join(db.Scenario)
+                .group_by(db.Workspace.id)
+            )
+        }
+        return [
+            dataclasses.replace(
+                ws,
+                dataset_count=dataset_counts.get(t.cast(UUID, ws.id), 0),
+                scenario_count=scenario_counts.get(t.cast(UUID, ws.id), 0),
+            )
+            for ws in result
+        ]
+
+    async def get_by_name(self, name: str) -> Workspace | None:
+        result = await super().get_by_name(name)
+        return await self._with_counts(result)
+
+    async def get_by_id(self, id: UUID) -> Workspace | None:
+        result = await super().get_by_id(id)
+        return await self._with_counts(result)
+
+    async def _with_counts(self, workspace: Workspace | None):
+        if workspace is None:
+            return workspace
+        return dataclasses.replace(
+            workspace,
+            dataset_count=await self.session.scalar(
+                select(func.count(1)).where(db.Dataset.workspace_id == workspace.id)
+            ),
+            scenario_count=await self.session.scalar(
+                select(func.count(1)).where(db.Scenario.workspace_id == workspace.id)
+            ),
+        )
 
     async def create(self, obj: Workspace) -> UUID:
 

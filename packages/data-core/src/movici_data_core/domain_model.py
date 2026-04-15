@@ -46,6 +46,8 @@ class Workspace:
     name: str
     display_name: str
     id: UUID | None = dataclasses.field(compare=False, default=None)
+    scenario_count: int = 0
+    dataset_count: int = 0
 
 
 @dataclasses.dataclass
