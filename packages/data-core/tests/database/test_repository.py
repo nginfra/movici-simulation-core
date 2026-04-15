@@ -59,6 +59,13 @@ class TestWorkspaceRepository:
 
         assert len(await repository.workspaces.list()) == existing
 
+    async def test_workspace_exists(self, repository: SQLAlchemyRepository):
+        assert not await repository.workspaces.exists("some_workspace")
+        await repository.workspaces.create(
+            Workspace(name="some_workspace", display_name="Some Workspace")
+        )
+        assert await repository.workspaces.exists("some_workspace")
+
     async def test_update_workspace(
         self, repository: SQLAlchemyRepository, a_workspace: Workspace
     ):
@@ -373,13 +380,20 @@ class TestDatasetRepository:
         assert isinstance(dataset.workspace, Workspace)
         assert isinstance(dataset.dataset_type, DatasetType)
 
-    async def test_create_dataset(
-        self, repository: SQLAlchemyRepository, a_workspace, a_dataset_type
-    ):
-        dataset_id = await repository.for_workspace(a_workspace.id).datasets.create(
+    async def test_create_dataset(self, repository: SQLAlchemyRepository, a_dataset_type):
+        dataset_id = await repository.datasets.create(
             Dataset("another_dataset", "Another Dataset", dataset_type=a_dataset_type)
         )
         assert int(dataset_id) > 0
+
+    async def test_dataset_exists(self, repository: SQLAlchemyRepository, a_dataset_type):
+        assert not await repository.datasets.exists("another_dataset")
+
+        await repository.datasets.create(
+            Dataset("another_dataset", "Another Dataset", dataset_type=a_dataset_type)
+        )
+
+        assert await repository.datasets.exists("another_dataset")
 
     async def test_update_dataset(self, repository: SQLAlchemyRepository, a_dataset):
         await repository.datasets.update(
@@ -607,15 +621,9 @@ class TestDatasetDataRepository:
 
 
 class TestScenarioRepository:
-    async def test_scenario_round_trip(
-        self,
-        repository: SQLAlchemyRepository,
-        a_dataset,
-        default_model_types,
-        get_model_config_validator,
-    ):
-        validator = await get_model_config_validator()
-        scenario = Scenario(
+    @pytest.fixture
+    def new_scenario(self, a_dataset, default_model_types):
+        return Scenario(
             name="some_scenario",
             workspace=a_dataset.workspace,
             display_name="Some Scenario",
@@ -643,19 +651,58 @@ class TestScenarioRepository:
                 },
             ],
         )
-        scenario_id = await repository.scenarios.create(scenario, validator)
-        result = await repository.scenarios.get_by_id(scenario_id)
+
+    async def test_list_scenarios(self, repository: SQLAlchemyRepository, a_scenario):
+        return len(await repository.scenarios.list()) == 1
+
+    async def test_scenario_round_trip(
+        self,
+        repository: SQLAlchemyRepository,
+        new_scenario,
+        a_dataset,
+        get_model_config_validator,
+    ):
+        validator = await get_model_config_validator()
+
+        scenario_id = await repository.scenarios.create(new_scenario, validator)
+        result = await repository.scenarios.for_id(scenario_id).get_by_id()
         assert result is not None
 
         assert result.id is not None
         assert result.created_at is not None
         assert result.updated_at is not None
         assert result.datasets[0].pop("id") == a_dataset.id
-        assert dataclasses.replace(result, id=None, created_at=None, updated_at=None) == scenario
+        assert (
+            dataclasses.replace(result, id=None, created_at=None, updated_at=None) == new_scenario
+        )
+
+    async def test_create_scenario_with_no_models_and_datasets(
+        self, repository: SQLAlchemyRepository, get_model_config_validator
+    ):
+        scenario_id = await repository.scenarios.create(
+            Scenario(
+                name="a_scenario",
+                display_name="a scenario",
+                description="",
+                epsg_code=0,
+            ),
+            validator=await get_model_config_validator(),
+        )
+        assert scenario_id is not None
 
     async def test_get_scenario_by_name(self, repository: SQLAlchemyRepository, a_scenario):
         result = await repository.scenarios.get_by_name(a_scenario.name)
         assert result is not None
+
+    async def test_scenario_exists(
+        self, repository: SQLAlchemyRepository, new_scenario, get_model_config_validator
+    ):
+        assert not await repository.scenarios.exists_by_name(new_scenario.name)
+
+        validator = await get_model_config_validator()
+        await repository.scenarios.create(new_scenario, validator)
+
+        assert await repository.scenarios.exists_by_name(new_scenario.name)
 
     async def test_update_scenario(
         self, repository: SQLAlchemyRepository, a_scenario: Scenario, get_model_config_validator
@@ -668,9 +715,9 @@ class TestScenarioRepository:
 
         a_scenario.name = "new_name"
         a_scenario.models = list(reversed(a_scenario.models))
-        await repository.scenarios.update(a_scenario.id, a_scenario, validator)
+        await repository.scenarios.for_id(a_scenario.id).update(a_scenario, validator)
 
-        result = await repository.scenarios.get_by_id(a_scenario.id)
+        result = await repository.scenarios.for_id(a_scenario.id).get_by_id()
 
         assert result is not None
         assert result.name == a_scenario.name
@@ -685,7 +732,7 @@ class TestScenarioRepository:
             .where(db.ScenarioDataset.scenario_id == a_scenario.id)
         )
         assert (await repository.session.scalar(query)) != 0
-        await repository.scenarios.delete(a_scenario.id)
+        await repository.scenarios.for_id(a_scenario.id).delete()
         assert len(await repository.scenarios.list()) == 0
         assert (await repository.session.scalar(query)) == 0
 
@@ -698,7 +745,7 @@ class TestScenarioRepository:
             .where(db.ScenarioModel.scenario_id == a_scenario.id)
         )
         assert (await repository.session.scalar(query)) != 0
-        await repository.scenarios.delete(a_scenario.id)
+        await repository.scenarios.for_id(a_scenario.id).delete()
         await repository.session.commit()
         assert len(await repository.scenarios.list()) == 0
         assert (await repository.session.scalar(query)) == 0
@@ -768,6 +815,14 @@ class TestUpdateRepository:
             result, data=None
         )
         assert_dataset_dicts_equal(update.data, result.data)
+
+    async def test_updates_exist(
+        self, create_update, repository_for_scenario: SQLAlchemyRepository
+    ):
+        assert not await repository_for_scenario.updates.exists()
+        await create_update(timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0])
+
+        assert await repository_for_scenario.updates.exists()
 
     async def test_gets_all_updates_in_order(
         self, create_update, repository_for_scenario: SQLAlchemyRepository

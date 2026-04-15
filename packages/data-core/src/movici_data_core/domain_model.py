@@ -105,6 +105,7 @@ class Scenario:
     updated_at: datetime.datetime | None = None
     models: list[dict] = dataclasses.field(default_factory=list)
     datasets: list[dict] = dataclasses.field(default_factory=list)
+    has_updates: bool = False
 
 
 @dataclasses.dataclass

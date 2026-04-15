@@ -39,7 +39,7 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy import Insert, Select, delete, func, insert, select, update
+from sqlalchemy import Insert, Select, delete, exists, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -60,7 +60,9 @@ class SQLAlchemyRepository:
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
-    def for_workspace(self, workspace_id: UUID):
+    def for_workspace(self, workspace_id: UUID | None):
+        if workspace_id is None:
+            raise ValueError("A workspace id must be given")
         return dataclasses.replace(self, workspace_id=workspace_id)
 
     def for_scenario(self, scenario_id: UUID):
@@ -89,8 +91,6 @@ class SQLAlchemyRepository:
 
     @property
     def datasets(self):
-        if self.workspace_id is None:
-            raise ValueError("SQLAlchemyRepository.workspace_id must be set")
         return DatasetRepository(self.session, self.options, self, workspace_id=self.workspace_id)
 
     @property
@@ -99,8 +99,6 @@ class SQLAlchemyRepository:
 
     @property
     def scenarios(self):
-        if self.workspace_id is None:
-            raise ValueError("SQLAlchemyRepository.workspace_id must be set")
         return ScenarioRepository(
             self.session,
             self.options,
@@ -122,6 +120,9 @@ class Repository:
     options: Options
     all_data: SQLAlchemyRepository
 
+    async def _exists(self, *where) -> bool:
+        return bool(await self.session.scalar(select(exists().where(*where))))
+
 
 class GenericResourceRepository(Repository, t.Generic[T_dom]):
     __resource__: type[NamedResource[T_dom]]
@@ -129,6 +130,9 @@ class GenericResourceRepository(Repository, t.Generic[T_dom]):
     async def list(self) -> list[T_dom]:
         result = await self.session.scalars(select(self.__resource__))
         return [obj.to_domain() for obj in result]
+
+    async def exists(self, name: str):
+        return await self._exists(self.__resource__.name == name)
 
     async def get_by_name(self, name: str) -> T_dom | None:
         return to_domain_or_none(
@@ -373,30 +377,31 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         }
 
 
+@dataclasses.dataclass
 class DatasetRepository(Repository):
-    def __init__(
-        self,
-        session: AsyncSession,
-        options: Options,
-        all_data: SQLAlchemyRepository,
-        workspace_id: UUID,
-    ):
-        self.session = session
-        self.options = options
-        self.all_data = all_data
-        self.workspace_id = workspace_id
+    workspace_id: UUID | None = None
+
+    def _ensure_workspace_id(self) -> UUID:
+        if self.workspace_id is None:
+            raise ValueError("DatasetRepository.workspace_id is required")
+        return self.workspace_id
 
     @property
     def selector(self):
+        workspace_id = self._ensure_workspace_id()
         return (
             select(db.Dataset)
-            .where(db.Dataset.workspace_id == self.workspace_id)
+            .where(db.Dataset.workspace_id == workspace_id)
             .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
         )
 
     async def list(self) -> list[Dataset]:
         result = await self.session.scalars(self.selector)
         return [obj.to_domain() for obj in result]
+
+    async def exists(self, name: str):
+        workspace_id = self._ensure_workspace_id()
+        return await self._exists(db.Dataset.workspace_id == workspace_id, db.Dataset.name == name)
 
     async def get_by_name(self, name: str) -> Dataset | None:
         return to_domain_or_none(
@@ -413,13 +418,14 @@ class DatasetRepository(Repository):
         return await self.session.execute(delete(db.Dataset).where(db.Dataset.id == id))
 
     async def create(self, obj: Dataset) -> UUID:
+        workspace_id = self._ensure_workspace_id()
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
         return t.cast(
             UUID,
             await self.session.scalar(
                 insert(db.Dataset)
                 .values(
-                    workspace_id=self.workspace_id,
+                    workspace_id=workspace_id,
                     name=obj.name,
                     display_name=obj.display_name,
                     dataset_type_id=t.cast(UUID, dataset_type.id),
@@ -441,6 +447,7 @@ class DatasetRepository(Repository):
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
     ) -> list[ScenarioDataset]:
+        workspace_id = self._ensure_workspace_id()
         existing_datasets = {
             ds.name: t.cast(db.Dataset, ds)
             for ds in await self.session.scalars(
@@ -476,7 +483,7 @@ class DatasetRepository(Repository):
                         "name": ds.name,
                         "display_name": ds.name,
                         "dataset_type_id": existing_types[ds.type].id,
-                        "workspace_id": self.workspace_id,
+                        "workspace_id": workspace_id,
                     }
                     for ds in to_create
                 ],
@@ -492,13 +499,9 @@ class DatasetRepository(Repository):
 
 class DatasetDataRepository(Repository):
     async def exists_for(self, id: UUID):
-        raw_data = await self.session.scalar(
-            select(func.count(db.RawData.id)).where(db.RawData.dataset_id == id)
-        )
-        entity_data = await self.session.scalar(
-            select(func.count(db.DatasetAttribute.id)).where(db.DatasetAttribute.dataset_id == id)
-        )
-        return bool(raw_data) or bool(entity_data)
+        raw_data_exists = await self._exists(db.RawData.dataset_id == id)
+        entity_data_exists = await self._exists(db.DatasetAttribute.dataset_id == id)
+        return raw_data_exists or entity_data_exists
 
     def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
         return _RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
@@ -574,6 +577,9 @@ class UpdateRepository(Repository):
             )
         )
         return [update.to_domain() for update in result]
+
+    async def exists(self):
+        return await self._exists(db.Update.scenario_id == self.scenario_id)
 
     async def get_by_id(self, id: UUID) -> Update | None:
         record = await self.session.scalar(
@@ -871,18 +877,33 @@ class _RawDataHandler:
 
 @dataclasses.dataclass
 class ScenarioRepository(Repository):
-    workspace_id: UUID
+    workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
-    def _ensure_scenario_id(self, id: UUID | None):
-        id = id or self.scenario_id
-        if id is None:
-            raise ValueError("Supply id or ScenarioRepository.id")
-        return id
+    def for_id(self, scenario_id: UUID):
+        self._ensure_no_scenario_id()
+        return dataclasses.replace(self, scenario_id=scenario_id)
+
+    def _ensure_workspace_id(self) -> UUID:
+        if self.workspace_id is None:
+            raise ValueError("ScenarioRepository.workspace_id is required")
+        return self.workspace_id
+
+    def _ensure_scenario_id(self):
+        if self.scenario_id is None:
+            raise ValueError("ScenarioRepository.scenario_id is required")
+        return self.scenario_id
+
+    def _ensure_no_scenario_id(self):
+        if self.scenario_id is not None:
+            raise InvalidAction("Unsupported operation for this mode")
 
     async def list(self) -> list[Scenario]:
+        workspace_id = self._ensure_workspace_id()
         result = await self.session.scalars(
-            select(db.Scenario).where(db.Scenario.workspace_id == self.workspace_id)
+            select(db.Scenario)
+            .options(joinedload(db.Scenario.workspace))
+            .where(db.Scenario.workspace_id == workspace_id)
         )
         return [obj.to_domain() for obj in result]
 
@@ -903,32 +924,43 @@ class ScenarioRepository(Repository):
             ),
         )
 
+    async def exists_by_name(self, name: str):
+        workspace_id = self._ensure_workspace_id()
+        return await self._exists(
+            db.Scenario.workspace_id == workspace_id, db.Scenario.name == name
+        )
+
+    async def exists(self):
+        id = self._ensure_scenario_id()
+        return await self._exists(db.Scenario.id == id)
+
     async def get_by_name(self, name: str) -> Scenario | None:
+        workspace_id = self._ensure_workspace_id()
         record = await self.session.scalar(
-            self.selector.where(
-                db.Scenario.name == name, db.Scenario.workspace_id == self.workspace_id
-            )
+            self.selector.where(db.Scenario.name == name, db.Scenario.workspace_id == workspace_id)
         )
         if record is None:
             return None
         return self.load_full_scenario(record)
 
-    async def get_by_id(self, id: UUID | None = None) -> Scenario | None:
-        id = self._ensure_scenario_id(id)
+    async def get_by_id(self) -> Scenario | None:
+        id = self._ensure_scenario_id()
         record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
         if record is None:
             return None
         return self.load_full_scenario(record)
 
-    async def delete(self, id: UUID | None = None):
-        id = self._ensure_scenario_id(id)
+    async def delete(self):
+        id = self._ensure_scenario_id()
         return await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
     async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
+        self._ensure_no_scenario_id()
+        workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
             insert(db.Scenario)
             .values(
-                workspace_id=self.workspace_id,
+                workspace_id=workspace_id,
                 name=obj.name,
                 display_name=obj.display_name,
                 description=obj.description,
@@ -939,11 +971,12 @@ class ScenarioRepository(Repository):
             .returning(db.Scenario.id)
         )
         assert scenario_id is not None
-        await self._store_scenario_details(self.workspace_id, scenario_id, obj, validator)
+        await self._store_scenario_details(workspace_id, scenario_id, obj, validator)
         return scenario_id
 
-    async def update(self, id: UUID, obj: Scenario, validator: ModelConfigValidator):
-        current = await self.get_by_id(id)
+    async def update(self, obj: Scenario, validator: ModelConfigValidator):
+        id = self._ensure_scenario_id()
+        current = await self.get_by_id()
         if current is None:
             raise ResourceDoesNotExist("scenario", id=id)
         assert current.workspace is not None
@@ -969,7 +1002,8 @@ class ScenarioRepository(Repository):
 
         await self._store_scenario_details(current.workspace.id, id, obj, validator)
 
-    async def set_status(self, id: UUID, status: ScenarioStatus):
+    async def set_status(self, status: ScenarioStatus):
+        id = self._ensure_scenario_id()
         await self.session.execute(
             update(db.Scenario).where(db.Scenario.id == id).values(status=status)
         )
@@ -978,16 +1012,20 @@ class ScenarioRepository(Repository):
         self, workspace_id: UUID, scenario_id: UUID, obj: Scenario, validator: ModelConfigValidator
     ):
         repository = self.all_data.for_workspace(workspace_id)
-        scenario_datasets = await repository.datasets.ensure_scenario_datasets(
-            [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
-        )
-        await self.session.execute(
-            insert(db.ScenarioDataset),
-            [
-                {"scenario_id": scenario_id, "dataset_id": ds.id, "sequence": idx}
-                for idx, ds in enumerate(scenario_datasets)
-            ],
-        )
+        scenario_datasets = []
+        if obj.datasets:
+            scenario_datasets = await repository.datasets.ensure_scenario_datasets(
+                [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
+            )
+            await self.session.execute(
+                insert(db.ScenarioDataset),
+                [
+                    {"scenario_id": scenario_id, "dataset_id": ds.id, "sequence": idx}
+                    for idx, ds in enumerate(scenario_datasets)
+                ],
+            )
+        if not obj.models:
+            return
 
         model_types = await self.all_data.model_types.ensure_model_types(
             [model["type"] for model in obj.models if "name" in model]

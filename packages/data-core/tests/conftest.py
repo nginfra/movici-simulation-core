@@ -149,6 +149,11 @@ async def get_model_config_validator(repository: SQLAlchemyRepository, a_workspa
 
 
 @pytest.fixture
+async def model_config_validator(get_model_config_validator):
+    return await get_model_config_validator()
+
+
+@pytest.fixture
 def create_scenario(repository: SQLAlchemyRepository, a_workspace, get_model_config_validator):
     async def _create_scenario(scenario: Scenario, workspace_id=None):
         workspace_id = workspace_id or a_workspace.id
@@ -248,4 +253,4 @@ async def a_scenario(
         ],
     )
     scenario_id = await create_scenario(scenario)
-    return t.cast(Scenario, await repository.scenarios.get_by_id(scenario_id))
+    return t.cast(Scenario, await repository.scenarios.for_id(scenario_id).get_by_id())

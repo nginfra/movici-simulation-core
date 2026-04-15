@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import contextlib
+import dataclasses
 from uuid import UUID
 
-from movici_data_core.exceptions import InconsistentDatabase
+from movici_data_core.domain_model import Scenario
+from movici_data_core.exceptions import InconsistentDatabase, InvalidAction, ResourceDoesNotExist
+from movici_data_core.validators import ModelConfigValidator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from . import model as db
 from .general import get_options
-from .model import DatabaseMode, Options
 from .repository import SQLAlchemyRepository
 
 
@@ -21,31 +26,62 @@ class SQLAlchemyBackendFactory:
             yield self._build_backend(session, options)
 
     @staticmethod
-    def _build_backend(session: AsyncSession, options: Options):
-        if options.mode == DatabaseMode.MULTIPLE_WORKSPACES:
-            return MultipleWorkspacesBackend(session, options)
+    def _build_backend(session: AsyncSession, options: db.Options):
+        if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
+            return SQLAlchemyBackend(session, options)
 
         if (workspace_id := options.default_workspace_id) is None:
             raise InconsistentDatabase("a default workspace is required")
 
-        if options.mode == DatabaseMode.SINGLE_WORKSPACE:
-            return SingleWorkspaceBackend(session, options, workspace_id=workspace_id)
-        if options.mode == DatabaseMode.SINGLE_SCENARIO:
+        if options.mode == db.DatabaseMode.SINGLE_WORKSPACE:
+            return SQLAlchemyBackend(
+                session, options, workspace_id=workspace_id, single_workspace_mode=True
+            )
+        if options.mode == db.DatabaseMode.SINGLE_SCENARIO:
             if (scenario_id := options.default_scenario_id) is None:
                 raise InconsistentDatabase("a default scenario is required")
-            return SingleScenarioBackend(session, options, scenario_id=scenario_id)
+            return SQLAlchemyBackend(
+                session,
+                options,
+                workspace_id=workspace_id,
+                scenario_id=scenario_id,
+                single_workspace_mode=True,
+                single_scenario_mode=True,
+            )
 
         assert False, f"Unknown database mode {options.mode}"
 
 
+@dataclasses.dataclass
 class SQLAlchemyBackend:
-    def __init__(self, session: AsyncSession, options: Options):
-        self.session = session
-        self.options = options
+    session: AsyncSession
+    options: db.Options
+    workspace_id: UUID | None = None
+    scenario_id: UUID | None = None
+    single_scenario_mode: bool = False
+    single_workspace_mode: bool = False
 
     @property
     def repository(self):
-        return SQLAlchemyRepository(self.session, self.options)
+        return SQLAlchemyRepository(
+            self.session, self.options, self.workspace_id, self.scenario_id
+        )
+
+    def for_workspace(self, workspace_id: UUID):
+        return dataclasses.replace(self, workspace_id=workspace_id)
+
+    def for_scenario(self, scenario_id: UUID):
+        return dataclasses.replace(self, scenario_id=scenario_id)
+
+    @property
+    def workspaces(self) -> WorkspaceService:
+        if self.single_workspace_mode:
+            raise InvalidAction("workspaces are not supported in this mode")
+        return WorkspaceService(self.repository)
+
+    @property
+    def scenarios(self):
+        return ScenarioService(self.repository, single_scenario_mode=self.single_scenario_mode)
 
     def set_options(
         self,
@@ -53,6 +89,7 @@ class SQLAlchemyBackend:
         strict_entity_types: bool | None = None,
         strict_attributes: bool | None = None,
         strict_model_types: bool | None = None,
+        strict_scenario_datasets: bool | None = None,
     ):
         if strict_dataset_types is not None:
             self.options.STRICT_DATASET_TYPES = strict_dataset_types
@@ -62,40 +99,54 @@ class SQLAlchemyBackend:
             self.options.STRICT_ATTRIBUTES = strict_attributes
         if strict_model_types is not None:
             self.options.STRICT_MODEL_TYPES = strict_model_types
+        if strict_scenario_datasets is not None:
+            self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
 
     def get_dataset_schema(self):
         pass
 
 
-class MultipleWorkspacesBackend(SQLAlchemyBackend):
-    def for_workspace(self, workspace_id: UUID):
-        return SingleWorkspaceBackend(self.session, self.options, workspace_id=workspace_id)
+class WorkspaceService:
+    def __init__(self, repository: SQLAlchemyRepository):
+        self.repository = repository
 
-
-class SingleWorkspaceBackend(SQLAlchemyBackend):
-    def __init__(self, session: AsyncSession, options: Options, workspace_id: UUID):
-        super().__init__(session, options)
-        self.workspace_id = workspace_id
-
-
-class SingleScenarioBackend(SQLAlchemyBackend):
-    def __init__(self, session: AsyncSession, options: Options, scenario_id: UUID):
-        super().__init__(session, options)
-        self.scenario_id = scenario_id
+    async def list(self):
+        return await self.repository.workspaces.list()
 
 
 class ScenarioService:
-    def __init__(self, repository: SQLAlchemyRepository, workspace_id: UUID | None = None):
+    def __init__(self, repository: SQLAlchemyRepository, single_scenario_mode: bool):
         self.repository = repository
-        self.workspace_id = workspace_id
+        self.single_scenario_mode = single_scenario_mode
 
-    async def list(self, workspace_id: UUID | None):
-        workspace_id = workspace_id or self.workspace_id
-        if workspace_id is None:
-            raise ValueError("A workspace id must be given")
-        return await self.repository.for_workspace(workspace_id).scenarios.list()
+    async def list(self):
+        return await self.repository.scenarios.list()
 
-    async def get(
-        self, name: str | None = None, id: UUID | None = None, workspace_id: UUID | None = None
-    ):
-        pass
+    async def get(self, name: str | None = None, id: UUID | None = None) -> Scenario | None:
+        if name is not None:
+            result = await self.repository.scenarios.get_by_name(name)
+        elif id is not None:
+            result = await self.repository.scenarios.for_id(id).get_by_id()
+        elif self.repository.scenario_id is not None:
+            result = await self.repository.scenarios.get_by_id()
+        else:
+            raise InvalidAction("Scenario name or id is required")
+
+        if result is not None:
+            result.has_updates = await self.repository.updates.exists()
+        return result
+
+    async def create(self, scenario: Scenario, validator: ModelConfigValidator):
+        if self.single_scenario_mode:
+            raise InvalidAction("Unsupported operation in this mode")
+        return await self.repository.scenarios.create(scenario, validator)
+
+    async def update(self, scenario: Scenario, validator):
+        return await self.repository.scenarios.update(scenario, validator)
+
+    async def delete(self):
+        if self.single_scenario_mode:
+            raise InvalidAction("Unsupported operation in this mode")
+        if not await self.repository.scenarios.exists():
+            raise ResourceDoesNotExist("scenario", id=self.repository.scenario_id)
+        return await self.repository.scenarios.delete()
