@@ -5,10 +5,10 @@ import logging
 import pytest
 import wntr
 
+from movici_drinking_water_model.model import Model as DrinkingWaterModel
+from movici_drinking_water_model.network_wrapper import NetworkWrapper
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.state import TrackedState
-from movici_simulation_core.models.drinking_water.model import Model as DrinkingWaterModel
-from movici_simulation_core.models.drinking_water.network_wrapper import NetworkWrapper
 
 
 @pytest.fixture
