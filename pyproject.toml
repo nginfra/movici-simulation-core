@@ -10,6 +10,7 @@ dependencies = [
   "movici-simulation-core",
   "movici-drinking-water-model",
   "movici-transport-assignment-model",
+  "movici-power-grid-model",
 ]
 
 [dependency-groups]
@@ -39,6 +40,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 movici-simulation-core = { workspace = true }
 movici-drinking-water-model = { workspace = true }
 movici-transport-assignment-model = { workspace = true }
+movici-power-grid-model = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -92,12 +94,14 @@ ignore = [
 "packages/simulation-core/examples/*" = ["S101", "T20"]
 "packages/drinking-water/tests/*" = ["S"]
 "packages/transport-assignment/tests/*" = ["S"]
+"packages/power-grid/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
 known-first-party = [
   "movici_simulation_core",
   "movici_drinking_water_model",
   "movici_transport_assignment_model",
+  "movici_power_grid_model",
 ]
 
 [tool.ruff.format]
