@@ -1,40 +1,25 @@
-MODULE_NAME = movici_simulation_core
+ruff:
+	uv run ruff format --check
+	uv run ruff check
+
+toml-check:
+	uv run taplo format --check .
+
+lint: ruff toml-check
 
 unittest:
-	NUMBA_DISABLE_JIT=1 pytest -v tests/
+	NUMBA_DISABLE_JIT=1 uv run pytest -v packages/*/tests/
 
 coverage:
-	NUMBA_DISABLE_JIT=1 pytest \
-		--cov $(MODULE_NAME) \
+	NUMBA_DISABLE_JIT=1 uv run pytest \
+		$(patsubst %,--cov %,$(wildcard packages/*/src/*)) \
 		--cov-report=term-missing \
 		--cov-report=xml \
 		--cov-report=html \
-		tests/
+		packages/*/tests/
 
 test-numba:
-	pytest -v tests/
-
-ruff:
-	ruff format --check
-	ruff check
-
-toml-check:
-	taplo format --check .
-
-mypy:
-	- mypy $(MODULE_NAME)
-
-lint: ruff toml-check mypy
-
-test-all: coverage lint
-
-level=patch
-export level
-
-bump-version:
-	bumpversion  --config-file .bumpversion.app $(level)
-	@NEW_VERSION=$$(tail -1 VERSION);\
-	echo New version: $$NEW_VERSION
+	uv run pytest -v packages/*/tests/
 
 .PHONY: docs
 docs:
