@@ -5,6 +5,8 @@ from uuid import UUID
 
 from jsonschema import ValidationError as JSONSchemaValidationError
 
+from movici_simulation_core.types import FileType
+
 
 class MoviciDataError(Exception):
     pass
@@ -46,6 +48,18 @@ class InvalidResource(MoviciDataError):
         if self.message is not None:
             parts.append(f"[{self.message}]")
         return " ".join(parts)
+
+
+class UnsupportedFileType(MoviciDataError):
+    def __init__(self, filetype: FileType):
+        self.filetype = filetype
+
+    def __str__(self) -> str:
+        return f"Filetype {self.filetype} is not supported for this operation"
+
+
+class SerializationError(MoviciDataError):
+    pass
 
 
 class MoviciValidationError(MoviciDataError):

@@ -73,10 +73,14 @@ class AttributeType:
 
     unit: str = ""
     description: str = ""
+    enum_name: str | None = None
 
     @classmethod
     def from_attribute_spec(cls, spec: AttributeSpec):
-        return cls(name=spec.name, data_type=spec.data_type)
+        return cls(name=spec.name, data_type=spec.data_type, enum_name=spec.enum_name)
+
+    def to_attribute_spec(self):
+        return AttributeSpec(name=self.name, data_type=self.data_type, enum_name=self.enum_name)
 
 
 @dataclasses.dataclass
@@ -134,12 +138,13 @@ class Dataset:
     workspace: Workspace | None = None
 
     general: dict | None = None
-    espg_code: int | None = None
+    epsg_code: int | None = None
     bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
 
     data: DatasetData | None = None
+    has_data: bool = False
 
 
 @dataclasses.dataclass
@@ -153,3 +158,33 @@ class Update:
 
     id: UUID | None = None
     data: DatasetData | None = None
+
+
+@dataclasses.dataclass
+class DatasetSummary:
+    general: dict
+    epsg_code: int | None
+    bounding_box: tuple[float, float, float, float] | None  # minx miny maxx maxy
+    entity_groups: list[EntityGroupSummary]
+    count: int
+
+
+@dataclasses.dataclass
+class EntityGroupSummary:
+    name: str
+    count: int
+    attributes: list[AttributeSummary]
+
+
+T_datatype = t.TypeVar("T_datatype", bool, int, float, str)
+
+
+@dataclasses.dataclass
+class AttributeSummary(t.Generic[T_datatype]):
+    name: str
+    data_type: DataType[T_datatype]
+    description: str
+    enum_name: str | None
+    unit: str
+    min_val: T_datatype | None
+    max_val: T_datatype | None

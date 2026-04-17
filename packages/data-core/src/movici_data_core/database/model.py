@@ -78,6 +78,7 @@ DEFAULT_DISPLAY_NAME_MAX_LENGTH = 50
 
 ATTRIBUTE_NAME_MAX_LENGTH = 100
 ATTRIBUTE_UNIT_MAX_LENGTH = 20
+ATTRIBUTE_ENUM_NAME_MAX_LENGTH = 20
 
 
 class Metadata(Base):
@@ -165,7 +166,7 @@ class Dataset(Base):
             dataset_type=self.dataset_type.to_domain(),
             workspace=self.workspace.to_domain(),
             general=self.general,
-            espg_code=self.epsg_code,
+            epsg_code=self.epsg_code,
             bounding_box=self.bounding_box,
             created_at=self.created_at,
             updated_at=self.updated_at,
@@ -190,6 +191,7 @@ class AttributeType(Base):
     unit_shape: Mapped[tuple[int, ...]] = mapped_column(JSONTuple)
     unit: Mapped[str] = mapped_column(String(ATTRIBUTE_UNIT_MAX_LENGTH))
     description: Mapped[str]
+    enum_name: Mapped[str | None] = mapped_column(String(ATTRIBUTE_ENUM_NAME_MAX_LENGTH))
 
     @property
     def data_type(self):
@@ -208,6 +210,7 @@ class AttributeType(Base):
             data_type=self.data_type,
             unit=self.unit,
             description=self.description,
+            enum_name=self.enum_name,
         )
 
 
@@ -260,7 +263,7 @@ class Attribute(Base):
     attribute_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
-
+    length: Mapped[int]
     entity_type: Mapped[EntityType] = relationship()
     attribute_type: Mapped[AttributeType] = relationship()
     data: Mapped[DataArray] = relationship()

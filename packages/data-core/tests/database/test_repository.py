@@ -8,10 +8,13 @@ import pytest
 from movici_data_core.database import model as db
 from movici_data_core.database.repository import DatasetDataRepository, SQLAlchemyRepository
 from movici_data_core.domain_model import (
+    AttributeSummary,
     AttributeType,
     Dataset,
     DatasetFormat,
+    DatasetSummary,
     DatasetType,
+    EntityGroupSummary,
     EntityType,
     ModelType,
     Scenario,
@@ -21,9 +24,10 @@ from movici_data_core.domain_model import (
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload
 
 from movici_simulation_core.core import DataType
-from movici_simulation_core.testing import assert_dataset_dicts_equal
+from movici_simulation_core.testing import assert_dataset_dicts_equal, dataset_data_to_numpy
 
 
 class TestWorkspaceRepository:
@@ -241,6 +245,15 @@ class TestAttributeTypeRepository:
         attribute_type = await repository.attribute_types.get_by_name("attribute_type")
         assert attribute_type is not None
         assert attribute_type.data_type == data_type
+
+    async def test_create_attribute_type_with_enum(self, repository: SQLAlchemyRepository):
+        data_type = DataType(float)
+        await repository.attribute_types.create(
+            AttributeType("attribute_type", data_type=data_type, enum_name="something")
+        )
+        attribute_type = await repository.attribute_types.get_by_name("attribute_type")
+        assert attribute_type is not None
+        assert attribute_type.enum_name == "something"
 
     async def test_create_and_delete_an_attribute_type(self, repository: SQLAlchemyRepository):
         existing = len(await repository.attribute_types.list())
@@ -511,6 +524,26 @@ class TestDatasetRepository:
                 [ScenarioDataset(name=a_dataset.name, type="tabular")]
             )
 
+    async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):
+        await repository.datasets.update_with_data(
+            a_dataset.id,
+            dataclasses.replace(
+                a_dataset,
+                general={"enum": {"label": ["a", "b"]}},
+                epsg_code=1234,
+                bounding_box=[1.0, 2.0, 3.0, 4.0],
+                data=dataset_data_to_numpy(
+                    {
+                        "transport_nodes": {
+                            "id": [1, 2, 3],
+                            "labels": {"data": [0, 0, 1, 1], "rowptr": [0, 1, 3, 4]},
+                        },
+                    }
+                ),
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
 
 class TestDatasetDataRepository:
     @pytest.mark.parametrize("method", ["path", "bytes", "bytesio"])
@@ -610,6 +643,80 @@ class TestDatasetDataRepository:
         result = await repository.dataset_data.get_entity_data(a_dataset.id)
         assert_dataset_dicts_equal(data, result)
 
+    @pytest.mark.parametrize(
+        "datatype, values, min_val, max_val",
+        [
+            (bool, [False, False], False, True),
+            (int, [2, -1], -1, 2),
+            (float, [0.0, np.nan], 0.0, 0.0),
+            (float, [np.nan], None, None),
+            (float, [], None, None),
+            (str, ["a", "b"], None, None),
+        ],
+    )
+    async def test_stores_min_max(
+        self,
+        repository: SQLAlchemyRepository,
+        datatype,
+        values,
+        min_val,
+        max_val,
+        a_dataset,
+        an_entity_type,
+    ):
+        await repository.attribute_types.create(AttributeType("some.attr", DataType(datatype)))
+
+        await repository.dataset_data.create(
+            a_dataset.id,
+            {an_entity_type.name: {"some.attr": {"data": np.asarray(values)}}},
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        attribute = await repository.session.scalar(
+            select(db.Attribute)
+            .options(joinedload(db.Attribute.data))
+            .join(db.DatasetAttribute)
+            .where(db.DatasetAttribute.dataset_id == a_dataset.id)
+            .limit(1)
+        )
+        assert attribute is not None
+        assert attribute.data.min_val == min_val
+        assert attribute.data.max_val == max_val
+
+    @pytest.mark.parametrize(
+        "unit_shape, values, length",
+        [
+            ((), [1, 2, 3], 3),
+            ((2,), [[1, 2], [2, 3], [3, 4], [4, 5]], 4),
+        ],
+    )
+    async def test_stores_attribute_length(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        an_entity_type,
+        unit_shape,
+        values,
+        length,
+    ):
+        await repository.attribute_types.create(
+            AttributeType("some.attr", DataType(int, unit_shape=unit_shape))
+        )
+
+        await repository.dataset_data.create(
+            a_dataset.id,
+            {an_entity_type.name: {"some.attr": {"data": np.asarray(values)}}},
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
+        attribute = await repository.session.scalar(
+            select(db.Attribute)
+            .join(db.DatasetAttribute)
+            .where(db.DatasetAttribute.dataset_id == a_dataset.id)
+            .limit(1)
+        )
+        assert attribute is not None
+        assert attribute.length == length
+
     async def test_deletes_entity_data(
         self, repository: SQLAlchemyRepository, a_dataset, an_entity_type, an_attribute_type
     ):
@@ -640,6 +747,98 @@ class TestDatasetDataRepository:
 
         data_count = await repository.session.scalar(select(func.count(db.RawData.id)))
         assert data_count == 0
+
+    async def test_get_dataset_summary(self, repository: SQLAlchemyRepository, a_dataset):
+        await repository.datasets.update_with_data(
+            a_dataset.id,
+            dataclasses.replace(
+                a_dataset,
+                general={"enum": {"label": ["a", "b"]}},
+                epsg_code=1234,
+                bounding_box=[1.0, 2.0, 3.0, 4.0],
+                data=dataset_data_to_numpy(
+                    {
+                        "transport_nodes": {
+                            "id": [1, 2, 3],
+                            "labels": {"data": [0, 0, 1, 1], "rowptr": [0, 1, 3, 4]},
+                            "geometry.x": [4.0, 5.0, 6.0],
+                        },
+                        "roads": {
+                            "id": [4, 5, 6, 7],
+                            "transport.capacity": [12.0, 13.0, 14.0, 15.0],
+                        },
+                    }
+                ),
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
+        summary = await repository.datasets.get_summary(a_dataset.id)
+        assert summary == DatasetSummary(
+            general={"enum": {"label": ["a", "b"]}},
+            epsg_code=1234,
+            bounding_box=(1.0, 2.0, 3.0, 4.0),
+            count=7,
+            entity_groups=[
+                EntityGroupSummary(
+                    name="roads",
+                    count=4,
+                    attributes=[
+                        AttributeSummary(
+                            name="id",
+                            data_type=DataType(int),
+                            description="Entity ID",
+                            enum_name=None,
+                            unit="",
+                            min_val=4,
+                            max_val=7,
+                        ),
+                        AttributeSummary(
+                            name="transport.capacity",
+                            data_type=DataType(float),
+                            description="",
+                            enum_name=None,
+                            unit="",
+                            min_val=12,
+                            max_val=15,
+                        ),
+                    ],
+                ),
+                EntityGroupSummary(
+                    name="transport_nodes",
+                    count=3,
+                    attributes=[
+                        AttributeSummary(
+                            name="geometry.x",
+                            data_type=DataType(float),
+                            description="",
+                            enum_name=None,
+                            unit="m",
+                            min_val=4,
+                            max_val=6,
+                        ),
+                        AttributeSummary(
+                            name="id",
+                            data_type=DataType(int),
+                            description="Entity ID",
+                            enum_name=None,
+                            unit="",
+                            min_val=1,
+                            max_val=3,
+                        ),
+                        AttributeSummary(
+                            name="labels",
+                            data_type=DataType(int, csr=True),
+                            description="",
+                            enum_name="label",
+                            unit="",
+                            min_val=0,
+                            max_val=1,
+                        ),
+                    ],
+                ),
+            ],
+        )
 
 
 class TestScenarioRepository:

@@ -125,7 +125,7 @@ def attributes_from_dict(d: dict):
     return filter(lambda i: isinstance(i, AttributeSpec), d.values())
 
 
-ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr"}
+ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr", "rowptr"}
 DEFAULT_ROWPTR_KEY = "indptr"
 
 

@@ -78,12 +78,13 @@ def default_entity_types():
 def default_attribute_types():
     return [
         AttributeType("id", DataType(int), description="Entity ID"),
-        AttributeType("geometry.x", DataType(float)),
-        AttributeType("geometry.y", DataType(float)),
+        AttributeType("geometry.x", DataType(float), unit="m"),
+        AttributeType("geometry.y", DataType(float), unit="m"),
         AttributeType("geometry.linestring_2d", DataType(float, unit_shape=(2,), csr=True)),
         AttributeType("topology.from_node_id", DataType(float)),
         AttributeType("topology.to_node_id", DataType(float)),
         AttributeType("transport.capacity", DataType(float)),
+        AttributeType("labels", DataType(int, (), True), enum_name="label"),
     ]
 
 

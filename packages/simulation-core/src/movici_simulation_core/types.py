@@ -15,11 +15,10 @@ class UniformAttributeData(t.TypedDict):
     data: np.ndarray
 
 
-class CSRAttributeData(t.TypedDict, total=False):
-    data: np.ndarray
-    ind_ptr: t.Optional[np.ndarray]
-    indptr: t.Optional[np.ndarray]
-    row_ptr: t.Optional[np.ndarray]
+class CSRAttributeData(UniformAttributeData, total=False):
+    ind_ptr: np.ndarray
+    indptr: np.ndarray
+    row_ptr: np.ndarray
 
 
 NumpyAttributeData = t.Union[UniformAttributeData, CSRAttributeData]

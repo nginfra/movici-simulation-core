@@ -1,10 +1,15 @@
+import dataclasses
 from uuid import UUID
 
 import pytest
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyBackendFactory
 from movici_data_core.database.model import DatabaseMode
-from movici_data_core.domain_model import Scenario
+from movici_data_core.domain_model import Dataset, Scenario
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
+from movici_data_core.serialization import dump_dict
+
+from movici_simulation_core.core import EntityInitDataFormat
+from movici_simulation_core.types import FileType
 
 
 @pytest.mark.parametrize(
@@ -65,15 +70,14 @@ async def test_default_flags(database_mode, flags, session_factory, initialized_
             assert getattr(backend.options, k) == v
 
 
-class _TestBackend:
-    @pytest.fixture
-    async def backend(self, session_factory, initialized_db):
-        factory = SQLAlchemyBackendFactory(session_factory)
-        async with factory.get_backend() as backend:
-            yield backend
+@pytest.fixture
+async def backend(session_factory, initialized_db):
+    factory = SQLAlchemyBackendFactory(session_factory)
+    async with factory.get_backend() as backend:
+        yield backend
 
 
-class TestSingleScenarioBackend(_TestBackend):
+class TestSingleScenarioBackend:
     @pytest.fixture
     def database_mode(self):
         return DatabaseMode.SINGLE_SCENARIO
@@ -105,7 +109,7 @@ class TestSingleScenarioBackend(_TestBackend):
             await backend.scenarios.delete()
 
 
-class TestSingleWorkspaceBackend(_TestBackend):
+class TestSingleWorkspaceBackend:
     @pytest.fixture
     def database_mode(self):
         return DatabaseMode.SINGLE_WORKSPACE
@@ -139,7 +143,7 @@ class TestSingleWorkspaceBackend(_TestBackend):
             await backend.for_scenario(UUID(int=0)).scenarios.delete()
 
 
-class TestMultipleWorkspaceBackend(_TestBackend):
+class TestMultipleWorkspaceBackend:
     @pytest.fixture
     def database_mode(self):
         return DatabaseMode.MULTIPLE_WORKSPACES
@@ -175,3 +179,57 @@ class TestMultipleWorkspaceBackend(_TestBackend):
         assert len(await backend.scenarios.list()) == 1
         await backend.for_scenario(scenario).scenarios.delete()
         assert len(await backend.scenarios.list()) == 0
+
+
+class TestDatasetService:
+    @pytest.fixture
+    async def backend(self, backend: SQLAlchemyBackend, a_dataset):
+        schema = await backend.get_attribute_schema()
+        return dataclasses.replace(
+            backend, serializer=EntityInitDataFormat(schema=schema)
+        ).for_workspace(a_dataset.workspace.id)
+
+    @pytest.fixture
+    def dataset_with_data(self, a_dataset: Dataset):
+        return {
+            "name": a_dataset.name,
+            "type": a_dataset.dataset_type.name,
+            "display_name": a_dataset.display_name,
+            "general": {"some": "data"},
+            "data": {
+                "transport_nodes": {
+                    "id": [1, 2],
+                    "geometry.x": [1.0, 2.0],
+                    "geometry.y": [2.0, 3.0],
+                }
+            },
+        }
+
+    @pytest.fixture
+    def store_dataset(self, tmp_path):
+        def _store(dataset_dict, filetype: FileType = FileType.JSON):
+            file_path = (tmp_path / dataset_dict["name"]).with_suffix(".json")
+            file_path.write_bytes(dump_dict(dataset_dict, filetype=filetype))
+            return file_path
+
+        return _store
+
+    @pytest.fixture
+    def dataset_path(self, dataset_with_data, store_dataset):
+        return store_dataset(dataset_with_data)
+
+    async def test_can_update_dataset_from_file(
+        self, a_dataset, dataset_path, backend: SQLAlchemyBackend
+    ):
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        dataset_data = await backend.datasets.get_entity_data(a_dataset.id)
+        assert dataset_data.get("transport_nodes") is not None
+
+    async def test_sqlalchemy_backend_doenst_allow_updating_dataset_type(
+        self, a_dataset, store_dataset, dataset_with_data, backend: SQLAlchemyBackend
+    ):
+        backend.set_options(strict_dataset_types=False)
+        dataset_with_data["type"] = "new_type"
+        path = store_dataset(dataset_with_data)
+        with pytest.raises(InvalidAction):
+            await backend.datasets.update_from_file(a_dataset.id, path)

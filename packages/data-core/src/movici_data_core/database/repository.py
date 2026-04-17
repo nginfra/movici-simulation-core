@@ -18,11 +18,14 @@ from movici_data_core.database.model import (
 )
 from movici_data_core.domain_model import (
     AttributeDataType,
+    AttributeSummary,
     AttributeType,
     Dataset,
     DatasetData,
     DatasetFormat,
+    DatasetSummary,
     DatasetType,
+    EntityGroupSummary,
     EntityType,
     ModelType,
     Scenario,
@@ -44,10 +47,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
 from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
-from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
-from movici_simulation_core.types import FileType, NumpyAttributeData
+from movici_simulation_core.types import NumpyAttributeData
 from movici_simulation_core.validate import MoviciDataRefInfo
 
 T_dom = t.TypeVar("T_dom")
@@ -315,6 +317,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
                     unit_shape=obj.data_type.unit_shape,
                     unit=obj.unit,
                     description=obj.description,
+                    enum_name=obj.enum_name,
                 )
                 .returning(db.AttributeType.id)
             ),
@@ -466,6 +469,57 @@ class DatasetRepository(Repository):
         await self.all_data.dataset_data.delete(id)
         return await self.session.execute(delete(db.Dataset).where(db.Dataset.id == id))
 
+    async def get_summary(self, id: UUID):
+        dataset = await self.get_by_id(id)
+        if dataset is None:
+            return None
+
+        entity_groups: dict[str, EntityGroupSummary] = {}
+        attribute: db.Attribute
+        for attribute, min_val, max_val in await self.session.execute(
+            select(db.Attribute, db.DataArray.min_val, db.DataArray.max_val)
+            .join(db.Attribute)
+            .join(db.DatasetAttribute)
+            .options(
+                joinedload(db.Attribute.attribute_type),
+                joinedload(db.Attribute.entity_type),
+            )
+            .where(db.DatasetAttribute.dataset_id == id)
+        ):
+            attribute_type = attribute.attribute_type
+            entity_group_name = attribute.entity_type.name
+            entity_group = entity_groups.setdefault(
+                entity_group_name, EntityGroupSummary(entity_group_name, 0, [])
+            )
+
+            if attribute.attribute_type.name == "id":
+                entity_group.count = max(entity_group.count, attribute.length)
+            entity_group.attributes.append(
+                AttributeSummary(
+                    name=attribute_type.name,
+                    data_type=attribute_type.data_type,
+                    description=attribute_type.description,
+                    unit=attribute_type.unit,
+                    enum_name=attribute_type.enum_name,
+                    min_val=min_val,
+                    max_val=max_val,
+                )
+            )
+
+        return DatasetSummary(
+            general=dataset.general or {},
+            epsg_code=dataset.epsg_code,
+            bounding_box=dataset.bounding_box,
+            entity_groups=sorted(
+                (
+                    dataclasses.replace(eg, attributes=sorted(eg.attributes, key=lambda a: a.name))
+                    for eg in entity_groups.values()
+                ),
+                key=lambda eg: eg.name,
+            ),
+            count=sum(e.count for e in entity_groups.values()),
+        )
+
     async def create(self, obj: Dataset) -> UUID:
         workspace_id = self._ensure_workspace_id()
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
@@ -491,6 +545,29 @@ class DatasetRepository(Repository):
             update(db.Dataset)
             .where(db.Dataset.id == id)
             .values(name=obj.name, display_name=obj.display_name)
+        )
+
+    async def update_with_data(self, id: UUID, obj: Dataset, format: DatasetFormat, chunk_size=0):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("dataset", id=id)
+        if obj.data is None:
+            raise InvalidAction("Must provide dataset data")
+        if obj.dataset_type != current.dataset_type:
+            raise InvalidAction("Cannot change dataset type when updating data")
+        await self.session.execute(
+            update(db.Dataset)
+            .where(db.Dataset.id == id)
+            .values(
+                name=obj.name,
+                display_name=obj.display_name,
+                general=obj.general,
+                epsg_code=obj.epsg_code,
+                bounding_box=obj.bounding_box,
+            )
+        )
+        await self.all_data.dataset_data.create(
+            id, data=obj.data, format=format, chunk_size=chunk_size
         )
 
     async def ensure_scenario_datasets(
@@ -769,20 +846,22 @@ class _EntityDataHandler:
                     AttributeType(attr_name, data_type=data_type)
                 )
 
+                data_array: np.ndarray = attr_data["data"]
+                rowptr = get_rowptr(t.cast(dict, attr_data))
+
                 attribute_id = await self.session.scalar(
                     insert(db.Attribute)
                     .values(
                         entity_type_id=entity_type.id,
                         attribute_type_id=attribute_type.id,
+                        length=len(data_array) if rowptr is None else len(rowptr) - 1,
                     )
                     .returning(db.Attribute.id)
                 )
                 assert attribute_id is not None
 
-                data_array: np.ndarray = attr_data["data"]  # type: ignore
                 await self._store_data_array(data_array, attribute_id, data_type=data_type)
 
-                rowptr = get_rowptr(t.cast(dict, attr_data))
                 if rowptr is not None:
                     await self._store_rowptr_array(rowptr, attribute_id)
 
@@ -807,26 +886,6 @@ class _EntityDataHandler:
         await self.session.execute(
             insert(db.RowptrArray).values(data=arr.tobytes(), attribute_id=attribute_id)
         )
-
-    # TODO: We already expect to have numpy data here, so we need to move this function somewhere
-    # else. The backend maybe?
-    def _data_as_numpy_dict(self, data: dict, filetype: FileType, data_is_numpy=False):
-        ""
-        finalizer = None  # noqa: F841
-
-        if isinstance(data, dict):
-            if data_is_numpy:
-                return data
-            if "data" not in data.keys():
-                data = {"data": data}
-            return EntityInitDataFormat(self.schema).load_json(data)["data"]
-
-        if isinstance(data, pathlib.Path):
-            data = data.read_bytes()
-        if isinstance(data, t.BinaryIO):
-            data = data.read()
-
-        return self.serializer.loads(data, type=filetype)["data"]
 
 
 class _RawDataHandler:
