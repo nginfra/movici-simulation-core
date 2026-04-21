@@ -613,6 +613,8 @@ class IDLinking(DatasetOperation):
     def get_indexed_values_or_raise(cls, values, indexers):
         if isinstance(values, t.Sequence) and not isinstance(values, (bytes, str)):
             return [cls.get_indexed_values_or_raise(item, indexers) for item in values]
+        if values is None:
+            return None
         return cls.get_single_indexed_value_or_raise(values, indexers)
 
     @staticmethod
