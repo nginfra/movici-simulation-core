@@ -5,7 +5,6 @@ import geopandas
 import netCDF4
 import numpy as np
 import pandas as pd
-import wntr
 from pyproj import CRS
 
 from movici_simulation_core.attributes import (
@@ -24,17 +23,16 @@ GeometryType = t.Literal["points", "lines", "polygons", "cells"]
 
 class MultiEntitySource:
     r"""Base class for data sources that provide multiple entity types from a single file or
-    connection. For example, an EPANET INP file contains junctions, tanks, reservoirs, pipes,
-    pumps and valves.
+    connection, such as a network file that contains both node and link collections.
 
     Use bracket notation to access individual entity types as ``DataSource``\s::
 
-        source = INPSource("network.inp")
-        junctions = source["junctions"]  # returns a DataSource
+        source = MySource("network.file")
+        nodes = source["nodes"]  # returns a DataSource
 
     In dataset creator configs, use dot notation to reference entity types::
 
-        {"source": "network.junctions"}
+        {"source": "network.nodes"}
     """
 
     def keys(self) -> t.Iterable[str]:
@@ -368,149 +366,6 @@ class NetCDFGridSource(DataSource):
         dict_coords = {(x, y): idx for idx, (x, y) in enumerate(unique_coords)}
         cells = [[dict_coords[(x, y)] for x, y in single_cell] for single_cell in coords]
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
-
-
-class _INPEntitySource(DataSource):
-    """DataSource for a single entity type from an INP file."""
-
-    NODE_TYPES = {"junctions", "tanks", "reservoirs"}
-    LINK_TYPES = {"pipes", "pumps", "valves"}
-
-    def __init__(self, get_model: t.Callable, entity_type: str) -> None:
-        self._get_model = get_model
-        self.entity_type = entity_type
-        self._items: t.Optional[t.List[t.Tuple[str, t.Any]]] = None
-
-    def _get_items(self) -> t.List[t.Tuple[str, t.Any]]:
-        if self._items is None:
-            wn = self._get_model()
-            self._items = list(getattr(wn, self.entity_type)())
-        return self._items
-
-    def get_attribute(self, name: str):
-        items = self._get_items()
-        result: list = []
-        for _name, obj in items:
-            if name == "name":
-                result.append(_name)
-            else:
-                val = getattr(obj, name, None)
-                result.append(val)
-        return result
-
-    def get_geometry(self, geometry_type: GeometryType):
-        if self.entity_type in self.NODE_TYPES:
-            items = self._get_items()
-            xs, ys = [], []
-            for _, node in items:
-                coords = node.coordinates or (0, 0)
-                xs.append(coords[0])
-                ys.append(coords[1])
-            return {Geometry_X.name: xs, Geometry_Y.name: ys}
-        elif self.entity_type in self.LINK_TYPES:
-            wn = self._get_model()
-            items = self._get_items()
-            lines = []
-            for _, link in items:
-                start = wn.get_node(link.start_node_name)
-                end = wn.get_node(link.end_node_name)
-                s = start.coordinates or (0, 0)
-                e = end.coordinates or (0, 0)
-                lines.append([[s[0], s[1]], [e[0], e[1]]])
-            return {Geometry_Linestring2d.name: lines}
-        raise ValueError("No geometry available")
-
-    def get_bounding_box(self):
-        if self.entity_type in self.NODE_TYPES:
-            items = self._get_items()
-            if not items:
-                return None
-            coords = [n.coordinates for _, n in items if n.coordinates]
-            if not coords:
-                return None
-            xs, ys = zip(*coords)
-            return (min(xs), min(ys), max(xs), max(ys))
-        return None
-
-    def __len__(self):
-        return len(self._get_items())
-
-
-class INPSource(MultiEntitySource):
-    r"""Multi-entity source for reading EPANET INP files via WNTR.
-
-    Contains entity types: ``junctions``, ``tanks``, ``reservoirs``, ``pipes``,
-    ``pumps``, ``valves``. Use bracket notation to access individual entity types
-    as ``DataSource``\s::
-
-        source = INPSource("network.inp")
-        junctions = source["junctions"]
-        len(junctions)  # number of junctions
-        junctions.get_attribute("elevation")
-
-    Multiple ``INPSource`` instances sharing the same file path reuse a cached
-    WNTR model.
-
-    :param file: Path to the INP file
-    """
-
-    _model_cache: t.ClassVar[dict] = {}
-
-    ENTITY_TYPES = frozenset({"junctions", "tanks", "reservoirs", "pipes", "pumps", "valves"})
-
-    def __init__(self, file: t.Union[Path, str]) -> None:
-        self.file = Path(file)
-        self._entity_sources: t.Dict[str, _INPEntitySource] = {}
-
-    @classmethod
-    def from_source_info(cls, source_info):
-        """Create from a source info dictionary.
-
-        If ``entity_type`` is present in the source info, returns a single-entity
-        ``DataSource`` for backward compatibility. Otherwise returns the full
-        ``INPSource`` multi-entity source.
-        """
-        source = cls(file=source_info["path"])
-        if "entity_type" in source_info:
-            return source[source_info["entity_type"]]
-        return source
-
-    def _get_model(self):
-        key = str(self.file.resolve())
-        if key not in self._model_cache:
-            self._model_cache[key] = wntr.network.WaterNetworkModel(str(self.file))
-        return self._model_cache[key]
-
-    def keys(self) -> t.Iterable[str]:
-        return iter(sorted(self.ENTITY_TYPES))
-
-    def __getitem__(self, entity_type: str) -> _INPEntitySource:
-        if entity_type not in self.ENTITY_TYPES:
-            raise KeyError(
-                f"Unknown entity type '{entity_type}', must be one of {sorted(self.ENTITY_TYPES)}"
-            )
-        if entity_type not in self._entity_sources:
-            self._entity_sources[entity_type] = _INPEntitySource(self._get_model, entity_type)
-        return self._entity_sources[entity_type]
-
-    def __contains__(self, entity_type) -> bool:
-        return entity_type in self.ENTITY_TYPES
-
-    def get_bounding_box(self):
-        bboxes = []
-        for et in self.ENTITY_TYPES:
-            bbox = self[et].get_bounding_box()
-            if bbox is not None:
-                bboxes.append(bbox)
-        if not bboxes:
-            return None
-        bboxes_arr = np.stack(bboxes)
-        return (
-            float(bboxes_arr[:, 0].min()),
-            float(bboxes_arr[:, 1].min()),
-            float(bboxes_arr[:, 2].max()),
-            float(bboxes_arr[:, 3].max()),
-        )
 
 
 SourcesDict = t.MutableMapping[str, t.Union[DataSource, MultiEntitySource]]

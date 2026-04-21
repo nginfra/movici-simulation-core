@@ -389,6 +389,13 @@ class TestSourcesSetup:
         assert sources.keys() == {"some_points", "some_lines", "empty"}
         assert all(isinstance(s, DataSource) for s in sources.values())
 
+    def test_unknown_source_type_raises_at_runtime(self):
+        config = {
+            "__sources__": {"foo": {"source_type": "definitely-not-registered", "path": "/x"}}
+        }
+        with pytest.raises(ValueError, match="Unknown source type"):
+            SourcesSetup(config)({}, sources={})
+
 
 class TestCRSTransformation:
     @pytest.fixture
@@ -1376,15 +1383,6 @@ class TestSchemaValidation:
                 },
             },
             {**min_required, "extra": "key"},
-            {
-                **min_required,
-                "__sources__": {
-                    "foo": {
-                        "source_type": "invalid",  # invalid source type
-                        "path": "/some/other/path",
-                    },
-                },
-            },
             {"__meta__": {"crs": 12.3}, **min_required},
             {"general": {"enum": ["invalid"]}, **min_required},
             {"general": {"special": ["invalid"]}, **min_required},

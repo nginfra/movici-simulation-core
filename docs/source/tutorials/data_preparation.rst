@@ -640,14 +640,15 @@ Below is given an example of a dataset creator config snippet
   }
 
 
-.. _dataset-creator-recipes-read-inp:
+.. _dataset-creator-recipes-read-epanet:
 
 Read an EPANET INP file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-EPANET INP files are supported via ``WNTR``. An ``inp`` source is a multi-entity source
-that exposes the six WNTR collections as separate sub-sources, each selected from the
-parent source using dot notation ``"<source_name>.<entity_type>"``:
+EPANET INP files are supported via ``WNTR`` and registered as the ``epanet`` source type
+by the ``movici-drinking-water-model`` package. An ``epanet`` source is a multi-entity
+source that exposes the six WNTR collections as separate sub-sources, each selected from
+the parent source using dot notation ``"<source_name>.<entity_type>"``:
 
 * Node types: ``junctions``, ``tanks``, ``reservoirs``
 * Link types: ``pipes``, ``pumps``, ``valves``
@@ -659,15 +660,15 @@ attribute and as an ``id_link`` key for resolving link-to-node topology.
 
 Caveats:
 
-* The CRS can not be converted for ``inp`` data sources. The CRS must be specified to be
-  the same CRS as the coordinates stored in the INP file.
+* The CRS can not be converted for ``epanet`` data sources. The CRS must be specified to
+  be the same CRS as the coordinates stored in the INP file.
 * Link sub-sources (``pipes``, ``pumps``, ``valves``) produce line geometries from the
   coordinates of their start and end nodes. They do not contribute a bounding box.
 * WNTR converts INP values to SI units on read according to the file's flow-units header
   (e.g. in ``LPS``, pipe diameters expressed in millimeters become meters). Map properties
   from the WNTR representation, not the raw INP values.
 
-Below is an example of a dataset creator config snippet. A single ``inp`` source is
+Below is an example of a dataset creator config snippet. A single ``epanet`` source is
 declared once, and each entity group references the appropriate sub-source through dot
 notation:
 
@@ -679,7 +680,7 @@ notation:
     },
     "__sources__": {
       "network": {
-        "source_type": "inp",
+        "source_type": "epanet",
         "path": "/path/to/network.inp"
       }
     },
@@ -777,9 +778,11 @@ DatasetCreatorSource
 | ``type``: ``object``
 
 ``properties``:
-  | ``source_type``: One of ``file``, ``netcdf``, ``inp``. Use ``netcdf`` for NetCDF-files,
-    ``inp`` for EPANET INP files (read via ``WNTR``), ``file`` for any other supported geospatial
-    data file
+  | ``source_type``: ``string`` identifier for a registered source type. The built-in types are
+    ``file`` (any geospatial file supported by ``Fiona``) and ``netcdf`` (NetCDF files).
+    Additional types are registered by plugin packages through the ``movici.source_types``
+    entry-point group — for example ``epanet`` is registered by ``movici-drinking-water-model``
+    for EPANET INP files.
   | ``path``: ``string`` location on disk to a source file
 
 Source files of ``source_type`` ``file`` are read using ``geopandas`` which uses ``Fiona`` under

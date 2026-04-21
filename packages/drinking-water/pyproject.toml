@@ -38,6 +38,9 @@ dependencies = [
 drinking_water = "movici_drinking_water_model.model:Model"
 drinking_water_attributes = "movici_drinking_water_model.attributes:DrinkingWaterNetworkAttributes"
 
+[project.entry-points."movici.source_types"]
+epanet = "movici_drinking_water_model.epanet_source:EPANETSource"
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 

@@ -61,12 +61,7 @@
             ],
             "properties": {
               "source_type": {
-                "type": "string",
-                "enum": [
-                  "file",
-                  "netcdf",
-                  "inp"
-                ]
+                "type": "string"
               },
               "path": {
                 "type": "string"

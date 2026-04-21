@@ -4,6 +4,7 @@ import functools
 import itertools
 import typing as t
 import warnings
+from importlib.metadata import entry_points
 from pathlib import Path
 
 import numpy as np
@@ -15,13 +16,45 @@ from movici_simulation_core.attributes import Grid_GridPoints
 from movici_simulation_core.json_schemas import PATH
 
 from .data_sources import (
+    DataSource,
     GeometryType,
     GeopandasSource,
-    INPSource,
+    MultiEntitySource,
     NetCDFGridSource,
     SourcesDict,
     resolve_source,
 )
+
+SOURCE_TYPE_ENTRY_POINT_GROUP = "movici.source_types"
+
+_SOURCE_TYPES: t.Dict[str, t.Type[t.Union[DataSource, MultiEntitySource]]] = {}
+_plugin_source_types_loaded = False
+
+
+def register_source_type(name: str, cls: t.Type[t.Union[DataSource, MultiEntitySource]]) -> None:
+    """Register a ``DataSource`` or ``MultiEntitySource`` class under ``name``.
+
+    The class must expose a ``from_source_info(source_info)`` classmethod.
+    Can also be registered declaratively through the ``movici.source_types``
+    entry-point group in a package's ``pyproject.toml``.
+    """
+    _SOURCE_TYPES[name] = cls
+
+
+def _load_plugin_source_types() -> None:
+    global _plugin_source_types_loaded
+    if _plugin_source_types_loaded:
+        return
+    _plugin_source_types_loaded = True
+    for entry_point in entry_points(group=SOURCE_TYPE_ENTRY_POINT_GROUP):
+        try:
+            register_source_type(entry_point.name, entry_point.load())
+        except ImportError:
+            continue
+
+
+register_source_type("file", GeopandasSource)
+register_source_type("netcdf", NetCDFGridSource)
 
 _dataset_creator_schema = None
 
@@ -139,14 +172,11 @@ class SourcesSetup(DatasetOperation):
             source_info = {"source_type": "file", "path": source_info}
 
         source_type = source_info["source_type"]
-        if source_type == "file":
-            cls = GeopandasSource
-        elif source_type == "netcdf":
-            cls = NetCDFGridSource
-        elif source_type == "inp":
-            cls = INPSource
-        else:
-            raise ValueError(f"Unknown source type '{source_type}'")
+        _load_plugin_source_types()
+        try:
+            cls = _SOURCE_TYPES[source_type]
+        except KeyError:
+            raise ValueError(f"Unknown source type '{source_type}'") from None
         return cls.from_source_info(source_info)
 
     @staticmethod
