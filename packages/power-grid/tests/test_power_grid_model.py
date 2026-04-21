@@ -7,9 +7,20 @@ from movici_power_grid_model import Model
 from movici_power_grid_model.attributes import PowerGridAttributes
 from movici_simulation_core.testing.model_tester import ModelTester
 
-from .conftest import get_dataset
-
 DATASET_NAME = "test_grid"
+
+
+def get_dataset(name, ds_type, data, **kwargs):
+    ds = {
+        "version": 3,
+        "name": name,
+        "type": ds_type,
+        "display_name": "",
+        "epsg_code": 28992,
+        "data": data,
+    }
+    ds.update(kwargs)
+    return ds
 
 
 @pytest.fixture
