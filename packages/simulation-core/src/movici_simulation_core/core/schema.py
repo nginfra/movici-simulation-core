@@ -24,6 +24,22 @@ class AttributeSchema(types.Extensible):
     def get(self, key, default=None):
         return self.attributes.get(key, default)
 
+    @t.overload
+    def get_spec(
+        self,
+        name: str,
+        default_data_type: t.Union[DataType, t.Callable[[], DataType]],
+        cache=False,
+    ) -> AttributeSpec: ...
+
+    @t.overload
+    def get_spec(
+        self,
+        name: str,
+        default_data_type: t.Union[DataType, t.Callable[[], DataType], None] = None,
+        cache=False,
+    ) -> AttributeSpec | None: ...
+
     def get_spec(
         self,
         name: str,

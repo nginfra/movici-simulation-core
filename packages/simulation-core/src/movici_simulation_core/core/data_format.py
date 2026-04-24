@@ -3,7 +3,7 @@ import warnings
 
 import msgpack
 import numpy as np
-import orjson as json
+import orjson
 
 from movici_simulation_core.types import (
     ExternalSerializationStrategy,
@@ -43,7 +43,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
     def loads(self, raw_data, type: FileType):
         self.supported_file_type_or_raise(type)
         if type is FileType.JSON:
-            list_data = json.loads(raw_data)
+            list_data = orjson.loads(raw_data)
         elif type is FileType.MSGPACK:
             list_data = msgpack.unpackb(raw_data)
         else:
@@ -86,8 +86,6 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
                     raise TypeError(f"Error when parsing data for '{name}'") from e
 
             spec = self.schema.get_spec(name, default_data_type=infer_datatype, cache=True)
-            # spec cannot be None because we have supplied a default_data_type argument
-            assert spec is not None
             data_type = spec.data_type
 
             return t.cast(dict, parse_list(attr_data, data_type))
@@ -95,11 +93,11 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
         else:
             raise TypeError("attribute data must be list")
 
-    def dumps(self, dataset: dict, filetype: FileType = FileType.JSON, **kwargs) -> bytes:
+    def dumps(self, data: dict, filetype: FileType = FileType.JSON, **kwargs) -> bytes:
         self.supported_file_type_or_raise(filetype)
-        list_data = self.dump_dict(dataset)
+        list_data = self.dump_dict(data)
         if filetype is FileType.JSON:
-            return json.dumps(list_data, **kwargs)
+            return orjson.dumps(list_data, **kwargs)
         if filetype is FileType.MSGPACK:
             return t.cast(bytes, msgpack.packb(list_data, **kwargs))
         raise ValueError(f"Unsupported file type {filetype}")
