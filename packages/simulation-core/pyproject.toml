@@ -50,7 +50,6 @@ dependencies = [
 [project.optional-dependencies]
 models = [
   "shapely>=1.7.1",
-  "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy",
@@ -58,7 +57,6 @@ models = [
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 all = [
   "shapely>=1.7.1",
-  "aequilibrae>=1",
   "pyproj>=3.0.1",
   "movici-geo-query>=1.1.1",
   "scipy",
@@ -81,7 +79,6 @@ init_data_service = "movici_simulation_core.services.init_data.service:InitDataS
 global_attributes = "movici_simulation_core.attributes:GlobalAttributes"
 common_attributes = "movici_simulation_core.models.common.attributes:CommonAttributes"
 area_aggregation = "movici_simulation_core.models.area_aggregation.model:Model"
-corridor = "movici_simulation_core.models.corridor.model:Model"
 csv_player = "movici_simulation_core.models.csv_player.csv_player:CSVPlayer"
 data_collector = "movici_simulation_core.models.data_collector.data_collector:DataCollector"
 evacuation_point_resolution = "movici_simulation_core.models.evacuation_point_resolution:EvacuatonPointResolution"
@@ -93,7 +90,6 @@ overlap_status = "movici_simulation_core.models.overlap_status.model:Model"
 shortest_path = "movici_simulation_core.models.shortest_path.model:ShortestPathModel"
 tape_player = "movici_simulation_core.models.tape_player.model:Model"
 time_window_status = "movici_simulation_core.models.time_window_status.model:Model"
-traffic_assignment_calculation = "movici_simulation_core.models.traffic_assignment_calculation.model:Model"
 traffic_demand_calculation = "movici_simulation_core.models.traffic_demand_calculation.model:TrafficDemandCalculation"
 traffic_kpi = "movici_simulation_core.models.traffic_kpi.model:Model"
 udf = "movici_simulation_core.models.udf_model.udf_model:UDFModel"

@@ -19,6 +19,7 @@ members = [
     "movici",
     "movici-drinking-water-model",
     "movici-simulation-core",
+    "movici-transport-assignment-model",
 ]
 
 [[package]]
@@ -1186,6 +1187,7 @@ source = { editable = "." }
 dependencies = [
     { name = "movici-drinking-water-model" },
     { name = "movici-simulation-core" },
+    { name = "movici-transport-assignment-model" },
 ]
 
 [package.dev-dependencies]
@@ -1211,6 +1213,7 @@ docs = [
 requires-dist = [
     { name = "movici-drinking-water-model", editable = "packages/drinking-water" },
     { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "movici-transport-assignment-model", editable = "packages/transport-assignment" },
 ]
 
 [package.metadata.requires-dev]
@@ -1301,7 +1304,6 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "aequilibrae" },
     { name = "movici-geo-query" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1311,7 +1313,6 @@ all = [
     { name = "sqlalchemy" },
 ]
 models = [
-    { name = "aequilibrae" },
     { name = "movici-geo-query" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -1325,8 +1326,6 @@ sqlite = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aequilibrae", marker = "extra == 'all'", specifier = ">=1" },
-    { name = "aequilibrae", marker = "extra == 'models'", specifier = ">=1" },
     { name = "click" },
     { name = "fiona", specifier = ">=1.9" },
     { name = "geopandas" },
@@ -1355,6 +1354,26 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'sqlite'", specifier = ">=1.4,<3.0" },
 ]
 provides-extras = ["all", "models", "sqlite"]
+
+[[package]]
+name = "movici-transport-assignment-model"
+source = { editable = "packages/transport-assignment" }
+dependencies = [
+    { name = "aequilibrae" },
+    { name = "movici-simulation-core" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aequilibrae", specifier = ">=1" },
+    { name = "movici-simulation-core", editable = "packages/simulation-core" },
+    { name = "numpy" },
+    { name = "pyproj", specifier = ">=3.0.1" },
+]
 
 [[package]]
 name = "msgpack"

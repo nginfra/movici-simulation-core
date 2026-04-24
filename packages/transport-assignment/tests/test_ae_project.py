@@ -7,12 +7,15 @@ import pytest
 from _pytest.fixtures import SubRequest
 from aequilibrae import Graph
 
-from movici_simulation_core.integrations.ae.collections import (
+from movici_transport_assignment_model.integrations.collections import (
     AssignmentResultCollection,
     LinkCollection,
     NodeCollection,
 )
-from movici_simulation_core.integrations.ae.project import AssignmentParameters, ProjectWrapper
+from movici_transport_assignment_model.integrations.project import (
+    AssignmentParameters,
+    ProjectWrapper,
+)
 
 
 @pytest.fixture(autouse=True)

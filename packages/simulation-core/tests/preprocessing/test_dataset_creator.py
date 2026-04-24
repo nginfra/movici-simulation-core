@@ -1077,7 +1077,10 @@ class TestIDLinking:
 
     @pytest.fixture
     def prepare_dataset(self, sources):
-        def _prepare_dataset(config):
+        default_sources = sources
+
+        def _prepare_dataset(config, sources=None):
+            sources = sources or default_sources
             return DatasetCreator(
                 [
                     AttributeDataLoading,
@@ -1105,6 +1108,31 @@ class TestIDLinking:
                 self.get_val_for_id(result["data"]["points"], "reference", node_id)
                 == node_refs[idx]
             )
+
+    def test_id_linking_skips_none_values(self, config, prepare_dataset, create_data_sources):
+        sources = create_data_sources(
+            {
+                "some_points": [
+                    Point(0, 0, attributes={"ref": "point_0"}),
+                    Point(1, 1, attributes={"ref": "point_1"}),
+                ],
+                "some_lines": [
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": "point_0"}),
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": None}),
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={}),
+                ],
+            }
+        )
+        dataset = prepare_dataset(config, sources=sources)
+        op = IDLinking(config)
+        result = op(dataset, sources=sources)
+        node_refs = result["data"]["lines"]["node_ref"]
+        node_ids = result["data"]["lines"]["node_id"]
+        assert node_refs == [
+            self.get_val_for_id(result["data"]["points"], "reference", node_ids[0]),
+            None,
+            None,
+        ]
 
     def test_link_ids_from_list_of_entries(self, prepare_dataset, sources):
         config = {

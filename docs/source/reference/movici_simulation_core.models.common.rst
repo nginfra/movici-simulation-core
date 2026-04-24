@@ -6,16 +6,6 @@ common
 
 
 
-ae\_util
----------
-
-.. automodule:: movici_simulation_core.models.common.ae_util
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-
-
 attributes
 -----------
 
