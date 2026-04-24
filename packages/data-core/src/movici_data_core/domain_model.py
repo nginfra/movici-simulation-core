@@ -91,7 +91,21 @@ class ModelType:
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
-DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
+@dataclasses.dataclass(frozen=True)
+class BoundingBox:
+    min_x: float | None
+    min_y: float | None
+    max_x: float | None
+    max_y: float | None
+
+    @classmethod
+    def empty(cls):
+        return cls(None, None, None, None)
+
+    def as_tuple_or_none(self):
+        if any(v is None for v in (self.min_x, self.min_y, self.max_x, self.max_y)):
+            return None
+        return (self.min_x, self.min_y, self.max_x, self.max_y)
 
 
 @dataclasses.dataclass
@@ -101,7 +115,7 @@ class Scenario:
     description: str
 
     epsg_code: int
-    bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
+    bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     simulation_info: dict = dataclasses.field(default_factory=dict)
     status: ScenarioStatus = ScenarioStatus.READY
 
@@ -129,6 +143,9 @@ class ScenarioModel:
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
 
 
+DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
+
+
 @dataclasses.dataclass
 class Dataset:
     name: str
@@ -139,7 +156,7 @@ class Dataset:
 
     general: dict | None = None
     epsg_code: int | None = None
-    bounding_box: tuple[float, float, float, float] | None = None  # minx miny maxx maxy
+    bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
 
@@ -164,7 +181,7 @@ class Update:
 class DatasetSummary:
     general: dict
     epsg_code: int | None
-    bounding_box: tuple[float, float, float, float] | None  # minx miny maxx maxy
+    bounding_box: BoundingBox
     entity_groups: list[EntityGroupSummary]
     count: int
 

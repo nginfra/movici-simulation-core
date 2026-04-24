@@ -2,12 +2,12 @@ import dataclasses
 from uuid import UUID
 
 import pytest
+
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyBackendFactory
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.domain_model import Dataset, Scenario
-from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
+from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from movici_data_core.serialization import dump_dict
-
 from movici_simulation_core.core import EntityInitDataFormat
 from movici_simulation_core.types import FileType
 
@@ -184,7 +184,7 @@ class TestMultipleWorkspaceBackend:
 class TestDatasetService:
     @pytest.fixture
     async def backend(self, backend: SQLAlchemyBackend, a_dataset):
-        schema = await backend.get_attribute_schema()
+        schema = await backend.attribute_types.as_schema()
         return dataclasses.replace(
             backend, serializer=EntityInitDataFormat(schema=schema)
         ).for_workspace(a_dataset.workspace.id)
@@ -207,9 +207,14 @@ class TestDatasetService:
 
     @pytest.fixture
     def store_dataset(self, tmp_path):
-        def _store(dataset_dict, filetype: FileType = FileType.JSON):
-            file_path = (tmp_path / dataset_dict["name"]).with_suffix(".json")
-            file_path.write_bytes(dump_dict(dataset_dict, filetype=filetype))
+        def _store(dataset_data, name: str | None = None, filetype: FileType = FileType.JSON):
+            if isinstance(dataset_data, dict):
+                name = dataset_data["name"]
+                dataset_data = dump_dict(dataset_data, filetype=filetype)
+            else:
+                assert name is not None
+            file_path = (tmp_path / name).with_suffix(filetype.default_extension)
+            file_path.write_bytes(dataset_data)
             return file_path
 
         return _store
@@ -218,12 +223,92 @@ class TestDatasetService:
     def dataset_path(self, dataset_with_data, store_dataset):
         return store_dataset(dataset_with_data)
 
-    async def test_can_update_dataset_from_file(
+    async def test_list_dataset_with_data(
+        self,
+        backend: SQLAlchemyBackend,
+        dataset_with_data,
+        store_dataset,
+        a_dataset_type,
+        a_dataset,
+    ):
+        # fill a_dataset with entity_data
+        await backend.datasets.update_from_file(a_dataset.id, store_dataset(dataset_with_data))
+
+        # create a dataset with raw data
+        raw_dataset_type = await backend.dataset_types.get(name="flooding_tape")
+        assert raw_dataset_type is not None
+        dataset_id = await backend.datasets.create(
+            Dataset("dataset_with_raw_data", "Raw Dataset", dataset_type=raw_dataset_type)
+        )
+        await backend.datasets.update_from_file(
+            dataset_id,
+            store_dataset(b"some_data", name="dataset_with_raw_data", filetype=FileType.NETCDF),
+        )
+
+        # create another dataset with no data
+        await backend.datasets.create(
+            Dataset("another_dataset", "Another Dataset", dataset_type=a_dataset_type)
+        )
+
+        result = await backend.datasets.list()
+        has_data = {ds.name: ds.has_data for ds in result}
+        assert has_data == {
+            a_dataset.name: True,
+            "dataset_with_raw_data": True,
+            "another_dataset": False,
+        }
+
+    async def test_can_update_entity_dataset_from_file(
         self, a_dataset, dataset_path, backend: SQLAlchemyBackend
     ):
         await backend.datasets.update_from_file(a_dataset.id, dataset_path)
         dataset_data = await backend.datasets.get_entity_data(a_dataset.id)
         assert dataset_data.get("transport_nodes") is not None
+
+    async def test_update_raw_dataset_from_file(self, backend: SQLAlchemyBackend, store_dataset):
+        dataset_type = await backend.dataset_types.get(name="flooding_tape")
+        assert dataset_type is not None
+
+        dataset_id = await backend.datasets.create(
+            Dataset("some_dataset", "Some Dataset", dataset_type=dataset_type)
+        )
+        created = await backend.datasets.get(id=dataset_id)
+        assert created is not None
+        assert not created.has_data
+
+        await backend.datasets.update_from_file(
+            dataset_id,
+            store_dataset(b"some_data", name="dataset_with_raw_data", filetype=FileType.NETCDF),
+        )
+
+        result = await backend.datasets.get(id=dataset_id)
+        assert result is not None
+        assert result.has_data
+
+    async def test_update_unstructured_dataset_from_file(
+        self, backend: SQLAlchemyBackend, store_dataset
+    ):
+        dataset_type = await backend.dataset_types.get(name="tabular")
+        assert dataset_type is not None
+
+        dataset_id = await backend.datasets.create(
+            Dataset("some_dataset", "Some Dataset", dataset_type=dataset_type)
+        )
+        created = await backend.datasets.get(id=dataset_id)
+        assert created is not None
+        assert not created.has_data
+
+        await backend.datasets.update_from_file(
+            dataset_id,
+            store_dataset(
+                {"name": "some_dataset", "type": "tabular", "data": {"some": "data"}},
+                filetype=FileType.JSON,
+            ),
+        )
+
+        result = await backend.datasets.get(id=dataset_id)
+        assert result is not None
+        assert result.has_data
 
     async def test_sqlalchemy_backend_doenst_allow_updating_dataset_type(
         self, a_dataset, store_dataset, dataset_with_data, backend: SQLAlchemyBackend
@@ -231,5 +316,5 @@ class TestDatasetService:
         backend.set_options(strict_dataset_types=False)
         dataset_with_data["type"] = "new_type"
         path = store_dataset(dataset_with_data)
-        with pytest.raises(InvalidAction):
+        with pytest.raises(InvalidResource):
             await backend.datasets.update_from_file(a_dataset.id, path)

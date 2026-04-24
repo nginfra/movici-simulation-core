@@ -6,8 +6,6 @@ import typing as t
 import uuid
 
 import numpy as np
-from movici_data_core import domain_model
-from movici_data_core.domain_model import DatasetFormat, ScenarioStatus
 from sqlalchemy import (
     JSON,
     ForeignKey,
@@ -18,6 +16,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from movici_data_core import domain_model
+from movici_data_core.domain_model import BoundingBox, DatasetFormat, ScenarioStatus
 from movici_simulation_core.core import DataType
 
 from .db_types import GUID, JSONTuple, TZDateTime
@@ -167,7 +167,9 @@ class Dataset(Base):
             workspace=self.workspace.to_domain(),
             general=self.general,
             epsg_code=self.epsg_code,
-            bounding_box=self.bounding_box,
+            bounding_box=(
+                BoundingBox(*self.bounding_box) if self.bounding_box else BoundingBox.empty()
+            ),
             created_at=self.created_at,
             updated_at=self.updated_at,
         )

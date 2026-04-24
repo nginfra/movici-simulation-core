@@ -10,6 +10,10 @@ from uuid import UUID
 
 import numpy as np
 import orjson
+from sqlalchemy import Insert, Select, delete, exists, func, insert, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload, selectinload
+
 from movici_data_core.database import model as db
 from movici_data_core.database.model import (
     NamedResource,
@@ -42,10 +46,6 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy import Insert, Select, delete, exists, func, insert, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload, selectinload
-
 from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
@@ -448,8 +448,23 @@ class DatasetRepository(Repository):
         )
 
     async def list(self) -> list[Dataset]:
-        result = await self.session.scalars(self.selector)
-        return [obj.to_domain() for obj in result]
+        workspace_id = self._ensure_workspace_id()
+        rows = await self.session.execute(
+            select(
+                db.Dataset,
+                exists().where(db.RawData.dataset_id == db.Dataset.id),
+                exists().where(db.DatasetAttribute.dataset_id == db.Dataset.id),
+            )
+            .where(db.Dataset.workspace_id == workspace_id)
+            .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
+        )
+
+        result = []
+        for ds, has_data_raw, has_attributes in rows:
+            result.append(
+                dataclasses.replace(ds.to_domain(), has_data=has_data_raw or has_attributes)
+            )
+        return result
 
     async def exists(self, name: str):
         workspace_id = self._ensure_workspace_id()
@@ -555,6 +570,7 @@ class DatasetRepository(Repository):
             raise InvalidAction("Must provide dataset data")
         if obj.dataset_type != current.dataset_type:
             raise InvalidAction("Cannot change dataset type when updating data")
+        await self.all_data.dataset_data.delete(id)
         await self.session.execute(
             update(db.Dataset)
             .where(db.Dataset.id == id)
@@ -563,7 +579,7 @@ class DatasetRepository(Repository):
                 display_name=obj.display_name,
                 general=obj.general,
                 epsg_code=obj.epsg_code,
-                bounding_box=obj.bounding_box,
+                bounding_box=obj.bounding_box.as_tuple_or_none(),
             )
         )
         await self.all_data.dataset_data.create(

@@ -42,9 +42,9 @@ class InvalidResource(MoviciDataError):
     def __str__(self) -> str:
         parts = [self.resource_type]
         if self.name is not None:
-            parts.append(f"({self.name})")
+            parts.append(f'(name="{self.name}")')
         if self.id is not None:
-            parts.append(f"({self.id})")
+            parts.append(f"(id={self.id})")
         if self.message is not None:
             parts.append(f"[{self.message}]")
         return " ".join(parts)

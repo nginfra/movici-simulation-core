@@ -5,11 +5,15 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from sqlalchemy import func, select
+from sqlalchemy.orm import joinedload
+
 from movici_data_core.database import model as db
 from movici_data_core.database.repository import DatasetDataRepository, SQLAlchemyRepository
 from movici_data_core.domain_model import (
     AttributeSummary,
     AttributeType,
+    BoundingBox,
     Dataset,
     DatasetFormat,
     DatasetSummary,
@@ -23,11 +27,13 @@ from movici_data_core.domain_model import (
     Workspace,
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
-from sqlalchemy import func, select
-from sqlalchemy.orm import joinedload
-
 from movici_simulation_core.core import DataType
-from movici_simulation_core.testing import assert_dataset_dicts_equal, dataset_data_to_numpy
+from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
+from movici_simulation_core.testing import (
+    assert_dataset_dicts_equal,
+    dataset_data_to_numpy,
+    dataset_dicts_equal,
+)
 
 
 class TestWorkspaceRepository:
@@ -531,7 +537,7 @@ class TestDatasetRepository:
                 a_dataset,
                 general={"enum": {"label": ["a", "b"]}},
                 epsg_code=1234,
-                bounding_box=[1.0, 2.0, 3.0, 4.0],
+                bounding_box=BoundingBox(1.0, 2.0, 3.0, 4.0),
                 data=dataset_data_to_numpy(
                     {
                         "transport_nodes": {
@@ -542,6 +548,24 @@ class TestDatasetRepository:
                 ),
             ),
             format=DatasetFormat.ENTITY_BASED,
+        )
+        result = await repository.datasets.get_by_id(a_dataset.id)
+        assert result is not None
+        assert result.epsg_code == 1234
+        assert result.bounding_box == BoundingBox(1.0, 2.0, 3.0, 4.0)
+        assert result.general == {"enum": {"label": ["a", "b"]}}
+        data = await repository.dataset_data.get_entity_data(a_dataset.id)
+        assert dataset_dicts_equal(
+            data,
+            {
+                "transport_nodes": {
+                    "id": {"data": np.array([1, 2, 3])},
+                    "labels": {
+                        "data": np.array([0, 0, 1, 1]),
+                        DEFAULT_ROWPTR_KEY: [0, 1, 3, 4],
+                    },
+                }
+            },
         )
 
 
@@ -755,13 +779,14 @@ class TestDatasetDataRepository:
                 a_dataset,
                 general={"enum": {"label": ["a", "b"]}},
                 epsg_code=1234,
-                bounding_box=[1.0, 2.0, 3.0, 4.0],
+                bounding_box=BoundingBox(1.0, 2.0, 3.0, 4.0),
                 data=dataset_data_to_numpy(
                     {
                         "transport_nodes": {
                             "id": [1, 2, 3],
                             "labels": {"data": [0, 0, 1, 1], "rowptr": [0, 1, 3, 4]},
                             "geometry.x": [4.0, 5.0, 6.0],
+                            "geometry.y": [4.0, 5.0, 6.0],
                         },
                         "roads": {
                             "id": [4, 5, 6, 7],
@@ -777,7 +802,7 @@ class TestDatasetDataRepository:
         assert summary == DatasetSummary(
             general={"enum": {"label": ["a", "b"]}},
             epsg_code=1234,
-            bounding_box=(1.0, 2.0, 3.0, 4.0),
+            bounding_box=BoundingBox(1.0, 2.0, 3.0, 4.0),
             count=7,
             entity_groups=[
                 EntityGroupSummary(
@@ -810,6 +835,15 @@ class TestDatasetDataRepository:
                     attributes=[
                         AttributeSummary(
                             name="geometry.x",
+                            data_type=DataType(float),
+                            description="",
+                            enum_name=None,
+                            unit="m",
+                            min_val=4,
+                            max_val=6,
+                        ),
+                        AttributeSummary(
+                            name="geometry.y",
                             data_type=DataType(float),
                             description="",
                             enum_name=None,
