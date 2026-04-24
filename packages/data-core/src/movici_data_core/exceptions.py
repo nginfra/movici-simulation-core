@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import typing as t
+from uuid import UUID
 
 from jsonschema import ValidationError as JSONSchemaValidationError
 
-from movici_data_core.types import T_id
 from movici_simulation_core.types import FileType
+
+T_id = t.TypeVar("T_id", UUID, str)
 
 
 class MoviciDataError(Exception):
