@@ -60,10 +60,10 @@ class ExternalSerializationStrategy:
         self.non_data_dict_keys = non_data_dict_keys
         self.cache_inferred_attributes = cache_inferred_attributes
 
-    def dumps(self, data, type: FileType):
+    def dumps(self, data: dict, filetype: FileType) -> bytes:
         raise NotImplementedError
 
-    def loads(self, raw_data, type: FileType):
+    def loads(self, raw_data: bytes, type: FileType) -> dict:
         raise NotImplementedError
 
     def supported_file_types(self) -> t.Sequence[FileType]:
