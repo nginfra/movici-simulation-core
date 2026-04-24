@@ -38,7 +38,11 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
-    OTHER = ()
+    OTHER = (".dat",)
+
+    @property
+    def default_extension(self):
+        return self.value[0]
 
     @classmethod
     def from_extension(cls, ext):
