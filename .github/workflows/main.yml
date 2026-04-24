@@ -40,7 +40,6 @@ jobs:
 
     - name: Run tests
       run: |
-        cd packages/simulation-core
         make test-numba
 
   deploy:
