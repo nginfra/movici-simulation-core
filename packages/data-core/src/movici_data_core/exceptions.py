@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import typing as t
-from uuid import UUID
 
 from jsonschema import ValidationError as JSONSchemaValidationError
 
+from movici_data_core.types import T_id
 from movici_simulation_core.types import FileType
 
 
@@ -24,12 +24,14 @@ class InconsistentDatabase(MoviciDataError):
     pass
 
 
-class InvalidResource(MoviciDataError):
+class InvalidResource(t.Generic[T_id], MoviciDataError):
+    id: T_id | None
+
     def __init__(
         self,
         resource_type: str,
         name: str | None = None,
-        id: UUID | None = None,
+        id: T_id | None = None,
         message: str | None = None,
     ):
         if not (name or id):

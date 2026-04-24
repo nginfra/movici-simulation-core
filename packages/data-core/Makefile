@@ -15,4 +15,4 @@ test-numba:
 	uv run pytest -v tests/
 
 mypy:
-	- mypy $(MODULE_NAME)
+	- mypy src/$(MODULE_NAME)

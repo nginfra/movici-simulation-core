@@ -53,3 +53,9 @@ fallback-version = "0.0.0"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto" # work with regular async @pytest.fixtures
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+show_error_context = true
+follow_untyped_imports = true

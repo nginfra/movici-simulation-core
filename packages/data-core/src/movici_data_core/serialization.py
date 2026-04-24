@@ -10,9 +10,9 @@ from movici_simulation_core.types import FileType
 def load_dict(data: bytes, filetype: FileType) -> dict:
     try:
         if filetype == FileType.JSON:
-            return orjson.loads(data)
+            return t.cast(dict, orjson.loads(data))
         if filetype == FileType.MSGPACK:
-            return msgpack.unpackb(data)
+            return t.cast(dict, msgpack.unpackb(data))
     except (OSError, ValueError) as e:
         raise SerializationError from e
     raise UnsupportedFileType(filetype)

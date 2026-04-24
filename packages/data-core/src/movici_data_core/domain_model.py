@@ -99,8 +99,8 @@ class BoundingBox:
     max_y: float | None
 
     @classmethod
-    def empty(cls):
-        return cls(None, None, None, None)
+    def empty(cls) -> BoundingBox:
+        return BoundingBox(None, None, None, None)
 
     def as_tuple_or_none(self):
         if any(v is None for v in (self.min_x, self.min_y, self.max_x, self.max_y)):

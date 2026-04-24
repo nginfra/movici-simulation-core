@@ -117,7 +117,7 @@ class Workspace(Base):
     datasets: Mapped[list[Dataset]] = relationship(back_populates="workspace")
     scenarios: Mapped[list[Scenario]] = relationship(back_populates="workspace")
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.Workspace:
         return domain_model.Workspace(id=self.id, name=self.name, display_name=self.display_name)
 
 
@@ -128,7 +128,7 @@ class DatasetType(Base):
     format: Mapped[DatasetFormat]
     mimetype: Mapped[str | None]
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.DatasetType:
         return domain_model.DatasetType(
             id=self.id, name=self.name, format=self.format, mimetype=self.mimetype
         )
@@ -180,7 +180,7 @@ class EntityType(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.EntityType:
         return domain_model.EntityType(name=self.name, id=self.id)
 
 
@@ -205,7 +205,7 @@ class AttributeType(Base):
         }[self.unit_type]
         return DataType(py_type, unit_shape=self.unit_shape, csr=self.has_rowptr)
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.AttributeType:
         return domain_model.AttributeType(
             id=self.id,
             name=self.name,
@@ -307,7 +307,7 @@ class ModelType(Base):
     name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
     jsonschema: Mapped[dict] = mapped_column(JSON)
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.ModelType:
         return domain_model.ModelType(id=self.id, name=self.name, jsonschema=self.jsonschema)
 
 
@@ -427,7 +427,7 @@ class Update(Base):
     dataset: Mapped[Dataset] = relationship()
     model_type: Mapped[ModelType] = relationship()
 
-    def to_domain(self):
+    def to_domain(self) -> domain_model.Update:
         return domain_model.Update(
             id=self.id,
             dataset=domain_model.ScenarioDataset(
