@@ -15,11 +15,10 @@ class UniformAttributeData(t.TypedDict):
     data: np.ndarray
 
 
-class CSRAttributeData(t.TypedDict, total=False):
-    data: np.ndarray
-    ind_ptr: t.Optional[np.ndarray]
-    indptr: t.Optional[np.ndarray]
-    row_ptr: t.Optional[np.ndarray]
+class CSRAttributeData(UniformAttributeData, total=False):
+    ind_ptr: np.ndarray
+    indptr: np.ndarray
+    row_ptr: np.ndarray
 
 
 NumpyAttributeData = t.Union[UniformAttributeData, CSRAttributeData]
@@ -39,7 +38,11 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
-    OTHER = ()
+    OTHER = (".dat",)
+
+    @property
+    def default_extension(self):
+        return self.value[0]
 
     @classmethod
     def from_extension(cls, ext):

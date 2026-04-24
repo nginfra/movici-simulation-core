@@ -7,8 +7,9 @@ name = "movici"
 dynamic = ["version"]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-  "movici-simulation-core",
+  "movici-data-core",
   "movici-drinking-water-model",
+  "movici-simulation-core",
   "movici-transport-assignment-model",
 ]
 
@@ -37,6 +38,7 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
+movici-data-core = { workspace = true }
 movici-drinking-water-model = { workspace = true }
 movici-transport-assignment-model = { workspace = true }
 
@@ -89,15 +91,19 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"packages/data-core/*" = ["S101", "B011"]
+"packages/data-core/tests/*" = ["S"]
+"packages/data-core/examples/*" = ["T20"]
+"packages/drinking-water/tests/*" = ["S"]
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
-"packages/drinking-water/tests/*" = ["S"]
 "packages/transport-assignment/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "movici_simulation_core",
+  "movici_data_core",
   "movici_drinking_water_model",
+  "movici_simulation_core",
   "movici_transport_assignment_model",
 ]
 

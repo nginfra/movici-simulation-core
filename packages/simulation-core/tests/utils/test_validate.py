@@ -158,15 +158,27 @@ def test_valid_movici_types(do_validate_and_process, entry):
     zip(
         _valid_entries,
         [
-            [MoviciDataRefInfo("$.dataset", "dataset", "dataset")],
-            [MoviciDataRefInfo("$.datasets[0]", "dataset", "another_dataset")],
+            [MoviciDataRefInfo.from_path_string("$.dataset", "dataset", movici_type="dataset")],
             [
-                MoviciDataRefInfo("$.transport_segments[0]", "dataset", "dataset"),
-                MoviciDataRefInfo("$.transport_segments[1]", "entityGroup", "some_entities"),
+                MoviciDataRefInfo.from_path_string(
+                    "$.datasets[0]", "another_dataset", movici_type="dataset"
+                )
             ],
-            [MoviciDataRefInfo("$.attribute", "attribute", "some_attribute")],
-            [MoviciDataRefInfo("$.component_attribute[1]", "attribute", "some_attribute")],
-            [MoviciDataRefInfo("$.anyof_field", "attribute", "some_attribute")],
+            [
+                MoviciDataRefInfo.from_path_string(
+                    "$.transport_segments[0]", "dataset", movici_type="dataset"
+                ),
+                MoviciDataRefInfo.from_path_string(
+                    "$.transport_segments[1]", "some_entities", "entityGroup"
+                ),
+            ],
+            [MoviciDataRefInfo.from_path_string("$.attribute", "some_attribute", "attribute")],
+            [
+                MoviciDataRefInfo.from_path_string(
+                    "$.component_attribute[1]", "some_attribute", "attribute"
+                )
+            ],
+            [MoviciDataRefInfo.from_path_string("$.anyof_field", "some_attribute", "attribute")],
         ],
     ),
 )
@@ -212,27 +224,27 @@ json_paths = [
     ),
 )
 def test_parse_json_path(jsonpath, path):
-    info = MoviciDataRefInfo(jsonpath, "foo", "bar")
+    info = MoviciDataRefInfo.from_path_string(jsonpath, "foo")
     assert info.path == path
 
 
 @pytest.mark.parametrize("jsonpath", json_paths)
 def test_round_trip_json_path(jsonpath):
-    info = MoviciDataRefInfo(jsonpath, "foo", "bar")
+    info = MoviciDataRefInfo.from_path_string(jsonpath, "foo")
     assert info.json_path == jsonpath
 
 
 def test_set_value():
     val = "value"
     obj = {"some": [{"path": None}]}
-    info = MoviciDataRefInfo("$.some[0].path", "foo", val)
+    info = MoviciDataRefInfo.from_path_string("$.some[0].path", val)
     info.set_value(obj)
     assert obj["some"][0]["path"] == val
 
 
 def test_unset_value():
     obj = {"some": [{"path": "value"}]}
-    info = MoviciDataRefInfo("$.some[0].path", "foo", "bar")
+    info = MoviciDataRefInfo.from_path_string("$.some[0].path", "foo")
     info.unset_value(obj)
     assert obj["some"][0]["path"] is None
 

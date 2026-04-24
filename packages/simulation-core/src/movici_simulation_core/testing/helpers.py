@@ -18,7 +18,7 @@ from movici_simulation_core.models.common.attributes import CommonAttributes
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
     if isinstance(data, dict):
         if "data" in data:
-            return data
+            return {k: np.asanyarray(v) for k, v in data.items()}
         return {key: dataset_data_to_numpy(val) for key, val in data.items()}
     return {"data": np.asarray(data)}
 

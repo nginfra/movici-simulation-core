@@ -127,7 +127,7 @@ def attributes_from_dict(d: dict):
     return filter(lambda i: isinstance(i, AttributeSpec), d.values())
 
 
-ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr"}
+ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr", "rowptr"}
 DEFAULT_ROWPTR_KEY = "indptr"
 
 
@@ -142,7 +142,7 @@ def get_rowptr(d: dict):
         return None
 
 
-def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
+def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]) -> DataType:
     """given array data, either as an np.ndarray, TrackedCSRArray or a "data"/"row_ptr" dictionary
     infer the `DataType` of that array data
     """
