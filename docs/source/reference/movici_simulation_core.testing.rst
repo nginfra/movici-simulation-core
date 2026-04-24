@@ -16,6 +16,16 @@ dummy
 
 
 
+fixtures
+---------
+
+.. automodule:: movici_simulation_core.testing.fixtures
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+
+
 helpers
 --------
 

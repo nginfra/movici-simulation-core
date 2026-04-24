@@ -104,7 +104,7 @@ class WaterTankEntity(WaterNodeEntity):
     Tank volume can be defined either by:
 
     - Constant diameter (cylindrical tank): use ``diameter``, ``min_level``, ``max_level``
-    - Volume curve (non-cylindrical): use ``volume_curve``, ``min_level``, ``max_level`
+    - Volume curve (non-cylindrical): use ``volume_curve``, ``min_level``, ``max_level``
     """
 
     __entity_name__ = "water_tank_entities"
