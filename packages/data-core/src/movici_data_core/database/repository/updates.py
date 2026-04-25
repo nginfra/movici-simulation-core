@@ -15,11 +15,11 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 
-from .common import EntityDataHandler, EntityDataSelector, Repository
+from .common import EntityDataProcessor, EntityDataSelector, SQLResourceRepository
 
 
 @dataclasses.dataclass
-class UpdateRepository(Repository):
+class UpdateRepository(SQLResourceRepository):
     scenario_id: UUID
 
     @property
@@ -53,7 +53,7 @@ class UpdateRepository(Repository):
             return None
         return dataclasses.replace(
             record.to_domain(),
-            data=await EntityDataHandler(
+            data=await EntityDataProcessor(
                 self.session, all_data=self.all_data, selector=UpdateDataSelector()
             ).get(id),
         )
@@ -99,7 +99,7 @@ class UpdateRepository(Repository):
                 .returning(db.Update.id)
             ),
         )
-        await EntityDataHandler(self.session, self.all_data, UpdateDataSelector()).store(
+        await EntityDataProcessor(self.session, self.all_data, UpdateDataSelector()).store(
             update_id, obj.data
         )
         return update_id

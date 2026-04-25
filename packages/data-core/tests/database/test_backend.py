@@ -1,13 +1,15 @@
 import dataclasses
+import typing as t
 from uuid import UUID
 
 import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyBackendFactory
 from movici_data_core.database.model import DatabaseMode
-from movici_data_core.domain_model import Dataset, Scenario
+from movici_data_core.domain_model import Dataset, Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from movici_data_core.serialization import dump_dict
+from movici_data_core.validators import MinimalModelConfigValidator
 from movici_simulation_core.core import EntityInitDataFormat
 from movici_simulation_core.types import FileType
 
@@ -75,6 +77,67 @@ async def backend(session_factory, initialized_db):
     factory = SQLAlchemyBackendFactory(session_factory)
     async with factory.get_backend() as backend:
         yield backend
+
+
+@pytest.mark.parametrize(
+    "database_mode, new_mode, workspace_count, scenario_count, can_change",
+    [
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.SINGLE_SCENARIO, 1, 1, True),
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.SINGLE_WORKSPACE, 1, 1, True),
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.MULTIPLE_WORKSPACES, 1, 1, True),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_SCENARIO, 1, 1, True),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_WORKSPACE, 1, 1, True),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES, 1, 1, True),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_SCENARIO, 1, 2, False),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_WORKSPACE, 1, 2, True),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES, 1, 2, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_SCENARIO, 1, 1, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_WORKSPACE, 1, 1, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.MULTIPLE_WORKSPACES, 1, 1, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_SCENARIO, 1, 2, False),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_WORKSPACE, 1, 2, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.MULTIPLE_WORKSPACES, 1, 2, True),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_SCENARIO, 2, 1, False),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_WORKSPACE, 2, 1, False),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.MULTIPLE_WORKSPACES, 2, 1, True),
+    ],
+)
+async def test_change_mode(
+    backend: SQLAlchemyBackend,
+    database_mode,
+    new_mode,
+    workspace_count,
+    scenario_count,
+    can_change,
+    initialized_db,
+):
+    if database_mode == DatabaseMode.MULTIPLE_WORKSPACES:
+        for num in range(workspace_count):
+            await backend.workspaces.create(Workspace(f"workspace_{num}", f"Workspace {num}"))
+    workspace_id: UUID = t.cast(
+        UUID, backend.options.default_workspace_id or (await backend.workspaces.list())[0].id
+    )
+
+    if database_mode != DatabaseMode.SINGLE_SCENARIO:
+        for num in range(scenario_count):
+            await backend.for_workspace(workspace_id).scenarios.create(
+                Scenario(f"scenario_{num}", f"scenario_{num}", description="", epsg_code=1),
+                validator=MinimalModelConfigValidator(),
+            )
+    if can_change:
+        await backend.set_database_mode(new_mode)
+        if new_mode == DatabaseMode.SINGLE_SCENARIO:
+            assert backend.single_scenario_mode
+            assert backend.scenario_id is not None
+        if new_mode in (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.SINGLE_WORKSPACE):
+            assert backend.single_workspace_mode
+            assert backend.workspace_id is not None
+        if new_mode == (DatabaseMode.MULTIPLE_WORKSPACES):
+            assert not backend.single_workspace_mode
+            assert not backend.single_scenario_mode
+    else:
+        with pytest.raises(InvalidAction):
+            await backend.set_database_mode(new_mode)
 
 
 class TestSingleScenarioBackend:

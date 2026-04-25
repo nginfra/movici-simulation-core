@@ -3,7 +3,7 @@ import typing as t
 from movici_data_core.domain_model import Scenario
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.types import MoviciDataRepository, T_id
-from movici_data_core.validators import ModelConfigValidator
+from movici_data_core.validators import BaseModelConfigValidator
 
 T_dom = t.TypeVar("T_dom")
 
@@ -32,7 +32,7 @@ class ScenarioService(t.Generic[T_id]):
             result.has_updates = await self.repository.updates.exists()
         return result
 
-    async def create(self, scenario: Scenario, validator: ModelConfigValidator):
+    async def create(self, scenario: Scenario, validator: BaseModelConfigValidator):
         if self.single_scenario_mode:
             raise InvalidAction("Unsupported operation in this mode")
         return await self.repository.scenarios.create(scenario, validator)

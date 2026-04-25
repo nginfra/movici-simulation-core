@@ -15,6 +15,7 @@ from movici_data_core.domain_model import (
     DatasetData,
     DatasetFormat,
     DatasetSummary,
+    DatasetType,
     EntityGroupSummary,
     ScenarioDataset,
 )
@@ -24,11 +25,11 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 
-from .common import EntityDataHandler, EntityDataSelector, RawDataHandler, Repository
+from .common import EntityDataProcessor, EntityDataSelector, RawDataHandler, SQLResourceRepository
 
 
 @dataclasses.dataclass
-class DatasetRepository(Repository):
+class DatasetRepository(SQLResourceRepository):
     workspace_id: UUID | None = None
 
     def _ensure_workspace_id(self) -> UUID:
@@ -214,7 +215,10 @@ class DatasetRepository(Repository):
             existing_types = {tp.name: tp for tp in await self.all_data.dataset_types.list()}
             for scenario_dataset in to_create:
                 if scenario_dataset.type not in existing_types:
-                    raise ResourceDoesNotExist("dataset_type", name=scenario_dataset.type)
+                    new_type = await self.all_data.dataset_types.ensure_dataset_type(
+                        DatasetType(scenario_dataset.type, format=DatasetFormat.ENTITY_BASED)
+                    )
+                    existing_types[new_type.name] = new_type
 
             created = await self.session.scalars(
                 insert(db.Dataset).returning(db.Dataset),
@@ -237,7 +241,7 @@ class DatasetRepository(Repository):
         ]
 
 
-class DatasetDataRepository(Repository):
+class DatasetDataRepository(SQLResourceRepository):
     async def exists_for(self, id: UUID):
         raw_data_exists = await self._exists(db.RawData.dataset_id == id)
         entity_data_exists = await self._exists(db.DatasetAttribute.dataset_id == id)
@@ -250,7 +254,7 @@ class DatasetDataRepository(Repository):
         return RawDataHandler(self.session).get_dict(id)
 
     def get_entity_data(self, id: UUID):
-        return EntityDataHandler(
+        return EntityDataProcessor(
             self.session, all_data=self.all_data, selector=DatasetDataSelector()
         ).get(id)
 
@@ -271,7 +275,7 @@ class DatasetDataRepository(Repository):
         if format == DatasetFormat.ENTITY_BASED:
             if not isinstance(data, dict):
                 raise ValueError("Entity based data must be provided as a dictionary")
-            await EntityDataHandler(
+            await EntityDataProcessor(
                 self.session, self.all_data, selector=DatasetDataSelector()
             ).store(id, data)
 

@@ -511,13 +511,14 @@ class TestDatasetRepository:
         ]
         assert None not in [ds.id for ds in scenario_datasets]
 
-    async def test_raises_on_missing_dataset_type(self, repository: SQLAlchemyRepository):
+    async def test_create_new_dataset_type_when_required(self, repository: SQLAlchemyRepository):
         repository.options.STRICT_SCENARIO_DATASETS = False
+        repository.options.STRICT_DATASET_TYPES = False
 
-        with pytest.raises(ResourceDoesNotExist):
-            await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset("new", "unknown_type")]
-            )
+        await repository.datasets.ensure_scenario_datasets([ScenarioDataset("new", "new_type")])
+        created = await repository.dataset_types.get_by_name("new_type")
+        assert created is not None
+        assert created == DatasetType("new_type", format=DatasetFormat.ENTITY_BASED)
 
     async def test_raises_on_existing_dataset_with_incorrect_type(
         self, repository: SQLAlchemyRepository, a_dataset

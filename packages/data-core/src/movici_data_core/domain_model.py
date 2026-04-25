@@ -10,6 +10,8 @@ from uuid import UUID
 from movici_simulation_core.core import AttributeSpec, DataType
 from movici_simulation_core.validate import MoviciDataRefInfo
 
+T_id = t.TypeVar("T_id", str, UUID)
+
 
 class DatasetFormat(str, enum.Enum):
     """Format types for dataset storage.
@@ -42,34 +44,34 @@ def utcnow():
 
 
 @dataclasses.dataclass
-class Workspace:
+class Workspace(t.Generic[T_id]):
     name: str
     display_name: str
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
     scenario_count: int = 0
     dataset_count: int = 0
 
 
 @dataclasses.dataclass
-class DatasetType:
+class DatasetType(t.Generic[T_id]):
     name: str
     format: DatasetFormat
     mimetype: str | None = None
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
-class EntityType:
+class EntityType(t.Generic[T_id]):
     name: str
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
-class AttributeType:
+class AttributeType(t.Generic[T_id]):
     name: str
     data_type: DataType
 
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
 
     unit: str = ""
     description: str = ""
@@ -84,11 +86,11 @@ class AttributeType:
 
 
 @dataclasses.dataclass
-class ModelType:
+class ModelType(t.Generic[T_id]):
     name: str
     jsonschema: dict
 
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -109,7 +111,7 @@ class BoundingBox:
 
 
 @dataclasses.dataclass
-class Scenario:
+class Scenario(t.Generic[T_id]):
     name: str
     display_name: str
     description: str
@@ -119,7 +121,7 @@ class Scenario:
     simulation_info: dict = dataclasses.field(default_factory=dict)
     status: ScenarioStatus = ScenarioStatus.READY
 
-    id: UUID | None = None
+    id: T_id | None = None
     workspace: Workspace | None = None
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
@@ -129,17 +131,18 @@ class Scenario:
 
 
 @dataclasses.dataclass
-class ScenarioDataset:
+class ScenarioDataset(t.Generic[T_id]):
     name: str
     type: str
-    id: UUID | None = dataclasses.field(compare=False, default=None)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
-class ScenarioModel:
+class ScenarioModel(t.Generic[T_id]):
     name: str
     type: ModelType
     config: dict = dataclasses.field(default_factory=dict)
+    id: T_id | None = dataclasses.field(compare=False, default=None)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
 
 
@@ -147,11 +150,11 @@ DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
 
 
 @dataclasses.dataclass
-class Dataset:
+class Dataset(t.Generic[T_id]):
     name: str
     display_name: str
     dataset_type: DatasetType
-    id: UUID | None = None
+    id: T_id | None = None
     workspace: Workspace | None = None
 
     general: dict | None = None
@@ -165,7 +168,7 @@ class Dataset:
 
 
 @dataclasses.dataclass
-class Update:
+class Update(t.Generic[T_id]):
     dataset: ScenarioDataset
     timestamp: int
     iteration: int
@@ -173,7 +176,7 @@ class Update:
     model_name: str
     model_type: str | None = None
 
-    id: UUID | None = None
+    id: T_id | None = None
     data: DatasetData | None = None
 
 

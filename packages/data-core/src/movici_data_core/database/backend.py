@@ -23,11 +23,19 @@ from movici_data_core.services import (
 from movici_simulation_core.types import ExternalSerializationStrategy
 
 from . import model as db
-from .general import get_options
+from .general import create_default_scenario, create_default_workspace, get_options
 from .repository import SQLAlchemyRepository
 
 
 class SQLAlchemyBackendFactory:
+    """This class is responsible for building a ``SQLAlchemyBackend``. When running inside an
+    FastAPI application, this class has the same lifetime as the application. From this class,
+    request-scoped ``SQLAlchemyBackend`` instances are created.
+
+    :param session_factory: a SQLALchemy ``AsyncSession`` factory, generally an
+      ``sqlalchemy.ext.asyncio.async_sessionmaker`` instance
+    """
+
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self.session_factory = session_factory
         pass
@@ -132,6 +140,73 @@ class SQLAlchemyBackend:
             raise RuntimeError("SQLAlchemyBackend.serializer must be set")
         return DatasetService(self.repository, self.serializer)
 
+    async def set_database_mode(self, new_mode: db.DatabaseMode):
+        """Change the mode of this database. Upgrading is always possible along the path
+        ``SINGLE_SCENARIO`` -> ``SINGLE_WORKSPACE`` -> ``MULTIPLE_WORKSPACES``. Downgrading is only
+        possible if a single workspace and/or scenario currently exists in the database
+
+        :param new_mode: the new database mode
+        """
+        current_mode = self.options.mode
+        if current_mode == new_mode:
+            return
+
+        match (current_mode, new_mode):
+            case (db.DatabaseMode.MULTIPLE_WORKSPACES, db.DatabaseMode.SINGLE_SCENARIO):
+                await self._downgrade_to_single_workspace_mode()
+                await self._downgrade_to_single_scenario_mode()
+            case (db.DatabaseMode.SINGLE_SCENARIO, db.DatabaseMode.MULTIPLE_WORKSPACES):
+                await self._upgrade_to_single_workspace_mode()
+                await self._upgrade_to_multiple_workspaces_mode()
+            case (db.DatabaseMode.MULTIPLE_WORKSPACES, db.DatabaseMode.SINGLE_WORKSPACE):
+                await self._downgrade_to_single_workspace_mode()
+            case (db.DatabaseMode.SINGLE_WORKSPACE, db.DatabaseMode.MULTIPLE_WORKSPACES):
+                await self._upgrade_to_multiple_workspaces_mode()
+            case (db.DatabaseMode.SINGLE_WORKSPACE, db.DatabaseMode.SINGLE_SCENARIO):
+                await self._downgrade_to_single_scenario_mode()
+            case (db.DatabaseMode.SINGLE_SCENARIO, db.DatabaseMode.SINGLE_WORKSPACE):
+                await self._upgrade_to_single_workspace_mode()
+
+    async def _upgrade_to_single_workspace_mode(self):
+        self.options.default_scenario = None
+        self.single_scenario_mode = False
+
+    async def _upgrade_to_multiple_workspaces_mode(self):
+        self.options.default_workspace = None
+        self.single_workspace_mode = False
+
+    async def _downgrade_to_single_scenario_mode(self):
+        scenarios = await self.repository.scenarios.list()
+        if len(scenarios) > 1:
+            raise InvalidAction(
+                "Cannot downgrade to SINGLE_SCENARIO mode when multiple scenarios exist"
+            )
+        elif len(scenarios) == 1:
+            scenario_id = scenarios[0].id
+        else:
+            if self.workspace_id is None:
+                raise ValueError("workspace_id must be set")
+            scenario_id = await create_default_scenario(self.session, self.workspace_id)
+        self.options.mode = db.DatabaseMode.SINGLE_SCENARIO
+        self.options.default_scenario_id = scenario_id
+        self.single_scenario_mode = True
+        self.scenario_id = scenario_id
+
+    async def _downgrade_to_single_workspace_mode(self):
+        workspaces = await self.repository.workspaces.list()
+        if len(workspaces) > 1:
+            raise InvalidAction(
+                "Cannot downgrade to SINGLE_WORKSPACE mode when multiple workspaces exist"
+            )
+        elif len(workspaces) == 1:
+            workspace_id = workspaces[0].id
+        else:
+            workspace_id = await create_default_workspace(self.session)
+        self.options.mode = db.DatabaseMode.SINGLE_WORKSPACE
+        self.options.default_workspace_id = workspace_id
+        self.single_workspace_mode = True
+        self.workspace_id = workspace_id
+
     def set_options(
         self,
         strict_dataset_types: bool | None = None,
@@ -140,6 +215,24 @@ class SQLAlchemyBackend:
         strict_model_types: bool | None = None,
         strict_scenario_datasets: bool | None = None,
     ):
+        """Set various database options for the database
+
+        :param strict_dataset_types: set/unset the ``STRICT_DATASET_TYPES`` option, which governs
+          whether to automatically create non-existing dataset types when they are encountered in
+          an uploaded dataset
+        :param strict_entity_types: set/unset the ``STRICT_ENTITY_TYPES`` option, which governs
+          whether to automatically create non-existing entity types when they are encountered in an
+          uploaded dataset
+        :param attributes: set/unset the ``STRICT_ATTRIBUTES`` option, which governs whether
+          to automatically create non-existing attribute types when they are encountered in an
+          uploaded dataset
+        :param strict_model_types: set/unset the ``STRICT_MODEL_TYPES`` option, which governs
+          whether to automatically create non-existing model types when they are encountered in an
+          uploaded scenario config
+        :param strict_scenario_datasets: set/unset the ``STRICT_SCENARIO_DATASETS`` option, which
+          governs whether to automatically create stubs for non-existing datasets when they are
+          encountered in an uploaded scenario config
+        """
         if strict_dataset_types is not None:
             self.options.STRICT_DATASET_TYPES = strict_dataset_types
         if strict_entity_types is not None:

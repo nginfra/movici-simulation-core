@@ -28,7 +28,9 @@ T_dom = t.TypeVar("T_dom")
 
 
 @dataclasses.dataclass
-class Repository:
+class SQLResourceRepository:
+    """Base class for the various resource repositories"""
+
     session: AsyncSession
     options: Options
     all_data: SQLAlchemyRepository
@@ -37,7 +39,18 @@ class Repository:
         return bool(await self.session.scalar(select(exists().where(*where))))
 
 
-class GenericResourceRepository(Repository, t.Generic[T_dom]):
+class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
+    """A GenericResourceRepository is the simplest CRUD repository. Resources are globally unique
+    by name and do not have a parent (such as a Workspace). Resources that are managed through
+    a GenericResourceRepository are:
+
+    * Workspaces
+    * DatasetTypes
+    * EntityTypes
+    * AttributeTypes
+    * ModelTypes
+    """
+
     __resource__: type[NamedResource[T_dom]]
 
     async def list(self) -> list[T_dom]:
@@ -68,11 +81,18 @@ class GenericResourceRepository(Repository, t.Generic[T_dom]):
 
 
 class EntityDataSelector(t.Protocol):
+    """EntityDataSelector is a Protocol that EntityDataProcessor uses to retrieve SQLAlchemy
+    queries for the resource it is operating on, ie Dataset or Update.
+    """
+
     def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]: ...
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert: ...
 
 
-class EntityDataHandler:
+class EntityDataProcessor:
+    """Logic for storing and retrieving entity data from the database. This can be used for both
+    Dataset data and Update data"""
+
     def __init__(
         self, session: AsyncSession, all_data: SQLAlchemyRepository, selector: EntityDataSelector
     ):
@@ -157,6 +177,10 @@ class EntityDataHandler:
 
 
 class RawDataHandler:
+    """Logic for storing dataset data as raw bytes in the database. Used for ``BINARY`` and
+    ``UNSTRUCTURED`` datasets
+    """
+
     RAW_DATA_CHUNK_SIZE = 100_000_000  # 100 MB
 
     def __init__(self, session: AsyncSession):

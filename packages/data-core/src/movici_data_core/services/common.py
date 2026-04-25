@@ -5,7 +5,7 @@ from movici_data_core.domain_model import (
 )
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.types import MoviciDataRepository, ResourceRepository, T_id
-from movici_data_core.validators import ModelConfigValidator
+from movici_data_core.validators import BaseModelConfigValidator
 
 T_dom = t.TypeVar("T_dom")
 
@@ -33,14 +33,14 @@ class GenericService(t.Generic[T_id, T_dom]):
 
         return result
 
-    async def create(self, dataset_type: T_dom):
-        return await self._repository.create(dataset_type)
+    async def create(self, obj: T_dom):
+        return await self._repository.create(obj)
 
-    async def update(self, dataset_type_id: T_id, dataset_type: T_dom):
-        return await self._repository.update(id=dataset_type_id, obj=dataset_type)
+    async def update(self, id: T_id, obj: T_dom):
+        return await self._repository.update(id=id, obj=obj)
 
-    async def delete(self, dataset_type_id: T_id):
-        return await self._repository.delete(dataset_type_id)
+    async def delete(self, id: T_id):
+        return await self._repository.delete(id)
 
 
 class ScenarioService(t.Generic[T_id]):
@@ -67,7 +67,7 @@ class ScenarioService(t.Generic[T_id]):
             result.has_updates = await self.repository.updates.exists()
         return result
 
-    async def create(self, scenario: Scenario, validator: ModelConfigValidator):
+    async def create(self, scenario: Scenario, validator: BaseModelConfigValidator):
         if self.single_scenario_mode:
             raise InvalidAction("Unsupported operation in this mode")
         return await self.repository.scenarios.create(scenario, validator)

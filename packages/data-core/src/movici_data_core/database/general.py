@@ -1,4 +1,10 @@
 import contextlib
+import typing as t
+from uuid import UUID
+
+from sqlalchemy import event, func, insert, select, text, update
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import joinedload
 
 from movici_data_core.database.model import (
     DEFAULT_SCENARIO_NAME,
@@ -12,9 +18,6 @@ from movici_data_core.database.model import (
 )
 from movici_data_core.domain_model import ScenarioStatus
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
-from sqlalchemy import event, func, insert, select, text, update
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import joinedload
 
 
 @contextlib.asynccontextmanager
@@ -47,25 +50,10 @@ async def initialize_database(session: AsyncSession, mode: DatabaseMode):
         if workspaces_count > 0:
             raise DatabaseAlreadyInitialized
 
-        workspace_id = await session.scalar(
-            insert(Workspace)
-            .returning(Workspace.id)
-            .values(name=DEFAULT_WORKSPACE_NAME, display_name=DEFAULT_WORKSPACE_NAME)
-        )
-    if mode == DatabaseMode.SINGLE_SCENARIO:
-        scenario_id = await session.scalar(
-            insert(Scenario)
-            .returning(Scenario.id)
-            .values(
-                workspace_id=workspace_id,
-                name=DEFAULT_SCENARIO_NAME,
-                display_name=DEFAULT_SCENARIO_NAME,
-                description="",
-                status=ScenarioStatus.READY,
-                simulation_info={},
-                epsg_code=0,
-            )
-        )
+        workspace_id = await create_default_workspace(session)
+        if mode == DatabaseMode.SINGLE_SCENARIO:
+            scenario_id = await create_default_scenario(session, workspace_id)
+
     await session.execute(
         insert(Options).values(
             default_workspace_id=workspace_id,
@@ -73,6 +61,41 @@ async def initialize_database(session: AsyncSession, mode: DatabaseMode):
             mode=mode,
             **_default_flags(mode),
         )
+    )
+
+
+async def create_default_workspace(
+    session: AsyncSession, name=DEFAULT_WORKSPACE_NAME, display_name=DEFAULT_WORKSPACE_NAME
+) -> UUID:
+    return t.cast(
+        UUID,
+        await session.scalar(
+            insert(Workspace).returning(Workspace.id).values(name=name, display_name=display_name)
+        ),
+    )
+
+
+async def create_default_scenario(
+    session: AsyncSession,
+    workspace_id: UUID,
+    name=DEFAULT_SCENARIO_NAME,
+    display_name=DEFAULT_SCENARIO_NAME,
+) -> UUID:
+    return t.cast(
+        UUID,
+        await session.scalar(
+            insert(Scenario)
+            .returning(Scenario.id)
+            .values(
+                workspace_id=workspace_id,
+                name=name,
+                display_name=display_name,
+                description="",
+                status=ScenarioStatus.READY,
+                simulation_info={},
+                epsg_code=0,
+            )
+        ),
     )
 
 

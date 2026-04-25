@@ -9,13 +9,14 @@ from movici_data_core.domain_model import (
     ScenarioModel,
 )
 from movici_data_core.exceptions import MoviciValidationError
+from movici_data_core.types import T_id
 from movici_simulation_core.validate import MoviciTypeLookup, ensure_schema, validate_and_process
 
 
 @dataclasses.dataclass
-class ModelConfigValidator:
-    attribute_types: dict[str, AttributeType]
-    entity_types: dict[str, EntityType]
+class BaseModelConfigValidator(t.Generic[T_id]):
+    attribute_types: dict[str, AttributeType] = dataclasses.field(default_factory=dict)
+    entity_types: dict[str, EntityType] = dataclasses.field(default_factory=dict)
     datasets: dict[str, ScenarioDataset] | None = None
     model_types: dict[str, ModelType] | None = None
     dataset_types_by_datasets: dict[str, str] | None = dataclasses.field(init=False)
@@ -47,6 +48,31 @@ class ModelConfigValidator:
             model_types={mt.name: mt for mt in model_types},
         )
 
+    def validated_model_type(self, config: dict):
+        assert self.model_types is not None
+
+        if "type" not in config:
+            raise MoviciValidationError("type is a required field")
+
+        model_type = config["type"]
+        if not isinstance(model_type, str):
+            raise MoviciValidationError("must be string", path="type")
+
+        if model_type not in self.model_types:
+            raise MoviciValidationError(f"invalid model_type {model_type}", path="type")
+
+        return self.model_types[model_type]
+
+    def process_model_configs(self, configs: list[dict]) -> list[ScenarioModel]:
+        raise NotImplementedError
+
+    def iter_scenario_model_references(
+        self, scenario_model: ScenarioModel[T_id]
+    ) -> t.Iterable[dict]:
+        raise NotImplementedError
+
+
+class ModelConfigValidator(BaseModelConfigValidator[T_id]):
     @property
     def lookup(self):
         return MoviciTypeLookup(
@@ -72,21 +98,6 @@ class ModelConfigValidator:
             raise MoviciValidationError.from_errors(errors)
         return result
 
-    def validated_model_type(self, config: dict):
-        assert self.model_types is not None
-
-        if "type" not in config:
-            raise MoviciValidationError("type is a required field")
-
-        model_type = config["type"]
-        if not isinstance(model_type, str):
-            raise MoviciValidationError("must be string", path="type")
-
-        if model_type not in self.model_types:
-            raise MoviciValidationError(f"invalid model_type {model_type}", path="type")
-
-        return self.model_types[model_type]
-
     def parse_and_validate_model_config(
         self, config: dict, model_type: ModelType
     ) -> ScenarioModel:
@@ -106,3 +117,38 @@ class ModelConfigValidator:
         if not errors:
             return ScenarioModel(name, type=model_type, config=config, references=refs)
         raise MoviciValidationError.from_errors(errors)
+
+    def iter_scenario_model_references(self, scenario_model: ScenarioModel) -> t.Iterable[dict]:
+        for ref in scenario_model.references:
+            ref_data = {
+                "scenario_model_id": scenario_model.id,
+                "path": ref.json_path,
+            }
+            if ref.movici_type == "attribute":
+                ref_data["attribute_type_id"] = self.attribute_types[ref.value].id
+            elif ref.movici_type == "entityGroup":
+                ref_data["entity_type_id"] = self.entity_types[ref.value].id
+            elif ref.movici_type == "dataset":
+                ref_data["dataset_id"] = self.datasets[ref.value].id if self.datasets else None
+            yield ref_data
+
+
+class MinimalModelConfigValidator(BaseModelConfigValidator[T_id]):
+    def process_model_configs(self, configs: list[dict]) -> list[ScenarioModel]:
+        return [self._process_model_config(config) for config in configs]
+
+    def _process_model_config(self, config: dict):
+        if "name" not in config:
+            raise MoviciValidationError("name is a required field")
+
+        name = config["name"]
+        if not isinstance(name, str):
+            raise MoviciValidationError("must be string", path="name")
+
+        model_type = self.validated_model_type(config)
+        return ScenarioModel(name, type=model_type, config=config)
+
+    def get_scenario_model_references(
+        self, scenario_model: ScenarioModel[T_id]
+    ) -> t.Iterable[dict]:
+        return ()

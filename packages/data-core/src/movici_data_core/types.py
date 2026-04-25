@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import typing as t
-from uuid import UUID
 
 from movici_data_core.domain_model import (
     AttributeType,
@@ -13,13 +12,13 @@ from movici_data_core.domain_model import (
     ModelType,
     Scenario,
     ScenarioStatus,
+    T_id,
     Update,
     Workspace,
 )
-from movici_data_core.validators import ModelConfigValidator
+from movici_data_core.validators import BaseModelConfigValidator
 from movici_simulation_core.types import DatasetData
 
-T_id = t.TypeVar("T_id", str, UUID)
 T_dom = t.TypeVar("T_dom")
 
 
@@ -92,8 +91,8 @@ class ScenarioRepository(t.Protocol, t.Generic[T_id]):
     async def get_by_name(self, name: str) -> Scenario | None: ...
     async def get_by_id(self) -> Scenario | None: ...
     async def delete(self): ...
-    async def create(self, obj: Scenario, validator: ModelConfigValidator) -> T_id: ...
-    async def update(self, obj: Scenario, validator: ModelConfigValidator): ...
+    async def create(self, obj: Scenario, validator: BaseModelConfigValidator) -> T_id: ...
+    async def update(self, obj: Scenario, validator: BaseModelConfigValidator): ...
     async def set_status(self, status: ScenarioStatus): ...
 
 

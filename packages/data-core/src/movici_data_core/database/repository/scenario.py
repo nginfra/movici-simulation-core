@@ -15,14 +15,14 @@ from movici_data_core.domain_model import (
     ScenarioStatus,
 )
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
-from movici_data_core.validators import ModelConfigValidator
+from movici_data_core.validators import BaseModelConfigValidator
 from movici_simulation_core.validate import MoviciDataRefInfo
 
-from .common import Repository
+from .common import SQLResourceRepository
 
 
 @dataclasses.dataclass
-class ScenarioRepository(Repository):
+class ScenarioRepository(SQLResourceRepository):
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
@@ -100,7 +100,7 @@ class ScenarioRepository(Repository):
         id = self._ensure_scenario_id()
         await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
-    async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
+    async def create(self, obj: Scenario, validator: BaseModelConfigValidator) -> UUID:
         self._ensure_no_scenario_id()
         workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
@@ -120,7 +120,7 @@ class ScenarioRepository(Repository):
         await self._store_scenario_details(workspace_id, scenario_id, obj, validator)
         return scenario_id
 
-    async def update(self, obj: Scenario, validator: ModelConfigValidator):
+    async def update(self, obj: Scenario, validator: BaseModelConfigValidator):
         id = self._ensure_scenario_id()
         current = await self.get_by_id()
         if current is None:
@@ -155,7 +155,11 @@ class ScenarioRepository(Repository):
         )
 
     async def _store_scenario_details(
-        self, workspace_id: UUID, scenario_id: UUID, obj: Scenario, validator: ModelConfigValidator
+        self,
+        workspace_id: UUID,
+        scenario_id: UUID,
+        obj: Scenario,
+        validator: BaseModelConfigValidator[UUID],
     ):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []
@@ -192,24 +196,15 @@ class ScenarioRepository(Repository):
                 for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
             ],
         )
-        refs_to_add = []
+        refs_to_add: list[dict] = []
         for scenario_model, record in zip(
             scenario_models, sorted(scenario_model_records, key=lambda r: r.sequence)
         ):
-            for ref in scenario_model.references:
-                ref_data = {
-                    "scenario_model_id": record.id,
-                    "path": ref.json_path,
-                }
-                if ref.movici_type == "attribute":
-                    ref_data["attribute_type_id"] = validator.attribute_types[ref.value].id
-                elif ref.movici_type == "entityGroup":
-                    ref_data["entity_type_id"] = validator.entity_types[ref.value].id
-                elif ref.movici_type == "dataset":
-                    ref_data["dataset_id"] = (
-                        validator.datasets[ref.value].id if validator.datasets else None
-                    )
-                refs_to_add.append(ref_data)
+            refs_to_add.extend(
+                validator.iter_scenario_model_references(
+                    dataclasses.replace(scenario_model, id=record.id)
+                )
+            )
 
         if refs_to_add:
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
@@ -260,23 +255,4 @@ class ScenarioRepository(Repository):
         result.pop("type", None)
         for ref in scenario_model.references:
             ref.unset_value(result)
-        return result
-
-    @staticmethod
-    def prepare_scenario_model_references(
-        id: UUID, scenario_model: ScenarioModel, schema: ModelConfigValidator
-    ):
-        result = []
-        for ref in scenario_model.references:
-            ref_data = {
-                "scenario_model_id": id,
-                "path": ref.json_path,
-            }
-            if ref.movici_type == "attribute":
-                ref_data["attribute_type_id"] = schema.attribute_types[ref.value].id
-            elif ref.movici_type == "entityGroup":
-                ref_data["entity_type_id"] = schema.entity_types[ref.value].id
-            elif ref.movici_type == "dataset":
-                ref_data["dataset_id"] = schema.datasets[ref.value].id if schema.datasets else None
-            result.append(ref_data)
         return result
