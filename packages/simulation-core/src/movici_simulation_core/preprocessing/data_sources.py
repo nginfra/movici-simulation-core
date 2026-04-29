@@ -21,6 +21,84 @@ from movici_simulation_core.attributes import (
 GeometryType = t.Literal["points", "lines", "polygons", "cells"]
 
 
+class MultiEntitySource:
+    r"""Base class for data sources that provide multiple entity types from a single file or
+    connection, such as a network file that contains both node and link collections.
+
+    Use bracket notation to access individual entity types as ``DataSource``\s::
+
+        source = MySource("network.file")
+        nodes = source["nodes"]  # returns a DataSource
+
+    In dataset creator configs, use dot notation to reference entity types::
+
+        {"source": "network.nodes"}
+    """
+
+    def keys(self) -> t.Iterable[str]:
+        """Return the available entity type names."""
+        raise NotImplementedError
+
+    def __getitem__(self, entity_type: str) -> "DataSource":
+        """Return a ``DataSource`` for the given entity type."""
+        raise NotImplementedError
+
+    def __contains__(self, entity_type: str) -> bool:
+        """Check whether an entity type is available."""
+        raise NotImplementedError
+
+    def to_crs(self, crs: t.Union[str, int, "CRS"]) -> None:
+        """Convert all sub-sources to the target CRS."""
+        return None
+
+    def get_bounding_box(self) -> t.Optional[t.Tuple[float, float, float, float]]:
+        """Return the combined bounding box across all entity types, or ``None``."""
+        return None
+
+
+def resolve_source(name: str, sources: "SourcesDict") -> "DataSource":
+    """Resolve a source reference to a ``DataSource``.
+
+    Supports dot notation for multi-entity sources: ``"source_name.entity_type"``.
+
+    :param name: Source reference, optionally with dot notation
+    :param sources: The sources dictionary
+    :raises ValueError: If the source or entity type is not found
+    :raises TypeError: If a bare name references a ``MultiEntitySource``
+    """
+    if "." in name:
+        source_name, entity_type = name.split(".", 1)
+        try:
+            source = sources[source_name]
+        except KeyError:
+            raise ValueError(f"Source '{source_name}' not available") from None
+        if not isinstance(source, MultiEntitySource):
+            raise TypeError(
+                f"Source '{source_name}' is not a multi-entity source, "
+                f"cannot select entity type '{entity_type}'"
+            )
+        try:
+            return source[entity_type]
+        except KeyError:
+            raise ValueError(
+                f"Entity type '{entity_type}' not found in source '{source_name}'"
+            ) from None
+
+    try:
+        source = sources[name]
+    except KeyError:
+        raise ValueError(f"Source '{name}' not available") from None
+
+    if isinstance(source, MultiEntitySource):
+        available = ", ".join(sorted(source.keys()))
+        raise TypeError(
+            f"Source '{name}' is a multi-entity source; "
+            f"use '{name}.<entity_type>' to select an entity type "
+            f"(available: {available})"
+        )
+    return source
+
+
 class DataSource:
     r"""Base class for creating custom ``DataSource``\s. Subclasses must implement
     ``get_attribute`` and ``__len``. In case the ``DataSource`` handles geospatial data, subclasses
@@ -290,4 +368,4 @@ class NetCDFGridSource(DataSource):
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
 
 
-SourcesDict = t.MutableMapping[str, DataSource]
+SourcesDict = t.MutableMapping[str, t.Union[DataSource, MultiEntitySource]]

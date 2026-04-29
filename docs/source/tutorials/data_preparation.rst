@@ -640,6 +640,89 @@ Below is given an example of a dataset creator config snippet
   }
 
 
+.. _dataset-creator-recipes-read-epanet:
+
+Read an EPANET INP file
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+EPANET INP files are supported via ``WNTR`` and registered as the ``epanet`` source type
+by the ``movici-drinking-water-model`` package. An ``epanet`` source is a multi-entity
+source that exposes the six WNTR collections as separate sub-sources, each selected from
+the parent source using dot notation ``"<source_name>.<entity_type>"``:
+
+* Node types: ``junctions``, ``tanks``, ``reservoirs``
+* Link types: ``pipes``, ``pumps``, ``valves``
+
+Properties available on each sub-source match the attributes of the corresponding WNTR
+object (e.g. ``elevation``, ``diameter``, ``start_node_name``, ``base_head``). The
+synthetic ``name`` property yields the WNTR element name and is useful as a ``reference``
+attribute and as an ``id_link`` key for resolving link-to-node topology.
+
+Caveats:
+
+* The CRS can not be converted for ``epanet`` data sources. The CRS must be specified to
+  be the same CRS as the coordinates stored in the INP file.
+* Link sub-sources (``pipes``, ``pumps``, ``valves``) produce line geometries from the
+  coordinates of their start and end nodes. They do not contribute a bounding box.
+* WNTR converts INP values to SI units on read according to the file's flow-units header
+  (e.g. in ``LPS``, pipe diameters expressed in millimeters become meters). Map properties
+  from the WNTR representation, not the raw INP values.
+
+Below is an example of a dataset creator config snippet. A single ``epanet`` source is
+declared once, and each entity group references the appropriate sub-source through dot
+notation:
+
+.. code-block::
+
+  {
+    "__meta__": {
+      "crs": "EPSG:28992"
+    },
+    "__sources__": {
+      "network": {
+        "source_type": "epanet",
+        "path": "/path/to/network.inp"
+      }
+    },
+    "data": {
+      "water_junction_entities": {
+        "__meta__": {"source": "network.junctions", "geometry": "points"},
+        "reference": {"property": "name"},
+        "water.elevation": {"property": "elevation"}
+      },
+      "water_reservoir_entities": {
+        "__meta__": {"source": "network.reservoirs", "geometry": "points"},
+        "reference": {"property": "name"}
+      },
+      "water_tank_entities": {
+        "__meta__": {"source": "network.tanks", "geometry": "points"},
+        "reference": {"property": "name"}
+      },
+      "water_pipe_entities": {
+        "__meta__": {"source": "network.pipes", "geometry": "lines"},
+        "reference": {"property": "name"},
+        "water.diameter": {"property": "diameter"},
+        "topology.from_node_id": {
+          "property": "start_node_name",
+          "id_link": [
+            {"entity_group": "water_junction_entities", "property": "name"},
+            {"entity_group": "water_reservoir_entities", "property": "name"},
+            {"entity_group": "water_tank_entities", "property": "name"}
+          ]
+        },
+        "topology.to_node_id": {
+          "property": "end_node_name",
+          "id_link": [
+            {"entity_group": "water_junction_entities", "property": "name"},
+            {"entity_group": "water_reservoir_entities", "property": "name"},
+            {"entity_group": "water_tank_entities", "property": "name"}
+          ]
+        }
+      }
+    }
+  }
+
+
 .. _tutorial-dataset-creator-config-schema:
 
 Dataset Creator Config Schema Reference
@@ -695,12 +778,16 @@ DatasetCreatorSource
 | ``type``: ``object``
 
 ``properties``:
-  | ``source_type``: One of ``file``, ``netcdf``. Use ``netcdf`` for NetCDF-files, ``file`` for any
-    other supported geospatial data file
+  | ``source_type``: ``string`` identifier for a registered source type. The built-in types are
+    ``file`` (any geospatial file supported by ``Fiona``) and ``netcdf`` (NetCDF files).
+    Additional types are registered by plugin packages through the ``movici.source_types``
+    entry-point group — for example ``epanet`` is registered by ``movici-drinking-water-model``
+    for EPANET INP files.
   | ``path``: ``string`` location on disk to a source file
 
-Source files are read using ``geopandas`` which uses  ``Fiona`` under the hood and may be any file
-that ``Fiona`` supports as geospatial data, such as ``geojson`` or ``shapefile``
+Source files of ``source_type`` ``file`` are read using ``geopandas`` which uses ``Fiona`` under
+the hood and may be any file that ``Fiona`` supports as geospatial data, such as ``geojson`` or
+``shapefile``
 
 
 .. _DatasetCreatorGeneralSection:
