@@ -389,6 +389,44 @@ class TestSourcesSetup:
         assert sources.keys() == {"some_points", "some_lines", "empty"}
         assert all(isinstance(s, DataSource) for s in sources.values())
 
+    def test_unknown_source_type_raises(self):
+        config = {
+            "__sources__": {"foo": {"source_type": "definitely-not-registered", "path": "/x"}},
+            "data": {},
+        }
+        with pytest.raises(ValueError, match="Unknown source type"):
+            SourcesSetup(config)({}, sources={})
+
+    def test_register_adds_source_type(self):
+        class DummySource(DataSource):
+            seen: t.ClassVar[t.List[dict]] = []
+
+            @classmethod
+            def from_source_info(cls, source_info):
+                cls.seen.append(source_info)
+                return cls()
+
+            def __len__(self):
+                return 0
+
+        previous = SourcesSetup._source_types.pop("dummy-test", None)
+        try:
+            SourcesSetup.register("dummy-test", DummySource)
+            op = SourcesSetup(
+                {
+                    "__sources__": {"x": {"source_type": "dummy-test", "path": "/p"}},
+                    "data": {},
+                }
+            )
+            sources = {}
+            op({}, sources=sources)
+            assert isinstance(sources["x"], DummySource)
+            assert DummySource.seen == [{"source_type": "dummy-test", "path": "/p"}]
+        finally:
+            SourcesSetup._source_types.pop("dummy-test", None)
+            if previous is not None:
+                SourcesSetup._source_types["dummy-test"] = previous
+
 
 class TestCRSTransformation:
     @pytest.fixture
