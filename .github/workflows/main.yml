@@ -39,7 +39,8 @@ jobs:
       run: uv sync --group dev --frozen
 
     - name: Run tests
-      run: make test-numba
+      run: |
+        make test-numba
 
   deploy:
     # We only want to run the deploy job if we've just created a version tag. in `on.push.tags`

@@ -56,7 +56,6 @@ jobs:
 
     - name: Run tests
       run: |
-        cd packages/simulation-core
         make test-numba
 
   test-numba:
@@ -87,7 +86,6 @@ jobs:
 
     - name: Run tests with Numba JIT enabled
       run: |
-        cd packages/simulation-core
         make test-numba
 
   coverage:
@@ -117,7 +115,6 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        cd packages/simulation-core
         make coverage
 
   test-docs:

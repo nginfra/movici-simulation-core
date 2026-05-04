@@ -6,7 +6,11 @@ build-backend = "hatchling.build"
 name = "movici"
 dynamic = ["version"]
 requires-python = ">=3.10,<3.14"
-dependencies = ["movici-simulation-core"]
+dependencies = [
+  "movici-simulation-core",
+  "movici-drinking-water-model",
+  "movici-transport-assignment-model",
+]
 
 [dependency-groups]
 dev = [
@@ -33,6 +37,8 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
+movici-drinking-water-model = { workspace = true }
+movici-transport-assignment-model = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -43,7 +49,6 @@ source = "uv-dynamic-versioning"
 [tool.ruff]
 line-length = 99
 target-version = "py310"
-extend-exclude = ["research"]
 
 [tool.ruff.lint]
 # Ideally we'd have the following rules enabled. However, that is currently not feasible,
@@ -80,14 +85,21 @@ ignore = [
   "B027", # empty method in abstract base class
   "B028", # warnings explicit `stack_level` kwarg
   "B905", # zip explicit `strict` kwarg
+  "S101",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
+"packages/drinking-water/tests/*" = ["S"]
+"packages/transport-assignment/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["movici_simulation_core"]
+known-first-party = [
+  "movici_simulation_core",
+  "movici_drinking_water_model",
+  "movici_transport_assignment_model",
+]
 
 [tool.ruff.format]
 docstring-code-format = true

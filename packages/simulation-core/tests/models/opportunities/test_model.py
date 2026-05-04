@@ -24,8 +24,8 @@ def model_config(model_name, overlap_dataset_name, road_network_name):
         "name": model_name,
         "type": "opportunity",
         "overlap_dataset": [overlap_dataset_name],
-        "opportunity_taken_property": [(None, "maintenance.under_maintenance")],
-        "total_length_property": [(None, "maintenance.length")],
+        "opportunity_taken_property": ["maintenance.under_maintenance"],
+        "total_length_property": ["maintenance.length"],
         "opportunity_entity": [
             (road_network_name, "road_segment_entities"),
         ],

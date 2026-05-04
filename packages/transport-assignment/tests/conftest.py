@@ -1,7 +1,10 @@
 import dataclasses
+import shutil
 import typing as t
+import uuid
 
 import pytest
+from aequilibrae import Project
 
 from movici_simulation_core.core.moment import TimelineInfo
 
@@ -9,6 +12,29 @@ from movici_simulation_core.core.moment import TimelineInfo
 @pytest.fixture
 def global_timeline_info():
     return TimelineInfo(0, 1, 0)
+
+
+@pytest.fixture(scope="session")
+def clean_aequilibrae_project(tmp_path_factory):
+    path = str(tmp_path_factory.mktemp("clean_aequilibrae_project") / uuid.uuid4().hex)
+    project = Project()
+    if hasattr(project, "_new_original"):
+        project._new_original(path)
+    else:
+        project.new(path)
+    project.close()
+    return path
+
+
+@pytest.fixture
+def patch_aequilibrae(monkeypatch, clean_aequilibrae_project):
+    def new(self, project_dir):
+        shutil.copytree(clean_aequilibrae_project, project_dir)
+        self.open(project_dir)
+
+    if not hasattr(Project, "_new_original"):
+        Project._new_original = Project.new
+    monkeypatch.setattr(Project, "new", new)
 
 
 @pytest.fixture
@@ -26,31 +52,6 @@ def railway_network_name():
     return "a_railway_network"
 
 
-@pytest.fixture
-def mv_network_name():
-    return "an_mv_network"
-
-
-@pytest.fixture
-def overlap_dataset_name():
-    return "an_overlap_dataset"
-
-
-@pytest.fixture
-def knotweed_dataset_name():
-    return "a_knotweed_dataset"
-
-
-@pytest.fixture
-def maintenance_agenda_dataset_name():
-    return "a_maintenance_agenda"
-
-
-@pytest.fixture
-def area_dataset_name():
-    return "an_area_dataset"
-
-
 def get_dataset(name, ds_type, data, **kwargs):
     ds = {
         "version": 3,
@@ -62,86 +63,6 @@ def get_dataset(name, ds_type, data, **kwargs):
     }
     ds.update(kwargs)
     return ds
-
-
-@pytest.fixture
-def knotweed_dataset(knotweed_dataset_name):
-    return get_dataset(
-        name=knotweed_dataset_name,
-        ds_type="knotweed",
-        data={
-            "knotweed_entities": {
-                "geometry.x": [0, 1],
-                "geometry.y": [0, 1],
-                "geometry.z": [1.2, 1.2],
-                "geometry.polygon": [
-                    [
-                        [0, 0],
-                        [0, 1],
-                        [1, 1],
-                        [1, 0],
-                        [0, 0],
-                    ],
-                    [
-                        [1, 1],
-                        [1, 2],
-                        [2, 2],
-                        [2, 1],
-                        [1, 1],
-                    ],
-                ],
-                "id": [0, 1],
-                "knotweed.stem_density": [80.0, 100.0],
-                "reference": ["Knotweed1", "Knotweed2"],
-            }
-        },
-    )
-
-
-@pytest.fixture
-def road_network(road_network_name):
-    return get_dataset(
-        name=road_network_name,
-        ds_type="random_type",
-        data={
-            "road_segment_entities": {
-                "id": [1, 2, 3],
-                "reference": ["Road1", "Road2", "Road3"],
-                "geometry.linestring_3d": [
-                    [[0.0, -10.0, 0.0], [1.0, -10.0, 1.0]],
-                    [[1.1, 1.0, 1.0], [1.05, 1.0, -1.0]],
-                    [[0, 0, 0.0], [0.1, 0.0, -1.0], [1, 1, 1.0], [-0.9, 1, 1.0]],
-                ],
-                "shape.length": [1.4142, 2.0006, 5.3154],
-            }
-        },
-    )
-
-
-@pytest.fixture
-def area_dataset(area_dataset_name):
-    return get_dataset(
-        name=area_dataset_name,
-        ds_type="impact_indicator",
-        data={
-            "area_entities": {
-                "id": [0, 2],
-                "geometry.polygon": [
-                    [[0, 0], [2000, 0], [2000, 2000], [0, 2000], [0, 0]],
-                    [[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5], [0, 0]],
-                ],
-            }
-        },
-    )
-
-
-@pytest.fixture
-def overlap_dataset(overlap_dataset_name):
-    return get_dataset(
-        name=overlap_dataset_name,
-        ds_type="random_type",
-        data={"overlap_entities": {"id": list(range(1, 1000))}},
-    )
 
 
 @pytest.fixture
