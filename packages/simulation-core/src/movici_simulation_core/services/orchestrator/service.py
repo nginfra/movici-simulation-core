@@ -1,8 +1,9 @@
 import logging
 
 from movici_simulation_core.core.types import Service
+from movici_simulation_core.exceptions import FSMError
 from movici_simulation_core.messages import Message, ModelMessage
-from movici_simulation_core.networking.stream import Stream
+from movici_simulation_core.networking.stream import BaseStream
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
@@ -20,9 +21,9 @@ class Orchestrator(Service):
     timeline: TimelineController
     logger: logging.Logger
     context: Context
-    stream: Stream
+    stream: BaseStream
 
-    def setup(self, *, settings: Settings, stream: Stream, logger: logging.Logger, **_):
+    def setup(self, *, settings: Settings, stream: BaseStream, logger: logging.Logger, **_):
         self.settings = settings
         self.logger = logger
         self.stream = stream
@@ -70,12 +71,23 @@ class Orchestrator(Service):
 
     def run(self):
         try:
-            self.fsm.start()
+            self.start()
             self.stream.run()
-        except FSMDone:
+        except (FSMDone, FSMError):
             if self.context.failed:
                 return 1
             return 0
+
+    def start(self):
+        """Start the orchestrator FSM but do not run the stream (yet)"""
+        self.fsm.start()
+
+    def restart_model_timer(self, model: str):
+        """Allow resetting a specific model timer. This is used when running using the
+        InProcessSimulationRunner. Orchestrator starts the timer by default when it sends out the
+        message, but we need to actually start the timer when we start processing the message
+        """
+        self.context.models[model].timer.restart_current()
 
     @classmethod
     def install(cls, sim: Simulation):

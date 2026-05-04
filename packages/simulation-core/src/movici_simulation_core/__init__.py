@@ -33,10 +33,9 @@ from .core import (
     set_timeline_info,
 )
 from .model_connector import (
-    DirectoryInitDataHandler,
-    InitDataClient,
+    DirectoryInitDataClient,
     InitDataHandler,
-    ServicedInitDataHandler,
+    ServicedInitDataClient,
     UpdateDataClient,
 )
 from .settings import Settings
@@ -78,10 +77,9 @@ __all__ = [
     "set_timeline_info",
     "validate_and_process",
     "Settings",
-    "DirectoryInitDataHandler",
-    "InitDataClient",
+    "DirectoryInitDataClient",
     "InitDataHandler",
-    "ServicedInitDataHandler",
+    "ServicedInitDataClient",
     "UpdateDataClient",
 ]
 

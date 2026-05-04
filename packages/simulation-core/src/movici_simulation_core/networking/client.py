@@ -4,11 +4,11 @@ import zmq
 
 from movici_simulation_core.exceptions import InvalidMessage
 from movici_simulation_core.messages import ErrorMessage, Message
-from movici_simulation_core.networking.stream import get_message_socket
+from movici_simulation_core.networking.stream import SocketFactory, get_message_socket
 
 
 class Sockets:
-    def __init__(self, socket_factory=get_message_socket):
+    def __init__(self, socket_factory: SocketFactory = get_message_socket):
         self.cache = {}
         self.get_message_socket = socket_factory
 
@@ -27,6 +27,8 @@ class Sockets:
 
 
 class RequestClient:
+    sockets: Sockets
+
     def __init__(self, name: str, sockets: Sockets | None = None):
         self.name = name
         self.sockets = sockets or Sockets()

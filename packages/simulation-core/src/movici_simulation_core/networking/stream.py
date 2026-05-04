@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import dataclasses
 import logging
 import typing as t
@@ -21,17 +23,21 @@ class BaseSocket(t.Generic[T]):
         raise NotImplementedError
 
 
-def get_message_socket(socket_type: int, context=None, ident: t.Optional[bytes] = None, **kwargs):
+class SocketFactory(t.Protocol):
+    def __call__(self, socket_type: int, ident: bytes | None = None): ...
+
+
+def get_message_socket(socket_type: int, ident: t.Optional[bytes] = None) -> MessageSocket:
     try:
-        adapter: t.Callable[[zmq.Socket], MessageSocket] = {
+        adapter: t.Type[MessageSocket] = {
             zmq.REQ: MessageReqSocket,
             zmq.ROUTER: MessageRouterSocket,
             zmq.DEALER: MessageDealerSocket,
         }[socket_type]
     except KeyError:
         raise TypeError("Only support REQ, ROUTER and DEALER sockets") from None
-    context = context or zmq.Context.instance()
-    socket = context.socket(socket_type, **kwargs)
+    context = zmq.Context.instance()
+    socket = context.socket(socket_type)
     if ident is not None:
         socket.set(zmq.IDENTITY, ident)
     return adapter(socket)
@@ -114,7 +120,20 @@ class MessageDealerSocket(MessageSocket[Message]):
         return self.parse_bytes(content)
 
 
-class Stream(t.Generic[T]):
+class BaseStream(t.Generic[T]):
+    handler = None
+
+    def set_handler(self, handler: t.Callable[[T], None]) -> None:
+        self.handler = handler
+
+    def run(self):
+        raise NotImplementedError
+
+    def send(self, payload: T):
+        raise NotImplementedError
+
+
+class Stream(BaseStream[T]):
     def __init__(self, socket: BaseSocket[T], logger: logging.Logger = None):
         self.handler = None
         self.socket = socket
