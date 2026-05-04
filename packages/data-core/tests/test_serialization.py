@@ -1,7 +1,7 @@
 import pytest
-from movici_data_core.exceptions import SerializationError, UnsupportedFileType
-from movici_data_core.serialization import dump_dict, load_dict
 
+from movici_data_core.exceptions import DeserializationError, UnsupportedFileType
+from movici_data_core.serialization import dump_dict, load_dict
 from movici_simulation_core.types import FileType
 
 
@@ -27,5 +27,5 @@ def test_raises_on_unsupported_filetype_on_dump():
 
 @pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
 def test_raises_on_invalid_data(filetype):
-    with pytest.raises(SerializationError):
+    with pytest.raises(DeserializationError):
         load_dict(b"{invalid}", filetype=filetype)

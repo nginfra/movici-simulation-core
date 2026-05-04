@@ -5,11 +5,12 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from movici_data_core.exceptions import (
     InconsistentDatabase,
     InvalidAction,
+    InvalidID,
 )
 from movici_data_core.services import (
     AttributeTypeService,
@@ -20,48 +21,77 @@ from movici_data_core.services import (
     ScenarioService,
     WorkspaceService,
 )
+from movici_simulation_core import EntityInitDataFormat
 from movici_simulation_core.types import ExternalSerializationStrategy
 
 from . import model as db
-from .general import create_default_scenario, create_default_workspace, get_options
+from .general import (
+    create_default_scenario,
+    create_default_workspace,
+    get_engine,
+    get_options,
+    initialize_database,
+)
 from .repository import SQLAlchemyRepository
 
 
-class SQLAlchemyBackendFactory:
+class SQLAlchemyServer:
     """This class is responsible for building a ``SQLAlchemyBackend``. When running inside an
     FastAPI application, this class has the same lifetime as the application. From this class,
     request-scoped ``SQLAlchemyBackend`` instances are created.
 
-    :param session_factory: a SQLALchemy ``AsyncSession`` factory, generally an
-      ``sqlalchemy.ext.asyncio.async_sessionmaker`` instance
+    :param dbapi_url: a DB API url string
+    :param serializer_cls: a class for instantiating an ``ExternalSerializationStrategy``. Default:
+      ``EntityInitDataFormat``
     """
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
-        self.session_factory = session_factory
-        pass
+    session_factory: async_sessionmaker[AsyncSession]
+    engine: AsyncEngine
+
+    def __init__(
+        self,
+        dbapi_url: str,
+        serializer_cls: type[ExternalSerializationStrategy] = EntityInitDataFormat,
+    ):
+
+        self.dbapi_url = dbapi_url
+        self.serializer_cls = serializer_cls
 
     @contextlib.asynccontextmanager
-    async def get_backend(
-        self,
-        serializer: ExternalSerializationStrategy | None = None,
-        session_kwargs: dict[str, t.Any] | None = None,
-    ):
+    async def begin(self, **engine_kwargs):
+        async with get_engine(self.dbapi_url, **engine_kwargs) as engine:
+            self.engine = engine
+            self.session_factory = async_sessionmaker(engine)
+            yield self
+
+    @contextlib.asynccontextmanager
+    async def get_session(self, **session_kwargs):
         async with self.session_factory(**(session_kwargs or {})) as session:
+            yield session
+
+    @contextlib.asynccontextmanager
+    async def get_backend(self, session_kwargs: dict[str, t.Any] | None = None):
+        async with self.get_session(**(session_kwargs or {})) as session:
             options = await get_options(session)
             try:
-                yield self._build_backend(session, options, serializer=serializer)
+                yield await self._with_serializer(self._build_backend(session, options))
             except Exception:
                 await session.rollback()
+                raise
             else:
                 await session.commit()
 
+    async def setup_db(self, mode: db.DatabaseMode = db.DatabaseMode.SINGLE_SCENARIO):
+        async with self.engine.begin() as conn:
+            await conn.run_sync(db.Base.metadata.create_all)
+
+        async with self.session_factory() as session:
+            await initialize_database(session, mode)
+            await session.commit()
+
     @staticmethod
-    def _build_backend(
-        session: AsyncSession,
-        options: db.Options,
-        serializer: ExternalSerializationStrategy | None,
-    ):
-        backend = SQLAlchemyBackend(session, options, serializer)
+    def _build_backend(session: AsyncSession, options: db.Options):
+        backend = SQLAlchemyBackend(session, options)
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
 
@@ -85,6 +115,10 @@ class SQLAlchemyBackendFactory:
 
         assert False, f"Unknown database mode {options.mode}"
 
+    async def _with_serializer(self, backend: SQLAlchemyBackend):
+        schema = await backend.attribute_types.as_schema()
+        return dataclasses.replace(backend, serializer=self.serializer_cls(schema))
+
 
 @dataclasses.dataclass
 class SQLAlchemyBackend:
@@ -95,6 +129,8 @@ class SQLAlchemyBackend:
     scenario_id: UUID | None = None
     single_scenario_mode: bool = False
     single_workspace_mode: bool = False
+
+    __id_type__ = UUID
 
     @property
     def repository(self):
@@ -243,3 +279,20 @@ class SQLAlchemyBackend:
             self.options.STRICT_MODEL_TYPES = strict_model_types
         if strict_scenario_datasets is not None:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
+
+    async def update_schema(self):
+        schema = await self.attribute_types.as_schema()
+        if self.serializer:
+            self.serializer.set_schema(schema)
+
+    def validated_id(self, id: t.Any) -> UUID:
+        match id:
+            case UUID():
+                return id
+            case str():
+                try:
+                    return UUID(id)
+                except ValueError as e:
+                    raise InvalidID(id) from e
+            case _:
+                raise InvalidID(id)

@@ -3,7 +3,7 @@ import typing as t
 import msgpack
 import orjson
 
-from movici_data_core.exceptions import SerializationError, UnsupportedFileType
+from movici_data_core.exceptions import DeserializationError, UnsupportedFileType
 from movici_simulation_core.types import FileType
 
 
@@ -14,7 +14,7 @@ def load_dict(data: bytes, filetype: FileType) -> dict:
         if filetype == FileType.MSGPACK:
             return t.cast(dict, msgpack.unpackb(data))
     except (OSError, ValueError) as e:
-        raise SerializationError from e
+        raise DeserializationError from e
     raise UnsupportedFileType(filetype)
 
 

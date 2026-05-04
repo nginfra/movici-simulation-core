@@ -1,17 +1,21 @@
-import dataclasses
 import typing as t
 from uuid import UUID
 
 import pytest
 
-from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyBackendFactory
+from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.domain_model import Dataset, Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from movici_data_core.serialization import dump_dict
-from movici_data_core.validators import MinimalModelConfigValidator
-from movici_simulation_core.core import EntityInitDataFormat
+from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.types import FileType
+
+
+@pytest.fixture
+async def backend(initialized_db: SQLAlchemyServer):
+    async with initialized_db.get_backend() as backend:
+        yield backend
 
 
 @pytest.mark.parametrize(
@@ -24,12 +28,10 @@ from movici_simulation_core.types import FileType
     ],
 )
 async def test_correct_backend(
-    database_mode, single_scenario_mode, single_workspace_mode, session_factory, initialized_db
+    backend, database_mode, single_scenario_mode, single_workspace_mode
 ):
-    factory = SQLAlchemyBackendFactory(session_factory)
-    async with factory.get_backend() as backend:
-        assert backend.single_scenario_mode == single_scenario_mode
-        assert backend.single_workspace_mode == single_workspace_mode
+    assert backend.single_scenario_mode == single_scenario_mode
+    assert backend.single_workspace_mode == single_workspace_mode
 
 
 @pytest.mark.parametrize(
@@ -65,18 +67,9 @@ async def test_correct_backend(
         ),
     ],
 )
-async def test_default_flags(database_mode, flags, session_factory, initialized_db):
-    factory = SQLAlchemyBackendFactory(session_factory)
-    async with factory.get_backend() as backend:
-        for k, v in flags.items():
-            assert getattr(backend.options, k) == v
-
-
-@pytest.fixture
-async def backend(session_factory, initialized_db):
-    factory = SQLAlchemyBackendFactory(session_factory)
-    async with factory.get_backend() as backend:
-        yield backend
+async def test_default_flags(backend, database_mode, flags):
+    for k, v in flags.items():
+        assert getattr(backend.options, k) == v
 
 
 @pytest.mark.parametrize(
@@ -122,7 +115,7 @@ async def test_change_mode(
         for num in range(scenario_count):
             await backend.for_workspace(workspace_id).scenarios.create(
                 Scenario(f"scenario_{num}", f"scenario_{num}", description="", epsg_code=1),
-                validator=MinimalModelConfigValidator(),
+                validator=ModelConfigValidator(),
             )
     if can_change:
         await backend.set_database_mode(new_mode)
@@ -246,11 +239,10 @@ class TestMultipleWorkspaceBackend:
 
 class TestDatasetService:
     @pytest.fixture
-    async def backend(self, backend: SQLAlchemyBackend, a_dataset):
-        schema = await backend.attribute_types.as_schema()
-        return dataclasses.replace(
-            backend, serializer=EntityInitDataFormat(schema=schema)
-        ).for_workspace(a_dataset.workspace.id)
+    async def backend(self, backend: SQLAlchemyBackend, a_dataset, create_default_types):
+        await create_default_types(backend.repository)
+        await backend.update_schema()
+        return backend.for_workspace(a_dataset.workspace.id)
 
     @pytest.fixture
     def dataset_with_data(self, a_dataset: Dataset):

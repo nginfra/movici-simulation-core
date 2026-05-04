@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import functools
+import inspect
 import typing as t
+from http import HTTPStatus
 from uuid import UUID
 
 from jsonschema import ValidationError as JSONSchemaValidationError
 
 from movici_simulation_core.types import FileType
 
-T_id = t.TypeVar("T_id", UUID, str)
-
 
 class MoviciDataError(Exception):
-    pass
+    __status_code__ = HTTPStatus.INTERNAL_SERVER_ERROR
+    __error_message__ = "An error occured"
+    __error_id__ = "generic_error"
+
+    def payload(self) -> dict | None:
+        pass
 
 
 class DatabaseAlreadyInitialized(MoviciDataError):
@@ -26,14 +32,17 @@ class InconsistentDatabase(MoviciDataError):
     pass
 
 
-class InvalidResource(t.Generic[T_id], MoviciDataError):
-    id: T_id | None
+class InvalidResource(MoviciDataError):
+    __status_code__ = HTTPStatus.BAD_REQUEST
+    __error_id__ = "invalid_resource"
+    __error_message__ = "Invalid resource"
+    id: UUID | None
 
     def __init__(
         self,
         resource_type: str,
         name: str | None = None,
-        id: T_id | None = None,
+        id: UUID | None = None,
         message: str | None = None,
     ):
         if not (name or id):
@@ -53,20 +62,47 @@ class InvalidResource(t.Generic[T_id], MoviciDataError):
             parts.append(f"[{self.message}]")
         return " ".join(parts)
 
+    def payload(self):
+        return {
+            "resource": self.resource_type,
+            "name": self.name,
+            "id": self.id,
+            "message": self.message or self.__error_message__,
+        }
+
+
+class InvalidID(MoviciDataError):
+    __status_code__ = HTTPStatus.NOT_FOUND
+    __error_id__ = "id_not_found"
+
+    def __init__(self, id: t.Any):
+        self.id = id
+
+    def payload(self) -> dict | None:
+        return {"message": f"ID {self.id} is not a valid id "}
+
 
 class UnsupportedFileType(MoviciDataError):
+    __status_code__ = HTTPStatus.UNSUPPORTED_MEDIA_TYPE
+    __error_id__ = "unsupported_media_type"
+
     def __init__(self, filetype: FileType):
         self.filetype = filetype
 
-    def __str__(self) -> str:
-        return f"Filetype {self.filetype} is not supported for this operation"
+    def payload(self):
+        return {"message": f"Filetype {self.filetype} is not supported for this operation"}
 
 
-class SerializationError(MoviciDataError):
-    pass
+class DeserializationError(MoviciDataError):
+    __status_code__ = HTTPStatus.BAD_REQUEST
+    __error_message__ = "Error while reading data"
 
 
 class MoviciValidationError(MoviciDataError):
+    __status_code__ = HTTPStatus.UNPROCESSABLE_CONTENT
+    __error_id__ = "validation_error"
+    __error_message__ = "Valdation error"
+
     def __init__(self, error: str | dict[str, list[str]] | None = None, path=""):
         self.path = path
         if isinstance(error, str):
@@ -120,15 +156,81 @@ class MoviciValidationError(MoviciDataError):
     def __str__(self):
         return "\n".join(f"{p}: {msg}" for p, msg in self.iter_messages())
 
+    def as_http_payload(self):
+        return {
+            "messages": self.as_dict(),
+        }
+
 
 class ResourceDoesNotExist(InvalidResource):
-    pass
+    __status_code__ = HTTPStatus.NOT_FOUND
+    __error_id__ = "not_found_error"
+    __error_message__ = "Resource not found"
 
 
 class ResourceAlreadyExists(InvalidResource):
-    pass
+    __status_code__ = HTTPStatus.CONFLICT
+    __error_id__ = "duplicate_error"
+    __error_message__ = "Resource already exists"
 
 
 class InvalidAction(MoviciDataError):
-    def __init__(self, message: str | None = None):
+    __status_code__ = HTTPStatus.BAD_REQUEST
+    __error_id__ = "invalid_action"
+
+    def __init__(self, message: str = "Invalid action"):
         self.message = message
+
+    def payload(self) -> dict | None:
+        return {"message": self.message}
+
+
+T = t.TypeVar("T")
+
+
+class map_errors:
+    def __init__(
+        self,
+        mapping: t.Mapping[
+            type[Exception], Exception | type[Exception] | t.Callable[..., Exception]
+        ],
+    ):
+        self.mapping = mapping
+
+    def __call__(self, func: T) -> T:
+        if inspect.iscoroutinefunction(func):
+            return self.wrap_async(func)
+        return t.cast(T, self.wrap(func))
+
+    def wrap(self, func):
+        @functools.wraps(func)
+        def _wrapped(inst, *args, **kwargs):
+            try:
+                return func(inst, *args, **kwargs)
+            except Exception as e:
+                raise self._map_error(e, args, kwargs) from e
+
+        return _wrapped
+
+    def wrap_async(self, func):
+        @functools.wraps(func)
+        async def _wrapped(inst, *args, **kwargs):
+            try:
+                return await func(inst, *args, **kwargs)
+            except Exception as e:
+                raise self._map_error(e, args, kwargs) from e
+            except BaseException:
+                raise
+
+        return _wrapped
+
+    def _map_error(
+        self, exc: type[Exception] | Exception, args, kwargs
+    ) -> type[Exception] | Exception:
+        exc_type = type(exc) if isinstance(exc, Exception) else exc
+        if exc_type in self.mapping:
+            mapped = self.mapping[exc_type]
+            if callable(mapped):
+                mapped = mapped(*args, **kwargs)
+            return mapped
+        return exc

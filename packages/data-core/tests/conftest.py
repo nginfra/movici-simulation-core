@@ -2,9 +2,12 @@ import typing as t
 from uuid import UUID
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from movici_data_core.database import model as db_model
-from movici_data_core.database.general import get_engine, get_options, initialize_database
-from movici_data_core.database.model import Base, DatabaseMode
+from movici_data_core.database.backend import SQLAlchemyServer
+from movici_data_core.database.general import get_options, initialize_database
+from movici_data_core.database.model import DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
     AttributeType,
@@ -17,17 +20,12 @@ from movici_data_core.domain_model import (
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from movici_simulation_core.core import DataType
 
 
 @pytest.fixture
-async def db():
-    async with get_engine("sqlite+aiosqlite://", echo=True) as engine:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        yield engine
+def dbapi_url():
+    return "sqlite+aiosqlite://"
 
 
 @pytest.fixture
@@ -36,20 +34,23 @@ def database_mode():
 
 
 @pytest.fixture
-def session_factory(db):
-    return async_sessionmaker(db)
+async def database_server(dbapi_url):
+    async with SQLAlchemyServer(dbapi_url).begin(echo=True) as server:
+        async with server.engine.begin() as conn:
+            await conn.run_sync(db_model.Base.metadata.create_all)
+        yield server
 
 
 @pytest.fixture
-async def initialized_db(session_factory, database_mode):
-    async with session_factory() as session:
+async def initialized_db(database_server: SQLAlchemyServer, database_mode):
+    async with database_server.get_session() as session:
         await initialize_database(session, mode=database_mode)
-        await session.commit()
+        yield database_server
 
 
 @pytest.fixture
-async def session(session_factory, initialized_db):
-    async with session_factory() as session:
+async def session(initialized_db: SQLAlchemyServer):
+    async with initialized_db.get_session() as session:
         yield session
 
 
@@ -115,24 +116,33 @@ def default_model_types():
 
 
 @pytest.fixture
-async def repository(
-    session,
-    default_dataset_types,
-    default_entity_types,
-    default_attribute_types,
-    default_model_types,
-    a_workspace,
+def create_default_types(
+    default_dataset_types, default_entity_types, default_attribute_types, default_model_types
 ):
+    created = False
+
+    async def _create(repository: SQLAlchemyRepository):
+        nonlocal created
+        if created:
+            return
+        for dataset_type in default_dataset_types:
+            await repository.dataset_types.create(dataset_type)
+        for entity_type in default_entity_types:
+            await repository.entity_types.create(entity_type)
+        for attribute_type in default_attribute_types:
+            await repository.attribute_types.create(attribute_type)
+        for model_type in default_model_types:
+            await repository.model_types.create(model_type)
+        created = True
+
+    return _create
+
+
+@pytest.fixture
+async def repository(session, create_default_types, a_workspace):
     options = await get_options(session)
     repository = SQLAlchemyRepository(session, options)
-    for dataset_type in default_dataset_types:
-        await repository.dataset_types.create(dataset_type)
-    for entity_type in default_entity_types:
-        await repository.entity_types.create(entity_type)
-    for attribute_type in default_attribute_types:
-        await repository.attribute_types.create(attribute_type)
-    for model_type in default_model_types:
-        await repository.model_types.create(model_type)
+    await create_default_types(repository)
     return repository.for_workspace(a_workspace.id)
 
 

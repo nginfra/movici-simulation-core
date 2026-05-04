@@ -56,10 +56,10 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         if not existing:
             if self.options.STRICT_DATASET_TYPES:
                 raise ResourceDoesNotExist("dataset_type", name=dataset_type.name)
-            dataset_type_id = await self.create(dataset_type)
+            dataset_type_id = await self.create(dataset_type.ensure_format())
             existing = await self.get_by_id(dataset_type_id)
 
-        if existing != dataset_type:
+        if dataset_type.format is not None and existing != dataset_type:
             raise InvalidResource(
                 "dataset_type",
                 name=dataset_type.name,

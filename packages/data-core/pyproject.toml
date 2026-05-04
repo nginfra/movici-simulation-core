@@ -29,6 +29,8 @@ classifiers = [
 ]
 
 dependencies = [
+  "fastapi[standard]",
+  "svcs",
   "numpy",
   "orjson>=3.11.7",
   "sqlalchemy",

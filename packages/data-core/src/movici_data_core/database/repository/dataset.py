@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import dataclasses
+import pathlib
 import typing as t
 from uuid import UUID
 
+import sqlalchemy.exc
 from sqlalchemy import Insert, Select, delete, exists, insert, select, update
 from sqlalchemy.orm import joinedload
 
@@ -22,10 +24,17 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    ResourceAlreadyExists,
     ResourceDoesNotExist,
+    map_errors,
 )
 
-from .common import EntityDataProcessor, EntityDataSelector, RawDataHandler, SQLResourceRepository
+from .common import (
+    EntityDataProcessor,
+    EntityDataSelector,
+    RawDataProcessor,
+    SQLResourceRepository,
+)
 
 
 @dataclasses.dataclass
@@ -134,6 +143,13 @@ class DatasetRepository(SQLResourceRepository):
             count=sum(e.count for e in entity_groups.values()),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "dataset", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: Dataset) -> UUID:
         workspace_id = self._ensure_workspace_id()
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
@@ -247,11 +263,27 @@ class DatasetDataRepository(SQLResourceRepository):
         entity_data_exists = await self._exists(db.DatasetAttribute.dataset_id == id)
         return raw_data_exists or entity_data_exists
 
-    def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
-        return RawDataHandler(self.session).stream_bytes(id, yield_per=yield_per)
+    async def get_dataset_as_file(self, dataset_id: UUID, file_dir: pathlib.Path):
+        if not file_dir.exists() and file_dir.is_dir():
+            raise OSError(f"{file_dir} is not a valid directory")
+
+        dataset = await self.all_data.datasets.get_by_id(dataset_id)
+        if dataset is None:
+            raise ResourceDoesNotExist("dataset", id=dataset_id)
+        match dataset.dataset_type.format:
+            case DatasetFormat.ENTITY_BASED:
+                pass
+
+            case DatasetFormat.UNSTRUCTURED:
+                return
+
+    def stream_binary_data(
+        self, id: UUID, yield_per=1
+    ) -> t.Coroutine[None, None, tuple[str | None, t.AsyncGenerator[bytes]]]:
+        return RawDataProcessor(self.session).stream_bytes(id, yield_per=yield_per)
 
     def get_unstructured_data(self, id: UUID):
-        return RawDataHandler(self.session).get_dict(id)
+        return RawDataProcessor(self.session).get_dict(id)
 
     def get_entity_data(self, id: UUID):
         return EntityDataProcessor(
@@ -280,10 +312,10 @@ class DatasetDataRepository(SQLResourceRepository):
             ).store(id, data)
 
         if format == DatasetFormat.UNSTRUCTURED:
-            await RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
+            await RawDataProcessor(self.session).store(id, data, chunk_size=chunk_size)
 
         if format == DatasetFormat.BINARY:
-            await RawDataHandler(self.session).store(id, data, chunk_size=chunk_size)
+            await RawDataProcessor(self.session).store(id, data, chunk_size=chunk_size)
 
     async def delete(self, id: UUID):
         await self.session.execute(

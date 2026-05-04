@@ -1,7 +1,14 @@
+import asyncio
 import dataclasses
 import pathlib
 import typing as t
+from uuid import UUID
 
+import svcs
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from movici_data_core.database.general import get_engine
+from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
     Dataset,
     DatasetFormat,
@@ -9,21 +16,23 @@ from movici_data_core.domain_model import (
 )
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
 from movici_data_core.serialization import load_dict
-from movici_data_core.types import MoviciDataRepository, T_id
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 
-class DatasetService(t.Generic[T_id]):
+class DatasetService:
     def __init__(
-        self, repository: MoviciDataRepository, serializer: ExternalSerializationStrategy
+        self,
+        repository: SQLAlchemyRepository,
+        serializer: ExternalSerializationStrategy,
     ):
         self.repository = repository
         self.serializer = serializer
+        self.tmpfile_path = None
 
     async def list(self):
         return await self.repository.datasets.list()
 
-    async def get(self, name: str | None = None, id: T_id | None = None) -> Dataset | None:
+    async def get(self, name: str | None = None, id: UUID | None = None) -> Dataset | None:
         if name is not None:
             result = await self.repository.datasets.get_by_name(name)
         elif id is not None:
@@ -36,20 +45,23 @@ class DatasetService(t.Generic[T_id]):
             result.has_data = await self.repository.dataset_data.exists_for(result.id)
         return result
 
-    async def get_entity_data(self, dataset_id: T_id):
+    async def get_entity_data(self, dataset_id: UUID):
         return await self.repository.dataset_data.get_entity_data(dataset_id)
 
-    async def get_unstructured_data(self, dataset_id: T_id):
+    async def get_unstructured_data(self, dataset_id: UUID):
         return await self.repository.dataset_data.get_unstructured_data(dataset_id)
 
-    async def stream_binary_data(self, dataset_id: T_id):
+    async def stream_binary_data(self, dataset_id: UUID):
         return self.repository.dataset_data.stream_binary_data(dataset_id)
 
     async def create(self, dataset: Dataset):
         return await self.repository.datasets.create(dataset)
 
+    async def update(self, dataset_id: UUID, dataset: Dataset):
+        return await self.repository.datasets.update(dataset_id, dataset)
+
     async def update_from_file(
-        self, dataset_id: T_id, path: pathlib.Path, mimetype: str | None = None
+        self, dataset_id: UUID, path: pathlib.Path, mimetype: str | None = None
     ):
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
@@ -130,7 +142,7 @@ class DatasetService(t.Generic[T_id]):
 
     @staticmethod
     def _ensure_supported_file_type(
-        dataset_id: T_id,
+        dataset_id: UUID,
         dataset_type: DatasetType,
         path: pathlib.Path,
         supported_file_types: t.Container[FileType],
@@ -144,3 +156,27 @@ class DatasetService(t.Generic[T_id]):
                 f" dataset with type {dataset_type.name}",
             )
         return file_type
+
+
+## -------------------------------------------
+#  Tasks that can be run in multiprocessing
+## ----------------------------------------
+
+
+class TaskContext:
+    engine: t.ClassVar[AsyncEngine | None] = None
+    loop: t.ClassVar[asyncio.AbstractEventLoop | None] = None
+
+    @classmethod
+    def initialize(cls, dbapi_url: str):
+        cls.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(cls.loop)
+
+        async def set_engine():
+            get_engine(dbapi_url)
+
+        cls.loop.run_until_complete(set_engine())
+
+
+def get_dataset_as_file(dataset_id: str | UUID, registry: svcs.Registry):
+    pass

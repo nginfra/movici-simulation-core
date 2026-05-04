@@ -9,12 +9,11 @@ from movici_data_core.domain_model import (
     ScenarioModel,
 )
 from movici_data_core.exceptions import MoviciValidationError
-from movici_data_core.types import T_id
 from movici_simulation_core.validate import MoviciTypeLookup, ensure_schema, validate_and_process
 
 
 @dataclasses.dataclass
-class BaseModelConfigValidator(t.Generic[T_id]):
+class ModelConfigValidator:
     attribute_types: dict[str, AttributeType] = dataclasses.field(default_factory=dict)
     entity_types: dict[str, EntityType] = dataclasses.field(default_factory=dict)
     datasets: dict[str, ScenarioDataset] | None = None
@@ -63,16 +62,6 @@ class BaseModelConfigValidator(t.Generic[T_id]):
 
         return self.model_types[model_type]
 
-    def process_model_configs(self, configs: list[dict]) -> list[ScenarioModel]:
-        raise NotImplementedError
-
-    def iter_scenario_model_references(
-        self, scenario_model: ScenarioModel[T_id]
-    ) -> t.Iterable[dict]:
-        raise NotImplementedError
-
-
-class ModelConfigValidator(BaseModelConfigValidator[T_id]):
     @property
     def lookup(self):
         return MoviciTypeLookup(
@@ -131,24 +120,3 @@ class ModelConfigValidator(BaseModelConfigValidator[T_id]):
             elif ref.movici_type == "dataset":
                 ref_data["dataset_id"] = self.datasets[ref.value].id if self.datasets else None
             yield ref_data
-
-
-class MinimalModelConfigValidator(BaseModelConfigValidator[T_id]):
-    def process_model_configs(self, configs: list[dict]) -> list[ScenarioModel]:
-        return [self._process_model_config(config) for config in configs]
-
-    def _process_model_config(self, config: dict):
-        if "name" not in config:
-            raise MoviciValidationError("name is a required field")
-
-        name = config["name"]
-        if not isinstance(name, str):
-            raise MoviciValidationError("must be string", path="name")
-
-        model_type = self.validated_model_type(config)
-        return ScenarioModel(name, type=model_type, config=config)
-
-    def get_scenario_model_references(
-        self, scenario_model: ScenarioModel[T_id]
-    ) -> t.Iterable[dict]:
-        return ()

@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import enum
 import typing as t
 
 import numpy as np
+
+if t.TYPE_CHECKING:
+    from movici_simulation_core import AttributeSchema
 
 Timestamp = int
 NextTime = t.Optional[int]
@@ -55,13 +60,16 @@ class FileType(enum.Enum):
 class ExternalSerializationStrategy:
     def __init__(
         self,
-        schema,
+        schema: AttributeSchema | None = None,
         non_data_dict_keys: t.Container[str] = ("general",),
         cache_inferred_attributes: bool = False,
     ) -> None:
         self.schema = schema
         self.non_data_dict_keys = non_data_dict_keys
         self.cache_inferred_attributes = cache_inferred_attributes
+
+    def set_schema(self, schema: AttributeSchema):
+        self.schema = schema
 
     def dumps(self, data: dict, filetype: FileType) -> bytes:
         raise NotImplementedError

@@ -1,24 +1,20 @@
-import typing as t
+from uuid import UUID
 
+from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import Scenario
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
-from movici_data_core.types import MoviciDataRepository, T_id
-from movici_data_core.validators import BaseModelConfigValidator
-
-T_dom = t.TypeVar("T_dom")
+from movici_data_core.validators import ModelConfigValidator
 
 
-class ScenarioService(t.Generic[T_id]):
-    repository: MoviciDataRepository[T_id]
-
-    def __init__(self, repository: MoviciDataRepository[T_id], single_scenario_mode: bool):
+class ScenarioService:
+    def __init__(self, repository: SQLAlchemyRepository, single_scenario_mode: bool):
         self.repository = repository
         self.single_scenario_mode = single_scenario_mode
 
     async def list(self):
         return await self.repository.scenarios.list()
 
-    async def get(self, name: str | None = None, id: T_id | None = None) -> Scenario | None:
+    async def get(self, name: str | None = None, id: UUID | None = None) -> Scenario | None:
         if name is not None:
             result = await self.repository.scenarios.get_by_name(name)
         elif id is not None:
@@ -32,7 +28,7 @@ class ScenarioService(t.Generic[T_id]):
             result.has_updates = await self.repository.updates.exists()
         return result
 
-    async def create(self, scenario: Scenario, validator: BaseModelConfigValidator):
+    async def create(self, scenario: Scenario, validator: ModelConfigValidator):
         if self.single_scenario_mode:
             raise InvalidAction("Unsupported operation in this mode")
         return await self.repository.scenarios.create(scenario, validator)

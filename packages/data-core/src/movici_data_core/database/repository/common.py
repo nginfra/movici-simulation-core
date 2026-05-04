@@ -176,7 +176,7 @@ class EntityDataProcessor:
         )
 
 
-class RawDataHandler:
+class RawDataProcessor:
     """Logic for storing dataset data as raw bytes in the database. Used for ``BINARY`` and
     ``UNSTRUCTURED`` datasets
     """
@@ -186,34 +186,43 @@ class RawDataHandler:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, id: UUID | None = None, raw_data: db.RawData | None = None) -> bytearray:
+    async def get(
+        self, id: UUID | None = None, raw_data: db.RawData | None = None
+    ) -> tuple[str | None, bytearray]:
         result = bytearray()
-
-        async for chunk in self.stream_bytes(id, raw_data):
+        encoding, gen = await self.stream_bytes(id, raw_data)
+        async for chunk in gen:
             result += chunk
-        return result
+        return encoding, result
 
     async def stream_bytes(
         self, id: UUID | None = None, raw_data: db.RawData | None = None, yield_per=1
-    ) -> t.AsyncGenerator[bytes]:
+    ) -> tuple[str | None, t.AsyncGenerator[bytes]]:
+        """
+        :returns: a tuple (encoding, bytestreamer). The bytestreamer can be used as an async
+            generator
+        """
         if not ((id is None) ^ (raw_data is None)):
             raise ValueError("Supply one of id and raw_data, but not both")
 
         raw_data = raw_data or await self._ensure_raw_data(t.cast(UUID, id))
 
-        async for chunk in await self.session.stream_scalars(
-            select(db.RawDataChunk.bytes)
-            .execution_options(yield_per=yield_per)
-            .where(db.RawDataChunk.raw_data_id == raw_data.id)
-            .order_by(db.RawDataChunk.sequence.asc())
-        ):
-            yield chunk
+        async def _bytestreamer():
+            async for chunk in await self.session.stream_scalars(
+                select(db.RawDataChunk.bytes)
+                .execution_options(yield_per=yield_per)
+                .where(db.RawDataChunk.raw_data_id == raw_data.id)
+                .order_by(db.RawDataChunk.sequence.asc())
+            ):
+                yield chunk
+
+        return raw_data.encoding, _bytestreamer()
 
     async def get_dict(self, id: UUID) -> dict:
         raw_data = await self._ensure_raw_data(id)
         if raw_data.encoding != "json":
             raise ValueError(f"Expected dataset encoding 'json', got {raw_data.encoding}")
-        raw_bytes = await self.get(id)
+        _, raw_bytes = await self.get(raw_data=raw_data)
         return t.cast(dict, orjson.loads(raw_bytes))
 
     async def store(self, id: UUID, data: DatasetData, chunk_size=0):

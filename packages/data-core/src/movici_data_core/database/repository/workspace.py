@@ -44,12 +44,18 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         ]
 
     async def get_by_name(self, name: str) -> Workspace | None:
-        result = await super().get_by_name(name)
+        result = await self.get_short_by_name(name)
         return await self._with_counts(result)
 
     async def get_by_id(self, id: UUID) -> Workspace | None:
-        result = await super().get_by_id(id)
+        result = await self.get_short_by_id(id)
         return await self._with_counts(result)
+
+    async def get_short_by_name(self, name: str) -> Workspace | None:
+        return await super().get_by_name(name)
+
+    async def get_short_by_id(self, id: UUID) -> Workspace | None:
+        return await super().get_by_id(id)
 
     async def _with_counts(self, workspace: Workspace | None) -> Workspace | None:
         if workspace is None:

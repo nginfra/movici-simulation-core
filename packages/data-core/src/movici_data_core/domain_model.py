@@ -10,8 +10,6 @@ from uuid import UUID
 from movici_simulation_core.core import AttributeSpec, DataType
 from movici_simulation_core.validate import MoviciDataRefInfo
 
-T_id = t.TypeVar("T_id", str, UUID)
-
 
 class DatasetFormat(str, enum.Enum):
     """Format types for dataset storage.
@@ -44,34 +42,37 @@ def utcnow():
 
 
 @dataclasses.dataclass
-class Workspace(t.Generic[T_id]):
+class Workspace:
     name: str
     display_name: str
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
     scenario_count: int = 0
     dataset_count: int = 0
 
 
 @dataclasses.dataclass
-class DatasetType(t.Generic[T_id]):
+class DatasetType:
     name: str
-    format: DatasetFormat
+    format: DatasetFormat | None = None
     mimetype: str | None = None
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
+
+    def ensure_format(self):
+        return dataclasses.replace(self, format=self.format or DatasetFormat.ENTITY_BASED)
 
 
 @dataclasses.dataclass
-class EntityType(t.Generic[T_id]):
+class EntityType:
     name: str
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
-class AttributeType(t.Generic[T_id]):
+class AttributeType:
     name: str
     data_type: DataType
 
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
     unit: str = ""
     description: str = ""
@@ -86,11 +87,11 @@ class AttributeType(t.Generic[T_id]):
 
 
 @dataclasses.dataclass
-class ModelType(t.Generic[T_id]):
+class ModelType:
     name: str
     jsonschema: dict
 
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -111,7 +112,7 @@ class BoundingBox:
 
 
 @dataclasses.dataclass
-class Scenario(t.Generic[T_id]):
+class Scenario:
     name: str
     display_name: str
     description: str
@@ -121,7 +122,7 @@ class Scenario(t.Generic[T_id]):
     simulation_info: dict = dataclasses.field(default_factory=dict)
     status: ScenarioStatus = ScenarioStatus.READY
 
-    id: T_id | None = None
+    id: UUID | None = None
     workspace: Workspace | None = None
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
@@ -131,18 +132,18 @@ class Scenario(t.Generic[T_id]):
 
 
 @dataclasses.dataclass
-class ScenarioDataset(t.Generic[T_id]):
+class ScenarioDataset:
     name: str
     type: str
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
-class ScenarioModel(t.Generic[T_id]):
+class ScenarioModel:
     name: str
     type: ModelType
     config: dict = dataclasses.field(default_factory=dict)
-    id: T_id | None = dataclasses.field(compare=False, default=None)
+    id: UUID | None = dataclasses.field(compare=False, default=None)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
 
 
@@ -150,11 +151,11 @@ DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
 
 
 @dataclasses.dataclass
-class Dataset(t.Generic[T_id]):
+class Dataset:
     name: str
     display_name: str
     dataset_type: DatasetType
-    id: T_id | None = None
+    id: UUID | None = None
     workspace: Workspace | None = None
 
     general: dict | None = None
@@ -168,7 +169,7 @@ class Dataset(t.Generic[T_id]):
 
 
 @dataclasses.dataclass
-class Update(t.Generic[T_id]):
+class Update:
     dataset: ScenarioDataset
     timestamp: int
     iteration: int
@@ -176,7 +177,7 @@ class Update(t.Generic[T_id]):
     model_name: str
     model_type: str | None = None
 
-    id: T_id | None = None
+    id: UUID | None = None
     data: DatasetData | None = None
 
 

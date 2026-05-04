@@ -3,8 +3,6 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from movici_data_core.types import MoviciDataRepository
-
 from ..model import Options
 from .dataset import DatasetDataRepository, DatasetRepository
 from .general import (
@@ -19,7 +17,7 @@ from .workspace import WorkspaceRepository
 
 
 @dataclasses.dataclass
-class SQLAlchemyRepository(MoviciDataRepository[UUID]):
+class SQLAlchemyRepository:
     session: AsyncSession
     options: Options
     workspace_id: UUID | None = None

@@ -15,7 +15,7 @@ from movici_data_core.domain_model import (
     ScenarioStatus,
 )
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
-from movici_data_core.validators import BaseModelConfigValidator
+from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.validate import MoviciDataRefInfo
 
 from .common import SQLResourceRepository
@@ -100,7 +100,7 @@ class ScenarioRepository(SQLResourceRepository):
         id = self._ensure_scenario_id()
         await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
-    async def create(self, obj: Scenario, validator: BaseModelConfigValidator) -> UUID:
+    async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
         self._ensure_no_scenario_id()
         workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
@@ -120,7 +120,7 @@ class ScenarioRepository(SQLResourceRepository):
         await self._store_scenario_details(workspace_id, scenario_id, obj, validator)
         return scenario_id
 
-    async def update(self, obj: Scenario, validator: BaseModelConfigValidator):
+    async def update(self, obj: Scenario, validator: ModelConfigValidator):
         id = self._ensure_scenario_id()
         current = await self.get_by_id()
         if current is None:
@@ -159,7 +159,7 @@ class ScenarioRepository(SQLResourceRepository):
         workspace_id: UUID,
         scenario_id: UUID,
         obj: Scenario,
-        validator: BaseModelConfigValidator[UUID],
+        validator: ModelConfigValidator,
     ):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []

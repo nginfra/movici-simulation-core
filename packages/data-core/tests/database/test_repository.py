@@ -26,7 +26,12 @@ from movici_data_core.domain_model import (
     Update,
     Workspace,
 )
-from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
+from movici_data_core.exceptions import (
+    InvalidAction,
+    InvalidResource,
+    ResourceAlreadyExists,
+    ResourceDoesNotExist,
+)
 from movici_simulation_core.core import DataType
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.testing import (
@@ -148,6 +153,15 @@ class TestDatasetTypeRepository:
             await repository.dataset_types.update(
                 dataset_type_id, dataclasses.replace(dataset_type, name="new_name")
             )
+
+    async def test_returns_existing_dataset_type_when_format_unspecified(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        repository.options.STRICT_DATASET_TYPES = True
+        found = await repository.dataset_types.ensure_dataset_type(
+            DatasetType(name="transport_network")
+        )
+        assert found == a_dataset_type
 
     async def test_returns_existing_dataset_type_when_compatible(
         self, repository: SQLAlchemyRepository, a_dataset_type
@@ -436,6 +450,10 @@ class TestDatasetRepository:
 
         assert await repository.datasets.exists("another_dataset")
 
+    async def test_raises_on_existing_dataset(self, repository: SQLAlchemyRepository, a_dataset):
+        with pytest.raises(ResourceAlreadyExists):
+            await repository.datasets.create(a_dataset)
+
     async def test_update_dataset(self, repository: SQLAlchemyRepository, a_dataset):
         await repository.datasets.update(
             a_dataset.id, dataclasses.replace(a_dataset, name="new_name")
@@ -520,7 +538,7 @@ class TestDatasetRepository:
         assert created is not None
         assert created == DatasetType("new_type", format=DatasetFormat.ENTITY_BASED)
 
-    async def test_raises_on_existing_dataset_with_incorrect_type(
+    async def test_raises_on_existing_scenario_dataset_with_incorrect_type(
         self, repository: SQLAlchemyRepository, a_dataset
     ):
 
@@ -593,7 +611,9 @@ class TestDatasetDataRepository:
         assert await repository.dataset_data.exists_for(a_dataset.id)
         result = b""
         n_chunks = 0
-        async for chunk in repository.dataset_data.stream_binary_data(a_dataset.id):
+
+        _, gen = await repository.dataset_data.stream_binary_data(a_dataset.id)
+        async for chunk in gen:
             result += chunk
             n_chunks += 1
         assert n_chunks == len(raw_bytes) // 2 + 1
