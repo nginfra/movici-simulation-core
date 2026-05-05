@@ -7,6 +7,7 @@ from .general import (
     WorkspaceService,
 )
 from .scenario import ScenarioService
+from .update import UpdateService
 
 __all__ = [
     "DatasetService",
@@ -16,4 +17,5 @@ __all__ = [
     "ModelTypeService",
     "WorkspaceService",
     "ScenarioService",
+    "UpdateService",
 ]

@@ -1,3 +1,4 @@
+import pathlib
 import typing as t
 from uuid import UUID
 
@@ -7,7 +8,7 @@ from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServe
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.domain_model import Dataset, Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
-from movici_data_core.serialization import dump_dict
+from movici_data_core.serialization import dump_dict, load_dict
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.types import FileType
 
@@ -245,11 +246,12 @@ class TestDatasetService:
         return backend.for_workspace(a_dataset.workspace.id)
 
     @pytest.fixture
-    def dataset_with_data(self, a_dataset: Dataset):
+    def dataset_data(self, a_dataset: Dataset):
         return {
             "name": a_dataset.name,
             "type": a_dataset.dataset_type.name,
             "display_name": a_dataset.display_name,
+            "epsg_code": 28992,
             "general": {"some": "data"},
             "data": {
                 "transport_nodes": {
@@ -275,19 +277,19 @@ class TestDatasetService:
         return _store
 
     @pytest.fixture
-    def dataset_path(self, dataset_with_data, store_dataset):
-        return store_dataset(dataset_with_data)
+    def dataset_path(self, dataset_data, store_dataset):
+        return store_dataset(dataset_data)
 
     async def test_list_dataset_with_data(
         self,
         backend: SQLAlchemyBackend,
-        dataset_with_data,
+        dataset_data,
         store_dataset,
         a_dataset_type,
         a_dataset,
     ):
         # fill a_dataset with entity_data
-        await backend.datasets.update_from_file(a_dataset.id, store_dataset(dataset_with_data))
+        await backend.datasets.update_from_file(a_dataset.id, store_dataset(dataset_data))
 
         # create a dataset with raw data
         raw_dataset_type = await backend.dataset_types.get(name="flooding_tape")
@@ -365,11 +367,119 @@ class TestDatasetService:
         assert result is not None
         assert result.has_data
 
-    async def test_sqlalchemy_backend_doenst_allow_updating_dataset_type(
-        self, a_dataset, store_dataset, dataset_with_data, backend: SQLAlchemyBackend
+    async def test_backend_doenst_allow_updating_dataset_type(
+        self, a_dataset, store_dataset, dataset_data, backend: SQLAlchemyBackend
     ):
         backend.set_options(strict_dataset_types=False)
-        dataset_with_data["type"] = "new_type"
-        path = store_dataset(dataset_with_data)
+        dataset_data["type"] = "new_type"
+        path = store_dataset(dataset_data)
         with pytest.raises(InvalidResource):
             await backend.datasets.update_from_file(a_dataset.id, path)
+
+    @pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
+    async def test_get_entity_data_as_file(
+        self,
+        a_dataset: Dataset,
+        dataset_data,
+        dataset_path,
+        backend: SQLAlchemyBackend,
+        tmp_path: pathlib.Path,
+        filetype: FileType,
+    ):
+        assert a_dataset.id is not None
+        assert a_dataset.created_at is not None
+        assert a_dataset.updated_at is not None
+
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        file = await backend.datasets.get_dataset_as_file(a_dataset.id, filetype=filetype)
+
+        assert file.parent == tmp_path
+        assert file.suffix == filetype.default_extension
+        result = load_dict(file.read_bytes(), filetype=filetype)
+        assert result == {
+            **dataset_data,
+            "id": str(a_dataset.id),
+            "created_at": a_dataset.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "updated_at": a_dataset.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "epsg_code": 28992,
+            "has_data": True,
+            "bounding_box": [1.0, 2.0, 2.0, 3.0],
+        }
+
+    @pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
+    async def test_get_unstructured_data_as_file(
+        self, store_dataset, backend: SQLAlchemyBackend, tmp_path, filetype: FileType
+    ):
+        dataset_type = await backend.dataset_types.get(name="tabular")
+        assert dataset_type is not None
+
+        dataset_id = await backend.datasets.create(
+            Dataset("some_dataset", "Some Dataset", dataset_type=dataset_type)
+        )
+        created = await backend.datasets.get(id=dataset_id)
+        assert created is not None
+        assert not created.has_data
+        assert created.created_at is not None
+        assert created.updated_at is not None
+
+        await backend.datasets.update_from_file(
+            dataset_id,
+            store_dataset(
+                {
+                    "name": "some_dataset",
+                    "display_name": "Some Dataset",
+                    "type": "tabular",
+                    "data": {"some": "data"},
+                },
+                filetype=filetype,
+            ),
+        )
+
+        file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file.parent == tmp_path
+        assert file.suffix == filetype.default_extension
+
+        result = load_dict(file.read_bytes(), filetype)
+        assert result == {
+            "id": str(created.id),
+            "name": created.name,
+            "display_name": created.display_name,
+            "type": "tabular",
+            "has_data": True,
+            "epsg_code": None,
+            "general": None,
+            "bounding_box": None,
+            "created_at": created.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "updated_at": created.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "data": {"some": "data"},
+        }
+
+    async def test_get_binary_data_as_file(
+        self, store_dataset, backend: SQLAlchemyBackend, tmp_path
+    ):
+        filetype = FileType.NETCDF
+        dataset_type = await backend.dataset_types.get(name="flooding_tape")
+        assert dataset_type is not None
+
+        dataset_id = await backend.datasets.create(
+            Dataset("some_dataset", "Some Dataset", dataset_type=dataset_type)
+        )
+        created = await backend.datasets.get(id=dataset_id)
+        assert created is not None
+        assert not created.has_data
+
+        await backend.datasets.update_from_file(
+            dataset_id,
+            store_dataset(
+                b"somedata" * 10,
+                name="some_dataset",
+                filetype=filetype,
+            ),
+        )
+
+        file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file.parent == tmp_path
+        assert file.suffix == filetype.default_extension
+
+        result = file.read_bytes()
+        assert result == b"somedata" * 10

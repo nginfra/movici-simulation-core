@@ -158,7 +158,9 @@ class Dataset(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
 
-    def to_domain(self) -> domain_model.Dataset:
+    def to_domain(
+        self, has_raw_data: bool = False, has_attributes: bool = False
+    ) -> domain_model.Dataset:
         return domain_model.Dataset(
             id=self.id,
             name=self.name,
@@ -172,6 +174,7 @@ class Dataset(Base):
             ),
             created_at=self.created_at,
             updated_at=self.updated_at,
+            has_data=has_raw_data or has_attributes,
         )
 
 

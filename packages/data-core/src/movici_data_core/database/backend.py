@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import pathlib
 import typing as t
 from uuid import UUID
 
@@ -10,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from movici_data_core.exceptions import (
     InconsistentDatabase,
     InvalidAction,
-    InvalidID,
 )
 from movici_data_core.services import (
     AttributeTypeService,
@@ -21,6 +21,7 @@ from movici_data_core.services import (
     ScenarioService,
     WorkspaceService,
 )
+from movici_data_core.services.update import UpdateService
 from movici_simulation_core import EntityInitDataFormat
 from movici_simulation_core.types import ExternalSerializationStrategy
 
@@ -48,14 +49,25 @@ class SQLAlchemyServer:
     session_factory: async_sessionmaker[AsyncSession]
     engine: AsyncEngine
 
+    workspace_service_cls: type[WorkspaceService] = WorkspaceService
+    dataset_type_service_cls: type[DatasetTypeService] = DatasetTypeService
+    entity_type_service_cls: type[EntityTypeService] = EntityTypeService
+    attribute_type_service_cls: type[AttributeTypeService] = AttributeTypeService
+    model_type_service_cls: type[ModelTypeService] = ModelTypeService
+    dataset_service_cls: type[DatasetService] = DatasetService
+    scenario_service_cls: type[ScenarioService] = ScenarioService
+    update_service_cls: type[UpdateService] = UpdateService
+
     def __init__(
         self,
         dbapi_url: str,
         serializer_cls: type[ExternalSerializationStrategy] = EntityInitDataFormat,
+        tmpfile_dir: pathlib.Path | None = None,
     ):
 
         self.dbapi_url = dbapi_url
         self.serializer_cls = serializer_cls
+        self.tmpfile_dir = tmpfile_dir
 
     @contextlib.asynccontextmanager
     async def begin(self, **engine_kwargs):
@@ -89,9 +101,8 @@ class SQLAlchemyServer:
             await initialize_database(session, mode)
             await session.commit()
 
-    @staticmethod
-    def _build_backend(session: AsyncSession, options: db.Options):
-        backend = SQLAlchemyBackend(session, options)
+    def _build_backend(self, session: AsyncSession, options: db.Options):
+        backend = SQLAlchemyBackend(session, options, tmpfile_dir=self.tmpfile_dir)
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
 
@@ -130,7 +141,15 @@ class SQLAlchemyBackend:
     single_scenario_mode: bool = False
     single_workspace_mode: bool = False
 
-    __id_type__ = UUID
+    tmpfile_dir: pathlib.Path | None = None
+    workspace_service_cls: type[WorkspaceService] = WorkspaceService
+    dataset_type_service_cls: type[DatasetTypeService] = DatasetTypeService
+    entity_type_service_cls: type[EntityTypeService] = EntityTypeService
+    attribute_type_service_cls: type[AttributeTypeService] = AttributeTypeService
+    model_type_service_cls: type[ModelTypeService] = ModelTypeService
+    dataset_service_cls: type[DatasetService] = DatasetService
+    scenario_service_cls: type[ScenarioService] = ScenarioService
+    update_service_cls: type[UpdateService] = UpdateService
 
     @property
     def repository(self):
@@ -148,33 +167,43 @@ class SQLAlchemyBackend:
     def workspaces(self):
         if self.single_workspace_mode:
             raise InvalidAction("workspaces are not supported in this mode")
-        return WorkspaceService(self.repository)
+        return self.workspace_service_cls(self.repository)
 
     @property
     def dataset_types(self):
-        return DatasetTypeService(self.repository)
+        return self.dataset_type_service_cls(self.repository)
 
     @property
     def entity_types(self):
-        return EntityTypeService(self.repository)
+        return self.entity_type_service_cls(self.repository)
 
     @property
     def attribute_types(self):
-        return AttributeTypeService(self.repository)
+        return self.attribute_type_service_cls(self.repository)
 
     @property
     def model_types(self):
-        return ModelTypeService(self.repository)
-
-    @property
-    def scenarios(self):
-        return ScenarioService(self.repository, single_scenario_mode=self.single_scenario_mode)
+        return self.model_type_service_cls(self.repository)
 
     @property
     def datasets(self):
         if self.serializer is None:
             raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        return DatasetService(self.repository, self.serializer)
+        if self.tmpfile_dir is None:
+            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
+        return self.dataset_service_cls(self.repository, self.serializer, self.tmpfile_dir)
+
+    @property
+    def scenarios(self):
+        return self.scenario_service_cls(
+            self.repository, single_scenario_mode=self.single_scenario_mode
+        )
+
+    @property
+    def updates(self):
+        if self.serializer is None:
+            raise RuntimeError("SQLAlchemyBackend.serializer must be set")
+        return self.update_service_cls(self.repository, serializer=self.serializer)
 
     async def set_database_mode(self, new_mode: db.DatabaseMode):
         """Change the mode of this database. Upgrading is always possible along the path
@@ -284,15 +313,3 @@ class SQLAlchemyBackend:
         schema = await self.attribute_types.as_schema()
         if self.serializer:
             self.serializer.set_schema(schema)
-
-    def validated_id(self, id: t.Any) -> UUID:
-        match id:
-            case UUID():
-                return id
-            case str():
-                try:
-                    return UUID(id)
-                except ValueError as e:
-                    raise InvalidID(id) from e
-            case _:
-                raise InvalidID(id)

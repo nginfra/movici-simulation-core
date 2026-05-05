@@ -1,4 +1,5 @@
 import typing as t
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -9,6 +10,7 @@ from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.database.general import get_options, initialize_database
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.database.repository.common import RawDataProcessor
 from movici_data_core.domain_model import (
     AttributeType,
     Dataset,
@@ -34,8 +36,8 @@ def database_mode():
 
 
 @pytest.fixture
-async def database_server(dbapi_url):
-    async with SQLAlchemyServer(dbapi_url).begin(echo=True) as server:
+async def database_server(dbapi_url, tmp_path):
+    async with SQLAlchemyServer(dbapi_url, tmpfile_dir=tmp_path).begin(echo=True) as server:
         async with server.engine.begin() as conn:
             await conn.run_sync(db_model.Base.metadata.create_all)
         yield server
@@ -140,10 +142,11 @@ def create_default_types(
 
 @pytest.fixture
 async def repository(session, create_default_types, a_workspace):
-    options = await get_options(session)
-    repository = SQLAlchemyRepository(session, options)
-    await create_default_types(repository)
-    return repository.for_workspace(a_workspace.id)
+    with patch.object(RawDataProcessor, "RAW_DATA_CHUNK_SIZE", 10):
+        options = await get_options(session)
+        repository = SQLAlchemyRepository(session, options)
+        await create_default_types(repository)
+        yield repository.for_workspace(a_workspace.id)
 
 
 @pytest.fixture

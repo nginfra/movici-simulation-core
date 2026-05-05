@@ -1,22 +1,31 @@
-import asyncio
 import dataclasses
 import pathlib
+import random
 import typing as t
+from string import ascii_lowercase
 from uuid import UUID
 
-import svcs
-from sqlalchemy.ext.asyncio import AsyncEngine
-
-from movici_data_core.database.general import get_engine
+from movici_data_core.api_model import DatasetOut
+from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
     Dataset,
     DatasetFormat,
     DatasetType,
+    Workspace,
 )
-from movici_data_core.exceptions import InvalidAction, InvalidResource, ResourceDoesNotExist
-from movici_data_core.serialization import load_dict
+from movici_data_core.exceptions import (
+    InvalidAction,
+    InvalidResource,
+    ResourceDoesNotExist,
+    UnsupportedFileType,
+)
+from movici_data_core.serialization import dump_dict, load_dict
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
+
+
+def random_suffix(length=6):
+    return "".join(random.choice(ascii_lowercase) for _ in range(length))  # noqa: S311
 
 
 class DatasetService:
@@ -24,10 +33,13 @@ class DatasetService:
         self,
         repository: SQLAlchemyRepository,
         serializer: ExternalSerializationStrategy,
+        tmpfile_dir: pathlib.Path,
     ):
         self.repository = repository
         self.serializer = serializer
-        self.tmpfile_path = None
+        if not tmpfile_dir.exists() and tmpfile_dir.is_dir():
+            raise OSError(f"{tmpfile_dir} is not a valid directory")
+        self.tmpfile_dir = tmpfile_dir
 
     async def list(self):
         return await self.repository.datasets.list()
@@ -45,6 +57,50 @@ class DatasetService:
             result.has_data = await self.repository.dataset_data.exists_for(result.id)
         return result
 
+    async def create(self, dataset: Dataset):
+        return await self.repository.datasets.create(dataset)
+
+    async def update(self, dataset_id: UUID, dataset: Dataset):
+        return await self.repository.datasets.update(dataset_id, dataset)
+
+    async def get_dataset_as_file(self, dataset_id: UUID, filetype: FileType = FileType.JSON):
+        existing = await self.repository.datasets.get_by_id(dataset_id)
+        if existing is None:
+            raise ResourceDoesNotExist("dataset", id=dataset_id)
+        outfile = (
+            self.tmpfile_dir
+            / f"{t.cast(Workspace, existing.workspace).name}-{existing.name}-{random_suffix()}"
+        ).with_suffix(filetype.default_extension)
+        dataset_as_dict = DatasetOut.from_domain(existing).model_dump(mode="json")
+        match existing.dataset_type.format:
+            case DatasetFormat.ENTITY_BASED:
+                if filetype not in self.serializer.supported_file_types():
+                    raise UnsupportedFileType(filetype)
+
+                data = await self.repository.dataset_data.get_entity_data(dataset_id)
+
+                raw_data = self.serializer.dumps(
+                    {
+                        **dataset_as_dict,
+                        "data": data,
+                    },
+                    filetype=filetype,
+                )
+                outfile.write_bytes(raw_data)
+
+            case DatasetFormat.UNSTRUCTURED:
+                data = await self.repository.dataset_data.get_unstructured_data(dataset_id)
+                raw_data = dump_dict({**dataset_as_dict, "data": data}, filetype=filetype)
+                outfile.write_bytes(raw_data)
+            case DatasetFormat.BINARY:
+                with open(outfile, "wb") as fp:
+                    _, streamer = await self.repository.dataset_data.stream_binary_data(dataset_id)
+                    async for chunk in streamer:
+                        fp.write(chunk)
+            case _:
+                raise UnsupportedFileType(filetype)
+        return outfile
+
     async def get_entity_data(self, dataset_id: UUID):
         return await self.repository.dataset_data.get_entity_data(dataset_id)
 
@@ -54,12 +110,6 @@ class DatasetService:
     async def stream_binary_data(self, dataset_id: UUID):
         return self.repository.dataset_data.stream_binary_data(dataset_id)
 
-    async def create(self, dataset: Dataset):
-        return await self.repository.datasets.create(dataset)
-
-    async def update(self, dataset_id: UUID, dataset: Dataset):
-        return await self.repository.datasets.update(dataset_id, dataset)
-
     async def update_from_file(
         self, dataset_id: UUID, path: pathlib.Path, mimetype: str | None = None
     ):
@@ -67,78 +117,99 @@ class DatasetService:
         if existing is None:
             raise ResourceDoesNotExist("dataset", id=dataset_id)
         dataset_type = existing.dataset_type
-        if dataset_type.format == DatasetFormat.ENTITY_BASED:
-            file_type = self._ensure_supported_file_type(
-                dataset_id, dataset_type, path, self.serializer.supported_file_types()
-            )
-            dataset_dict = self.serializer.loads(path.read_bytes(), file_type)
-            # TODO: use apilevel deserialization (eg pydantic) for deserialization
-            if dataset_dict.get("type") != dataset_type.name:
-                raise InvalidResource(
-                    "dataset", id=dataset_id, message="Cannot change dataset type"
+        match existing.dataset_type.format:
+            case DatasetFormat.ENTITY_BASED:
+                return await self._update_entity_based_dataset_from_file(
+                    dataset_id, dataset_type, path
                 )
 
-            dataset = Dataset(
-                name=dataset_dict["name"],
-                display_name=dataset_dict.get("display_name", dataset_dict["name"]),
-                dataset_type=dataset_type,
-                general=dataset_dict.get("general"),
-                epsg_code=dataset_dict.get("epsg_code"),
-                data=dataset_dict.get("data", {}),
-            )
-
-            return await self.repository.datasets.update_with_data(
-                dataset_id, dataset, dataset_type.format
-            )
-        elif dataset_type.format == DatasetFormat.UNSTRUCTURED:
-            file_type = self._ensure_supported_file_type(
-                dataset_id, dataset_type, path, (FileType.JSON, FileType.MSGPACK)
-            )
-
-            dataset_dict = load_dict(path.read_bytes(), file_type)
-
-            # TODO: use apilevel deserialization (eg pydantic) for deserialization
-            if dataset_dict["type"] != dataset_type.name:
-                raise InvalidResource(
-                    "dataset",
-                    id=dataset_id,
-                    message="Cannot change dataset type for unstructured dataset",
-                )
-            dataset = Dataset(
-                name=dataset_dict["name"],
-                display_name=dataset_dict.get("display_name", dataset_dict["name"]),
-                dataset_type=dataset_type,
-                general=dataset_dict.get("general"),
-                epsg_code=dataset_dict.get("epsg_code"),
-                data=dataset_dict.get("data", {}),
-            )
-
-            return await self.repository.datasets.update_with_data(
-                dataset_id, dataset, dataset_type.format
-            )
-
-        elif dataset_type.format == DatasetFormat.BINARY:
-            if (
-                dataset_type.mimetype is not None
-                and mimetype is not None
-                and dataset_type.mimetype != mimetype
-            ):
-                raise InvalidResource(
-                    "dataset",
-                    id=dataset_id,
-                    message=(
-                        f'Invalid mimetype. Expected "{dataset_type.mimetype}", got {mimetype}'
-                    ),
+            case DatasetFormat.UNSTRUCTURED:
+                return await self._update_unstructured_dataset_from_file(
+                    dataset_id, dataset_type, path
                 )
 
-            return await self.repository.datasets.update_with_data(
-                dataset_id,
-                obj=dataclasses.replace(existing, data=path),
-                format=dataset_type.format,
+            case DatasetFormat.BINARY:
+                return await self._update_binary_dataset_from_file(
+                    existing, path, mimetype=mimetype
+                )
+
+        assert False, "should not get here"
+
+    async def _update_entity_based_dataset_from_file(
+        self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path
+    ):
+        file_type = self._ensure_supported_file_type(
+            dataset_id, dataset_type, path, self.serializer.supported_file_types()
+        )
+        dataset_dict = self.serializer.loads(path.read_bytes(), file_type)
+        # TODO: use apilevel deserialization (eg pydantic) for deserialization
+        if dataset_dict.get("type") != dataset_type.name:
+            raise InvalidResource("dataset", id=dataset_id, message="Cannot change dataset type")
+        dataset_data = dataset_dict.get("data", {})
+        dataset = Dataset(
+            name=dataset_dict["name"],
+            display_name=dataset_dict.get("display_name", dataset_dict["name"]),
+            dataset_type=dataset_type,
+            general=dataset_dict.get("general"),
+            epsg_code=dataset_dict.get("epsg_code"),
+            bounding_box=calculate_bounding_box_from_data(dataset_data),
+            data=dataset_data,
+        )
+
+        return await self.repository.datasets.update_with_data(
+            dataset_id, dataset, DatasetFormat.ENTITY_BASED
+        )
+
+    async def _update_unstructured_dataset_from_file(
+        self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path
+    ):
+        file_type = self._ensure_supported_file_type(
+            dataset_id, dataset_type, path, (FileType.JSON, FileType.MSGPACK)
+        )
+
+        dataset_dict = load_dict(path.read_bytes(), file_type)
+
+        # TODO: use apilevel deserialization (eg pydantic) for deserialization
+        if dataset_dict["type"] != dataset_type.name:
+            raise InvalidResource(
+                "dataset",
+                id=dataset_id,
+                message="Cannot change dataset type for unstructured dataset",
+            )
+        dataset = Dataset(
+            name=dataset_dict["name"],
+            display_name=dataset_dict.get("display_name", dataset_dict["name"]),
+            dataset_type=dataset_type,
+            general=dataset_dict.get("general"),
+            epsg_code=dataset_dict.get("epsg_code"),
+            data=dataset_dict.get("data", {}),
+        )
+
+        return await self.repository.datasets.update_with_data(
+            dataset_id, dataset, DatasetFormat.UNSTRUCTURED
+        )
+
+    async def _update_binary_dataset_from_file(
+        self, dataset: Dataset, path: pathlib.Path, mimetype: str | None
+    ):
+        assert dataset.id is not None
+        dataset_type = dataset.dataset_type
+        if (
+            dataset_type.mimetype is not None
+            and mimetype is not None
+            and dataset.dataset_type.mimetype != mimetype
+        ):
+            raise InvalidResource(
+                "dataset",
+                id=dataset.id,
+                message=(f'Invalid mimetype. Expected "{dataset_type.mimetype}", got {mimetype}'),
             )
 
-        else:
-            assert False, "should not get here"
+        return await self.repository.datasets.update_with_data(
+            dataset.id,
+            obj=dataclasses.replace(dataset, data=path),
+            format=DatasetFormat.BINARY,
+        )
 
     @staticmethod
     def _ensure_supported_file_type(
@@ -156,27 +227,3 @@ class DatasetService:
                 f" dataset with type {dataset_type.name}",
             )
         return file_type
-
-
-## -------------------------------------------
-#  Tasks that can be run in multiprocessing
-## ----------------------------------------
-
-
-class TaskContext:
-    engine: t.ClassVar[AsyncEngine | None] = None
-    loop: t.ClassVar[asyncio.AbstractEventLoop | None] = None
-
-    @classmethod
-    def initialize(cls, dbapi_url: str):
-        cls.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(cls.loop)
-
-        async def set_engine():
-            get_engine(dbapi_url)
-
-        cls.loop.run_until_complete(set_engine())
-
-
-def get_dataset_as_file(dataset_id: str | UUID, registry: svcs.Registry):
-    pass

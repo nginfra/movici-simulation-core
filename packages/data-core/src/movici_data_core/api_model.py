@@ -34,11 +34,35 @@ class ShortDatasetIn(BaseModel):
 class ShortDatasetOut(BaseModel):
     name: str
     display_name: str
-    uuid: UUID | str = Field(validation_alias="id")
+    id: UUID
     has_data: bool
     type: str = Field(validation_alias=AliasPath("dataset_type", "name"))
     created_at: datetime.datetime | None
     updated_at: datetime.datetime | None
+
+
+class DatasetOut(ShortDatasetOut):
+    type: str
+    general: dict | None
+    epsg_code: int | None
+    bounding_box: tuple[float, float, float, float] | None
+    data: dict | None
+
+    @classmethod
+    def from_domain(cls, obj: domain_model.Dataset):
+        return DatasetOut(
+            id=t.cast(UUID, obj.id),
+            name=obj.name,
+            display_name=obj.display_name,
+            has_data=obj.has_data,
+            type=obj.dataset_type.name,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
+            general=obj.general,
+            epsg_code=obj.epsg_code,
+            bounding_box=obj.bounding_box.as_tuple_or_none(),
+            data=t.cast(dict, obj.data),
+        )
 
 
 class ResourceSuccess(BaseModel):

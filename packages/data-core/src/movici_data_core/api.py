@@ -44,7 +44,6 @@ async def get_backend(container: DepContainer, workspace: t.Annotated[str | None
 
 DepBackend = t.Annotated[SQLAlchemyBackend, Depends(get_backend)]
 DepDatasetIn = t.Annotated[domain_model.Dataset, Depends(ShortDatasetIn.to_domain)]
-Id = UUID | str
 
 
 dataset_router = fastapi.APIRouter(prefix="/datasets")
@@ -63,8 +62,7 @@ async def create_dataset(dataset: DepDatasetIn, backend: DepBackend):
 
 
 @dataset_router.get("/{dataset_id}")
-async def get_dataset(dataset_id: Id, backend: DepBackend):
-    dataset_id = backend.validated_id(dataset_id)
+async def get_dataset(dataset_id: UUID, backend: DepBackend):
     dataset = await backend.datasets.get(id=dataset_id)
     if dataset is None:
         raise ResourceDoesNotExist("dataset", id=dataset_id)
@@ -72,19 +70,35 @@ async def get_dataset(dataset_id: Id, backend: DepBackend):
 
 
 @dataset_router.put("/{dataset_id}")
-async def update_dataset(dataset_id: Id, dataset: DepDatasetIn, backend: DepBackend):
-    dataset_id = backend.validated_id(dataset_id)
+async def update_dataset(dataset_id: UUID, dataset: DepDatasetIn, backend: DepBackend):
     await backend.datasets.update(dataset_id, dataset)
     return ResourceSuccess(resource="dataset", id=dataset_id, verb="updated")
 
 
 @dataset_router.get("/{dataset_id}/data")
-async def get_dataset_data(dataset_id: Id, backend: DepBackend):
-    dataset_id = backend.validated_id(dataset_id)
+async def get_dataset_data(dataset_id: UUID, backend: DepBackend):
     await backend.datasets.get_dataset_as_file(dataset_id)
 
 
 DEFAULT_ROUTERS = (dataset_router,)
+
+
+class MoviciWebApiBuilder:
+    def make_app(self):
+        pass
+
+    @staticmethod
+    async def movici_data_error_handler(request: Request, exc: MoviciDataError):
+        return fastapi.responses.JSONResponse(
+            {
+                "result": "error",
+                "status": exc.__status_code__,
+                "message": exc.__error_message__,
+                "type": exc.__error_id__,
+                **(exc.payload() or {}),
+            },
+            status_code=exc.__status_code__,
+        )
 
 
 def make_app(server: SQLAlchemyServer, routers: t.Iterable[APIRouter] | None = None):

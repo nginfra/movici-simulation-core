@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import dataclasses
-import pathlib
 import typing as t
 from uuid import UUID
 
 import sqlalchemy.exc
-from sqlalchemy import Insert, Select, delete, exists, insert, select, update
+from sqlalchemy import (
+    ColumnElement,
+    Insert,
+    Select,
+    delete,
+    exists,
+    insert,
+    select,
+    update,
+)
 from sqlalchemy.orm import joinedload
 
 from movici_data_core.database import model as db
-from movici_data_core.database.model import to_domain_or_none
 from movici_data_core.domain_model import (
     AttributeSummary,
     Dataset,
@@ -55,38 +62,46 @@ class DatasetRepository(SQLResourceRepository):
             .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
         )
 
-    async def list(self) -> list[Dataset]:
-        workspace_id = self._ensure_workspace_id()
-        rows = await self.session.execute(
-            select(
-                db.Dataset,
-                exists().where(db.RawData.dataset_id == db.Dataset.id),
-                exists().where(db.DatasetAttribute.dataset_id == db.Dataset.id),
-            )
-            .where(db.Dataset.workspace_id == workspace_id)
-            .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
-        )
-
-        result = []
-        for ds, has_data_raw, has_attributes in rows:
-            result.append(
-                dataclasses.replace(ds.to_domain(), has_data=has_data_raw or has_attributes)
-            )
-        return result
+    @property
+    def selector_with_has_data(self):
+        return select(
+            db.Dataset,
+            exists().where(db.RawData.dataset_id == db.Dataset.id),
+            exists().where(db.DatasetAttribute.dataset_id == db.Dataset.id),
+        ).options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
 
     async def exists(self, name: str):
         workspace_id = self._ensure_workspace_id()
         return await self._exists(db.Dataset.workspace_id == workspace_id, db.Dataset.name == name)
 
+    async def list(self) -> list[Dataset]:
+        workspace_id = self._ensure_workspace_id()
+        rows = await self.session.execute(
+            self.selector_with_has_data.where(db.Dataset.workspace_id == workspace_id)
+        )
+
+        return [
+            ds.to_domain(has_data_raw, has_attributes) for ds, has_data_raw, has_attributes in rows
+        ]
+
+    async def get_one_with_has_data(self, where_clause: ColumnElement[bool]):
+        result = (
+            await self.session.execute(self.selector_with_has_data.where(where_clause).limit(1))
+        ).first()
+
+        if result is None:
+            return None
+        ds, has_raw_data, has_attributes = result
+        return ds.to_domain(has_raw_data, has_attributes)
+
     async def get_by_name(self, name: str) -> Dataset | None:
-        return to_domain_or_none(
-            await self.session.scalar(self.selector.where(db.Dataset.name == name).limit(1))
+        workspace_id = self._ensure_workspace_id()
+        return await self.get_one_with_has_data(
+            (db.Dataset.workspace_id == workspace_id) & (db.Dataset.name == name)
         )
 
     async def get_by_id(self, id: UUID) -> Dataset | None:
-        return to_domain_or_none(
-            await self.session.scalar(self.selector.where(db.Dataset.id == id).limit(1))
-        )
+        return await self.get_one_with_has_data(db.Dataset.id == id)
 
     async def delete(self, id: UUID):
         await self.all_data.dataset_data.delete(id)
@@ -262,20 +277,6 @@ class DatasetDataRepository(SQLResourceRepository):
         raw_data_exists = await self._exists(db.RawData.dataset_id == id)
         entity_data_exists = await self._exists(db.DatasetAttribute.dataset_id == id)
         return raw_data_exists or entity_data_exists
-
-    async def get_dataset_as_file(self, dataset_id: UUID, file_dir: pathlib.Path):
-        if not file_dir.exists() and file_dir.is_dir():
-            raise OSError(f"{file_dir} is not a valid directory")
-
-        dataset = await self.all_data.datasets.get_by_id(dataset_id)
-        if dataset is None:
-            raise ResourceDoesNotExist("dataset", id=dataset_id)
-        match dataset.dataset_type.format:
-            case DatasetFormat.ENTITY_BASED:
-                pass
-
-            case DatasetFormat.UNSTRUCTURED:
-                return
 
     def stream_binary_data(
         self, id: UUID, yield_per=1

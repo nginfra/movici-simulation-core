@@ -108,7 +108,9 @@ class BoundingBox:
     def as_tuple_or_none(self):
         if any(v is None for v in (self.min_x, self.min_y, self.max_x, self.max_y)):
             return None
-        return (self.min_x, self.min_y, self.max_x, self.max_y)
+        return t.cast(
+            tuple[float, float, float, float], (self.min_x, self.min_y, self.max_x, self.max_y)
+        )
 
 
 @dataclasses.dataclass
