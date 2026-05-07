@@ -358,6 +358,12 @@ def sources(create_data_sources):
 
 
 class TestSourcesSetup:
+    @pytest.fixture(autouse=True)
+    def clean_sources_setup(self):
+        current_registry = dict(SourcesSetup._source_types)
+        yield
+        SourcesSetup._source_types = current_registry
+
     @pytest.fixture
     def sources(self):
         return {
@@ -409,23 +415,17 @@ class TestSourcesSetup:
             def __len__(self):
                 return 0
 
-        previous = SourcesSetup._source_types.pop("dummy-test", None)
-        try:
-            SourcesSetup.register("dummy-test", DummySource)
-            op = SourcesSetup(
-                {
-                    "__sources__": {"x": {"source_type": "dummy-test", "path": "/p"}},
-                    "data": {},
-                }
-            )
-            sources = {}
-            op({}, sources=sources)
-            assert isinstance(sources["x"], DummySource)
-            assert DummySource.seen == [{"source_type": "dummy-test", "path": "/p"}]
-        finally:
-            SourcesSetup._source_types.pop("dummy-test", None)
-            if previous is not None:
-                SourcesSetup._source_types["dummy-test"] = previous
+        SourcesSetup.register("dummy-test", DummySource)
+        op = SourcesSetup(
+            {
+                "__sources__": {"x": {"source_type": "dummy-test", "path": "/p"}},
+                "data": {},
+            }
+        )
+        sources = {}
+        op({}, sources=sources)
+        assert isinstance(sources["x"], DummySource)
+        assert DummySource.seen == [{"source_type": "dummy-test", "path": "/p"}]
 
 
 class TestCRSTransformation:
