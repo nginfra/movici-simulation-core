@@ -134,7 +134,8 @@ class SourcesSetup(DatasetOperation):
         The class must expose a ``from_source_info(source_info)`` classmethod. Source types
         can also be registered declaratively through the
         ``movici.dataset_creator.source`` entry-point group in a package's
-        ``pyproject.toml``.
+        ``pyproject.toml``. Registering imperatively under a name that is also exposed
+        via that entry-point group will override the declarative registration.
         """
         cls._source_types[name] = source_cls
 
