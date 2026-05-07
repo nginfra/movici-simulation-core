@@ -162,11 +162,12 @@ class SourcesSetup(DatasetOperation):
         if name in cls._source_types:
             return cls._source_types[name]
         try:
-            (source_cls,) = importlib.metadata.entry_points(group=SOURCE_TYPE_ENTRY_POINT_GROUP, name=name)
-            cls._source_types[name] = source_cls
-            return source_cls
+            (entry_point,) = entry_points(group=SOURCE_TYPE_ENTRY_POINT_GROUP, name=name)
         except ValueError:
             raise ValueError(f"Unknown source type '{name}'") from None
+        source_cls = entry_point.load()
+        cls._source_types[name] = source_cls
+        return source_cls
 
     @staticmethod
     def get_file_path(path_str):
