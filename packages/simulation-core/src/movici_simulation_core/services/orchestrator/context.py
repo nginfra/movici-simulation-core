@@ -166,8 +166,7 @@ class ConnectedModel:
         self.fsm.send(event)
 
     def send_command(self, message: Command) -> None:
-        """If there are any messages in the queue, send the first one and start the timer, also,
-        start waiting"""
+        """Send a message and start the timer. Also, start waiting"""
         self.send(message)
         self.timer.start()
         self.busy = True

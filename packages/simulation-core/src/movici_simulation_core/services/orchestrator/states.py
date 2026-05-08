@@ -8,6 +8,7 @@ from movici_simulation_core.services.orchestrator.fsm import (
     Always,
     Condition,
     FSMDone,
+    FSMError,
     State,
     TransitionsT,
 )
@@ -110,7 +111,7 @@ class FinalizingWaitForModels(WaitForModels):
 class EndFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.finalize()
-        raise FSMDone
+        raise FSMError if self.context.failed else FSMDone
 
     def transitions(self) -> TransitionsT:
         return []

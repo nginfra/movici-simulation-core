@@ -49,6 +49,12 @@ class Stopwatch:
         self.start()
         return rv
 
+    def restart_current(self):
+        """Restart the current timer, without recording the current progress"""
+        if not (self.ignore_errors or self.running):
+            raise RuntimeError("Stopwatch not started")
+        self.started_at = self.now()
+
     def _update_elapsed(self):
         if not (self.ignore_errors or self.running):
             raise RuntimeError("Stopwatch not started")

@@ -5,7 +5,7 @@ import pytest
 from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.messages import QuitMessage
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
-from movici_simulation_core.services.orchestrator.fsm import FSMDone, send_silent
+from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError, send_silent
 from movici_simulation_core.services.orchestrator.states import (
     EndFinalizingPhase,
     NewTime,
@@ -117,6 +117,11 @@ class TestStartFinalizingPhase(BaseTestState):
 class TestEndFinalizingPhase(BaseTestState):
     state_cls = EndFinalizingPhase
 
+    @pytest.fixture
+    def context(self, context):
+        context.models = ModelCollection(model_b=ConnectedModel("model", Mock(), Mock()))
+        return context
+
     def run_silent(self, state):
         try:
             state.run()
@@ -125,5 +130,13 @@ class TestEndFinalizingPhase(BaseTestState):
 
     def test_finalizes_context(self, context, state):
         context.finalize = Mock()
-        self.run_silent(state)
+        with pytest.raises(FSMDone):
+            state.run()
+        assert context.finalize.call_count == 1
+
+    def test_raises_FSMError_on_error(self, context, state):
+        context.finalize = Mock()
+        next(iter(context.models.values())).failed = True
+        with pytest.raises(FSMError):
+            state.run()
         assert context.finalize.call_count == 1
