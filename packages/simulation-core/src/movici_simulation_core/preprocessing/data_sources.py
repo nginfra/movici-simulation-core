@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import typing as t
 from pathlib import Path
 
-import geopandas
-import netCDF4
 import numpy as np
 import pandas as pd
 from pyproj import CRS
+
+if t.TYPE_CHECKING:
+    import geopandas
 
 from movici_simulation_core.attributes import (
     Geometry_Linestring2d,
@@ -107,6 +110,8 @@ class GeopandasSource(DataSource):
 
     @classmethod
     def from_source_info(cls, source_info):
+        import geopandas
+
         gdf = geopandas.read_file(source_info["path"])
         return cls(gdf)
 
@@ -263,6 +268,8 @@ class NetCDFGridSource(DataSource):
         return self._read_netcdf([self.time_var])[self.time_var].tolist()
 
     def _read_netcdf(self, attributes: t.Sequence[str]) -> t.Dict[str, np.ndarray]:
+        import netCDF4
+
         rv = {}
         with netCDF4.Dataset(self.file, mode="r") as raw_data:
             for attr in attributes:
