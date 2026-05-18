@@ -19,13 +19,13 @@ GEOMETRY_ATTRIBUTES = [
 def calculate_bounding_box_from_data(data: DatasetData) -> BoundingBox:
     bounding_box = BoundingBox.empty()
     for entity_data in data.values():
-        if "geometry.x" in entity_data:
-            min_x, max_x = DataType(float).get_min_max(_get_data(entity_data, "geometry.x"))
+        if GEOMETRY_X in entity_data:
+            min_x, max_x = DataType(float).get_min_max(_get_data(entity_data, GEOMETRY_X))
             bounding_box = calculate_new_bounding_box(
                 bounding_box, BoundingBox(min_x, None, max_x, None)
             )
-        if "geometry.y" in entity_data:
-            min_y, max_y = DataType(float).get_min_max(_get_data(entity_data, "geometry.y"))
+        if GEOMETRY_Y in entity_data:
+            min_y, max_y = DataType(float).get_min_max(_get_data(entity_data, GEOMETRY_Y))
             bounding_box = calculate_new_bounding_box(
                 bounding_box, BoundingBox(None, min_y, None, max_y)
             )

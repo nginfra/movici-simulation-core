@@ -20,12 +20,14 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
 )
 
-from .common import GenericResourceRepository
+from .common import GenericResourceRepository, ensure_valid_id
 
 
 class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource__ = db.DatasetType
+    __resource_type_name__ = "dataset_type"
 
+    # TODO: prevent creating dataset type with UNKNOWN format
     async def create(self, obj: DatasetType) -> UUID:
         return t.cast(
             UUID,
@@ -36,6 +38,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
             ),
         )
 
+    # TODO: prevent updating dataset type with UNKNOWN format
     async def update(self, id: UUID, obj: DatasetType):
         current = await self.get_by_id(id)
         if current is None:
@@ -56,10 +59,10 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         if not existing:
             if self.options.STRICT_DATASET_TYPES:
                 raise ResourceDoesNotExist("dataset_type", name=dataset_type.name)
-            dataset_type_id = await self.create(dataset_type.ensure_format())
+            dataset_type_id = await self.create(dataset_type)
             existing = await self.get_by_id(dataset_type_id)
 
-        if dataset_type.format is not None and existing != dataset_type:
+        if dataset_type.format != DatasetFormat.UNKNOWN and existing != dataset_type:
             raise InvalidResource(
                 "dataset_type",
                 name=dataset_type.name,
@@ -70,6 +73,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
 
 class EntityTypeRepository(GenericResourceRepository[EntityType]):
     __resource__ = db.EntityType
+    __resource_type_name__ = "entity_type"
 
     async def create(self, obj: EntityType) -> UUID:
         return t.cast(
@@ -79,6 +83,7 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
             ),
         )
 
+    @ensure_valid_id
     async def update(self, id: UUID, obj: EntityType):
         await self.session.execute(
             update(db.EntityType).where(db.EntityType.id == id).values(name=obj.name)
@@ -98,6 +103,7 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
 
 class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource__ = db.AttributeType
+    __resource_type_name__ = "attribute_type"
 
     async def create(self, obj: AttributeType) -> UUID:
         return t.cast(
@@ -168,6 +174,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
 
 class ModelTypeRepository(GenericResourceRepository[ModelType]):
     __resource__ = db.ModelType
+    __resource_type_name__ = "model_type"
 
     async def create(self, obj: ModelType) -> UUID:
         return t.cast(
@@ -179,6 +186,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             ),
         )
 
+    @ensure_valid_id
     async def update(self, id: UUID, obj: ModelType):
         await self.session.execute(
             update(db.ModelType)

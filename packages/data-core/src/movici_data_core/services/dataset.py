@@ -1,18 +1,14 @@
 import dataclasses
 import pathlib
-import random
 import typing as t
-from string import ascii_lowercase
 from uuid import UUID
 
-from movici_data_core.api_model import DatasetOut
 from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
     Dataset,
     DatasetFormat,
     DatasetType,
-    Workspace,
 )
 from movici_data_core.exceptions import (
     InvalidAction,
@@ -20,12 +16,11 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
     UnsupportedFileType,
 )
+from movici_data_core.schema import DatasetWithDataIn, DatasetWithDataOut
 from movici_data_core.serialization import dump_dict, load_dict
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
-
-def random_suffix(length=6):
-    return "".join(random.choice(ascii_lowercase) for _ in range(length))  # noqa: S311
+from .common import random_suffix
 
 
 class DatasetService:
@@ -68,10 +63,9 @@ class DatasetService:
         if existing is None:
             raise ResourceDoesNotExist("dataset", id=dataset_id)
         outfile = (
-            self.tmpfile_dir
-            / f"{t.cast(Workspace, existing.workspace).name}-{existing.name}-{random_suffix()}"
+            self.tmpfile_dir / f"dataset-{existing.id}-{existing.name}-{random_suffix()}"
         ).with_suffix(filetype.default_extension)
-        dataset_as_dict = DatasetOut.from_domain(existing).model_dump(mode="json")
+
         match existing.dataset_type.format:
             case DatasetFormat.ENTITY_BASED:
                 if filetype not in self.serializer.supported_file_types():
@@ -79,19 +73,20 @@ class DatasetService:
 
                 data = await self.repository.dataset_data.get_entity_data(dataset_id)
 
-                raw_data = self.serializer.dumps(
-                    {
-                        **dataset_as_dict,
-                        "data": data,
-                    },
-                    filetype=filetype,
-                )
-                outfile.write_bytes(raw_data)
+                raw_data = DatasetWithDataOut.from_domain(
+                    dataclasses.replace(existing, data={})
+                ).model_dump(mode="json")
+                raw_data["data"] = data
+                outfile.write_bytes(self.serializer.dumps(raw_data, filetype=filetype))
 
             case DatasetFormat.UNSTRUCTURED:
                 data = await self.repository.dataset_data.get_unstructured_data(dataset_id)
-                raw_data = dump_dict({**dataset_as_dict, "data": data}, filetype=filetype)
-                outfile.write_bytes(raw_data)
+                raw_data = DatasetWithDataOut.from_domain(
+                    dataclasses.replace(existing, data={})
+                ).model_dump(mode="json")
+                raw_data["data"] = data
+                outfile.write_bytes(dump_dict(raw_data, filetype=filetype))
+
             case DatasetFormat.BINARY:
                 with open(outfile, "wb") as fp:
                     _, streamer = await self.repository.dataset_data.stream_binary_data(dataset_id)
@@ -142,23 +137,18 @@ class DatasetService:
             dataset_id, dataset_type, path, self.serializer.supported_file_types()
         )
         dataset_dict = self.serializer.loads(path.read_bytes(), file_type)
-        # TODO: use apilevel deserialization (eg pydantic) for deserialization
-        if dataset_dict.get("type") != dataset_type.name:
-            raise InvalidResource("dataset", id=dataset_id, message="Cannot change dataset type")
-        dataset_data = dataset_dict.get("data", {})
-        dataset = Dataset(
-            name=dataset_dict["name"],
-            display_name=dataset_dict.get("display_name", dataset_dict["name"]),
-            dataset_type=dataset_type,
-            general=dataset_dict.get("general"),
-            epsg_code=dataset_dict.get("epsg_code"),
+        dataset_data = dataset_dict.pop("data", {})
+        dataset = DatasetWithDataIn.model_validate(dataset_dict).to_domain()
+        dataset = dataclasses.replace(
+            dataset,
+            dataset_type=self._ensure_compatible_dataset_type(
+                existing=dataset_type, new=dataset.dataset_type, dataset_id=dataset_id
+            ),
             bounding_box=calculate_bounding_box_from_data(dataset_data),
             data=dataset_data,
         )
 
-        return await self.repository.datasets.update_with_data(
-            dataset_id, dataset, DatasetFormat.ENTITY_BASED
-        )
+        return await self.repository.datasets.update_with_data(dataset_id, dataset)
 
     async def _update_unstructured_dataset_from_file(
         self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path
@@ -168,26 +158,17 @@ class DatasetService:
         )
 
         dataset_dict = load_dict(path.read_bytes(), file_type)
-
-        # TODO: use apilevel deserialization (eg pydantic) for deserialization
-        if dataset_dict["type"] != dataset_type.name:
-            raise InvalidResource(
-                "dataset",
-                id=dataset_id,
-                message="Cannot change dataset type for unstructured dataset",
-            )
-        dataset = Dataset(
-            name=dataset_dict["name"],
-            display_name=dataset_dict.get("display_name", dataset_dict["name"]),
-            dataset_type=dataset_type,
-            general=dataset_dict.get("general"),
-            epsg_code=dataset_dict.get("epsg_code"),
-            data=dataset_dict.get("data", {}),
+        dataset_data = dataset_dict.pop("data", {})
+        dataset = DatasetWithDataIn.model_validate(dataset_dict).to_domain()
+        dataset = dataclasses.replace(
+            dataset,
+            dataset_type=self._ensure_compatible_dataset_type(
+                existing=dataset_type, new=dataset.dataset_type, dataset_id=dataset_id
+            ),
+            data=dataset_data,
         )
 
-        return await self.repository.datasets.update_with_data(
-            dataset_id, dataset, DatasetFormat.UNSTRUCTURED
-        )
+        return await self.repository.datasets.update_with_data(dataset_id, dataset)
 
     async def _update_binary_dataset_from_file(
         self, dataset: Dataset, path: pathlib.Path, mimetype: str | None
@@ -206,9 +187,7 @@ class DatasetService:
             )
 
         return await self.repository.datasets.update_with_data(
-            dataset.id,
-            obj=dataclasses.replace(dataset, data=path),
-            format=DatasetFormat.BINARY,
+            dataset.id, obj=dataclasses.replace(dataset, data=path)
         )
 
     @staticmethod
@@ -227,3 +206,11 @@ class DatasetService:
                 f" dataset with type {dataset_type.name}",
             )
         return file_type
+
+    @staticmethod
+    def _ensure_compatible_dataset_type(existing: DatasetType, new: DatasetType, dataset_id: UUID):
+        if new.format == DatasetFormat.UNKNOWN:
+            new = dataclasses.replace(new, format=existing.format)
+        if new != existing:
+            raise InvalidResource("dataset", id=dataset_id, message="Cannot change dataset type")
+        return existing

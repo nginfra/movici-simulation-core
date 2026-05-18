@@ -95,6 +95,7 @@ class UnsupportedFileType(MoviciDataError):
 
 class DeserializationError(MoviciDataError):
     __status_code__ = HTTPStatus.BAD_REQUEST
+    __error_id__ = "invalid_data"
     __error_message__ = "Error while reading data"
 
 
@@ -164,7 +165,7 @@ class MoviciValidationError(MoviciDataError):
 
 class ResourceDoesNotExist(InvalidResource):
     __status_code__ = HTTPStatus.NOT_FOUND
-    __error_id__ = "not_found_error"
+    __error_id__ = "not_found"
     __error_message__ = "Resource not found"
 
 

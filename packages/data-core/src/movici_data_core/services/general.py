@@ -21,7 +21,7 @@ class WorkspaceService(GenericService[Workspace]):
     def _repository(self):
         return self.repository.workspaces
 
-    async def ensure_valid_id(self, name_or_id: str) -> UUID:
+    async def ensure_valid_workspace(self, name_or_id: str) -> Workspace:
         # try workspace as a UUID
         try:
             workspace_id = UUID(name_or_id)
@@ -30,17 +30,19 @@ class WorkspaceService(GenericService[Workspace]):
 
         if workspace_id is not None:
             # workspace was given as a uuid
-            workspace_obj = await self._repository.get_short_by_id(id=workspace_id)
+            workspace_obj = await self._repository.get_by_id(id=workspace_id)
             if workspace_obj is None:
                 raise ResourceDoesNotExist("workspace", id=workspace_id)
         else:
             # workspace was given as a name
-            workspace_obj = await self._repository.get_short_by_name(name_or_id)
+            workspace_obj = await self._repository.get_by_name(name_or_id)
             if workspace_obj is None:
                 raise ResourceDoesNotExist("workspace", name=name_or_id)
 
-        assert workspace_obj.id is not None
-        return workspace_obj.id
+        return workspace_obj
+
+    async def with_counts(self, workspace: Workspace):
+        return await self._repository.with_counts(workspace)
 
 
 class DatasetTypeService(GenericService[DatasetType]):

@@ -1,4 +1,6 @@
+import random
 import typing as t
+from string import ascii_lowercase
 from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
@@ -6,6 +8,10 @@ from movici_data_core.database.repository.common import GenericResourceRepositor
 from movici_data_core.exceptions import InvalidAction
 
 T_dom = t.TypeVar("T_dom")
+
+
+def random_suffix(length=6):
+    return "".join(random.choice(ascii_lowercase) for _ in range(length))  # noqa: S311
 
 
 class GenericService(t.Generic[T_dom]):

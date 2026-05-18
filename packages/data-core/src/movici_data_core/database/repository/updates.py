@@ -40,23 +40,19 @@ class UpdateRepository(SQLResourceRepository):
     async def exists(self):
         return await self._exists(db.Update.scenario_id == self.scenario_id)
 
-    async def get_by_id(self, id: UUID) -> Update | None:
-        record = await self.session.scalar(
-            select(db.Update)
-            .options(
-                joinedload(db.Update.dataset).joinedload(db.Dataset.dataset_type),
-                joinedload(db.Update.model_type),
-            )
-            .where(db.Update.id == id)
-        )
+    async def get_by_id(self, id: UUID, with_data=False) -> Update | None:
+        record = await self.session.scalar(self.selector.where(db.Update.id == id))
         if record is None:
             return None
-        return dataclasses.replace(
-            record.to_domain(),
-            data=await EntityDataProcessor(
-                self.session, all_data=self.all_data, selector=UpdateDataSelector()
-            ).get(id),
-        )
+        result = record.to_domain()
+        if with_data:
+            result = dataclasses.replace(result, data=await self.get_data(id=id))
+        return result
+
+    async def get_data(self, id: UUID) -> dict:
+        return await EntityDataProcessor(
+            self.session, all_data=self.all_data, selector=UpdateDataSelector()
+        ).get(id)
 
     async def create(self, obj: Update) -> UUID:
         """

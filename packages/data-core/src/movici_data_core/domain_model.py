@@ -24,6 +24,7 @@ class DatasetFormat(str, enum.Enum):
     ENTITY_BASED = "entity_based"
     UNSTRUCTURED = "unstructured"
     BINARY = "binary"
+    UNKNOWN = "unknown"
 
 
 class ScenarioStatus(str, enum.Enum):
@@ -46,19 +47,16 @@ class Workspace:
     name: str
     display_name: str
     id: UUID | None = dataclasses.field(compare=False, default=None)
-    scenario_count: int = 0
-    dataset_count: int = 0
+    scenario_count: int | None = None
+    dataset_count: int | None = None
 
 
 @dataclasses.dataclass
 class DatasetType:
     name: str
-    format: DatasetFormat | None = None
+    format: DatasetFormat
     mimetype: str | None = None
     id: UUID | None = dataclasses.field(compare=False, default=None)
-
-    def ensure_format(self):
-        return dataclasses.replace(self, format=self.format or DatasetFormat.ENTITY_BASED)
 
 
 @dataclasses.dataclass
@@ -94,8 +92,11 @@ class ModelType:
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
-@dataclasses.dataclass(frozen=True)
-class BoundingBox:
+class BoundingBox(t.NamedTuple):
+    """Representation of a bounding box, if any of the components are ``None``, the bounding box
+    is considered incomplete and reduces to ``None``
+    """
+
     min_x: float | None
     min_y: float | None
     max_x: float | None
@@ -103,14 +104,15 @@ class BoundingBox:
 
     @classmethod
     def empty(cls) -> BoundingBox:
+        """Return an empty BoundingBox (all fields set to None) that can be use as a basis for
+        generating a bounding box from multiple datasets/updates
+        """
         return BoundingBox(None, None, None, None)
 
     def as_tuple_or_none(self):
-        if any(v is None for v in (self.min_x, self.min_y, self.max_x, self.max_y)):
+        if self.min_x is None or self.min_y is None or self.max_x is None or self.max_y is None:
             return None
-        return t.cast(
-            tuple[float, float, float, float], (self.min_x, self.min_y, self.max_x, self.max_y)
-        )
+        return self
 
 
 @dataclasses.dataclass
@@ -180,6 +182,8 @@ class Update:
     model_type: str | None = None
 
     id: UUID | None = None
+    created_at: datetime.datetime | None = None
+    updated_at: datetime.datetime | None = None
     data: DatasetData | None = None
 
 

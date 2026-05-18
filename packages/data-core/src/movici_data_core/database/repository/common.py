@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 import io
 import pathlib
 import typing as t
@@ -39,6 +40,22 @@ class SQLResourceRepository:
         return bool(await self.session.scalar(select(exists().where(*where))))
 
 
+def ensure_valid_id(method):
+    """Decorator to ensure that a resource id exists, raises ResourceDoesNotExist if a non-existing
+    id is given
+    :param method: a method from a GenericResourceRepository that takes in ``id`` as its first
+    argument
+    """
+
+    @functools.wraps(method)
+    async def _wrapped(self: GenericResourceRepository, id: UUID, *args, **kwargs):
+        if (await self.get_by_id(id)) is None:
+            raise ResourceDoesNotExist(self.__resource_type_name__, id=id)
+        return await method(self, id, *args, **kwargs)
+
+    return _wrapped
+
+
 class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     """A GenericResourceRepository is the simplest CRUD repository. Resources are globally unique
     by name and do not have a parent (such as a Workspace). Resources that are managed through
@@ -52,6 +69,7 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     """
 
     __resource__: type[NamedResource[T_dom]]
+    __resource_type_name__: str
 
     async def list(self) -> list[T_dom]:
         result = await self.session.scalars(select(self.__resource__))
@@ -70,13 +88,14 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     async def get_by_id(self, id: UUID) -> T_dom | None:
         return to_domain_or_none(await self.session.get(self.__resource__, id))
 
+    @ensure_valid_id
     async def delete(self, id: UUID):
         await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))
 
     async def create(self, obj: T_dom) -> UUID:
         raise NotImplementedError
 
-    async def update(self, id: UUID, obj: T_dom):
+    async def update(self, id: UUID, obj: T_dom) -> None:
         raise NotImplementedError
 
 

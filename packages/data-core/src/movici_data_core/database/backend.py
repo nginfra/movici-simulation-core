@@ -44,6 +44,7 @@ class SQLAlchemyServer:
     :param dbapi_url: a DB API url string
     :param serializer_cls: a class for instantiating an ``ExternalSerializationStrategy``. Default:
       ``EntityInitDataFormat``
+    :param tmpfile_dir: a path to a directory that may be used to store temporary files
     """
 
     session_factory: async_sessionmaker[AsyncSession]
@@ -203,7 +204,11 @@ class SQLAlchemyBackend:
     def updates(self):
         if self.serializer is None:
             raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        return self.update_service_cls(self.repository, serializer=self.serializer)
+        if self.tmpfile_dir is None:
+            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
+        return self.update_service_cls(
+            self.repository, serializer=self.serializer, tmpfile_dir=self.tmpfile_dir
+        )
 
     async def set_database_mode(self, new_mode: db.DatabaseMode):
         """Change the mode of this database. Upgrading is always possible along the path

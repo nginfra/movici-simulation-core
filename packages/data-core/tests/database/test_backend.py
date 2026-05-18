@@ -396,8 +396,10 @@ class TestDatasetService:
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
         result = load_dict(file.read_bytes(), filetype=filetype)
+        assert result["type"].pop("id", None) is not None
         assert result == {
             **dataset_data,
+            "type": {"name": dataset_data["type"], "format": "entity_based", "mimetype": None},
             "id": str(a_dataset.id),
             "created_at": a_dataset.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "updated_at": a_dataset.updated_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -440,11 +442,12 @@ class TestDatasetService:
         assert file.suffix == filetype.default_extension
 
         result = load_dict(file.read_bytes(), filetype)
+        assert result["type"].pop("id", None) is not None
         assert result == {
             "id": str(created.id),
             "name": created.name,
             "display_name": created.display_name,
-            "type": "tabular",
+            "type": {"name": "tabular", "format": "unstructured", "mimetype": None},
             "has_data": True,
             "epsg_code": None,
             "general": None,
@@ -483,3 +486,39 @@ class TestDatasetService:
 
         result = file.read_bytes()
         assert result == b"somedata" * 10
+
+
+class TestUpdateService:
+    @pytest.mark.xfail
+    @pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
+    async def test_store_update_from_file(
+        self,
+        backend: SQLAlchemyBackend,
+        a_dataset,
+        a_scenario,
+        an_entity_type,
+        an_attribute_type,
+        tmp_path: pathlib.Path,
+        filetype: FileType,
+    ):
+        backend = backend.for_scenario(a_scenario.id)
+        assert len(await backend.updates.list()) == 0
+        update_data = {
+            "name": a_dataset.name,
+            "type": a_dataset.dataset_type.name,
+            "timestamp": 0,
+            "iteration": 1,
+            "model_name": a_scenario.models[0]["name"],
+            "model_type": a_scenario.models[0]["type"],
+            "data": {
+                an_entity_type.name: {
+                    "id": [0, 1],
+                    an_attribute_type.name: [1.0, 2.0],
+                }
+            },
+        }
+
+        file = tmp_path / "update.json"
+        file.write_bytes(dump_dict(update_data, filetype))
+        await backend.updates.store_update_from_file(file, filetype)
+        assert len(await backend.updates.list()) == 1

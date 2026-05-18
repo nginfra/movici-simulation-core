@@ -2,6 +2,7 @@ import typing as t
 from unittest.mock import patch
 from uuid import UUID
 
+import numpy as np
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,8 @@ from movici_data_core.domain_model import (
     EntityType,
     ModelType,
     Scenario,
+    ScenarioDataset,
+    Update,
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
@@ -37,7 +40,7 @@ def database_mode():
 
 @pytest.fixture
 async def database_server(dbapi_url, tmp_path):
-    async with SQLAlchemyServer(dbapi_url, tmpfile_dir=tmp_path).begin(echo=True) as server:
+    async with SQLAlchemyServer(dbapi_url, tmpfile_dir=tmp_path).begin() as server:
         async with server.engine.begin() as conn:
             await conn.run_sync(db_model.Base.metadata.create_all)
         yield server
@@ -176,6 +179,35 @@ def create_scenario(repository: SQLAlchemyRepository, a_workspace, get_model_con
         )
 
     return _create_scenario
+
+
+@pytest.fixture
+async def create_update(
+    repository: SQLAlchemyRepository,
+    a_scenario,
+    a_dataset,
+    an_attribute_type,
+    an_entity_type,
+):
+    async def _create_update(timestamp, iteration, ids, array, scenario_id=None):
+        scenario_id = scenario_id or a_scenario.id
+        update = Update(
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+            timestamp=timestamp,
+            iteration=iteration,
+            model_name=a_scenario.models[0]["name"],
+            model_type=a_scenario.models[0]["type"],
+            data={
+                an_entity_type.name: {
+                    "id": {"data": np.asarray(ids)},
+                    an_attribute_type.name: {"data": np.asarray(array)},
+                }
+            },
+        )
+
+        return await repository.for_scenario(scenario_id).updates.create(update)
+
+    return _create_update
 
 
 @pytest.fixture

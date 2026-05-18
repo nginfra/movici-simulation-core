@@ -30,7 +30,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
     def __init__(
         self,
         schema: t.Optional[AttributeSchema] = None,
-        non_data_dict_keys: t.Container[str] = ("general",),
+        non_data_dict_keys: t.Container[str] = ("general", "type"),
         cache_inferred_attributes: bool = False,
     ) -> None:
         if schema is None:

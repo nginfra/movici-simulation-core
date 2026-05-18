@@ -192,13 +192,16 @@ class DatasetRepository(SQLResourceRepository):
             .values(name=obj.name, display_name=obj.display_name)
         )
 
-    async def update_with_data(self, id: UUID, obj: Dataset, format: DatasetFormat, chunk_size=0):
+    async def update_with_data(self, id: UUID, obj: Dataset, chunk_size=0):
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
         if obj.data is None:
             raise InvalidAction("Must provide dataset data")
-        if obj.dataset_type != current.dataset_type:
+        if not (
+            obj.dataset_type.format == DatasetFormat.UNKNOWN
+            or obj.dataset_type == current.dataset_type
+        ):
             raise InvalidAction("Cannot change dataset type when updating data")
         await self.all_data.dataset_data.delete(id)
         await self.session.execute(
@@ -213,7 +216,7 @@ class DatasetRepository(SQLResourceRepository):
             )
         )
         await self.all_data.dataset_data.create(
-            id, data=obj.data, format=format, chunk_size=chunk_size
+            id, data=obj.data, format=current.dataset_type.format, chunk_size=chunk_size
         )
 
     async def ensure_scenario_datasets(

@@ -9,11 +9,12 @@ from sqlalchemy import func, insert, select, update
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import Workspace
 
-from .common import GenericResourceRepository
+from .common import GenericResourceRepository, ensure_valid_id
 
 
 class WorkspaceRepository(GenericResourceRepository[Workspace]):
     __resource__ = db.Workspace
+    __resource_type_name__ = "workspace"
 
     async def list(self) -> list[Workspace]:
         result = await super().list()
@@ -43,23 +44,8 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             for ws in result
         ]
 
-    async def get_by_name(self, name: str) -> Workspace | None:
-        result = await self.get_short_by_name(name)
-        return await self._with_counts(result)
-
-    async def get_by_id(self, id: UUID) -> Workspace | None:
-        result = await self.get_short_by_id(id)
-        return await self._with_counts(result)
-
-    async def get_short_by_name(self, name: str) -> Workspace | None:
-        return await super().get_by_name(name)
-
-    async def get_short_by_id(self, id: UUID) -> Workspace | None:
-        return await super().get_by_id(id)
-
-    async def _with_counts(self, workspace: Workspace | None) -> Workspace | None:
-        if workspace is None:
-            return workspace
+    async def with_counts(self, workspace: Workspace) -> Workspace:
+        assert workspace.id is not None
         return dataclasses.replace(
             workspace,
             dataset_count=t.cast(
@@ -87,6 +73,7 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             ),
         )
 
+    @ensure_valid_id
     async def update(self, id: UUID, obj: Workspace):
         await self.session.execute(
             update(db.Workspace)
