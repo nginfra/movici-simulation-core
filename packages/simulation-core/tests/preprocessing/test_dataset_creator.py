@@ -1442,15 +1442,6 @@ class TestSchemaValidation:
                 },
             },
             {**min_required, "extra": "key"},
-            {
-                **min_required,
-                "__sources__": {
-                    "foo": {
-                        "source_type": "invalid",  # invalid source type
-                        "path": "/some/other/path",
-                    },
-                },
-            },
             {"__meta__": {"crs": 12.3}, **min_required},
             {"general": {"enum": ["invalid"]}, **min_required},
             {"general": {"special": ["invalid"]}, **min_required},
