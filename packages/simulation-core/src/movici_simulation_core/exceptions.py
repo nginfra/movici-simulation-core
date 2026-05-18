@@ -24,3 +24,19 @@ class NotReady(SimulationException):
 
 class InvalidMessage(SimulationException):
     pass
+
+
+class FSMException(Exception):
+    pass
+
+
+class FSMStarted(FSMException):
+    pass
+
+
+class FSMDone(FSMException):
+    pass
+
+
+class FSMError(FSMException):
+    pass

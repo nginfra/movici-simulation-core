@@ -5,16 +5,16 @@ import os
 import pathlib
 import typing as t
 
-from movici_simulation_core.core.types import InitDataHandlerBase
+from movici_simulation_core.core.types import InitDataHandler
 from movici_simulation_core.messages import GetDataMessage, PathMessage
-from movici_simulation_core.networking.client import RequestClient, Sockets
+from movici_simulation_core.networking.client import RequestClient
 from movici_simulation_core.types import FileType
 from movici_simulation_core.utils.path import DatasetPath
 
 
-class InitDataHandler(InitDataHandlerBase):
+class InitDataClient(InitDataHandler):
     def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
-        pass
+        raise NotImplementedError
 
     def get_type_and_path(self, path) -> t.Tuple[FileType, DatasetPath]:
         dtype = FileType.from_extension(path.suffix)
@@ -32,7 +32,7 @@ class InitDataHandler(InitDataHandlerBase):
 
 
 @dataclasses.dataclass
-class DirectoryInitDataHandler(InitDataHandler):
+class DirectoryInitDataClient(InitDataClient):
     root: pathlib.Path
 
     def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
@@ -52,29 +52,24 @@ class DirectoryInitDataHandler(InitDataHandler):
 
 
 @dataclasses.dataclass
-class ServicedInitDataHandler(InitDataHandler):
+class ServicedInitDataClient(InitDataClient):
     name: str
     server: str
-    client: InitDataClient = dataclasses.field(init=False)
+    client: RequestClient = dataclasses.field(init=False)
 
     def __post_init__(self):
-        self.client = InitDataClient(self.name, self.server)
+        self.client = RequestClient(self.name)
 
-    def get(self, name: str) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
-        path = self.client.get(name)
+    def get(
+        self, name: str, mask: dict | None = None
+    ) -> t.Tuple[t.Optional[FileType], t.Optional[DatasetPath]]:
+        resp = self.client.request(
+            self.server, GetDataMessage(name, mask), valid_responses=PathMessage
+        )
+        path = resp.path
         if path is not None:
             return self.get_type_and_path(path)
         return None, None
 
     def close(self):
         self.client.close()
-
-
-class InitDataClient(RequestClient):
-    def __init__(self, name: str, server: str, sockets: Sockets = None):
-        super().__init__(name, sockets)
-        self.server = server
-
-    def get(self, key: str, mask: t.Optional[dict] = None) -> t.Optional[pathlib.Path]:
-        resp = self.request(self.server, GetDataMessage(key, mask), valid_responses=PathMessage)
-        return resp.path

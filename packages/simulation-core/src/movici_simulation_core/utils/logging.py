@@ -6,9 +6,15 @@ import warnings
 
 from movici_simulation_core.settings import Settings
 
+_configured_loggers: set[str] = set()
+
 
 def get_logger(settings: Settings, name=None, capture_warnings=True):
+    name = name or settings.name
     logger = logging.getLogger(name or settings.name)
+    if name in _configured_loggers:
+        return logger
+
     level = logging.getLevelName(settings.log_level.upper())
     logger.setLevel(level)
     handler = logging.StreamHandler(sys.stdout)
@@ -16,6 +22,7 @@ def get_logger(settings: Settings, name=None, capture_warnings=True):
     logger.addHandler(handler)
     if capture_warnings:
         captureWarnings(logger)
+    _configured_loggers.add(name)
     return logger
 
 

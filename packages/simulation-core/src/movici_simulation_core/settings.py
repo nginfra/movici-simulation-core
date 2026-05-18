@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     service_types: t.List[str] = Field(default_factory=list)
     scenario_config: t.Optional[dict] = Field(default=None)
     service_discovery: t.Dict[str, str] = Field(default_factory=dict)
+    distributed: bool = True
 
     # pydantic settings. the "model_" here has nothing to do with movici models, but with pydantic
     model_config = SettingsConfigDict(env_prefix="movici_")

@@ -3,13 +3,12 @@ from unittest.mock import Mock
 
 import pytest
 
+from movici_simulation_core.exceptions import FSMDone, FSMStarted
 from movici_simulation_core.services.orchestrator.fsm import (
     FSM,
     Always,
     Condition,
     Event,
-    FSMDone,
-    FSMStarted,
     State,
     TransitionsT,
 )
