@@ -1,3 +1,6 @@
+sync:
+	uv sync --all-packages --all-groups
+
 ruff:
 	uv run ruff format --check
 	uv run ruff check
