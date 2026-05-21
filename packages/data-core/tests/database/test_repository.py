@@ -328,7 +328,7 @@ class TestAttributeTypeRepository:
     async def test_returns_existing_attribute_type_when_compatible(
         self, repository: SQLAlchemyRepository, an_attribute_type
     ):
-        repository.options.STRICT_ATTRIBUTES = True
+        repository.options.STRICT_ATTRIBUTE_TYPES = True
         found = await repository.attribute_types.ensure_attribute_type(
             AttributeType("some.attribute", data_type=DataType(float))
         )
@@ -338,7 +338,7 @@ class TestAttributeTypeRepository:
     async def test_raises_on_non_existing_attribute_type_when_strict(
         self, repository: SQLAlchemyRepository
     ):
-        repository.options.STRICT_ATTRIBUTES = True
+        repository.options.STRICT_ATTRIBUTE_TYPES = True
 
         with pytest.raises(ResourceDoesNotExist):
             await repository.attribute_types.ensure_attribute_type(
@@ -348,7 +348,7 @@ class TestAttributeTypeRepository:
     async def test_automatically_creates_attribute_type_when_not_strict(
         self, repository: SQLAlchemyRepository
     ):
-        repository.options.STRICT_ATTRIBUTES = False
+        repository.options.STRICT_ATTRIBUTE_TYPES = False
 
         attribute_type = await repository.attribute_types.ensure_attribute_type(
             AttributeType("some.attribute", data_type=DataType(float))
@@ -361,7 +361,7 @@ class TestAttributeTypeRepository:
     async def test_raises_on_incompatible_existing_attribute_type(
         self, repository: SQLAlchemyRepository, an_attribute_type
     ):
-        repository.options.STRICT_ATTRIBUTES = False
+        repository.options.STRICT_ATTRIBUTE_TYPES = False
 
         with pytest.raises(InvalidResource):
             await repository.attribute_types.ensure_attribute_type(

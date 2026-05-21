@@ -158,7 +158,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
         existing = await self.get_by_name(attribute_type.name)
         if not existing:
-            if self.options.STRICT_ATTRIBUTES:
+            if self.options.STRICT_ATTRIBUTE_TYPES:
                 raise ResourceDoesNotExist("attribute_type", name=attribute_type.name)
             attribute_type_id = await self.create(attribute_type)
             existing = t.cast(AttributeType, await self.get_by_id(attribute_type_id))
