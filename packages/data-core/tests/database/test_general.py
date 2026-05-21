@@ -23,7 +23,7 @@ async def test_initialize_db_for_single_scenario_sets_flags(session):
     assert options.mode == DatabaseMode.SINGLE_SCENARIO
     assert not options.STRICT_DATASET_TYPES
     assert not options.STRICT_ENTITY_TYPES
-    assert not options.STRICT_ATTRIBUTES
+    assert not options.STRICT_ATTRIBUTE_TYPES
     assert not options.STRICT_MODEL_TYPES
     assert not options.STRICT_SCENARIO_DATASETS
 
@@ -44,7 +44,7 @@ async def test_initialize_db_for_multiple_workspaces_sets_flags(session):
     assert options.mode == DatabaseMode.MULTIPLE_WORKSPACES
     assert options.STRICT_DATASET_TYPES
     assert options.STRICT_ENTITY_TYPES
-    assert options.STRICT_ATTRIBUTES
+    assert options.STRICT_ATTRIBUTE_TYPES
     assert options.STRICT_MODEL_TYPES
     assert options.STRICT_SCENARIO_DATASETS
 

@@ -100,7 +100,7 @@ class Options(Base):
 
     STRICT_DATASET_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_ENTITY_TYPES: Mapped[bool] = mapped_column(default=False)
-    STRICT_ATTRIBUTES: Mapped[bool] = mapped_column(default=False)
+    STRICT_ATTRIBUTE_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_MODEL_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_SCENARIO_DATASETS: Mapped[bool] = mapped_column(default=False)
 

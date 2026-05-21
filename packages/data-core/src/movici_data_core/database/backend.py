@@ -220,7 +220,7 @@ class SQLAlchemyBackend:
         :param strict_entity_types: set/unset the ``STRICT_ENTITY_TYPES`` option, which governs
           whether to automatically create non-existing entity types when they are encountered in an
           uploaded dataset
-        :param attributes: set/unset the ``STRICT_ATTRIBUTES`` option, which governs whether
+        :param attributes: set/unset the ``STRICT_ATTRIBUTE_TYPES`` option, which governs whether
           to automatically create non-existing attribute types when they are encountered in an
           uploaded dataset
         :param strict_model_types: set/unset the ``STRICT_MODEL_TYPES`` option, which governs
@@ -235,7 +235,7 @@ class SQLAlchemyBackend:
         if strict_entity_types is not None:
             self.options.STRICT_ENTITY_TYPES = strict_entity_types
         if strict_attributes is not None:
-            self.options.STRICT_ATTRIBUTES = strict_attributes
+            self.options.STRICT_ATTRIBUTE_TYPES = strict_attributes
         if strict_model_types is not None:
             self.options.STRICT_MODEL_TYPES = strict_model_types
         if strict_scenario_datasets is not None:

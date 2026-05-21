@@ -122,7 +122,7 @@ def _default_flags(mode: DatabaseMode):
     """Return a dictionary of default flags that must be set (to true), based on the ``mode``"""
     if mode == DatabaseMode.MULTIPLE_WORKSPACES:
         return {
-            "STRICT_ATTRIBUTES": True,
+            "STRICT_ATTRIBUTE_TYPES": True,
             "STRICT_DATASET_TYPES": True,
             "STRICT_ENTITY_TYPES": True,
             "STRICT_MODEL_TYPES": True,
