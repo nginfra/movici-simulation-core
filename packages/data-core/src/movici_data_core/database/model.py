@@ -445,6 +445,7 @@ class Update(Base):
             model_type=self.model_type.name,
             timestamp=self.timestamp,
             iteration=self.iteration,
+            created_at=self.created_at,
         )
 
 
