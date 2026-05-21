@@ -1058,6 +1058,7 @@ class TestUpdateRepository:
 
         result = await repository_for_scenario.updates.get_by_id(update_id)
         assert result is not None
+        assert result.created_at is not None
         assert dataclasses.replace(update, data=None, id=update_id) == dataclasses.replace(
             result, data=None
         )

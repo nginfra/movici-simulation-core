@@ -211,7 +211,6 @@ class Update:
 
     id: UUID | None = None
     created_at: datetime.datetime | None = None
-    updated_at: datetime.datetime | None = None
     data: DatasetData | None = None
 
 
