@@ -3,15 +3,11 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import pathlib
-import typing as t
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from movici_data_core.exceptions import (
-    InconsistentDatabase,
-    InvalidAction,
-)
+from movici_data_core.exceptions import InvalidAction
 from movici_simulation_core import EntityInitDataFormat
 from movici_simulation_core.types import ExternalSerializationStrategy
 
@@ -20,7 +16,6 @@ from .general import (
     create_default_scenario,
     create_default_workspace,
     get_engine,
-    get_options,
     initialize_database,
 )
 from .repository import SQLAlchemyRepository
@@ -63,18 +58,6 @@ class SQLAlchemyServer:
         async with self.session_factory(**(session_kwargs or {})) as session:
             yield session
 
-    @contextlib.asynccontextmanager
-    async def get_backend(self, session_kwargs: dict[str, t.Any] | None = None):
-        async with self.get_session(**(session_kwargs or {})) as session:
-            options = await get_options(session)
-            try:
-                yield await self._with_serializer(self._build_backend(session, options))
-            except Exception:
-                await session.rollback()
-                raise
-            else:
-                await session.commit()
-
     async def setup_db(self, mode: db.DatabaseMode = db.DatabaseMode.SINGLE_SCENARIO):
         async with self.engine.begin() as conn:
             await conn.run_sync(db.Base.metadata.create_all)
@@ -82,35 +65,6 @@ class SQLAlchemyServer:
         async with self.session_factory() as session:
             await initialize_database(session, mode)
             await session.commit()
-
-    def _build_backend(self, session: AsyncSession, options: db.Options):
-        backend = SQLAlchemyBackend(session, options, tmpfile_dir=self.tmpfile_dir)
-        if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
-            return backend
-
-        if (workspace_id := options.default_workspace_id) is None:
-            raise InconsistentDatabase("a default workspace is required")
-
-        if options.mode == db.DatabaseMode.SINGLE_WORKSPACE:
-            return dataclasses.replace(
-                backend, workspace_id=workspace_id, single_workspace_mode=True
-            )
-        if options.mode == db.DatabaseMode.SINGLE_SCENARIO:
-            if (scenario_id := options.default_scenario_id) is None:
-                raise InconsistentDatabase("a default scenario is required")
-            return dataclasses.replace(
-                backend,
-                workspace_id=workspace_id,
-                scenario_id=scenario_id,
-                single_workspace_mode=True,
-                single_scenario_mode=True,
-            )
-
-        assert False, f"Unknown database mode {options.mode}"
-
-    async def _with_serializer(self, backend: SQLAlchemyBackend):
-        schema = await backend.attribute_types.as_schema()
-        return dataclasses.replace(backend, serializer=self.serializer_cls(schema))
 
 
 @dataclasses.dataclass
