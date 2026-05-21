@@ -645,7 +645,7 @@ Below is given an example of a dataset creator config snippet
 Read an EPANET INP file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-EPANET INP files are supported via ``WNTR``. An ``inp`` source is a multi-entity source
+EPANET INP files are supported via ``WNTR``. An ``epanet`` source is a multi-entity source
 that exposes the six WNTR collections as separate sub-sources, each selected from the
 parent source using dot notation ``"<source_name>.<entity_type>"``:
 
@@ -659,7 +659,7 @@ attribute and as an ``id_link`` key for resolving link-to-node topology.
 
 Caveats:
 
-* The CRS can not be converted for ``inp`` data sources. The CRS must be specified to be
+* The CRS can not be converted for ``epanet`` data sources. The CRS must be specified to be
   the same CRS as the coordinates stored in the INP file.
 * Link sub-sources (``pipes``, ``pumps``, ``valves``) produce line geometries from the
   coordinates of their start and end nodes. They do not contribute a bounding box.
@@ -667,7 +667,7 @@ Caveats:
   (e.g. in ``LPS``, pipe diameters expressed in millimeters become meters). Map properties
   from the WNTR representation, not the raw INP values.
 
-Below is an example of a dataset creator config snippet. A single ``inp`` source is
+Below is an example of a dataset creator config snippet. A single ``epanet`` source is
 declared once, and each entity group references the appropriate sub-source through dot
 notation:
 
@@ -679,7 +679,7 @@ notation:
     },
     "__sources__": {
       "network": {
-        "source_type": "inp",
+        "source_type": "epanet",
         "path": "/path/to/network.inp"
       }
     },

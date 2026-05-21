@@ -24,7 +24,7 @@ from movici_simulation_core.attributes import (
 GeometryType = t.Literal["points", "lines", "polygons", "cells"]
 
 
-class MultiEntitySource:
+class MultipleEntityTypeSource:
     r"""Base class for data sources that provide multiple entity types from a single file or
     connection, such as a network file that contains both node and link collections.
 
@@ -67,7 +67,7 @@ def resolve_source(name: str, sources: "SourcesDict") -> "DataSource":
     :param name: Source reference, optionally with dot notation
     :param sources: The sources dictionary
     :raises ValueError: If the source or entity type is not found
-    :raises TypeError: If a bare name references a ``MultiEntitySource``
+    :raises TypeError: If a bare name references a ``MultipleEntityTypeSource``
     """
     if "." in name:
         source_name, entity_type = name.split(".", 1)
@@ -75,7 +75,7 @@ def resolve_source(name: str, sources: "SourcesDict") -> "DataSource":
             source = sources[source_name]
         except KeyError:
             raise ValueError(f"Source '{source_name}' not available") from None
-        if not isinstance(source, MultiEntitySource):
+        if not isinstance(source, MultipleEntityTypeSource):
             raise TypeError(
                 f"Source '{source_name}' is not a multi-entity source, "
                 f"cannot select entity type '{entity_type}'"
@@ -92,7 +92,7 @@ def resolve_source(name: str, sources: "SourcesDict") -> "DataSource":
     except KeyError:
         raise ValueError(f"Source '{name}' not available") from None
 
-    if isinstance(source, MultiEntitySource):
+    if isinstance(source, MultipleEntityTypeSource):
         available = ", ".join(sorted(source.keys()))
         raise TypeError(
             f"Source '{name}' is a multi-entity source; "
@@ -375,4 +375,4 @@ class NetCDFGridSource(DataSource):
         return np.array(unique_coords, dtype=float), np.array(cells, dtype=np.int32)
 
 
-SourcesDict = t.MutableMapping[str, t.Union[DataSource, MultiEntitySource]]
+SourcesDict = t.MutableMapping[str, t.Union[DataSource, MultipleEntityTypeSource]]

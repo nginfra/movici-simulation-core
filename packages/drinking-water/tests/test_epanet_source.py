@@ -1,11 +1,11 @@
-"""Tests for EPANETSource MultiEntitySource."""
+"""Tests for EPANETSource MultipleEntityTypeSource."""
 
 import textwrap
 
 import pytest
 
 from movici_drinking_water_model.epanet_source import EPANETSource
-from movici_simulation_core.preprocessing import MultiEntitySource
+from movici_simulation_core.preprocessing import MultipleEntityTypeSource
 from movici_simulation_core.preprocessing.dataset_creator import (
     AttributeDataLoading,
     DatasetCreator,
@@ -62,14 +62,13 @@ MINIMAL_INP = textwrap.dedent("""\
 def inp_file(tmp_path):
     path = tmp_path / "test_network.inp"
     path.write_text(MINIMAL_INP)
-    yield path
-    EPANETSource._model_cache.clear()
+    return path
 
 
 class TestEPANETSource:
     def test_is_multi_entity_source(self, inp_file):
         source = EPANETSource(inp_file)
-        assert isinstance(source, MultiEntitySource)
+        assert isinstance(source, MultipleEntityTypeSource)
 
     def test_has_all_entity_types(self, inp_file):
         source = EPANETSource(inp_file)
@@ -208,33 +207,29 @@ class TestEPANETSource:
                 "entity_type": "junctions",
             }
         )
-        assert not isinstance(source, MultiEntitySource)
+        assert not isinstance(source, MultipleEntityTypeSource)
         assert len(source) == 2
 
     def test_from_source_info_without_entity_type(self, inp_file):
-        """from_source_info without entity_type returns a MultiEntitySource."""
+        """from_source_info without entity_type returns a MultipleEntityTypeSource."""
         source = EPANETSource.from_source_info(
             {
                 "source_type": "epanet",
                 "path": str(inp_file),
             }
         )
-        assert isinstance(source, MultiEntitySource)
+        assert isinstance(source, MultipleEntityTypeSource)
         assert len(source["junctions"]) == 2
 
-    def test_model_caching(self, inp_file):
+    def test_model_shared_across_entity_types(self, inp_file):
         source = EPANETSource(inp_file)
-        # Access two entity types, model should be loaded once
-        len(source["junctions"])
-        len(source["pipes"])
-        assert source["junctions"]._get_model() is source["pipes"]._get_model()
+        assert source["junctions"].model is source["pipes"].model
 
-    def test_model_caching_across_instances(self, inp_file):
-        s1 = EPANETSource(inp_file)
-        s2 = EPANETSource(inp_file)
-        len(s1["junctions"])
-        len(s2["pipes"])
-        assert s1._get_model() is s2._get_model()
+    def test_model_loaded_lazily(self, inp_file):
+        source = EPANETSource(inp_file)
+        assert source.model is None
+        source["junctions"]
+        assert source.model is not None
 
     def test_entity_source_is_cached(self, inp_file):
         source = EPANETSource(inp_file)

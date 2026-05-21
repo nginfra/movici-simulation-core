@@ -1,10 +1,10 @@
-"""Tests for resolve_source and MultiEntitySource."""
+"""Tests for resolve_source and MultipleEntityTypeSource."""
 
 import pytest
 
 from movici_simulation_core.preprocessing.data_sources import (
     DataSource,
-    MultiEntitySource,
+    MultipleEntityTypeSource,
     resolve_source,
 )
 
@@ -17,7 +17,7 @@ class DummySource(DataSource):
         return 0
 
 
-class DummyMultiSource(MultiEntitySource):
+class DummyMultiSource(MultipleEntityTypeSource):
     def __init__(self, entity_types):
         self._entity_types = entity_types
         self._sources = {et: DummySource() for et in entity_types}

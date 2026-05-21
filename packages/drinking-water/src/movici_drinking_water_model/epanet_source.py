@@ -13,7 +13,7 @@ from movici_simulation_core.attributes import (
     Geometry_X,
     Geometry_Y,
 )
-from movici_simulation_core.preprocessing import DataSource, MultiEntitySource
+from movici_simulation_core.preprocessing import DataSource, MultipleEntityTypeSource
 from movici_simulation_core.preprocessing.data_sources import GeometryType
 
 
@@ -25,23 +25,19 @@ class _EPANETEntitySource(DataSource):
 
     def __init__(
         self,
-        get_model: t.Callable[[], "wntr.network.WaterNetworkModel"],
+        model: "wntr.network.WaterNetworkModel",
         entity_type: str,
     ) -> None:
-        self._get_model = get_model
+        self.model = model
         self.entity_type = entity_type
-        self._items: t.Optional[t.List[t.Tuple[str, t.Any]]] = None
 
-    def _get_items(self) -> t.List[t.Tuple[str, t.Any]]:
-        if self._items is None:
-            wn = self._get_model()
-            self._items = list(getattr(wn, self.entity_type)())
-        return self._items
+    @property
+    def _features(self) -> t.Iterator[t.Tuple[str, t.Any]]:
+        return getattr(self.model, self.entity_type)()
 
     def get_attribute(self, name: str):
-        items = self._get_items()
         result: list = []
-        for _name, obj in items:
+        for _name, obj in self._features:
             if name == "name":
                 result.append(_name)
             else:
@@ -56,9 +52,9 @@ class _EPANETEntitySource(DataSource):
                     f"got '{geometry_type}'"
                 )
             xs, ys = [], []
-            for _, node in self._get_items():
+            for _name, node in self._features:
                 if node.coordinates is None:
-                    raise ValueError(f"Node '{_}' has no coordinates")
+                    raise ValueError(f"Node '{_name}' has no coordinates")
                 xs.append(node.coordinates[0])
                 ys.append(node.coordinates[1])
             return {Geometry_X.name: xs, Geometry_Y.name: ys}
@@ -68,11 +64,10 @@ class _EPANETEntitySource(DataSource):
                     f"Link entity '{self.entity_type}' only supports 'lines' geometry, "
                     f"got '{geometry_type}'"
                 )
-            wn = self._get_model()
             lines = []
-            for _name, link in self._get_items():
-                start = wn.get_node(link.start_node_name).coordinates
-                end = wn.get_node(link.end_node_name).coordinates
+            for _name, link in self._features:
+                start = self.model.get_node(link.start_node_name).coordinates
+                end = self.model.get_node(link.end_node_name).coordinates
                 if start is None or end is None:
                     raise ValueError(f"Link '{_name}' has an endpoint without coordinates")
                 lines.append([[start[0], start[1]], [end[0], end[1]]])
@@ -82,17 +77,17 @@ class _EPANETEntitySource(DataSource):
     def get_bounding_box(self):
         if self.entity_type not in self.NODE_TYPES:
             return None
-        coords = [n.coordinates for _, n in self._get_items() if n.coordinates is not None]
+        coords = [n.coordinates for _, n in self._features if n.coordinates is not None]
         if not coords:
             return None
         xs, ys = zip(*coords)
         return (min(xs), min(ys), max(xs), max(ys))
 
     def __len__(self):
-        return len(self._get_items())
+        return sum(1 for _ in self._features)
 
 
-class EPANETSource(MultiEntitySource):
+class EPANETSource(MultipleEntityTypeSource):
     r"""Multi-entity source for reading EPANET INP files via WNTR.
 
     Registered as the ``"epanet"`` source type for the dataset creator. Contains
@@ -105,19 +100,17 @@ class EPANETSource(MultiEntitySource):
         len(junctions)
         junctions.get_attribute("elevation")
 
-    Multiple ``EPANETSource`` instances sharing the same file path reuse a
-    cached WNTR model. The cache is keyed by resolved absolute path and is
-    never invalidated — edits to the file within one process are not picked up.
+    The WNTR model is loaded lazily on first entity-type access and shared across
+    sub-sources of the same ``EPANETSource`` instance.
 
     :param file: Path to the INP file
     """
-
-    _model_cache: t.ClassVar[t.Dict[str, "wntr.network.WaterNetworkModel"]] = {}
 
     ENTITY_TYPES = frozenset({"junctions", "tanks", "reservoirs", "pipes", "pumps", "valves"})
 
     def __init__(self, file: t.Union[Path, str]) -> None:
         self.file = Path(file)
+        self.model: t.Optional["wntr.network.WaterNetworkModel"] = None
         self._entity_sources: t.Dict[str, _EPANETEntitySource] = {}
 
     @classmethod
@@ -133,12 +126,6 @@ class EPANETSource(MultiEntitySource):
             return source[source_info["entity_type"]]
         return source
 
-    def _get_model(self) -> "wntr.network.WaterNetworkModel":
-        key = str(self.file.resolve())
-        if key not in self._model_cache:
-            self._model_cache[key] = wntr.network.WaterNetworkModel(str(self.file))
-        return self._model_cache[key]
-
     def keys(self) -> t.Iterable[str]:
         return iter(sorted(self.ENTITY_TYPES))
 
@@ -147,8 +134,10 @@ class EPANETSource(MultiEntitySource):
             raise KeyError(
                 f"Unknown entity type '{entity_type}', must be one of {sorted(self.ENTITY_TYPES)}"
             )
+        if self.model is None:
+            self.model = wntr.network.WaterNetworkModel(str(self.file))
         if entity_type not in self._entity_sources:
-            self._entity_sources[entity_type] = _EPANETEntitySource(self._get_model, entity_type)
+            self._entity_sources[entity_type] = _EPANETEntitySource(self.model, entity_type)
         return self._entity_sources[entity_type]
 
     def __contains__(self, entity_type) -> bool:

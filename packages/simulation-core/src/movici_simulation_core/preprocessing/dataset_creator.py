@@ -18,7 +18,7 @@ from movici_simulation_core.json_schemas import PATH
 from .data_sources import (
     DataSource,
     GeometryType,
-    MultiEntitySource,
+    MultipleEntityTypeSource,
     SourcesDict,
     resolve_source,
 )
@@ -131,11 +131,13 @@ class SourcesSetup(DatasetOperation):
     :meth:`register`.
     """
 
-    _source_types: t.ClassVar[t.Dict[str, t.Type[t.Union[DataSource, MultiEntitySource]]]] = {}
+    _source_types: t.ClassVar[
+        t.Dict[str, t.Type[t.Union[DataSource, MultipleEntityTypeSource]]]
+    ] = {}
 
     @classmethod
     def register(
-        cls, name: str, source_cls: t.Type[t.Union[DataSource, MultiEntitySource]]
+        cls, name: str, source_cls: t.Type[t.Union[DataSource, MultipleEntityTypeSource]]
     ) -> None:
         """Register a ``DataSource`` class under ``name``.
 
@@ -167,7 +169,9 @@ class SourcesSetup(DatasetOperation):
         return cls.from_source_info(source_info)
 
     @classmethod
-    def _resolve_source_type(cls, name: str) -> t.Type[t.Union[DataSource, MultiEntitySource]]:
+    def _resolve_source_type(
+        cls, name: str
+    ) -> t.Type[t.Union[DataSource, MultipleEntityTypeSource]]:
         if name in cls._source_types:
             return cls._source_types[name]
         try:
@@ -186,7 +190,9 @@ class SourcesSetup(DatasetOperation):
         return path
 
 
-def register_source_type(name: str, cls: t.Type[t.Union[DataSource, MultiEntitySource]]) -> None:
+def register_source_type(
+    name: str, cls: t.Type[t.Union[DataSource, MultipleEntityTypeSource]]
+) -> None:
     """Register a ``DataSource`` class under ``name`` with :class:`SourcesSetup`.
 
     Convenience module-level shim that delegates to :meth:`SourcesSetup.register`.
