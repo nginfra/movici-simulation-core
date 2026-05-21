@@ -17,7 +17,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from movici_data_core import domain_model
-from movici_data_core.domain_model import BoundingBox, DatasetFormat, ScenarioStatus
+from movici_data_core.domain_model import (
+    BoundingBox,
+    DatasetFormat,
+    ScenarioStatus,
+    SimulationInfo,
+)
 from movici_simulation_core.core import DataType
 
 from .db_types import GUID, JSONTuple, TZDateTime
@@ -344,7 +349,7 @@ class Scenario(Base):
             name=self.name,
             display_name=self.display_name,
             description=self.description,
-            simulation_info=self.simulation_info,
+            simulation_info=SimulationInfo(**self.simulation_info),
             epsg_code=self.epsg_code,
             created_at=self.created_at,
             updated_at=self.updated_at,
