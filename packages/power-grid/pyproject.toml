@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[project]
+name = "movici-power-grid-model"
+dynamic = ["version"]
+description = "Power grid simulation model for Movici using power-grid-model"
+readme = "README.rst"
+requires-python = ">=3.10,<3.14"
+license = { text = "Movici Public License" }
+authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: Free for non-commercial use",
+  "License :: Other/Proprietary License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+]
+
+dependencies = ["movici-simulation-core", "numpy", "power-grid-model"]
+
+[project.entry-points."movici.plugins"]
+power_grid_calculation = "movici_power_grid_model.model:Model"
+power_grid_attributes = "movici_power_grid_model.attributes:PowerGridAttributes"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"
