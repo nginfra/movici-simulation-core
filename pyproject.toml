@@ -16,6 +16,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "movici-simulation-core[all]",
+  "movici-data-core[sqlite]",
   "pytest",
   "pytest-cov",
   "mypy",
