@@ -116,6 +116,7 @@ minversion = "7.0"
 addopts = ["--tb=short", "--strict-markers", "--strict-config"]
 testpaths = ["tests"]
 filterwarnings = ["ignore:.*ABCs from 'collections'.*:DeprecationWarning"]
+asyncio_mode = "auto"                                                      # work with regular async @pytest.fixtures
 
 [tool.mypy]
 disallow_untyped_calls = true
