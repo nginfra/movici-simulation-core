@@ -116,6 +116,34 @@ class BoundingBox(t.NamedTuple):
 
 
 @dataclasses.dataclass
+class SimulationInfo:
+    """A class to hold information about the time settings of the scenario. In a simulation, time
+    progresses in discrete intervals, each with a time step of ``time_scale`` seconds. The total
+    duration of the simulation is ``duration`` discrete intervals. The simulation starts at the
+    discrete time step ``start_time``. For purposes of calculating the absolute (wall clock) time
+    in the simulation, at ``t=start_time``, the absolute time has a unix timestamp
+    ``reference``
+
+    :param duration: the duration of the scenario in discrete time steps
+    :param reference: the unix timestamp inside the simulation at ``t=0``
+    :param time_scale: the size of a single discrete timestep in seconds. Default: ``1``
+    :param start_time: the discrete time step to start the simulation at, usually ``t=0``.
+      default: ``0``
+    :param mode: must be set to ``"time_oriented". Default ``"time_oriented"``
+    """
+
+    duration: int
+    reference: float
+    time_scale: float = 1
+    start_time: int = 0
+    mode: t.Literal["time_oriented"] = "time_oriented"
+
+    @classmethod
+    def default(cls):
+        return cls(reference=0, duration=1)
+
+
+@dataclasses.dataclass
 class Scenario:
     name: str
     display_name: str
@@ -123,7 +151,7 @@ class Scenario:
 
     epsg_code: int
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
-    simulation_info: dict = dataclasses.field(default_factory=dict)
+    simulation_info: SimulationInfo = dataclasses.field(default_factory=SimulationInfo.default)
     status: ScenarioStatus = ScenarioStatus.READY
 
     id: UUID | None = None

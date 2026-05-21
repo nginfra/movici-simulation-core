@@ -21,6 +21,7 @@ from movici_data_core.domain_model import (
     ModelType,
     Scenario,
     ScenarioDataset,
+    SimulationInfo,
     Update,
     Workspace,
 )
@@ -276,7 +277,7 @@ async def a_scenario(
         display_name="A Scenario",
         description="Scenario for testing",
         epsg_code=28992,
-        simulation_info={"some": "info"},
+        simulation_info=SimulationInfo.default(),
         datasets=[
             {
                 "name": a_dataset.name,

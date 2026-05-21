@@ -111,7 +111,7 @@ class ScenarioRepository(SQLResourceRepository):
                 display_name=obj.display_name,
                 description=obj.description,
                 status=obj.status,
-                simulation_info=obj.simulation_info,
+                simulation_info=dataclasses.asdict(obj.simulation_info),
                 epsg_code=obj.epsg_code,
             )
             .returning(db.Scenario.id)
@@ -135,7 +135,7 @@ class ScenarioRepository(SQLResourceRepository):
                 name=obj.name,
                 display_name=obj.display_name,
                 description=obj.description,
-                simulation_info=obj.simulation_info,
+                simulation_info=dataclasses.asdict(obj.simulation_info),
                 epsg_code=obj.epsg_code,
             )
         )
