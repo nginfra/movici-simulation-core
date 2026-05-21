@@ -202,7 +202,7 @@ class ScenarioRepository(SQLResourceRepository):
         ):
             refs_to_add.extend(
                 validator.iter_scenario_model_references(
-                    dataclasses.replace(scenario_model, id=record.id)
+                    id=record.id, scenario_model=scenario_model
                 )
             )
 

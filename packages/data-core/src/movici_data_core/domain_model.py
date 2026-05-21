@@ -175,7 +175,6 @@ class ScenarioModel:
     name: str
     type: ModelType
     config: dict = dataclasses.field(default_factory=dict)
-    id: UUID | None = dataclasses.field(compare=False, default=None)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
 
 

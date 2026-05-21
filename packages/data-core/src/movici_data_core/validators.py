@@ -1,5 +1,6 @@
 import dataclasses
 import typing as t
+from uuid import UUID
 
 from movici_data_core.domain_model import (
     AttributeType,
@@ -107,10 +108,12 @@ class ModelConfigValidator:
             return ScenarioModel(name, type=model_type, config=config, references=refs)
         raise MoviciValidationError.from_errors(errors)
 
-    def iter_scenario_model_references(self, scenario_model: ScenarioModel) -> t.Iterable[dict]:
+    def iter_scenario_model_references(
+        self, id: UUID, scenario_model: ScenarioModel
+    ) -> t.Iterable[dict]:
         for ref in scenario_model.references:
             ref_data = {
-                "scenario_model_id": scenario_model.id,
+                "scenario_model_id": id,
                 "path": ref.json_path,
             }
             if ref.movici_type == "attribute":
