@@ -4,6 +4,7 @@ import pytest
 
 from movici_simulation_core.messages import NewTimeMessage, UpdateMessage
 from movici_simulation_core.services.orchestrator.context import (
+    Context,
     ModelCollection,
     TimelineController,
 )
@@ -49,26 +50,30 @@ class TestTimelineController:
         timeline = TimelineController(start=1, end=20, current_time=10)
         assert timeline._get_validated_next_time(10) == 10
 
+
+class TestContext:
     @pytest.mark.parametrize(
         "next_a, next_b, exp_a, exp_b",
         [
             (0, 1, [UpdateMessage(0)], []),
             (2, 1, [NewTimeMessage(1)], [NewTimeMessage(1), UpdateMessage(1)]),
             (1, 2, [NewTimeMessage(1), UpdateMessage(1)], [NewTimeMessage(1)]),
+            (2, 2, [NewTimeMessage(2), UpdateMessage(2)], [NewTimeMessage(2), UpdateMessage(2)]),
             (2, None, [NewTimeMessage(2), UpdateMessage(2)], [NewTimeMessage(2)]),
             (None, 2, [NewTimeMessage(2)], [NewTimeMessage(2), UpdateMessage(2)]),
         ],
     )
     def test_queue_for_next_time(self, next_a, next_b, exp_a, exp_b):
-        timeline = TimelineController(start=0, end=20, current_time=0)
         a, b = Mock(), Mock()
-        models = ModelCollection(
-            a=a,
-            b=b,
+
+        context = Context(
+            models=ModelCollection(a=a, b=b),
+            timeline=TimelineController(start=0, end=20, current_time=0),
         )
         a.next_time = next_a
         b.next_time = next_b
 
-        timeline.queue_for_next_time(models)
+        context.queue_models_for_next_time()
+
         assert a.recv_event.call_args_list == [call(msg) for msg in exp_a]
         assert b.recv_event.call_args_list == [call(msg) for msg in exp_b]

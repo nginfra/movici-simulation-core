@@ -18,17 +18,17 @@ def send_silent(coro: t.Generator, value: t.Any):
         pass
 
 
-def fsm_conditional_raise(func=None, attribute: str = None, exc: t.Type[Exception] = None):
-    if func is None:
-        return functools.partial(fsm_conditional_raise, attribute=attribute, exc=exc)
+def fsm_conditional_raise(attribute: str, exc: t.Type[Exception]):
+    def _decorator(func):
+        @functools.wraps(func)
+        def wrapper(fsm: FSM, *args, **kwargs):
+            if getattr(fsm, attribute):
+                raise exc()
+            return func(fsm, *args, **kwargs)
 
-    @functools.wraps(func)
-    def wrapper(fsm: FSM, *args, **kwargs):
-        if getattr(fsm, attribute):
-            raise exc()
-        return func(fsm, *args, **kwargs)
+        return wrapper
 
-    return wrapper
+    return _decorator
 
 
 not_started = fsm_conditional_raise(attribute="started", exc=FSMStarted)
@@ -70,6 +70,7 @@ class FSM(t.Generic[T, E]):
 
     @not_done
     def send(self, event: E):
+        assert self.runner is not None
         send_silent(self.runner, event)
 
     def transition(self):

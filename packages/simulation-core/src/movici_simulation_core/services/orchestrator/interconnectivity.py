@@ -3,14 +3,12 @@ from __future__ import annotations
 import typing as t
 
 
-class IPubSubFilter(t.Protocol):
+class Publisher(t.Protocol):
     name: str
-    pub: dict
-    sub: dict
-    subscribers: t.List[IPubSubFilter]
+    publishes_to: t.List[Publisher]
 
 
-def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):
+def format_matrix(models: t.Sequence[Publisher], title="", match="X"):
     """
     ::
 
@@ -28,7 +26,7 @@ def format_matrix(models: t.Sequence[IPubSubFilter], title="", match="X"):
     def header_row():
         return first_column(title) + "".join(box(num) for num in model_nums.values())
 
-    def model_row(model):
+    def model_row(model: Publisher):
         return first_column(box(model_nums[model.name]) + model.name) + "".join(
             box(match if sub in model.publishes_to else "") for sub in models
         )

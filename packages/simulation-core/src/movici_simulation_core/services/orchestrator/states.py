@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import typing as t
 from abc import ABC
 
 from movici_simulation_core.messages import QuitMessage
@@ -43,7 +44,7 @@ class StartInitializingPhase(OrchestratorState):
         self.context.phase_timer.start()
         self.context.log_new_phase("Initializing Phase")
 
-    def transitions(self):
+    def transitions(self) -> TransitionsT:
         return [(Always, ModelsRegistration)]
 
 
@@ -51,7 +52,7 @@ class WaitForModels(OrchestratorState, ABC):
     def run(self):
         ident, msg = yield
 
-        if not (model := self.context.models.get(ident)):
+        if not (model := self.context.models.get(t.cast(bytes, ident))):
             return
         model.recv_event(msg)
 
@@ -78,7 +79,7 @@ class StartRunningPhase(OrchestratorState):
 class NewTime(OrchestratorState):
     def run(self):
         self.context.log_new_time()
-        self.context.timeline.queue_for_next_time(self.context.models)
+        self.context.queue_models_for_next_time()
 
     def transitions(self) -> TransitionsT:
         return [(Always, WaitForResults)]

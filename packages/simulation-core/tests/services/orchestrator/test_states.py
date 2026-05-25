@@ -97,9 +97,13 @@ class TestStartRunningPhase(BaseTestState):
 class TestNewTime(BaseTestState):
     state_cls = NewTime
 
+    @pytest.fixture
+    def context(self):
+        return Mock()
+
     def test_queues_models(self, state, context):
         state.run()
-        assert context.timeline.queue_for_next_time.call_args == call(context.models)
+        assert context.queue_models_for_next_time.call_count == 1
 
 
 class TestStartFinalizingPhase(BaseTestState):

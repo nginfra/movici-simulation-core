@@ -21,7 +21,7 @@ from movici_simulation_core.messages import (
 from movici_simulation_core.utils.data_mask import masks_overlap
 
 from .fsm import FSM, Always, State, TransitionsT
-from .interconnectivity import format_matrix
+from .interconnectivity import Publisher, format_matrix
 from .stopwatch import ReportingStopwatch, Stopwatch
 
 
@@ -48,6 +48,22 @@ class Context:
     def log_new_phase(self, phase: str):
         self.logger.info(f"Entering {phase}")
 
+    def queue_models_for_next_time(self):
+        next_time = self.models.next_time
+        if next_time is None:
+            raise RuntimeError(
+                "Cannot progress to next time when all models are done,"
+                " should finalize simulation instead"
+            )
+
+        if next_time != self.timeline.current_time:
+            self.timeline.current_time = next_time
+            self.models.queue_all(NewTimeMessage(next_time))
+
+        for model in self.models.values():
+            if model.next_time == next_time:
+                model.recv_event(UpdateMessage(timestamp=next_time))
+
     def log_new_time(self):
         if self.models.next_time != self.timeline.current_time:
             self.logger.info(f"New time: {self.models.next_time}")
@@ -59,7 +75,10 @@ class Context:
         self.logger.info(f"Total elapsed time: {seconds:.1f}")
 
     def log_interconnectivity_matrix(self):
-        self.logger.info("Model interconnectivity matrix:\n" + format_matrix(self.models.values()))
+        self.logger.info(
+            "Model interconnectivity matrix:\n"
+            + format_matrix(t.cast(list[Publisher], list(self.models.values())))
+        )
 
     def finalize(self):
         self.phase_timer.reset()
@@ -85,7 +104,7 @@ class Context:
 class TimelineController:
     start: int
     end: int
-    current_time: int = None
+    current_time: int | None = None
 
     def set_model_to_start(self, model: ConnectedModel):
         model.next_time = self.start
@@ -103,13 +122,6 @@ class TimelineController:
             return None
 
         return min(next_time, self.end)
-
-    def queue_for_next_time(self, models: ModelCollection):
-        next_time = models.next_time
-        if next_time != self.current_time:
-            self.current_time = next_time
-            models.queue_all(NewTimeMessage(next_time))
-        models.queue_models_for_next_time()
 
 
 class NoUpdateMessage(Message):
@@ -134,11 +146,11 @@ class ConnectedModel:
     send: t.Callable[[Message], None]
 
     logger: logging.Logger = field(default_factory=logging.getLogger)
-    publishes_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
-    subscribed_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
-    timer: Stopwatch = field(default=None)
-    pub: t.Optional[dict] = field(default_factory=dict)
-    sub: t.Optional[dict] = field(default_factory=dict)
+    publishes_to: list[ConnectedModel] = field(default_factory=list)
+    subscribed_to: list[ConnectedModel] = field(default_factory=list)
+    timer: Stopwatch = field(init=False)
+    pub: dict | None = field(default_factory=dict)
+    sub: dict | None = field(default_factory=dict)
 
     busy: bool = field(default=False, init=False)
     next_time: t.Optional[int] = field(default=None, init=False)
@@ -148,10 +160,10 @@ class ConnectedModel:
     quit: t.Optional[QuitMessage] = field(default=None, init=False)
     pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
 
-    fsm: FSM[ConnectedModel] = field(init=False)
+    fsm: FSM[ConnectedModel, Message] = field(init=False)
 
     def __post_init__(self):
-        self.timer = self.timer or ReportingStopwatch(
+        self.timer = ReportingStopwatch(
             on_stop=lambda s: self.logger.debug(
                 f"Model '{self.name}' returned in {s:.1f} seconds "
             ),
@@ -418,12 +430,9 @@ class ProcessPendingQuit(BaseModelState):
             raise RuntimeError(
                 "can only enter ProcessPendingQuit when there is a QuitMessage pending"
             )
-        self.process_pending_quit()
-        self.next_state = Finalizing
-
-    def process_pending_quit(self):
         self.context.ack = False
         self.context.send_command(self.context.quit)
+        self.next_state = Finalizing
 
 
 class Finalizing(Busy):
@@ -449,7 +458,7 @@ class Done(BaseModelState):
         yield
 
 
-class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
+class ModelCollection(dict[bytes, ConnectedModel]):
     @property
     def busy(self):
         return any(model.busy for model in self.values())
@@ -473,13 +482,6 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
         """add a message to the queue of all models"""
         for model in self.values():
             model.recv_event(message)
-
-    def queue_models_for_next_time(self):
-        """Queue an update message to the model(s) that have the specified next_time"""
-        next_time = self.next_time
-        for model in self.values():
-            if model.next_time == next_time:
-                model.recv_event(UpdateMessage(timestamp=next_time))
 
     def determine_interdependency(self):
         """calculate the subscribers for every model based on the pub/sub mask."""
