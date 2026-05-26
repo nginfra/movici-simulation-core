@@ -84,18 +84,19 @@ class TestWaitingForMessage:
     @pytest.mark.parametrize(
         "msg",
         [
-            NewTimeMessage(1),
-            UpdateMessage(1),
-            QuitMessage(),
             RegistrationMessage(pub=None, sub=None),
             AcknowledgeMessage(),
             ResultMessage(),
             ErrorMessage(),
         ],
     )
-    def test_invalid_message_sets_failed(self, msg, send_message, context):
+    def test_invalid_response_sets_failed(self, msg, send_message, context):
         send_message(msg)
         assert context.failed
+
+    def test_invalid_command_raises(self, send_message):
+        with pytest.raises(ValueError):
+            send_message(NewTimeMessage(1))
 
 
 class TestBusyTransitions:
@@ -127,8 +128,8 @@ class TestBusyTransitions:
 
         return _send
 
-    def test_transitions_after_invalid_message(self, send_message, next_state):
-        send_message(NewTimeMessage(1))
+    def test_transitions_after_invalid_response(self, send_message, next_state):
+        send_message(ResultMessage())
         assert next_state() == ProcessPendingQuit
 
     def test_transitions_after_error_message(self, send_message, next_state):
@@ -195,6 +196,11 @@ class TestBusy:
     @pytest.fixture
     def state_cls(self):
         return Busy
+
+    def test_on_enter_starts_timer(self, context: ConnectedModel):
+        assert not context.timer.running
+        Busy(context).on_enter()
+        assert context.timer.running
 
     def test_sets_quit_message_as_pending(self, send_message, context):
         assert context.quit is None

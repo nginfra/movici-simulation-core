@@ -93,6 +93,7 @@ class FSM(t.Generic[T, E]):
 
     def _run(self):
         try:
+            self.state.on_enter()
             while True:
                 if inspect.isgeneratorfunction(self.state.run):
                     yield from self.state.run()
@@ -115,6 +116,7 @@ class FSM(t.Generic[T, E]):
     def transition(self):
         if new_state := next_state(self.context, self.config.states.get(type(self.state), [])):
             self.state = new_state(self.context)
+            self.state.on_enter()
 
 
 def next_state(context, transitions: TransitionsT):
@@ -131,7 +133,6 @@ class Event:
 class State(ABC, t.Generic[T]):
     def __init__(self, context: T):
         self.context = context
-        self.on_enter()
 
     def on_enter(self):
         pass

@@ -96,12 +96,14 @@ class Orchestrator(Service):
         self.stream.set_handler(self.fsm.send)
 
     def _get_connected_model(self, identifier: str):
-        return ConnectedModel(
+        model = ConnectedModel(
             name=identifier,
             timeline=self.timeline,
             send=self.make_send(identifier),
             logger=self.logger,
         )
+        model.start()
+        return model
 
     def make_send(self, identifier: str):
         """create a send function that a can be used to send a message to a specific client

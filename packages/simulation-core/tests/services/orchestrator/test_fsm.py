@@ -61,6 +61,29 @@ def test_calls_on_enter_when_starting():
     assert StateA.on_enter.call_count == 1
 
 
+def test_calls_on_enter_when_transitioning():
+    class StateA(DummyState):
+        pass
+
+    class StateB(DummyState):
+        on_enter = Mock()
+        is_final = True
+
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [(Always, StateB)],
+                StateB: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
+    fsm.start()
+    assert StateB.on_enter.call_count == 1
+
+
 def test_fsm_runs_a_state():
     class StateA(DummyState):
         is_final = True
