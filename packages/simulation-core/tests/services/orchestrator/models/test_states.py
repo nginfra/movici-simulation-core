@@ -41,8 +41,10 @@ def context():
 
 
 @pytest.fixture
-def state(context, state_cls):
-    return state_cls(context)
+def state(state_cls, context):
+    state = state_cls(context)
+    state.on_enter()
+    return state
 
 
 @pytest.fixture
@@ -102,19 +104,14 @@ class TestWaitingForMessage:
 class TestBusyTransitions:
     @pytest.fixture
     def state_cls(self):
-        # Use NewTime as a substitute for Busy state, since it has an implementation for a model
-        # response (AcknowledgeMessage)
-        return NewTime
+        class DummyState(Busy):
+            valid_responses = (ErrorMessage, AcknowledgeMessage)
+
+        return DummyState
 
     @pytest.fixture
     def transitions(self):
         return MODEL_BUSY_TRANSITIONS
-
-    @pytest.fixture
-    def state(self, state_cls, context):
-        state = state_cls(context)
-        state.on_enter()
-        return state
 
     @pytest.fixture
     def send_message(self, state):
@@ -137,7 +134,7 @@ class TestBusyTransitions:
         assert next_state() == Done
 
     def test_transitions_to_idle_when_no_pending_messages(self, send_message, context, next_state):
-        assert not context.quit
+        assert not context.pending_quit
         assert not context.pending_updates
         send_message(AcknowledgeMessage())
         assert next_state() == Idle
@@ -164,15 +161,15 @@ class TestIdle:
     def state_cls(self):
         return Idle
 
-    def test_sends_incoming_new_time_message(self, send_message, context: ConnectedModel):
+    def test_adds_pending_new_time(self, send_message, context: ConnectedModel):
         msg = NewTimeMessage(1)
         send_message(msg)
-        assert context.send.call_args == call(msg)
+        assert context.pending_new_time == msg
 
     def test_adds_quit_to_pending(self, context, send_message):
-        assert context.quit is None
+        assert context.pending_quit is None
         send_message(QuitMessage())
-        assert context.quit == QuitMessage()
+        assert context.pending_quit == QuitMessage()
 
     def test_adds_update_to_pending(self, send_message, context):
         assert context.pending_updates == []
@@ -203,9 +200,9 @@ class TestBusy:
         assert context.timer.running
 
     def test_sets_quit_message_as_pending(self, send_message, context):
-        assert context.quit is None
+        assert context.pending_quit is None
         send_message(QuitMessage())
-        assert context.quit == QuitMessage()
+        assert context.pending_quit == QuitMessage()
 
     def test_adds_update_message_as_pending(self, send_message, context):
         context.pending_updates = [UpdateMessage(1)]
@@ -218,10 +215,10 @@ class TestBusy:
         assert context.failed
 
     def test_reset_pending_after_error(self, send_message, context):
-        context.quit = QuitMessage()
+        context.pending_quit = QuitMessage()
         context.pending_updates = [UpdateMessage(1)]
         send_message(ErrorMessage())
-        assert not context.quit
+        assert not context.pending_quit
         assert not context.pending_updates
 
 
@@ -229,7 +226,6 @@ class TestBusy:
     "state_cls, msg",
     [
         (Registration, RegistrationMessage(None, None)),
-        (NewTime, AcknowledgeMessage()),
         (Updating, ResultMessage()),
     ],
 )
@@ -257,8 +253,17 @@ class TestRegistration:
 
 class TestNewTime:
     @pytest.fixture
+    def context(self, context):
+        context.pending_new_time = NewTimeMessage(1)
+        return context
+
+    @pytest.fixture
     def state_cls(self):
         return NewTime
+
+    def test_sends_pending_new_time_and_resets(self, context, send_message):
+        assert context.send.call_args == call(NewTimeMessage(1))
+        assert context.pending_new_time is None
 
     def test_acknowledge_is_valid(self, send_message, context):
         send_message(AcknowledgeMessage())

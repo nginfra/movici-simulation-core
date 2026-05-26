@@ -6,12 +6,10 @@ from abc import ABC
 from movici_simulation_core.messages import QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
-    Always,
     Condition,
     FSMDone,
     FSMError,
     State,
-    TransitionsT,
 )
 
 
@@ -44,9 +42,6 @@ class StartInitializingPhase(OrchestratorState):
         self.context.phase_timer.start()
         self.context.log_new_phase("Initializing Phase")
 
-    def transitions(self) -> TransitionsT:
-        return [(Always, ModelsRegistration)]
-
 
 class WaitForModels(OrchestratorState, ABC):
     def run(self):
@@ -58,11 +53,7 @@ class WaitForModels(OrchestratorState, ABC):
 
 
 class ModelsRegistration(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsReady, StartRunningPhase),
-        ]
+    pass
 
 
 class StartRunningPhase(OrchestratorState):
@@ -72,26 +63,15 @@ class StartRunningPhase(OrchestratorState):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Running Phase")
 
-    def transitions(self) -> TransitionsT:
-        return [(Always, NewTime)]
-
 
 class NewTime(OrchestratorState):
     def run(self):
         self.context.log_new_time()
         self.context.queue_models_for_next_time()
 
-    def transitions(self) -> TransitionsT:
-        return [(Always, WaitForResults)]
-
 
 class WaitForResults(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsDone, StartFinalizingPhase),
-            (AllModelsReady, NewTime),
-        ]
+    pass
 
 
 class StartFinalizingPhase(OrchestratorState):
@@ -100,19 +80,12 @@ class StartFinalizingPhase(OrchestratorState):
         self.context.log_new_phase("Finalizing Phase")
         self.context.models.queue_all(QuitMessage(due_to_failure=bool(self.context.failed)))
 
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]
-
 
 class FinalizingWaitForModels(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase)]
+    pass
 
 
 class EndFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.finalize()
         raise FSMError if self.context.failed else FSMDone
-
-    def transitions(self) -> TransitionsT:
-        return []

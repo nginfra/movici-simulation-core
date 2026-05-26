@@ -155,11 +155,10 @@ class ConnectedModel:
     busy: bool = field(default=False, init=False)
     next_time: t.Optional[int] = field(default=None, init=False)
     failed: bool = field(default=False, init=False)
-    ack: bool = field(default=False, init=False)
 
-    quit: t.Optional[QuitMessage] = field(default=None, init=False)
+    pending_new_time: NewTimeMessage | None = field(default=None, init=False)
     pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
-    processing_new_time: bool = False
+    pending_quit: QuitMessage | None = field(default=None, init=False)
 
     fsm_config: FSMConfig | None = None
     fsm: FSM[ConnectedModel, Message] = field(init=False)
@@ -187,7 +186,7 @@ class ConnectedModel:
 
     def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
         self.logger.error(
-            f"Received invalid message in {message} from model '{self.name}'. Expected one of "
+            f"Received invalid message {message} from model '{self.name}'. Expected one of "
             + ", ".join(m.__name__ for m in valid_messages)
         )
 
@@ -239,16 +238,16 @@ class WaitingForMessage(BaseModelState):
             self._handle_response(msg)
 
     def process_new_time(self, msg: NewTimeMessage):
-        pass
+        self.context.pending_new_time = msg
 
     def process_no_update(self, msg: NoUpdateMessage):
         pass
 
     def process_update(self, msg: UpdateMessage):
-        pass
+        self.context.pending_updates.append(msg)
 
     def process_quit(self, msg: QuitMessage):
-        pass
+        self.context.pending_quit = msg
 
     @singledispatchmethod
     def _handle_response(self, msg: Message) -> None:
@@ -263,7 +262,6 @@ class WaitingForMessage(BaseModelState):
     @_handle_response.register
     def _(self, msg: AcknowledgeMessage) -> None:
         """when a model sends an accepted message, don't do extra logic"""
-        self.context.ack = True
         if not self.context.pending_updates:
             self.notify_subscribers()
 
@@ -286,14 +284,14 @@ class WaitingForMessage(BaseModelState):
     def _(self, msg: ErrorMessage) -> None:
         """When a model reports an error, set it to failed"""
         self.context.failed = True
-        self.context.quit = None
+        self.context.pending_quit = None
         self.context.pending_updates = []
 
-    def handle_invalid_response(self, msg: Message, valid_messages: t.Iterable[t.Type[Message]]):
+    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[t.Type[Response]]):
         self.context.failed = True
         self.context.log_invalid(msg, valid_messages)
-        if not self.context.quit:
-            self.context.quit = QuitMessage()
+        if not self.context.pending_quit:
+            self.context.pending_quit = QuitMessage()
             self.context.pending_updates = []
 
     def notify_subscribers(self, command: t.Optional[Command] = None):
@@ -307,17 +305,6 @@ class Idle(WaitingForMessage):
 
     valid_commands = (NewTimeMessage, NoUpdateMessage, UpdateMessage, QuitMessage)
     valid_responses = ()
-
-    def process_new_time(self, msg: NewTimeMessage):
-        self.context.ack = False
-        self.context.processing_new_time = True
-        self.context.send_command(msg)
-
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
-
-    def process_quit(self, msg: QuitMessage):
-        self.context.quit = msg
 
 
 class Busy(WaitingForMessage):
@@ -333,12 +320,6 @@ class Busy(WaitingForMessage):
         self.context.busy = True
         self.context.timer.start()
 
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
-
-    def process_quit(self, msg: QuitMessage):
-        self.context.quit = msg
-
 
 class Registration(Busy):
     """A RegistrationMessage is expected from the model"""
@@ -348,14 +329,17 @@ class Registration(Busy):
 
 
 class NewTime(Busy):
-    """A NewTime message has been sent to the model, and it needs to Acknowledge that"""
+    """A NewTime message will be sent to the model, and it needs to Acknowledge that"""
 
     valid_commands = (UpdateMessage, NoUpdateMessage, QuitMessage)
     valid_responses = (AcknowledgeMessage, ErrorMessage)
 
     def on_enter(self):
+        if not isinstance(self.context.pending_new_time, NewTimeMessage):
+            raise RuntimeError("can only enter NewTime when there is a pending NewTimeMessage")
+        self.context.send_command(self.context.pending_new_time)
+        self.context.pending_new_time = None
         super().on_enter()
-        self.context.processing_new_time = False
 
 
 class Updating(Busy):
@@ -372,9 +356,6 @@ class PendingMoreUpdates(Idle):
 
     valid_commands = (NoUpdateMessage, UpdateMessage, QuitMessage)
     valid_responses = ()
-
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
 
 
 class ProcessPendingUpdates(BaseModelState):
@@ -409,12 +390,11 @@ class ProcessPendingQuit(BaseModelState):
     """
 
     def run(self):
-        if not isinstance(self.context.quit, QuitMessage):
+        if not isinstance(self.context.pending_quit, QuitMessage):
             raise RuntimeError(
                 "can only enter ProcessPendingQuit when there is a QuitMessage pending"
             )
-        self.context.ack = False
-        self.context.send_command(self.context.quit)
+        self.context.send_command(self.context.pending_quit)
 
 
 class Finalizing(Busy):
@@ -439,10 +419,6 @@ class ModelCollection(dict[bytes, ConnectedModel]):
     @property
     def busy(self):
         return any(model.busy for model in self.values())
-
-    @property
-    def waiting_for(self):
-        return [model for model in self.values() if model.busy]
 
     @property
     def next_time(self):
@@ -479,7 +455,7 @@ class ModelHasFailed(Condition[ConnectedModel]):
 
 class HasPendingQuitAndIdle(Condition[ConnectedModel]):
     def met(self) -> bool:
-        return bool(self.context.quit and not self.context.busy)
+        return bool(self.context.pending_quit and not self.context.busy)
 
 
 class HasPendingUpdatesAndIdle(Condition[ConnectedModel]):
@@ -487,9 +463,9 @@ class HasPendingUpdatesAndIdle(Condition[ConnectedModel]):
         return bool(self.context.pending_updates and not self.context.busy)
 
 
-class IsProcessingNewTime(Condition[ConnectedModel]):
+class HasPendingNewTimeAndIdle(Condition[ConnectedModel]):
     def met(self) -> bool:
-        return self.context.processing_new_time
+        return bool(self.context.pending_new_time)
 
 
 class IsIdle(Condition[ConnectedModel]):
@@ -518,7 +494,7 @@ MODEL_FSM_CONFIG = FSMConfig(
         Idle: [
             (HasPendingQuitAndIdle, ProcessPendingQuit),
             (HasPendingUpdatesAndIdle, ProcessPendingUpdates),
-            (IsProcessingNewTime, NewTime),
+            (HasPendingNewTimeAndIdle, NewTime),
         ],
         ProcessPendingUpdates: [
             (ModelWaitingForDependencies, PendingMoreUpdates),
