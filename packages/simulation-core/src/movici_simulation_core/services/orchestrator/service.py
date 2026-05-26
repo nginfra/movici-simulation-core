@@ -8,7 +8,7 @@ from movici_simulation_core.services.orchestrator.context import ConnectedModel,
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
 
-from .context import Context, TimelineController
+from .context import MODEL_FSM_CONFIG, Context, TimelineController
 from .fsm import FSM, Always, FSMConfig, FSMDone
 from .states import (
     AllModelsDone,
@@ -101,6 +101,7 @@ class Orchestrator(Service):
             timeline=self.timeline,
             send=self.make_send(identifier),
             logger=self.logger,
+            fsm_config=MODEL_FSM_CONFIG,
         )
         model.start()
         return model
