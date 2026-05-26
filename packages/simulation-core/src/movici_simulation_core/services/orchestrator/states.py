@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import typing as t
 from abc import ABC
 
 from movici_simulation_core.messages import QuitMessage
@@ -47,7 +46,7 @@ class WaitForModels(OrchestratorState, ABC):
     def run(self):
         ident, msg = yield
 
-        if not (model := self.context.models.get(t.cast(bytes, ident))):
+        if not (model := self.context.models.get(ident)):
             return
         model.recv_event(msg)
 

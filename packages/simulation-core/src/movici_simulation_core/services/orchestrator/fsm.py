@@ -44,7 +44,7 @@ class FSMConfig(t.Generic[T]):
     :param initial_state: the initial state
     :param states: a dictionary of all possible states as ``type``s and their transitions.
         Transitions are a sequence of ``(type[Condition], type[State])`` tuples
-    :pararm strict: a boolean whether to validate that all states mentioned in the transitions
+    :param strict: a boolean whether to validate that all states mentioned in the transitions
         and ``initial`` state must have an entry in the states  dictionary
     """
 
@@ -69,12 +69,7 @@ class FSMConfig(t.Generic[T]):
 
 
 class FSM(t.Generic[T, E]):
-    def __init__(
-        self,
-        config: FSMConfig[T],
-        context: T = None,
-        raise_on_done=True,
-    ):
+    def __init__(self, config: FSMConfig[T], context: T = None, raise_on_done=True):
         self.context = context
         self.config = config
         self.state = config.initial_state(context=self.context)

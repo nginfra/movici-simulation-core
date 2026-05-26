@@ -465,7 +465,7 @@ class HasPendingUpdatesAndIdle(Condition[ConnectedModel]):
 
 class HasPendingNewTimeAndIdle(Condition[ConnectedModel]):
     def met(self) -> bool:
-        return bool(self.context.pending_new_time)
+        return bool(self.context.pending_new_time and not self.context.busy)
 
 
 class IsIdle(Condition[ConnectedModel]):
