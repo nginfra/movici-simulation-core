@@ -9,8 +9,8 @@ from movici_simulation_core.services.orchestrator.fsm import (
     Always,
     Condition,
     Event,
+    FSMConfig,
     State,
-    TransitionsT,
 )
 
 
@@ -52,7 +52,11 @@ def test_calls_on_enter_when_starting():
         is_final = True
         on_enter = Mock()
 
-    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(initial_state=StateA, states={StateA: []}),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     assert StateA.on_enter.call_count == 1
 
@@ -61,28 +65,40 @@ def test_fsm_runs_a_state():
     class StateA(DummyState):
         is_final = True
 
-    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(initial_state=StateA, states={StateA: []}),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     assert fsm.context.states == [StateA]
 
 
 def test_fsm_does_a_transition():
     class StateA(DummyState):
-        def transitions(self) -> TransitionsT:
-            return [(Always, StateB)]
+        pass
 
     class StateB(DummyState):
         is_final = True
 
-    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [(Always, StateB)],
+                StateB: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     assert fsm.context.states == [StateA, StateB]
 
 
 def test_fsm_calls_on_enter_on_transition():
     class StateA(DummyState):
-        def transitions(self) -> TransitionsT:
-            return [(Always, StateB)]
+        pass
 
     class StateB(DummyState):
         is_final = True
@@ -90,7 +106,17 @@ def test_fsm_calls_on_enter_on_transition():
 
     assert StateA.on_enter is not StateB.on_enter
 
-    fsm = FSM(StateA, context=DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [(Always, StateB)],
+                StateB: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     assert StateB.on_enter.call_count == 1
 
@@ -102,7 +128,16 @@ def test_fsm_doensnt_call_on_enter_when_not_transitioning():
             self.is_final = True
 
     context = DummyContext()
-    fsm = FSM(StateA, context=context, raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [],
+            },
+        ),
+        context=context,
+        raise_on_done=False,
+    )
     fsm.start()
     assert context.states == [StateA, StateA]
     assert StateA.on_enter.call_count == 1
@@ -113,7 +148,16 @@ def test_evented_state_handles_event():
         is_final = True
 
     event = Event()
-    fsm = FSM(StateA, DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     fsm.send(event)
     assert fsm.context.events == [event]
@@ -121,13 +165,22 @@ def test_evented_state_handles_event():
 
 def test_fsm_runs_until_event_required():
     class StateA(DummyState):
-        def transitions(self) -> TransitionsT:
-            return [(Always, StateB)]
+        pass
 
     class StateB(EventState):
         pass
 
-    fsm = FSM(StateA, DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            initial_state=StateA,
+            states={
+                StateA: [(Always, StateB)],
+                StateB: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     assert fsm.context.states == [StateA]
     assert isinstance(fsm.state, StateB)
@@ -141,17 +194,31 @@ def test_fsm_does_more_complex_transitions():
             return StateB not in self.context.states
 
     class StateA(EventState):
-        def transitions(self) -> TransitionsT:
-            return [(HaventTransitionedToB, StateB), (Always, StateC)]
+        pass
 
     class StateB(DummyState):
-        def transitions(self) -> TransitionsT:
-            return [(Always, StateA)]
+        pass
 
     class StateC(DummyState):
         is_final = True
 
-    fsm = FSM(StateA, DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            StateA,
+            states={
+                StateA: [
+                    (HaventTransitionedToB, StateB),
+                    (Always, StateC),
+                ],
+                StateB: [
+                    (Always, StateA),
+                ],
+                StateC: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     one = Event()
     two = Event()
@@ -166,7 +233,14 @@ def test_fsm_raises_when_trying_to_send_when_done():
     class DoneState(DummyState):
         is_final = True
 
-    fsm = FSM(DoneState, DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            DoneState,
+            states={DoneState: []},
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
     with pytest.raises(FSMDone):
         fsm.send(Event())
@@ -174,13 +248,22 @@ def test_fsm_raises_when_trying_to_send_when_done():
 
 def test_fsm_raises_when_trying_to_start_twice():
     class SomeState(EventState):
-        def transitions(self) -> TransitionsT:
-            return [(Always, FinalState)]
+        pass
 
     class FinalState(DummyState):
         is_final = True
 
-    fsm = FSM(SomeState, DummyContext(), raise_on_done=False)
+    fsm = FSM(
+        FSMConfig(
+            SomeState,
+            states={
+                SomeState: [(Always, FinalState)],
+                FinalState: [],
+            },
+        ),
+        context=DummyContext(),
+        raise_on_done=False,
+    )
     fsm.start()
 
     with pytest.raises(FSMStarted):

@@ -13,6 +13,8 @@ from movici_simulation_core.messages import (
     UpdateMessage,
 )
 from movici_simulation_core.services.orchestrator.context import (
+    MODEL_BUSY_TRANSITIONS,
+    MODEL_FSM_CONFIG,
     BaseModelState,
     Busy,
     ConnectedModel,
@@ -25,7 +27,7 @@ from movici_simulation_core.services.orchestrator.context import (
     Updating,
     WaitingForMessage,
 )
-from movici_simulation_core.services.orchestrator.fsm import next_state
+from movici_simulation_core.services.orchestrator.fsm import next_state as next_state_
 
 
 @pytest.fixture
@@ -45,18 +47,29 @@ def state(context, state_cls):
 
 @pytest.fixture
 def send_message(state, context):
-    runner = state.run()
-    runner.send(None)
 
     def _send(msg: Message):
-        nonlocal runner
+        runner = state.run()
+        runner.send(None)
         try:
             runner.send(msg)
         except StopIteration:
-            runner = state.run()
-            runner.send(None)
+            pass
 
     return _send
+
+
+@pytest.fixture
+def transitions(state_cls):
+    return MODEL_FSM_CONFIG.states[state_cls]
+
+
+@pytest.fixture
+def next_state(context, transitions):
+    def _calculate_next_state():
+        return next_state_(context, transitions)
+
+    return _calculate_next_state
 
 
 class TestWaitingForMessage:
@@ -84,9 +97,65 @@ class TestWaitingForMessage:
         send_message(msg)
         assert context.failed
 
-    def test_goes_to_process_quit_after_invalid_message(self, send_message, state):
+
+class TestBusyTransitions:
+    @pytest.fixture
+    def state_cls(self):
+        # Use NewTime as a substitute for Busy state, since it has an implementation for a model
+        # response (AcknowledgeMessage)
+        return NewTime
+
+    @pytest.fixture
+    def transitions(self):
+        return MODEL_BUSY_TRANSITIONS
+
+    @pytest.fixture
+    def state(self, state_cls, context):
+        state = state_cls(context)
+        state.on_enter()
+        return state
+
+    @pytest.fixture
+    def send_message(self, state):
+        def _send(msg: Message):
+            runner = state.run()
+            runner.send(None)
+            try:
+                runner.send(msg)
+            except StopIteration:
+                pass
+
+        return _send
+
+    def test_transitions_after_invalid_message(self, send_message, next_state):
         send_message(NewTimeMessage(1))
-        assert next_state(state) == ProcessPendingQuit
+        assert next_state() == ProcessPendingQuit
+
+    def test_transitions_after_error_message(self, send_message, next_state):
+        send_message(ErrorMessage())
+        assert next_state() == Done
+
+    def test_transitions_to_idle_when_no_pending_messages(self, send_message, context, next_state):
+        assert not context.quit
+        assert not context.pending_updates
+        send_message(AcknowledgeMessage())
+        assert next_state() == Idle
+
+    def test_transitions_on_pending_updates(self, send_message, next_state):
+        send_message(UpdateMessage(1))
+        send_message(AcknowledgeMessage())
+        assert next_state() == ProcessPendingUpdates
+
+    def test_transitions_on_pending_quit(self, send_message, next_state):
+        send_message(QuitMessage())
+        send_message(AcknowledgeMessage())
+        assert next_state() == ProcessPendingQuit
+
+    def test_quit_has_preference_over_updates(self, send_message, next_state):
+        send_message(QuitMessage())
+        send_message(UpdateMessage(1))
+        send_message(AcknowledgeMessage())
+        assert next_state() == ProcessPendingQuit
 
 
 class TestIdle:
@@ -117,9 +186,9 @@ class TestIdle:
             (QuitMessage(), ProcessPendingQuit),
         ],
     )
-    def test_transitions_to_correct_state(self, msg, expected, send_message, state):
+    def test_transitions_to_correct_state(self, msg, expected, send_message, next_state):
         send_message(msg)
-        assert next_state(state) == expected
+        assert next_state() == expected
 
 
 class TestBusy:
@@ -148,45 +217,6 @@ class TestBusy:
         send_message(ErrorMessage())
         assert not context.quit
         assert not context.pending_updates
-
-
-class TestBusyTransitions:
-    @pytest.fixture
-    def state_cls(self):
-        # Use NewTime as a substitute for Busy state, since it has an implementation for a model
-        # response (AcknowledgeMessage)
-        return NewTime
-
-    @pytest.fixture
-    def context(self, context):
-        context.busy = True
-        return context
-
-    def test_transitions_after_error_message(self, send_message, state):
-        send_message(ErrorMessage())
-        assert next_state(state) == Done
-
-    def test_transitions_to_idle_when_no_pending_messages(self, send_message, state, context):
-        assert not context.quit
-        assert not context.pending_updates
-        send_message(AcknowledgeMessage())
-        assert next_state(state) == Idle
-
-    def test_transitions_on_pending_updates(self, send_message, state, context):
-        send_message(UpdateMessage(1))
-        send_message(AcknowledgeMessage())
-        assert next_state(state) == ProcessPendingUpdates
-
-    def test_transitions_on_pending_quit(self, send_message, state, context):
-        send_message(QuitMessage())
-        send_message(AcknowledgeMessage())
-        assert next_state(state) == ProcessPendingQuit
-
-    def test_quit_has_preference_over_updates(self, send_message, state, context):
-        send_message(QuitMessage())
-        send_message(UpdateMessage(1))
-        send_message(AcknowledgeMessage())
-        assert next_state(state) == ProcessPendingQuit
 
 
 @pytest.mark.parametrize(

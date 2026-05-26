@@ -18,7 +18,7 @@ from movici_simulation_core.services.orchestrator.states import (
 
 
 class BaseTestState:
-    state_cls = OrchestratorState
+    state_cls: type[OrchestratorState]
 
     @pytest.fixture
     def state(self, context):

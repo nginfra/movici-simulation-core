@@ -20,7 +20,7 @@ from movici_simulation_core.messages import (
 )
 from movici_simulation_core.utils.data_mask import masks_overlap
 
-from .fsm import FSM, Always, State, TransitionsT
+from .fsm import FSM, Always, Condition, FSMConfig, State
 from .interconnectivity import Publisher, format_matrix
 from .stopwatch import ReportingStopwatch, Stopwatch
 
@@ -159,7 +159,9 @@ class ConnectedModel:
 
     quit: t.Optional[QuitMessage] = field(default=None, init=False)
     pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
+    processing_new_time: bool = False
 
+    fsm_config: FSMConfig | None = None
     fsm: FSM[ConnectedModel, Message] = field(init=False)
 
     def __post_init__(self):
@@ -171,7 +173,7 @@ class ConnectedModel:
                 f"Total time spent in in model '{self.name}': {s:.1f} seconds "
             ),
         )
-        self.fsm = FSM(Registration, self, raise_on_done=False)
+        self.fsm = FSM(self.fsm_config or MODEL_FSM_CONFIG, self, raise_on_done=False)
         self.fsm.start()
 
     def recv_event(self, event: Message):
@@ -193,15 +195,6 @@ class ConnectedModel:
 class BaseModelState(State[ConnectedModel], ABC):
     valid_commands: t.Tuple[t.Type[Command], ...] = ()
     valid_responses: t.Tuple[t.Type[Response], ...] = ()
-    next_state: t.Type[BaseModelState] = None
-
-    def transitions(self) -> TransitionsT:
-        if self.next_state is not None:
-            return [(Always, self.next_state)]
-        return self._transitions()
-
-    def _transitions(self):
-        return []
 
 
 class WaitingForMessage(BaseModelState):
@@ -300,7 +293,6 @@ class WaitingForMessage(BaseModelState):
         if not self.context.quit:
             self.context.quit = QuitMessage()
             self.context.pending_updates = []
-            self.next_state = ProcessPendingQuit
 
     def notify_subscribers(self, command: t.Optional[Command] = None):
         command = command or NoUpdateMessage()
@@ -316,16 +308,14 @@ class Idle(WaitingForMessage):
 
     def process_new_time(self, msg: NewTimeMessage):
         self.context.ack = False
+        self.context.processing_new_time = True
         self.context.send_command(msg)
-        self.next_state = NewTime
 
     def process_update(self, msg: UpdateMessage):
         self.context.pending_updates.append(msg)
-        self.next_state = ProcessPendingUpdates
 
     def process_quit(self, msg: QuitMessage):
         self.context.quit = msg
-        self.next_state = ProcessPendingQuit
 
 
 class Busy(WaitingForMessage):
@@ -342,14 +332,6 @@ class Busy(WaitingForMessage):
 
     def process_quit(self, msg: QuitMessage):
         self.context.quit = msg
-
-    def _transitions(self):
-        return [
-            (lambda c: c.failed, Done),
-            (lambda c: (not c.busy) and c.quit, ProcessPendingQuit),
-            (lambda c: (not c.busy) and c.pending_updates, ProcessPendingUpdates),
-            (lambda c: not c.busy, Idle),
-        ]
 
 
 class Registration(Busy):
@@ -368,6 +350,9 @@ class NewTime(Busy):
 
     valid_commands = (UpdateMessage, NoUpdateMessage, QuitMessage)
     valid_responses = (AcknowledgeMessage, ErrorMessage)
+
+    def on_enter(self):
+        self.context.processing_new_time = False
 
 
 class Updating(Busy):
@@ -388,9 +373,6 @@ class PendingMoreUpdates(Idle):
     def process_update(self, msg: UpdateMessage):
         self.context.pending_updates.append(msg)
 
-    def _transitions(self):
-        return [(Always, ProcessPendingUpdates)]
-
 
 class ProcessPendingUpdates(BaseModelState):
     """While the model was Busy, one or more updates came in which needs to be processed, this
@@ -406,11 +388,9 @@ class ProcessPendingUpdates(BaseModelState):
             )
 
         if any(model.busy for model in self.context.subscribed_to):
-            self.next_state = PendingMoreUpdates
             return
 
         self.process_pending_updates()
-        self.next_state = Updating
 
     def process_pending_updates(self):
         updates = self.context.pending_updates
@@ -432,7 +412,6 @@ class ProcessPendingQuit(BaseModelState):
             )
         self.context.ack = False
         self.context.send_command(self.context.quit)
-        self.next_state = Finalizing
 
 
 class Finalizing(Busy):
@@ -444,11 +423,6 @@ class Finalizing(Busy):
 
     def process_command(self, msg: Command):
         pass
-
-    def _transitions(self):
-        return [
-            (lambda c: not c.busy, Done),
-        ]
 
 
 class Done(BaseModelState):
@@ -493,3 +467,87 @@ class ModelCollection(dict[bytes, ConnectedModel]):
     def reset_model_timers(self):
         for model in self.values():
             model.timer.reset()
+
+
+class ModelHasFailed(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return self.context.failed
+
+
+class HasMisbehaved(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.failed and self.context.quit)
+
+
+class HasPendingQuit(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.quit)
+
+
+class HasPendingQuitAndIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return (not self.context.busy) and bool(self.context.quit)
+
+
+class HasPendingUpdates(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.pending_updates)
+
+
+class HasPendingUpdatesAndIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool((not self.context.busy) and self.context.pending_updates)
+
+
+class IsIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return not self.context.busy
+
+
+class IsProcessingNewTime(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return self.context.processing_new_time
+
+
+class ModelWaitingForDependencies(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return any(model.busy for model in self.context.subscribed_to)
+
+
+# after invalid: a model should always process quit
+# When a model is busy and it receives a quit, it should not process it yet and stay in its own
+MODEL_BUSY_TRANSITIONS = (
+    (HasMisbehaved, ProcessPendingQuit),
+    (HasPendingQuitAndIdle, ProcessPendingQuit),
+    (ModelHasFailed, Done),
+    (HasPendingUpdatesAndIdle, ProcessPendingUpdates),
+    (IsIdle, Idle),
+)
+
+MODEL_FSM_CONFIG = FSMConfig(
+    initial_state=Registration,
+    states={
+        Registration: MODEL_BUSY_TRANSITIONS,
+        NewTime: MODEL_BUSY_TRANSITIONS,
+        Updating: MODEL_BUSY_TRANSITIONS,
+        Idle: [
+            (HasPendingQuit, ProcessPendingQuit),
+            (HasPendingUpdates, ProcessPendingUpdates),
+            (IsProcessingNewTime, NewTime),
+        ],
+        ProcessPendingUpdates: [
+            (ModelWaitingForDependencies, PendingMoreUpdates),
+            (Always, Updating),
+        ],
+        PendingMoreUpdates: [
+            (Always, ProcessPendingUpdates),
+        ],
+        ProcessPendingQuit: [
+            (Always, Finalizing),
+        ],
+        Finalizing: [
+            (IsIdle, Done),
+        ],
+        Done: [],
+    },
+)

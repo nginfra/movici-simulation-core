@@ -9,8 +9,52 @@ from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
 
 from .context import Context, TimelineController
-from .fsm import FSM, FSMDone
-from .states import StartInitializingPhase
+from .fsm import FSM, Always, FSMConfig, FSMDone
+from .states import (
+    AllModelsDone,
+    AllModelsReady,
+    EndFinalizingPhase,
+    Failed,
+    FinalizingWaitForModels,
+    ModelsRegistration,
+    NewTime,
+    StartFinalizingPhase,
+    StartInitializingPhase,
+    StartRunningPhase,
+    WaitForResults,
+)
+
+FSM_CONFIG = FSMConfig(
+    initial_state=StartInitializingPhase,
+    states={
+        StartInitializingPhase: [
+            (Always, ModelsRegistration),
+        ],
+        ModelsRegistration: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+        ],
+        StartRunningPhase: [
+            (Always, NewTime),
+        ],
+        NewTime: [
+            (Always, WaitForResults),
+        ],
+        WaitForResults: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsDone, StartFinalizingPhase),
+            (AllModelsReady, NewTime),
+        ],
+        StartFinalizingPhase: [
+            (AllModelsReady, EndFinalizingPhase),
+            (Always, FinalizingWaitForModels),
+        ],
+        FinalizingWaitForModels: [
+            (AllModelsReady, EndFinalizingPhase),
+        ],
+        EndFinalizingPhase: [],
+    },
+)
 
 
 class Orchestrator(Service):
@@ -48,7 +92,7 @@ class Orchestrator(Service):
         )
 
     def _setup_fsm(self):
-        self.fsm = FSM(StartInitializingPhase, context=self.context)
+        self.fsm = FSM(FSM_CONFIG, context=self.context)
         self.stream.set_handler(self.fsm.send)
 
     def _get_connected_model(self, identifier: str):
