@@ -39,6 +39,8 @@ class ModelConfigValidator:
             datasets={ds.name: ds for ds in datasets} if datasets is not None else None,
         )
 
+    # TODO: Once a Scenario contains ScenarioDatasets and ScenarioModels, this method can take
+    # the scenario as an input argument
     def for_scenario(
         self, datasets: t.Sequence[ScenarioDataset], model_types: t.Sequence[ModelType]
     ):

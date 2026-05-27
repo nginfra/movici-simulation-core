@@ -71,6 +71,12 @@ class DatasetRepository(SQLResourceRepository):
         ).options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
 
     async def exists(self, name: str):
+        """return whether the dataset (by name) already exists in the database for the acitve
+        workspace.
+
+        :param name: dataset name
+        :return: a boolean indicating the dataset exists for the active workspace
+        """
         workspace_id = self._ensure_workspace_id()
         return await self._exists(db.Dataset.workspace_id == workspace_id, db.Dataset.name == name)
 
@@ -84,7 +90,16 @@ class DatasetRepository(SQLResourceRepository):
             ds.to_domain(has_data_raw, has_attributes) for ds, has_data_raw, has_attributes in rows
         ]
 
-    async def get_one_with_has_data(self, where_clause: ColumnElement[bool]):
+    async def get_by_name(self, name: str) -> Dataset | None:
+        workspace_id = self._ensure_workspace_id()
+        return await self._get_one_with_has_data(
+            (db.Dataset.workspace_id == workspace_id) & (db.Dataset.name == name)
+        )
+
+    async def get_by_id(self, id: UUID) -> Dataset | None:
+        return await self._get_one_with_has_data(db.Dataset.id == id)
+
+    async def _get_one_with_has_data(self, where_clause: ColumnElement[bool]):
         result = (
             await self.session.execute(self.selector_with_has_data.where(where_clause).limit(1))
         ).first()
@@ -94,20 +109,16 @@ class DatasetRepository(SQLResourceRepository):
         ds, has_raw_data, has_attributes = result
         return ds.to_domain(has_raw_data, has_attributes)
 
-    async def get_by_name(self, name: str) -> Dataset | None:
-        workspace_id = self._ensure_workspace_id()
-        return await self.get_one_with_has_data(
-            (db.Dataset.workspace_id == workspace_id) & (db.Dataset.name == name)
-        )
-
-    async def get_by_id(self, id: UUID) -> Dataset | None:
-        return await self.get_one_with_has_data(db.Dataset.id == id)
-
     async def delete(self, id: UUID):
         await self.all_data.dataset_data.delete(id)
         await self.session.execute(delete(db.Dataset).where(db.Dataset.id == id))
 
     async def get_summary(self, id: UUID):
+        """Request a DatasetSummary for the dataset id
+
+        :param id: the dataset id
+        :return: A ``DatasetSummary``
+        """
         dataset = await self.get_by_id(id)
         if dataset is None:
             raise ResourceDoesNotExist("dataset", id=id)
@@ -183,16 +194,36 @@ class DatasetRepository(SQLResourceRepository):
         )
 
     async def update(self, id: UUID, obj: Dataset):
+        """Update a :class:`Dataset` in the database when not providing a full dataset with data
+
+        Valid fields to update are: ``name``, ``display_name``
+
+        :param id: the UUID of the stored ``Dataset``
+        :param obj: the ``Dataset`` object with the changes
+        """
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
+        # TODO: accept changes to dataset type if the dataset does not have data and is not used
+        #  anywhere?
         await self.session.execute(
             update(db.Dataset)
             .where(db.Dataset.id == id)
             .values(name=obj.name, display_name=obj.display_name)
         )
 
+    # TODO: merge update_with_data with regular update and switch on whether data is provided
     async def update_with_data(self, id: UUID, obj: Dataset, chunk_size=0):
+        """Update a dataset when providing a full dataset with data, processes all fields, except
+        the data section, which must be processed separately using the
+        :class:`DatasetDataRepository`.
+
+        :param id: the UUID of the stored ``Dataset``
+        :param obj: the ``Dataset`` object with the changes
+        :param chunk_size: the chunk size in bytes when storing unstructured or binary data. When
+            set to 0, the default, the chunk size is set to
+            :attr:`RawDataProcessor.RAW_DATA_CHUNK_SIZE`
+        """
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
@@ -222,6 +253,16 @@ class DatasetRepository(SQLResourceRepository):
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
     ) -> t.List[ScenarioDataset]:
+        r"""Ensure that the :class:`Dataset`s of a sequences of :class:`ScenarioDataset`\s exist in
+        the database or raise an error. If one or more of the ``Dataset``s do not exist and the
+        database option ``STRICT_SCENARIO_DATASETS`` is unset, the non-existing datasets will be
+        created. If the ``STRICT_MODEL_TYPES`` options is set, an error is raised instead. An
+        error is also raised if a ``Dataset`` already exists but with a different dataset type
+
+        :param datasets: The ``ScenarioDataset``s to ensure
+        :return: The datasets as they exist in the database, as ``ScenarioDataset`` objects, in
+            the same order as the input sequence
+        """
         workspace_id = self._ensure_workspace_id()
         existing_datasets = {
             ds.name: t.cast(db.Dataset, ds)
@@ -277,20 +318,42 @@ class DatasetRepository(SQLResourceRepository):
 
 class DatasetDataRepository(SQLResourceRepository):
     async def exists_for(self, id: UUID):
+        """
+        :param id: a dataset id
+        :return: a boolean wether the dataset has data (either entity data or raw data)
+        """
         raw_data_exists = await self._exists(db.RawData.dataset_id == id)
         entity_data_exists = await self._exists(db.DatasetAttribute.dataset_id == id)
         return raw_data_exists or entity_data_exists
 
-    def stream_binary_data(
-        self, id: UUID, yield_per=1
-    ) -> t.Coroutine[None, None, tuple[str | None, t.AsyncGenerator[bytes]]]:
-        return RawDataProcessor(self.session).stream_bytes(id, yield_per=yield_per)
+    async def stream_binary_data(self, id: UUID, yield_per=1) -> t.AsyncGenerator[bytes]:
+        """
+        :param id: the dataset ``UUID``
+        :param yield_per: an optimzation parameter for the database to request n chunks at a time.
+            Default: 1
 
-    def get_unstructured_data(self, id: UUID):
-        return RawDataProcessor(self.session).get_dict(id)
+        :return: An async generator that can be iterated over (async for loop) to produce
+            chunks of binary data. The chunk size is determined by the data stored in the database
+            and is :attr:`RawDataProcessor.RAW_DATA_CHUNK_SIZE` by default
+        """
+        _, generator = await RawDataProcessor(self.session).stream_bytes(id, yield_per=yield_per)
+        return generator
 
-    def get_entity_data(self, id: UUID):
-        return EntityDataProcessor(
+    async def get_unstructured_data(self, id: UUID) -> dict:
+        """return the dataset data for an ``UNSTRUCTURED`` dataset
+
+        :param id: the dataset ``UUID``
+        :return: The unstructured dataset data section
+        """
+        return await RawDataProcessor(self.session).get_dict(id)
+
+    async def get_entity_data(self, id: UUID):
+        """return the dataset data for an ``ENTITY_BASED`` dataset
+
+        :param id: the dataset ``UUID``
+        :return: The entity based dataset data section
+        """
+        return await EntityDataProcessor(
             self.session, all_data=self.all_data, selector=DatasetDataSelector()
         ).get(id)
 

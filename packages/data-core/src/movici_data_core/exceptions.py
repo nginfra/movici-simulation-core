@@ -190,6 +190,13 @@ T = t.TypeVar("T")
 
 
 class map_errors:
+    """A decorator to catch certain exceptions and reraise them as a different exception
+
+    :param mapping: a mapping between exceptions or exception types and a callable per exception
+       or exception type. The callable must accept the same arguments as the decorated method
+       except the ``self`` argument
+    """
+
     def __init__(
         self,
         mapping: t.Mapping[

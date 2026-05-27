@@ -87,6 +87,11 @@ ATTRIBUTE_ENUM_NAME_MAX_LENGTH = 20
 
 
 class Metadata(Base):
+    """A table that should contain a single entry with the schema version of this database. Future
+    iterations of the data-core may use this version to determine compatibility or migrate data
+    from one version to another
+    """
+
     __tablename__ = "metadata"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -94,6 +99,31 @@ class Metadata(Base):
 
 
 class Options(Base):
+    """A table that should contain a single entry with a database's options. It contains the
+    database mode (see :class:`DatabaseMode`) and the various ``STRICT_`` options:
+
+    - ``STRICT_DATASET_TYPES``: when set, datasets may only be added to this database if their
+      dataset_type exists. If unset, a dataset type will be created with format
+      ``DatasetFormat.ENTITY_BASED`` if a dataset is about to be added with a non-exsiting type
+    - ``STRICT_ENTITY_TYPES``: when set, an entity type must exist before data for an entity group
+      of that type can be added in either a dataset or an update. When unset, an entity type will
+      be created when adding data for an entity group of a non-existing type
+    - ``STRICT_ATTRIBUTE_TYPES``: when set, an attribute type must exist before an entity group
+      can contain data for that attribute. When unset, an attribute type will be created with an
+      inferred data type when storing attribute data for that type.
+    - ``STRICT_MODEL_TYPES``: when set, a model type must exist before a scenario can be added that
+      uses a model of that type. When unset, a model type will be created when adding a scenario
+      that uses a model of that type. It will be created with a pass-all schema so that any config
+      is allowed, but this also means that no references to datasets, entity groups or attributes
+      can be made in the model config
+    - ``STRICT_SCENARIO_DATASETS``: when set, every dataset in a scenario config ``"dataset"``
+      section must exist before the scenario config may be added. When unset, any a stub for every
+      dataset that does not exist will be added when adding a scenario config
+
+    Furthermore, the options singleton contains a reference to the default scenario and/or default
+    workspace if they exist (determined by the database mode mode)
+    """
+
     __tablename__ = "options"
     id: Mapped[int] = mapped_column(primary_key=True)
     mode: Mapped[DatabaseMode]

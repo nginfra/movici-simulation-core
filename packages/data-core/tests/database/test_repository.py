@@ -612,7 +612,7 @@ class TestDatasetDataRepository:
         result = b""
         n_chunks = 0
 
-        _, gen = await repository.dataset_data.stream_binary_data(a_dataset.id)
+        gen = await repository.dataset_data.stream_binary_data(a_dataset.id)
         async for chunk in gen:
             result += chunk
             n_chunks += 1
@@ -940,7 +940,7 @@ class TestScenarioRepository:
         validator = await get_model_config_validator()
 
         scenario_id = await repository.scenarios.create(new_scenario, validator)
-        result = await repository.scenarios.for_id(scenario_id).get_by_id()
+        result = await repository.scenarios.for_id(scenario_id).get()
         assert result is not None
 
         assert result.id is not None
@@ -992,7 +992,7 @@ class TestScenarioRepository:
         a_scenario.models = list(reversed(a_scenario.models))
         await repository.scenarios.for_id(a_scenario.id).update(a_scenario, validator)
 
-        result = await repository.scenarios.for_id(a_scenario.id).get_by_id()
+        result = await repository.scenarios.for_id(a_scenario.id).get()
 
         assert result is not None
         assert result.name == a_scenario.name

@@ -300,4 +300,4 @@ async def a_scenario(
         ],
     )
     scenario_id = await create_scenario(scenario)
-    return t.cast(Scenario, await repository.scenarios.for_id(scenario_id).get_by_id())
+    return t.cast(Scenario, await repository.scenarios.for_id(scenario_id).get())
