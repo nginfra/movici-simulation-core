@@ -45,6 +45,9 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         ]
 
     async def with_counts(self, workspace: Workspace) -> Workspace:
+        """add :attr:`Workspace.dataset_count` and :attr:`Workspace.scenario_count` to the
+        workspace. The workspace must have been previously loaded from the database
+        """
         assert workspace.id is not None
         return dataclasses.replace(
             workspace,
@@ -63,7 +66,11 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         )
 
     async def create(self, obj: Workspace) -> UUID:
+        """Store a :class:``Workspace`` in the database
 
+        :param obj: the ``Workspace`` object
+        :return: the UUID of the stored ``ModelType``
+        """
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -75,6 +82,13 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
 
     @ensure_valid_id
     async def update(self, id: UUID, obj: Workspace):
+        """Update a :class:``Workspace`` in the database
+
+        Valid fields to update are: ``name``, ``display_name``
+
+        :param id: the UUID of the stored ``Workspace``
+        :param obj: the ``Workspace`` object with the changes
+        """
         await self.session.execute(
             update(db.Workspace)
             .where(db.Workspace.id == id)

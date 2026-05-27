@@ -16,9 +16,13 @@ class DatasetFormat(str, enum.Enum):
 
     Matches the ``format`` field used in the platform:
 
-    * ``ENTITY_BASED``: Entity-oriented JSON data, destructured into numpy arrays
-    * ``UNSTRUCTURED``: Unstructured JSON data, stored as blob but JSON-loadable
-    * ``BINARY``: Binary data, stored as blob and passed transparently
+    * ``ENTITY_BASED``: Entity-oriented JSON data, destructured into numpy arrays. Entity data is
+      split up into entity groups that contain attributes. see also :ref:`movici-data-format`
+    * ``UNSTRUCTURED``: Unstructured JSON data, stored as blob but JSON-loadable. A Dataset with
+      ``UNSTRUCTURED`` data contains a ``"data"`` sections that can be JSON encoded, but is
+      otherwise schemaless
+    * ``BINARY``: Binary data, stored as blob and passed transparently. A Dataset with ``BINARY``
+      data can contain any data that is not validated by ``movici-data-core``
     """
 
     ENTITY_BASED = "entity_based"
@@ -27,6 +31,13 @@ class DatasetFormat(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+# TODO: implement proper usage of scenariostatus. Invalid/Ready is managed internally based on the
+# availability of data (do all the scenariodatasets have data?) while the other statuses need an
+# external source, or an (api) endpoint that can set them, based on a simulation that is running
+# or has completed (succesfully or not)
+# Perhaps we also need to think about what happens if simulation just stops reporting about the
+# Scenario. Do we want to trigger setting a scenario status to Failed if a simulation has not
+# updated a scenario for a certain time, either by posting an update or (re)posting the status
 class ScenarioStatus(str, enum.Enum):
     FAILED = "Failed"
     INVALID = "Invalid"
@@ -44,6 +55,17 @@ def utcnow():
 
 @dataclasses.dataclass
 class Workspace:
+    """A Workspace is a logical unit for bundling Scenarios and Datasets. A Scenario must be in the
+    same Workspace as any Dataset it references. Workspaces may group Scenarios and Datasets that
+    belong to a certain project, organisation or that otherwise logically belong together.
+
+    :param name: a *snake_case* workspace name, must be unique in the database
+    :param display_name: a human readably display name
+    :param id: the workspace ``UUID`` in the database (if any)
+    :param scenario_count: the number of scenarios in this workspace
+    :param dataset_count: the number of datasets in this workspace
+    """
+
     name: str
     display_name: str
     id: UUID | None = dataclasses.field(compare=False, default=None)
@@ -53,6 +75,14 @@ class Workspace:
 
 @dataclasses.dataclass
 class DatasetType:
+    """A DatasetType determines the meaning of a Dataset. Every Dataset must have a type. Examples
+    may be ``transport_network`` or ``tabular``
+    :param name: a *snake_case* name, must be unique in the database
+    :param format: determines how Dataset data is formatted
+    :param mimetype: in case of a ``DatasetFormat.BINARY`` format, a dataset type may
+      specify a mimetype. When adding data, the mimetype may be validated if given
+    """
+
     name: str
     format: DatasetFormat
     mimetype: str | None = None
@@ -61,12 +91,31 @@ class DatasetType:
 
 @dataclasses.dataclass
 class EntityType:
+    """Representation of an entity type
+
+    :param name: a *snake_case* name, must be unique in the database
+    :param id: the entity type ``UUID`` in the database (if any)
+    """
+
     name: str
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
 
 @dataclasses.dataclass
 class AttributeType:
+    """
+    An attribute type contains information about an attribute. Every attribute must have a type.
+    Equivalent to an :ref:`AttributeSpec` and can be converted to and from :ref:`AttributeSpec`
+
+    :param name: a *snake_case* name for the attribute type. Must be unique in the database
+    :param data_type: The data type of the attribute
+    :param id: the attribute type ``UUID`` in the database (if any)
+    :param unit: the unit of the attribute, such as ``m`` or ``s``. Default ``""`` (emtpy string)
+    :param description: a description of the attribute describing it's meaning. Default
+      ``""`` (empty string)
+    :param enum_name: (Optional) in case of an ``enum`` attribute, the name of the ``enum``
+    """
+
     name: str
     data_type: DataType
 
@@ -78,14 +127,27 @@ class AttributeType:
 
     @classmethod
     def from_attribute_spec(cls, spec: AttributeSpec):
+        """Convert an :ref:`AttributeSpec` to an :ref:`AttributeType`"""
         return cls(name=spec.name, data_type=spec.data_type, enum_name=spec.enum_name)
 
     def to_attribute_spec(self):
+        """Convert an :ref:`AttributeType` to an :ref:`AttributeSpec`"""
         return AttributeSpec(name=self.name, data_type=self.data_type, enum_name=self.enum_name)
 
 
 @dataclasses.dataclass
 class ModelType:
+    """A model type is a definition of a model that may be used in a ``Scenario``. It must contain
+    a jsonschema that validates model configs for that type in the ``Scenario`` config
+
+    :param name: a *snake_case* name, must be unique in the database
+    :param jsonschema: a ``jsonschema`` dict to validate any model configs for this model
+      type. The json schema may contain movici custom keys such as ``movici.type`` and
+      ``movici.datasetType``, to indicate a field is a reference to a Movici object such as a
+      ``Dataset``,  ``EntityType`` or ``AttributeType``
+    :param id: the model type ``UUID`` in the database (if any)
+    """
+
     name: str
     jsonschema: dict
 
@@ -145,6 +207,25 @@ class SimulationInfo:
 
 @dataclasses.dataclass
 class Scenario:
+    r"""A Scenario is a description of a simulation. It contains a collection of models that should
+    work togehter on a collection of datasets in order to perform a certain, specific, calculation,
+    as well as other information such as the timeline information
+
+    :param name: a *snake_case* name, must be unique in the workspace
+    :param display_name: a human readable display name
+    :param description: a human readable description of the scenario
+    :param epsg_code: The coordinate reference system (as an EPSG code) of the scenario
+    :param bounding_box: the scenario bounding box (output only)
+    :param simulation_info: the scenario simulation info
+    :param status: the scenario status
+    :param id: the scenario ``UUID`` in the database (if any)
+    :param workspace: The workspace the scenario belongs to (if any)
+    :param created_at: the datetime the scenario was created
+    :param updated_at: the datetime the scenario was updated
+    :param models: a list of model config dicts for this scenario
+    :param datasets: a list of datasets for this scenario
+    """
+
     name: str
     display_name: str
     description: str
@@ -158,6 +239,7 @@ class Scenario:
     workspace: Workspace | None = None
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
+    # TODO: Use ScenarioModel and ScenarioDataset here
     models: list[dict] = dataclasses.field(default_factory=list)
     datasets: list[dict] = dataclasses.field(default_factory=list)
     has_updates: bool = False
@@ -165,6 +247,13 @@ class Scenario:
 
 @dataclasses.dataclass
 class ScenarioDataset:
+    """A representation of a dataset in a scenario
+
+    :param name: the dataset name
+    :param type: the dataset dataset type
+    :param id: the dataset ``UUID`` in the database (if any)
+    """
+
     name: str
     type: str
     id: UUID | None = dataclasses.field(compare=False, default=None)
@@ -172,6 +261,15 @@ class ScenarioDataset:
 
 @dataclasses.dataclass
 class ScenarioModel:
+    """A configured model in a scenario
+
+    :param name: a *snake_case* model name. Must be unique in a scenario
+    :param type: the model type
+    :param config: the model config dict
+    :param references: a list of :ref:`MoviciDataRefInfo` objects that were extracted from the
+        model config dict
+    """
+
     name: str
     type: ModelType
     config: dict = dataclasses.field(default_factory=dict)
@@ -183,6 +281,23 @@ DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
 
 @dataclasses.dataclass
 class Dataset:
+    """
+    :param name: a *snake_case* dataset name, must be unique in the Workspace
+    :param display_name: a human readable display name
+    :param dataset_type: the dataset's type
+    :param id: the dataset ``UUID`` in the database (if any)
+    :param workspace: the :ref:`Workspace` the dataset belongs to (if any)
+    :param general: the dataset's general section (dict) for ``ENTITY_BASED`` and ``UNSTRUCTURED``
+        datasets (if any)
+    :param epsg_code: the dataset's CRS as an EPSG code
+    :param bounding_box: the datasets :class:`BoundingBox` if it contains geospatial data (output
+        only)
+    :param created_at: the datetime the dataset was created
+    :param updated_at: the datetime the dataset was updated
+    :param data: the dataset's data, if presented or loaded
+    :param has_data: whether the dataset has data in the database
+    """
+
     name: str
     display_name: str
     dataset_type: DatasetType
@@ -201,10 +316,25 @@ class Dataset:
 
 @dataclasses.dataclass
 class Update:
+    """An Update is a change to the :term:`World State` in a simulation. An update is always
+    produced by a model at a certain timestamp
+
+    :param dataset: The dataset this update changes the state for
+    :param timestamp: the discrete time step this update was produced in the simulation
+    :param iteration: the iteration at the timestamp this update was created. Every update in a
+        scenario must have a unique (timestamp, iteration) combination
+    :param model_name: the name of the model in the scenario that produced the update
+    :param model_type: the type of the model in the scenario that produced the update
+    :param id: the update ``UUID`` in the database (if any)
+    :param created_at: the datetime the update was created
+    :param data: the update data payload
+    """
+
     dataset: ScenarioDataset
     timestamp: int
     iteration: int
 
+    # TODO: use ScenarioModel here
     model_name: str
     model_type: str | None = None
 
@@ -215,6 +345,17 @@ class Update:
 
 @dataclasses.dataclass
 class DatasetSummary:
+    """A DatasetSummary is an overview of the entity groups and attributes in a (``ENTITY_BASED``
+    dataset. It also contains some other information, such as the dataset general section as well
+    as the EPSG code and bounding box. A ``DatasetSummary`` is an output only object
+
+    :param general: the dataset general section
+    :param epsg_code: the dataset's CRS as an EPSG code
+    :param bounding_box: the dataset's :class:`BoundingBox` if it contains geospatial data
+    :param entity_groups: a summary of the entity groups in the dataset
+    :param count: the total number of entities in the dataset
+    """
+
     general: dict
     epsg_code: int | None
     bounding_box: BoundingBox
@@ -224,6 +365,14 @@ class DatasetSummary:
 
 @dataclasses.dataclass
 class EntityGroupSummary:
+    """an entry in the :attr:`DatasetSummary.entity_groups` list. Contains a summary of a single
+    entity group.
+
+    :param name: the entity group name (equal to its type)
+    :param count: the number of entities in this entity group
+    :param attributes: a summary of the attributes in the entity groups
+    """
+
     name: str
     count: int
     attributes: list[AttributeSummary]
@@ -232,8 +381,21 @@ class EntityGroupSummary:
 T_datatype = t.TypeVar("T_datatype", bool, int, float, str)
 
 
+# TODO: Reuse fields from AttributeType, perhaps introducing a BaseAttributeType class
 @dataclasses.dataclass
 class AttributeSummary(t.Generic[T_datatype]):
+    """an entry in the :attr:`EntityGroupSummary.entity_groups` list. Contains a summary of a
+    single entity group.
+
+    :param name: the attribute name (equal to its type)
+    :param data_type: the attribute's data type
+    :param description: the attribute type's description
+    :param enum_name: the attribute type's enum name (if any)
+    :param unit: the attributes type's unit
+    :param min_val: the minimum value of the attribute for the associated entity group (if any)
+    :param max_val: the maximum value of the attribute for the associated entity group (if any)
+    """
+
     name: str
     data_type: DataType[T_datatype]
     description: str

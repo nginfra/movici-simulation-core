@@ -36,6 +36,7 @@ class SQLResourceRepository:
     options: Options
     all_data: SQLAlchemyRepository
 
+    # TODO: make this a function `resource_exists` that takes a session instead of a method
     async def _exists(self, *where) -> bool:
         return bool(await self.session.scalar(select(exists().where(*where))))
 
@@ -66,6 +67,10 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     * EntityTypes
     * AttributeTypes
     * ModelTypes
+
+    To implement a GenericResourceRepository, subclass it and set the ``__resource__`` and
+    ``__resource_type_name__`` class fields. Then, implement the ``create`` and ``update`` methods
+    it is recommended to wrap the ``update`` method in an ``@ensure_valid_id`` decorator
     """
 
     __resource__: type[NamedResource[T_dom]]
@@ -218,7 +223,7 @@ class RawDataProcessor:
         self, id: UUID | None = None, raw_data: db.RawData | None = None, yield_per=1
     ) -> tuple[str | None, t.AsyncGenerator[bytes]]:
         """
-        :returns: a tuple (encoding, bytestreamer). The bytestreamer can be used as an async
+        :return: a tuple (encoding, bytestreamer). The bytestreamer can be used as an async
             generator
         """
         if not ((id is None) ^ (raw_data is None)):

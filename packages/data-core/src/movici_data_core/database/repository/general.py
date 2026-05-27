@@ -29,6 +29,11 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
 
     # TODO: prevent creating dataset type with UNKNOWN format
     async def create(self, obj: DatasetType) -> UUID:
+        """Store a :class:``DatasetType`` in the database
+
+        :param obj: the ``DatasetType`` object
+        :return: the UUID of the stored ``DatasetType``
+        """
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -40,6 +45,13 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
 
     # TODO: prevent updating dataset type with UNKNOWN format
     async def update(self, id: UUID, obj: DatasetType):
+        """Update a :class:``DatasetType`` in the database
+
+        Valid fields to update are: ``name``, ``mimetype``
+
+        :param id: the UUID of the stored ``DatasetType``
+        :param obj: the ``DatasetType`` object
+        """
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("dataset_type", id=id)
@@ -55,6 +67,15 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         )
 
     async def ensure_dataset_type(self, dataset_type: DatasetType) -> DatasetType:
+        """Ensure that a dataset type exists in the database or raise an error. If the dataset type
+        does not exist and the database option ``STRICT_DATASET_TYPES`` is unset, the dataset
+        type will be created. If the ``STRICT_DATASET_TYPES`` options is set, an error is raised
+        instead. An error will also be raised if an attempt is made to create a DatasetType with
+        the ``DatasetType.UNKNOWN`` format.
+
+        :param dataset_type: the ``DatasetType`` object to ensure.
+        :return: the ``DatasetType`` object as it exists in the database
+        """
         existing = await self.get_by_name(dataset_type.name)
         if not existing:
             if self.options.STRICT_DATASET_TYPES:
@@ -76,6 +97,11 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
     __resource_type_name__ = "entity_type"
 
     async def create(self, obj: EntityType) -> UUID:
+        """Store a :class:``EntityType`` in the database
+
+        :param obj: the ``EntityType`` object
+        :return: the UUID of the stored ``EntityType``
+        """
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -85,6 +111,13 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
 
     @ensure_valid_id
     async def update(self, id: UUID, obj: EntityType):
+        """Update a :class:``EntityType`` in the database
+
+        Valid fields to update are: ``name``
+
+        :param id: the UUID of the stored ``EntityType``
+        :param obj: the ``EntityType`` object with the changes
+        """
         await self.session.execute(
             update(db.EntityType).where(db.EntityType.id == id).values(name=obj.name)
         )
@@ -106,6 +139,11 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource_type_name__ = "attribute_type"
 
     async def create(self, obj: AttributeType) -> UUID:
+        """Store a :class:``AttributeType`` in the database
+
+        :param obj: the ``AttributeType`` object
+        :return: the UUID of the stored ``AttributeType``
+        """
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -113,7 +151,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
                 .values(
                     name=obj.name,
                     has_rowptr=obj.data_type.csr,
-                    unit_type=self.db_unit_type(obj.data_type.py_type),
+                    unit_type=self._db_unit_type(obj.data_type.py_type),
                     unit_shape=obj.data_type.unit_shape,
                     unit=obj.unit,
                     description=obj.description,
@@ -123,7 +161,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             ),
         )
 
-    def db_unit_type(self, py_type: AttributeDataType):
+    def _db_unit_type(self, py_type: AttributeDataType):
         return {
             bool: db.AttributeDataType.BOOL,
             int: db.AttributeDataType.INT,
@@ -132,6 +170,14 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         }[py_type]
 
     async def update(self, id: UUID, obj: AttributeType):
+        """Update a :class:``AttributeType`` in the database
+
+        Valid fields to update are: ``name``, ``data_type``, ``unit``, ``description``,
+        ``enum_name``
+
+        :param id: the UUID of the stored ``EntityType``
+        :param obj: the ``EntityType`` object with the changes
+        """
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("attribute_type", id=id)
@@ -148,14 +194,24 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             .values(
                 name=obj.name,
                 has_rowptr=obj.data_type.csr,
-                unit_type=self.db_unit_type(obj.data_type.py_type),
+                unit_type=self._db_unit_type(obj.data_type.py_type),
                 unit_shape=obj.data_type.unit_shape,
                 unit=obj.unit,
                 description=obj.description,
+                enum_name=obj.enum_name,
             )
         )
 
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
+        """Ensure that an attribute type exists in the database or raise an error. If the attribute
+        type does not exist and the database option ``STRICT_ATTRIBUTE_TYPES`` is unset, the
+        attribute type will be created. If the ``STRICT_ATTRIBUTE_TYPES`` options is set, an error
+        is raised instead. An error will also be raised if an ``AttributeType`` with a different
+        data_type already exists.
+
+        :param attribute_type: the ``AttributeType`` object to ensure.
+        :return: the ``AttributeType`` object as it exists in the database
+        """
         existing = await self.get_by_name(attribute_type.name)
         if not existing:
             if self.options.STRICT_ATTRIBUTE_TYPES:
@@ -163,7 +219,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             attribute_type_id = await self.create(attribute_type)
             existing = t.cast(AttributeType, await self.get_by_id(attribute_type_id))
 
-        if not existing.data_type == attribute_type.data_type:
+        if existing.data_type != attribute_type.data_type:
             raise InvalidResource(
                 "attribute_type",
                 name=attribute_type.name,
@@ -177,6 +233,11 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
     __resource_type_name__ = "model_type"
 
     async def create(self, obj: ModelType) -> UUID:
+        """Store a :class:``ModelType`` in the database
+
+        :param obj: the ``ModelType`` object
+        :return: the UUID of the stored ``ModelType``
+        """
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -188,6 +249,13 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
 
     @ensure_valid_id
     async def update(self, id: UUID, obj: ModelType):
+        """Update a :class:``ModelType`` in the database
+
+        Valid fields to update are: ``name``, ``jsonschema``
+
+        :param id: the UUID of the stored ``ModelType``
+        :param obj: the ``ModelType`` object with the changes
+        """
         await self.session.execute(
             update(db.ModelType)
             .where(db.ModelType.id == id)
@@ -195,6 +263,14 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         )
 
     async def ensure_model_types(self, model_types: t.Sequence[str]) -> list[ModelType]:
+        """Ensure that a sequence of model types exist in the database or raise an error. If one or
+        more of the model types does not exist and the database option ``STRICT_MODEL_TYPES`` is
+        unset, the non-existing model types will be created. If the ``STRICT_MODEL_TYPES`` options
+        is set, an error is raised instead.
+        :param model_types: The model types to ensure, as a sequence of model type names
+        :return: the ``ModelType`` objects as they exist in the database, in the same order as the
+            input sequence
+        """
         existing_model_types = {
             tp.name: t.cast(db.ModelType, tp)
             for tp in await self.session.scalars(
@@ -214,7 +290,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         if to_create:
             created = await self.session.scalars(
                 insert(db.ModelType).returning(db.ModelType),
-                [{"name": tp, "jsonschema": self.default_jsonschema(tp)} for tp in to_create],
+                [{"name": tp, "jsonschema": self._default_jsonschema(tp)} for tp in to_create],
             )
 
             existing_model_types.update((tp.name, tp) for tp in created)
@@ -222,7 +298,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         return [existing_model_types[tp].to_domain() for tp in model_types]
 
     @staticmethod
-    def default_jsonschema(name: str):
+    def _default_jsonschema(name: str):
         return {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "$id": f"/{name}/1.0.0",

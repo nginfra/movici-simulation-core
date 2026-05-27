@@ -21,12 +21,17 @@ from movici_simulation_core.validate import MoviciDataRefInfo
 from .common import SQLResourceRepository
 
 
+# TODO: implement a `get_bounding_box` function that looks up the bounding boxes for all scnenario
+# datasets and updates and combines it into one. Question: what if the datasets have different CRS?
 @dataclasses.dataclass
 class ScenarioRepository(SQLResourceRepository):
+    """A"""
+
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
     def for_id(self, scenario_id: UUID):
+        """Bind the ScenarioRepository to a specific scenario"""
         self._ensure_no_scenario_id()
         return dataclasses.replace(self, scenario_id=scenario_id)
 
@@ -45,6 +50,7 @@ class ScenarioRepository(SQLResourceRepository):
             raise InvalidAction("Unsupported operation for this mode")
 
     async def list(self) -> list[Scenario]:
+        """List all scenarios in the active workspace"""
         workspace_id = self._ensure_workspace_id()
         result = await self.session.scalars(
             select(db.Scenario)
@@ -71,36 +77,50 @@ class ScenarioRepository(SQLResourceRepository):
         )
 
     async def exists_by_name(self, name: str):
+        """checks whether a scenario with a specific name exists in the active workspace
+        :return: bool
+        """
         workspace_id = self._ensure_workspace_id()
         return await self._exists(
             db.Scenario.workspace_id == workspace_id, db.Scenario.name == name
         )
 
-    async def exists(self):
-        id = self._ensure_scenario_id()
-        return await self._exists(db.Scenario.id == id)
-
     async def get_by_name(self, name: str) -> Scenario | None:
+        """Get a scenario by name, in the active workspace"""
         workspace_id = self._ensure_workspace_id()
         record = await self.session.scalar(
             self.selector.where(db.Scenario.name == name, db.Scenario.workspace_id == workspace_id)
         )
         if record is None:
             return None
-        return self.load_full_scenario(record)
+        return self._load_full_scenario(record)
 
-    async def get_by_id(self) -> Scenario | None:
+    async def get(self) -> Scenario | None:
+        """Get the active scenario from the database
+
+        :return: The Scenario, or None if it does not exist
+        """
         id = self._ensure_scenario_id()
         record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
         if record is None:
             return None
-        return self.load_full_scenario(record)
+        return self._load_full_scenario(record)
 
     async def delete(self):
+        """Delete de active scenario, if it exists"""
         id = self._ensure_scenario_id()
         await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
     async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
+        """Store a new Scenario in the database. This method can only be invoked if there is no
+        currently active Scenario, to prevent creating scenarios when in a ``SINGLE_SCENARIO`` mode
+
+        :param obj: The scenario to create
+        :param validator: A ModelConfigValidator that is instantiated with all available models in
+            the dataset
+        :return: the newly created Scenario UUID
+        """
+
         self._ensure_no_scenario_id()
         workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
@@ -121,8 +141,14 @@ class ScenarioRepository(SQLResourceRepository):
         return scenario_id
 
     async def update(self, obj: Scenario, validator: ModelConfigValidator):
+        """Update a scenario in the database. The scenario to update must be the active scenario
+
+        :param obj: The sc
+        :param validator: A ModelConfigValidator that is instantiated with all available models in
+            the dataset
+        """
         id = self._ensure_scenario_id()
-        current = await self.get_by_id()
+        current = await self.get()
         if current is None:
             raise ResourceDoesNotExist("scenario", id=id)
         assert current.workspace is not None
@@ -148,7 +174,10 @@ class ScenarioRepository(SQLResourceRepository):
 
         await self._store_scenario_details(current.workspace.id, id, obj, validator)
 
+    # TODO: test this, and perhaps rethink how to deal with scenariostatus (see TODO for
+    # ScenarioStatus)
     async def set_status(self, status: ScenarioStatus):
+        """Set the ScenarioStatus for the active scenario"""
         id = self._ensure_scenario_id()
         await self.session.execute(
             update(db.Scenario).where(db.Scenario.id == id).values(status=status)
@@ -191,7 +220,7 @@ class ScenarioRepository(SQLResourceRepository):
                     "scenario_id": scenario_id,
                     "model_type_id": model_type.id,
                     "sequence": idx,
-                    "config": self.stripped_config(model),
+                    "config": self._stripped_config(model),
                 }
                 for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
             ],
@@ -210,7 +239,7 @@ class ScenarioRepository(SQLResourceRepository):
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
     @classmethod
-    def load_full_scenario(cls, scenario: db.Scenario) -> Scenario:
+    def _load_full_scenario(cls, scenario: db.Scenario) -> Scenario:
         return dataclasses.replace(
             scenario.to_domain(),
             datasets=[
@@ -249,7 +278,7 @@ class ScenarioRepository(SQLResourceRepository):
         return result
 
     @staticmethod
-    def stripped_config(scenario_model: ScenarioModel):
+    def _stripped_config(scenario_model: ScenarioModel):
         result = copy.deepcopy(scenario_model.config)
         result.pop("name", None)
         result.pop("type", None)
