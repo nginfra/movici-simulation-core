@@ -77,7 +77,7 @@ def resolve_source(name: str, sources: "SourcesDict") -> "DataSource":
             raise ValueError(f"Source '{source_name}' not available") from None
         if not isinstance(source, MultipleEntityTypeSource):
             raise TypeError(
-                f"Source '{source_name}' is not a multi-entity source, "
+                f"Source '{source_name}' is not a MultipleEntityTypeSource, "
                 f"cannot select entity type '{entity_type}'"
             )
         try:
