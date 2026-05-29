@@ -1,7 +1,10 @@
 import pytest
 from jsonschema import exceptions
 
+from movici_simulation_core.core.attribute_spec import AttributeSpec
+from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.validate import (
+    AttributeSchemaLookup,
     FromDictLookup,
     ModelConfigSchema,
     MoviciDataRefInfo,
@@ -90,19 +93,41 @@ def test_from_dict_lookup(method, value, expected):
     assert getattr(lookup, method)(value) == expected
 
 
-_default_lookup = FromDictLookup(datasets=[{"name": "some_dataset", "type": "some_type"}])
+@pytest.mark.parametrize(
+    "method, value, expected",
+    [
+        ("dataset", "dataset", True),
+        ("dataset", "invalid", False),
+        ("entity_group", "some_entities", True),
+        ("attribute", "some_attribute", True),
+        ("attribute", "invalid", False),
+    ],
+)
+def test_attribute_schema_lookup(method, value, expected):
+    lookup = AttributeSchemaLookup(
+        ["dataset", "another_dataset"],
+        AttributeSchema([AttributeSpec("some_attribute", data_type=int)]),
+    )
+    assert getattr(lookup, method)(value) == expected
+
+
+_from_dict_lookup = FromDictLookup(datasets=[{"name": "some_dataset", "type": "some_type"}])
+_attribute_schema_lookup = AttributeSchemaLookup(["some_dataset"])
 
 
 @pytest.mark.parametrize(
     "lookup, dataset, type, expected",
     [
-        (_default_lookup, "some_dataset", "some_type", True),
-        (_default_lookup, "some_dataset", "other_type", False),
-        (_default_lookup, "other_dataset", "some_type", False),
+        (_from_dict_lookup, "some_dataset", "some_type", True),
+        (_from_dict_lookup, "some_dataset", "other_type", False),
+        (_from_dict_lookup, "other_dataset", "some_type", False),
+        (_attribute_schema_lookup, "some_dataset", "some_type", True),
+        (_attribute_schema_lookup, "some_dataset", "other_type", True),
+        (_attribute_schema_lookup, "other_dataset", "some_type", False),
         (FromDictLookup(), "unknown", "unknown", True),
     ],
 )
-def test_from_dict_lookup_dataset_type(lookup, dataset, type, expected):
+def test_lookup_dataset_type(lookup, dataset, type, expected):
     assert lookup.dataset_type(dataset, type) == expected
 
 

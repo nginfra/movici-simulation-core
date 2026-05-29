@@ -285,11 +285,14 @@ def test_csr_undefined(data, row_ptr, data_type, expected):
         ([UNDEFINED[str]], DataType(str), None, None),
         (["asdf"], DataType(str), None, None),
         ([1, 2], DataType(int), 1, 2),
-        ([False], DataType(bool), False, True),
+        ([True, False], DataType(bool), False, True),
+        ([False], DataType(bool), False, False),
+        ([True], DataType(bool), True, True),
+        ([True, UNDEFINED[bool], False], DataType(bool), False, True),
+        ([True, UNDEFINED[bool]], DataType(bool), True, True),
         ([1.1, 2], DataType(float), 1.1, 2.0),
         ([1.1, UNDEFINED[float], 2], DataType(float), 1.1, 2.0),
         ([1, UNDEFINED[int], 2], DataType(int), 1, 2),
-        ([True, UNDEFINED[bool], False], DataType(bool), False, True),
     ],
 )
 def test_min_max(data, data_type, exp_min, exp_max):

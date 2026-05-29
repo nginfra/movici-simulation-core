@@ -44,8 +44,6 @@ class DataType(t.Generic[T]):
         defined = data[~undefineds]
         if len(defined) == 0:
             return None, None
-        if self.py_type is bool:
-            return False, True  # type: ignore
         return np.nanmin(defined).item(), np.nanmax(defined).item()
 
 

@@ -254,6 +254,17 @@ def movici_validator(schema, lookup: MoviciTypeLookup | None = None):
 
 @dataclasses.dataclass
 class MoviciDataRefInfo:
+    """A class containing information regarding a reference in a model config to a Movici object
+    (such as a dataset, entity group or attribute). It can be to set links between a model config
+    and the associated Movici object stored in a database. Instances of ``MoviciDataRefInfo`` are
+    returned by :func:`validate_and_process` and do generally not need to be created manually.
+
+    :param path: the path of the reference in a JSON structure as a tuple. ``str`` values indicate
+        keys in object, while ``int`` values represent positions in an array
+    :param value: the value of the reference
+    :param movici_type: one of ``"dataset"``, ``"entityGroup"`` or ``"attribute"``
+    """
+
     path: tuple[str | int, ...]
     value: t.Any
     movici_type: MoviciTypeStr | None = None
@@ -263,7 +274,7 @@ class MoviciDataRefInfo:
         cls,
         path: str,
         value: t.Any,
-        movici_type: t.Literal["dataset", "entityGroup", "attribute", None] = None,
+        movici_type: MoviciTypeStr | None = None,
     ):
         return cls(path=cls._parse_json_path(path), value=value, movici_type=movici_type)
 
