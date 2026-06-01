@@ -18,7 +18,9 @@ def timeline():
 
 def get_model(name="dummy", timeline=None, send=None, **kwargs):
     send = send or Mock()
-    return ConnectedModel(name, timeline, send, **kwargs)
+    model = ConnectedModel(name, timeline, send, **kwargs)
+    model.start()
+    return model
 
 
 class TestConnectedModel:
@@ -63,14 +65,6 @@ class TestConnectedModel:
         msg = UpdateMessage(1)
         model.recv_event(msg)
         assert model.send.call_args == call(msg)
-
-    def test_send_command_starts_timer(self, model):
-        model.send_command(UpdateMessage(1))
-        assert model.timer.running
-
-    def test_send_command_marks_model_as_waiting(self, model):
-        model.send_command(UpdateMessage(1))
-        assert model.busy
 
     def test_response_stops_timer_and_busy(self, running_model):
         running_model.recv_event(ResultMessage())

@@ -20,8 +20,8 @@ from movici_simulation_core.messages import (
 )
 from movici_simulation_core.utils.data_mask import masks_overlap
 
-from .fsm import FSM, Always, State, TransitionsT
-from .interconnectivity import format_matrix
+from .fsm import FSM, Always, Condition, FSMConfig, State
+from .interconnectivity import Publisher, format_matrix
 from .stopwatch import ReportingStopwatch, Stopwatch
 
 
@@ -48,6 +48,22 @@ class Context:
     def log_new_phase(self, phase: str):
         self.logger.info(f"Entering {phase}")
 
+    def queue_models_for_next_time(self):
+        next_time = self.models.next_time
+        if next_time is None:
+            raise RuntimeError(
+                "Cannot progress to next time when all models are done,"
+                " should finalize simulation instead"
+            )
+
+        if next_time != self.timeline.current_time:
+            self.timeline.current_time = next_time
+            self.models.queue_all(NewTimeMessage(next_time))
+
+        for model in self.models.values():
+            if model.next_time == next_time:
+                model.recv_event(UpdateMessage(timestamp=next_time))
+
     def log_new_time(self):
         if self.models.next_time != self.timeline.current_time:
             self.logger.info(f"New time: {self.models.next_time}")
@@ -59,7 +75,10 @@ class Context:
         self.logger.info(f"Total elapsed time: {seconds:.1f}")
 
     def log_interconnectivity_matrix(self):
-        self.logger.info("Model interconnectivity matrix:\n" + format_matrix(self.models.values()))
+        self.logger.info(
+            "Model interconnectivity matrix:\n"
+            + format_matrix(t.cast(list[Publisher], list(self.models.values())))
+        )
 
     def finalize(self):
         self.phase_timer.reset()
@@ -85,7 +104,7 @@ class Context:
 class TimelineController:
     start: int
     end: int
-    current_time: int = None
+    current_time: int | None = None
 
     def set_model_to_start(self, model: ConnectedModel):
         model.next_time = self.start
@@ -103,13 +122,6 @@ class TimelineController:
             return None
 
         return min(next_time, self.end)
-
-    def queue_for_next_time(self, models: ModelCollection):
-        next_time = models.next_time
-        if next_time != self.current_time:
-            self.current_time = next_time
-            models.queue_all(NewTimeMessage(next_time))
-        models.queue_models_for_next_time()
 
 
 class NoUpdateMessage(Message):
@@ -134,24 +146,25 @@ class ConnectedModel:
     send: t.Callable[[Message], None]
 
     logger: logging.Logger = field(default_factory=logging.getLogger)
-    publishes_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
-    subscribed_to: t.Optional[t.List[ConnectedModel]] = field(default_factory=list)
-    timer: Stopwatch = field(default=None)
-    pub: t.Optional[dict] = field(default_factory=dict)
-    sub: t.Optional[dict] = field(default_factory=dict)
+    publishes_to: list[ConnectedModel] = field(default_factory=list)
+    subscribed_to: list[ConnectedModel] = field(default_factory=list)
+    timer: Stopwatch = field(init=False)
+    pub: dict | None = field(default_factory=dict)
+    sub: dict | None = field(default_factory=dict)
 
     busy: bool = field(default=False, init=False)
     next_time: t.Optional[int] = field(default=None, init=False)
     failed: bool = field(default=False, init=False)
-    ack: bool = field(default=False, init=False)
 
-    quit: t.Optional[QuitMessage] = field(default=None, init=False)
+    pending_new_time: NewTimeMessage | None = field(default=None, init=False)
     pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
+    pending_quit: QuitMessage | None = field(default=None, init=False)
 
-    fsm: FSM[ConnectedModel] = field(init=False)
+    fsm_config: FSMConfig | None = None
+    fsm: FSM[ConnectedModel, Message] = field(init=False)
 
     def __post_init__(self):
-        self.timer = self.timer or ReportingStopwatch(
+        self.timer = ReportingStopwatch(
             on_stop=lambda s: self.logger.debug(
                 f"Model '{self.name}' returned in {s:.1f} seconds "
             ),
@@ -159,7 +172,9 @@ class ConnectedModel:
                 f"Total time spent in in model '{self.name}': {s:.1f} seconds "
             ),
         )
-        self.fsm = FSM(Registration, self, raise_on_done=False)
+        self.fsm = FSM(self.fsm_config or MODEL_FSM_CONFIG, self, raise_on_done=False)
+
+    def start(self):
         self.fsm.start()
 
     def recv_event(self, event: Message):
@@ -168,8 +183,6 @@ class ConnectedModel:
     def send_command(self, message: Command) -> None:
         """Send a message and start the timer. Also, start waiting"""
         self.send(message)
-        self.timer.start()
-        self.busy = True
 
     def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
         self.logger.error(
@@ -181,15 +194,6 @@ class ConnectedModel:
 class BaseModelState(State[ConnectedModel], ABC):
     valid_commands: t.Tuple[t.Type[Command], ...] = ()
     valid_responses: t.Tuple[t.Type[Response], ...] = ()
-    next_state: t.Type[BaseModelState] = None
-
-    def transitions(self) -> TransitionsT:
-        if self.next_state is not None:
-            return [(Always, self.next_state)]
-        return self._transitions()
-
-    def _transitions(self):
-        return []
 
 
 class WaitingForMessage(BaseModelState):
@@ -209,8 +213,10 @@ class WaitingForMessage(BaseModelState):
 
     def process_command(self, msg: Command):
         if not isinstance(msg, self.valid_commands):
-            self.handle_invalid(msg, self.valid_commands)
-            return
+            raise ValueError(
+                f"Received invalid command {msg} for model '{self.context.name}'. Expected one of "
+                + ", ".join(m.__name__ for m in self.valid_commands)
+            )
 
         if isinstance(msg, NewTimeMessage):
             self.process_new_time(msg)
@@ -227,21 +233,21 @@ class WaitingForMessage(BaseModelState):
         self.context.busy = False
 
         if not isinstance(msg, self.valid_responses):
-            self.handle_invalid(msg, self.valid_responses)
+            self.handle_invalid_response(msg, self.valid_responses)
         else:
             self._handle_response(msg)
 
     def process_new_time(self, msg: NewTimeMessage):
-        pass
+        self.context.pending_new_time = msg
 
     def process_no_update(self, msg: NoUpdateMessage):
         pass
 
     def process_update(self, msg: UpdateMessage):
-        pass
+        self.context.pending_updates.append(msg)
 
     def process_quit(self, msg: QuitMessage):
-        pass
+        self.context.pending_quit = msg
 
     @singledispatchmethod
     def _handle_response(self, msg: Message) -> None:
@@ -256,7 +262,6 @@ class WaitingForMessage(BaseModelState):
     @_handle_response.register
     def _(self, msg: AcknowledgeMessage) -> None:
         """when a model sends an accepted message, don't do extra logic"""
-        self.context.ack = True
         if not self.context.pending_updates:
             self.notify_subscribers()
 
@@ -279,16 +284,15 @@ class WaitingForMessage(BaseModelState):
     def _(self, msg: ErrorMessage) -> None:
         """When a model reports an error, set it to failed"""
         self.context.failed = True
-        self.context.quit = None
+        self.context.pending_quit = None
         self.context.pending_updates = []
 
-    def handle_invalid(self, msg: Message, valid_messages: t.Iterable[t.Type[Message]]):
-        self.context.log_invalid(msg, valid_messages)
+    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[t.Type[Response]]):
         self.context.failed = True
-        if not self.context.quit:
-            self.context.quit = QuitMessage()
+        self.context.log_invalid(msg, valid_messages)
+        if not self.context.pending_quit:
+            self.context.pending_quit = QuitMessage()
             self.context.pending_updates = []
-            self.next_state = ProcessPendingQuit
 
     def notify_subscribers(self, command: t.Optional[Command] = None):
         command = command or NoUpdateMessage()
@@ -302,19 +306,6 @@ class Idle(WaitingForMessage):
     valid_commands = (NewTimeMessage, NoUpdateMessage, UpdateMessage, QuitMessage)
     valid_responses = ()
 
-    def process_new_time(self, msg: NewTimeMessage):
-        self.context.ack = False
-        self.context.send_command(msg)
-        self.next_state = NewTime
-
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
-        self.next_state = ProcessPendingUpdates
-
-    def process_quit(self, msg: QuitMessage):
-        self.context.quit = msg
-        self.next_state = ProcessPendingQuit
-
 
 class Busy(WaitingForMessage):
     """Base class for if a model is doing something and a response is required. While busy,
@@ -325,19 +316,9 @@ class Busy(WaitingForMessage):
     valid_commands = (UpdateMessage, NoUpdateMessage, QuitMessage)
     valid_responses = (ErrorMessage,)
 
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
-
-    def process_quit(self, msg: QuitMessage):
-        self.context.quit = msg
-
-    def _transitions(self):
-        return [
-            (lambda c: c.failed, Done),
-            (lambda c: (not c.busy) and c.quit, ProcessPendingQuit),
-            (lambda c: (not c.busy) and c.pending_updates, ProcessPendingUpdates),
-            (lambda c: not c.busy, Idle),
-        ]
+    def on_enter(self):
+        self.context.busy = True
+        self.context.timer.start()
 
 
 class Registration(Busy):
@@ -346,16 +327,19 @@ class Registration(Busy):
     valid_commands = (QuitMessage,)
     valid_responses = (RegistrationMessage, ErrorMessage)
 
-    def on_enter(self):
-        self.context.busy = True
-        self.context.timer.start()
-
 
 class NewTime(Busy):
-    """A NewTime message has been sent to the model, and it needs to Acknowledge that"""
+    """A NewTime message will be sent to the model, and it needs to Acknowledge that"""
 
     valid_commands = (UpdateMessage, NoUpdateMessage, QuitMessage)
     valid_responses = (AcknowledgeMessage, ErrorMessage)
+
+    def on_enter(self):
+        if not isinstance(self.context.pending_new_time, NewTimeMessage):
+            raise RuntimeError("can only enter NewTime when there is a pending NewTimeMessage")
+        self.context.send_command(self.context.pending_new_time)
+        self.context.pending_new_time = None
+        super().on_enter()
 
 
 class Updating(Busy):
@@ -373,12 +357,6 @@ class PendingMoreUpdates(Idle):
     valid_commands = (NoUpdateMessage, UpdateMessage, QuitMessage)
     valid_responses = ()
 
-    def process_update(self, msg: UpdateMessage):
-        self.context.pending_updates.append(msg)
-
-    def _transitions(self):
-        return [(Always, ProcessPendingUpdates)]
-
 
 class ProcessPendingUpdates(BaseModelState):
     """While the model was Busy, one or more updates came in which needs to be processed, this
@@ -394,11 +372,9 @@ class ProcessPendingUpdates(BaseModelState):
             )
 
         if any(model.busy for model in self.context.subscribed_to):
-            self.next_state = PendingMoreUpdates
             return
 
         self.process_pending_updates()
-        self.next_state = Updating
 
     def process_pending_updates(self):
         updates = self.context.pending_updates
@@ -414,16 +390,11 @@ class ProcessPendingQuit(BaseModelState):
     """
 
     def run(self):
-        if not isinstance(self.context.quit, QuitMessage):
+        if not isinstance(self.context.pending_quit, QuitMessage):
             raise RuntimeError(
                 "can only enter ProcessPendingQuit when there is a QuitMessage pending"
             )
-        self.process_pending_quit()
-        self.next_state = Finalizing
-
-    def process_pending_quit(self):
-        self.context.ack = False
-        self.context.send_command(self.context.quit)
+        self.context.send_command(self.context.pending_quit)
 
 
 class Finalizing(Busy):
@@ -436,11 +407,6 @@ class Finalizing(Busy):
     def process_command(self, msg: Command):
         pass
 
-    def _transitions(self):
-        return [
-            (lambda c: not c.busy, Done),
-        ]
-
 
 class Done(BaseModelState):
     """The model is either done or failed, ignore any further messages"""
@@ -449,14 +415,10 @@ class Done(BaseModelState):
         yield
 
 
-class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
+class ModelCollection(dict[bytes, ConnectedModel]):
     @property
     def busy(self):
         return any(model.busy for model in self.values())
-
-    @property
-    def waiting_for(self):
-        return [model for model in self.values() if model.busy]
 
     @property
     def next_time(self):
@@ -474,13 +436,6 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
         for model in self.values():
             model.recv_event(message)
 
-    def queue_models_for_next_time(self):
-        """Queue an update message to the model(s) that have the specified next_time"""
-        next_time = self.next_time
-        for model in self.values():
-            if model.next_time == next_time:
-                model.recv_event(UpdateMessage(timestamp=next_time))
-
     def determine_interdependency(self):
         """calculate the subscribers for every model based on the pub/sub mask."""
         for publisher, subscriber in product(self.values(), self.values()):
@@ -491,3 +446,69 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
     def reset_model_timers(self):
         for model in self.values():
             model.timer.reset()
+
+
+class ModelHasFailed(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return self.context.failed
+
+
+class HasPendingQuitAndIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.pending_quit and not self.context.busy)
+
+
+class HasPendingUpdatesAndIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.pending_updates and not self.context.busy)
+
+
+class HasPendingNewTimeAndIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return bool(self.context.pending_new_time and not self.context.busy)
+
+
+class IsIdle(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return not self.context.busy
+
+
+class ModelWaitingForDependencies(Condition[ConnectedModel]):
+    def met(self) -> bool:
+        return any(model.busy for model in self.context.subscribed_to)
+
+
+MODEL_BUSY_TRANSITIONS = (
+    (HasPendingQuitAndIdle, ProcessPendingQuit),
+    (ModelHasFailed, Done),
+    (HasPendingUpdatesAndIdle, ProcessPendingUpdates),
+    (IsIdle, Idle),
+)
+
+MODEL_FSM_CONFIG = FSMConfig(
+    initial_state=Registration,
+    states={
+        Registration: MODEL_BUSY_TRANSITIONS,
+        NewTime: MODEL_BUSY_TRANSITIONS,
+        Updating: MODEL_BUSY_TRANSITIONS,
+        Idle: [
+            (HasPendingQuitAndIdle, ProcessPendingQuit),
+            (HasPendingUpdatesAndIdle, ProcessPendingUpdates),
+            (HasPendingNewTimeAndIdle, NewTime),
+        ],
+        ProcessPendingUpdates: [
+            (ModelWaitingForDependencies, PendingMoreUpdates),
+            (Always, Updating),
+        ],
+        PendingMoreUpdates: [
+            (Always, ProcessPendingUpdates),
+        ],
+        ProcessPendingQuit: [
+            (Always, Finalizing),
+        ],
+        Finalizing: [
+            (IsIdle, Done),
+        ],
+        Done: [],
+    },
+)
