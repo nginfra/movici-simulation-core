@@ -55,7 +55,7 @@ class TestResolveSource:
 
     def test_dot_on_non_multi_raises_type_error(self):
         source = DummySource()
-        with pytest.raises(TypeError, match="not a multi-entity source"):
+        with pytest.raises(TypeError, match="not a MultipleEntityTypeSource"):
             resolve_source("src.nodes", {"src": source})
 
     def test_invalid_entity_type_raises_value_error(self):
