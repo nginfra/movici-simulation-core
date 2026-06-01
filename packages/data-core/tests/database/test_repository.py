@@ -30,6 +30,7 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    MoviciValidationError,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
 )
@@ -1025,6 +1026,18 @@ class TestScenarioRepository:
         assert len(await repository.scenarios.list()) == 0
         assert (await repository.session.scalar(query)) == 0
 
+    async def test_create_invalid_scenario(
+        self, repository: SQLAlchemyRepository, new_scenario: Scenario, get_model_config_validator
+    ):
+        del new_scenario.models[0]["type"]
+        validator = await get_model_config_validator()
+
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.scenarios.create(new_scenario, validator)
+
+        path, _ = next(iter(e.value.iter_messages()))
+        assert path == "models.0"
+
 
 class TestUpdateRepository:
     @pytest.fixture
@@ -1112,3 +1125,28 @@ class TestUpdateRepository:
             len(await repository_for_scenario.for_scenario(another_scenario_id).updates.list())
             == 1
         )
+
+    async def test_deletes_all_underlying_data(
+        self,
+        a_scenario,
+        create_update,
+        repository_for_scenario: SQLAlchemyRepository,
+        create_scenario,
+        session,
+    ):
+
+        another_scenario_id = await create_scenario(
+            dataclasses.replace(a_scenario, name="another_scenario")
+        )
+        await create_update(timestamp=6, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(timestamp=2, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
+        await create_update(
+            scenario_id=another_scenario_id, timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0]
+        )
+
+        assert (await session.scalar(select(func.count(db.DataArray.id)))) == 8
+
+        await repository_for_scenario.updates.delete_all()
+
+        assert (await session.scalar(select(func.count(db.DataArray.id)))) == 2
