@@ -50,7 +50,10 @@ Then you can install this package and all its dependencies using uv:
 
 .. code-block::
 
-  uv sync --all-groups
+  uv sync --all-packages --all-groups
+
+  # This command is also availble from the Makefile
+  make sync
 
   # optional: activate the virtual environment
   source .venv/bin/activate
