@@ -10,6 +10,8 @@ from jsonschema import exceptions, validators
 
 import movici_simulation_core.core.schema as schema
 
+MoviciTypeStr = t.Literal["dataset", "entityGroup", "attribute"]
+
 
 @dataclasses.dataclass
 class ModelConfigSchema:
@@ -24,14 +26,14 @@ class MoviciTypeReport(exceptions.ValidationError):
     raised as actual errors
     """
 
-    def __init__(self, movici_type: str, instance: str) -> None:
-        self.movici_type = movici_type
+    def __init__(self, movici_type: MoviciTypeStr, instance: str) -> None:
+        self.movici_type: MoviciTypeStr = movici_type
         super().__init__(message=f"<{movici_type}>{instance}", instance=instance)
 
-    def asinfo(
-        self,
-    ):
-        return MoviciDataRefInfo(path=self.path, movici_type=self.movici_type, value=self.instance)
+    def asinfo(self):
+        return MoviciDataRefInfo(
+            path=tuple(self.path), value=self.instance, movici_type=self.movici_type
+        )
 
 
 def movici_dataset_type(lookup):
@@ -135,35 +137,21 @@ def extract_reports(errors):
     return reports, real_errors
 
 
-class MoviciTypeLookup(t.Protocol):
+class MoviciTypeLookup:
     """class for looking up wether a specific dataset, entity_group, attribute exists or whether
     a dataset is of a specific type. Used alongside ``validate_and_process``. This class
     can be subclassed to provide custom logic for determining whether these objects exist
     """
 
-    def dataset(self, dataset_name) -> bool: ...
-    def entity_group(self, entity_type) -> bool: ...
-    def attribute(self, attribute_type) -> bool: ...
-    def dataset_type(self, dataset_name, required_type) -> bool: ...
-
-
-class FromDictLookup(MoviciTypeLookup):
     def __init__(
         self,
-        datasets: t.Optional[t.List[dict]] = None,
-        entity_types: t.Optional[list] = None,
-        attribute_types: t.Optional[list] = None,
-        validate_dataset_types: bool = True,
-    ) -> None:
-        self.datasets = self.entity_types = self.attribute_types = None
-        if datasets is not None:
-            self.datasets = {
-                ds["name"]: (ds["type"] if validate_dataset_types else None) for ds in datasets
-            }
-        if entity_types is not None:
-            self.entity_types = set(entity_types)
-        if attribute_types is not None:
-            self.attribute_types = {e["name"] for e in attribute_types}
+        datasets: t.Mapping[str, str | None] | None = None,
+        entity_types: t.Collection[str] | None = None,
+        attribute_types: t.Collection[str] | None = None,
+    ):
+        self.datasets = datasets
+        self.entity_types = entity_types
+        self.attribute_types = attribute_types
 
     def dataset(self, dataset_name):
         return self.datasets is None or dataset_name in self.datasets
@@ -183,26 +171,42 @@ class FromDictLookup(MoviciTypeLookup):
             return False
 
 
+class FromDictLookup(MoviciTypeLookup):
+    def __init__(
+        self,
+        datasets: t.Optional[t.List[dict]] = None,
+        entity_types: t.Optional[list] = None,
+        attribute_types: t.Optional[list] = None,
+        validate_dataset_types: bool = True,
+    ) -> None:
+        super().__init__(
+            datasets={
+                ds["name"]: (ds["type"] if validate_dataset_types else None) for ds in datasets
+            }
+            if datasets is not None
+            else None,
+            entity_types=set(entity_types) if entity_types is not None else None,
+            attribute_types={e["name"] for e in attribute_types}
+            if attribute_types is not None
+            else None,
+        )
+
+
 class AttributeSchemaLookup(MoviciTypeLookup):
     def __init__(
         self,
         dataset_names: t.Optional[t.Sequence[str]] = None,
         schema: t.Optional[schema.AttributeSchema] = None,
     ):
-        self.dataset_names = set(dataset_names) if dataset_names is not None else None
+        super().__init__(
+            datasets={ds: None for ds in dataset_names} if dataset_names is not None else None,
+            entity_types=None,
+            attribute_types=None,
+        )
         self.schema = schema
-
-    def dataset(self, dataset_name):
-        return self.dataset_names is None or dataset_name in self.dataset_names
-
-    def entity_group(self, entity_type) -> bool:  # noqa: ARG002
-        return True
 
     def attribute(self, attribute_type):
         return self.schema is None or attribute_type in self.schema.attributes
-
-    def dataset_type(self, dataset_name, required_type) -> bool:  # noqa: ARG002
-        return True
 
 
 def validate_and_process(
@@ -250,9 +254,18 @@ def movici_validator(schema, lookup: MoviciTypeLookup | None = None):
 
 @dataclasses.dataclass
 class MoviciDataRefInfo:
-    path: t.Tuple[t.Union[str, int], ...]
-    movici_type: t.Literal["dataset", "entityGroup", "attribute"]
-    value: str
+    path: tuple[str | int, ...]
+    value: t.Any
+    movici_type: MoviciTypeStr | None = None
+
+    @classmethod
+    def from_path_string(
+        cls,
+        path: str,
+        value: t.Any,
+        movici_type: t.Literal["dataset", "entityGroup", "attribute", None] = None,
+    ):
+        return cls(path=cls._parse_json_path(path), value=value, movici_type=movici_type)
 
     def __post_init__(self):
         if isinstance(self.path, tuple):
@@ -360,8 +373,9 @@ def ensure_schema(schema_identifier: t.Union[dict, str, Path], add_name_and_type
     else:
         schema = json.loads(Path(schema_identifier).read_text())
     if add_name_and_type:
-        schema["properties"]["name"] = {"type": "string"}
-        schema["properties"]["type"] = {"type": "string"}
+        properties = schema.setdefault("properties", {})
+        properties["name"] = {"type": "string"}
+        properties["type"] = {"type": "string"}
     return schema
 
 
