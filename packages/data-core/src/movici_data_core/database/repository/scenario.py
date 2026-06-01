@@ -14,7 +14,7 @@ from movici_data_core.domain_model import (
     ScenarioModel,
     ScenarioStatus,
 )
-from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
+from movici_data_core.exceptions import InvalidAction, MoviciValidationError, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.validate import MoviciDataRefInfo
 
@@ -207,11 +207,21 @@ class ScenarioRepository(SQLResourceRepository):
             return
 
         model_types = await self.all_data.model_types.ensure_model_types(
-            [model["type"] for model in obj.models if "name" in model]
+            [model["type"] for model in obj.models if "type" in model]
         )
 
         validator = validator.for_scenario(scenario_datasets, model_types)
-        scenario_models = validator.process_model_configs(obj.models)
+        try:
+            scenario_models = validator.process_model_configs(obj.models)
+        except MoviciValidationError as e:
+            raise MoviciValidationError.from_errors(e, path="models") from e
+
+        # In the previous step where we create the model_type list, there is the possibility of
+        # a model config that does not specify a type, and we potentially end up with a list of
+        # model_types that is shorter that the number of scenario_models. However, validation must
+        # have caught this and raise an error if a model does not have a "type" field. So we
+        # can assert that we always have the correct length of lists here
+        assert len(scenario_models) == len(model_types)
         scenario_model_records = await self.session.scalars(
             insert(db.ScenarioModel).returning(db.ScenarioModel),
             [

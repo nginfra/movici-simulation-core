@@ -132,6 +132,15 @@ class UpdateRepository(SQLResourceRepository):
         """
 
         scenario_id = self._ensure_scenario_id()
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.UpdateAttribute.attribute_id)
+                    .join(db.Update)
+                    .where(db.Update.scenario_id == scenario_id)
+                )
+            )
+        )
         await self.session.execute(delete(db.Update).where(db.Update.scenario_id == scenario_id))
 
 

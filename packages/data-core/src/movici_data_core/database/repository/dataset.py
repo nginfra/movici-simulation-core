@@ -127,7 +127,7 @@ class DatasetRepository(SQLResourceRepository):
         attribute: db.Attribute
         for attribute, min_val, max_val in await self.session.execute(
             select(db.Attribute, db.DataArray.min_val, db.DataArray.max_val)
-            .join(db.Attribute)
+            .join(db.DataArray, db.DataArray.attribute_id == db.Attribute.id)
             .join(db.DatasetAttribute)
             .options(
                 joinedload(db.Attribute.attribute_type),
