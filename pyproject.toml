@@ -16,7 +16,7 @@ dependencies = [
 dev = [
   "movici-simulation-core[all]",
   "pytest",
-  "pytest-cov",
+  "coverage",
   "mypy",
   "taplo",
   "ruff",
