@@ -3,16 +3,16 @@ requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
 
 [project]
-name = "movici-drinking-water-model"
+name = "movici-data-core"
 dynamic = ["version"]
-description = "Drinking water network simulation model for Movici using WNTR"
+description = "Shared library for reading/writing movici data using SQL databases"
 readme = "README.rst"
 requires-python = ">=3.10,<3.14"
 license = { text = "Movici Public License" }
 authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
 maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Science/Research",
   "Intended Audience :: Developers",
   "License :: Free for non-commercial use",
@@ -25,24 +25,38 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Topic :: Scientific/Engineering",
+  "Topic :: Database",
 ]
 
 dependencies = [
-  "movici-simulation-core",
   "numpy",
-  "wntr>=1.0.0",
-  "setuptools<81; python_version < '3.12'",
+  "orjson>=3.11.7",
+  "sqlalchemy",
+  "movici-simulation-core",
 ]
+[project.optional-dependencies]
+sqlite = ["aiosqlite>=0.22.1"]
 
-[project.entry-points."movici.plugins"]
-drinking_water = "movici_drinking_water_model.model:Model"
-drinking_water_attributes = "movici_drinking_water_model.attributes:DrinkingWaterNetworkAttributes"
+[dependency-groups]
+dev = ["pytest-asyncio>=1.3.0"]
 
-[project.entry-points."movici.dataset_creator.source"]
-epanet = "movici_drinking_water_model.epanet_source:EPANETSource"
+[project.urls]
+Homepage = "https://github.com/nginfra/movici-simulation-core"
+Documentation = "https://docs.movici.nl/en/latest/index.html"
+Repository = "https://github.com/nginfra/movici-simulation-core"
+Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 
 [tool.uv-dynamic-versioning]
 fallback-version = "0.0.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto" # work with regular async @pytest.fixtures
+
+[tool.mypy]
+warn_return_any = true
+warn_unused_configs = true
+show_error_context = true
+follow_untyped_imports = true

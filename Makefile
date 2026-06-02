@@ -1,3 +1,4 @@
+
 sync:
 	uv sync --all-packages --all-groups
 
@@ -13,13 +14,14 @@ lint: ruff toml-check
 unittest:
 	NUMBA_DISABLE_JIT=1 uv run pytest -v packages/*/tests/
 
+comma:= ,
 coverage:
-	NUMBA_DISABLE_JIT=1 uv run pytest \
-		$(patsubst %,--cov %,$(wildcard packages/*/src/*)) \
-		--cov-report=term-missing \
-		--cov-report=xml \
-		--cov-report=html \
-		packages/*/tests/
+	NUMBA_DISABLE_JIT=1 uv run coverage run \
+	  --source $(subst $(eval ) ,$(comma),$(wildcard packages/*/src/*)) \
+		-m pytest packages/*/tests/
+	uv run coverage report -m
+	uv run coverage html
+	uv run coverage xml
 
 test-numba:
 	uv run pytest -v packages/*/tests/
