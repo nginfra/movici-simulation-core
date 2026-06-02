@@ -692,7 +692,8 @@ class TestDatasetDataRepository:
     @pytest.mark.parametrize(
         "datatype, values, min_val, max_val",
         [
-            (bool, [False, False], False, True),
+            (bool, [False, False], False, False),
+            (bool, [True, False], False, True),
             (int, [2, -1], -1, 2),
             (float, [0.0, np.nan], 0.0, 0.0),
             (float, [np.nan], None, None),
@@ -714,7 +715,7 @@ class TestDatasetDataRepository:
 
         await repository.dataset_data.create(
             a_dataset.id,
-            {an_entity_type.name: {"some.attr": {"data": np.asarray(values)}}},
+            {an_entity_type.name: {"some.attr": {"data": np.asarray(values, dtype=datatype)}}},
             format=DatasetFormat.ENTITY_BASED,
         )
         attribute = await repository.session.scalar(

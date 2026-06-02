@@ -29,13 +29,10 @@ classifiers = [
 ]
 
 dependencies = [
-  "fastapi[standard]",
-  "svcs",
   "numpy",
   "orjson>=3.11.7",
   "sqlalchemy",
   "movici-simulation-core",
-  "marshmallow>=4.3.0",
 ]
 [project.optional-dependencies]
 sqlite = ["aiosqlite>=0.22.1"]
