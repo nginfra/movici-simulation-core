@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/urban_drainage/1.0.0",
+  "type": "object",
+  "required": ["dataset"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "description": "Urban drainage network dataset name"
+    },
+    "options": {
+      "type": "object",
+      "description": "SWMM simulation options",
+      "properties": {
+        "routing_step": {
+          "type": "number",
+          "default": 60,
+          "description": "SWMM routing (hydraulic) step in seconds (default: 60)"
+        },
+        "report_step": {
+          "type": "number",
+          "default": 300,
+          "description": "Reporting / control cadence in seconds (default: 300)"
+        },
+        "flow_units": {
+          "type": "string",
+          "enum": ["CMS", "LPS", "MLD", "CFS", "GPM", "MGD"],
+          "default": "CMS",
+          "description": "SWMM flow units (default: CMS, cubic meters per second)"
+        },
+        "flow_routing": {
+          "type": "string",
+          "enum": ["STEADY", "KINWAVE", "DYNWAVE"],
+          "default": "DYNWAVE",
+          "description": "SWMM flow routing method (default: DYNWAVE)"
+        },
+        "infiltration": {
+          "type": "string",
+          "enum": ["HORTON", "MODIFIED_HORTON", "GREEN_AMPT", "MODIFIED_GREEN_AMPT", "CURVE_NUMBER"],
+          "default": "HORTON",
+          "description": "SWMM infiltration model (default: HORTON)"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
