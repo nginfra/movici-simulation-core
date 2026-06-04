@@ -40,6 +40,30 @@ class GenericService(t.Generic[T_dom]):
         return await self._repository.delete(id)
 
 
+class DatasetSchemaService(GenericService[T_dom]):
+    def __init__(
+        self, repository: SQLAlchemyRepository, invalidate_schema: t.Callable | None = None
+    ):
+        self.invalidate_schema = invalidate_schema
+        super().__init__(repository)
+
+    async def create(self, obj: T_dom):
+        result = await self._repository.create(obj)
+        if self.invalidate_schema is not None:
+            self.invalidate_schema()
+        return result
+
+    async def update(self, id: UUID, obj: T_dom):
+        result = await self._repository.update(id=id, obj=obj)
+        if self.invalidate_schema is not None:
+            self.invalidate_schema()
+        return result
+
+    async def delete(self, id: UUID):
+        result = await self._repository.delete(id)
+        if self.invalidate_schema is not None:
+            self.invalidate_schema()
+        return result
 async def ensure_valid_workspace(
     name_or_id: str | None, repository: SQLAlchemyRepository
 ) -> Workspace:

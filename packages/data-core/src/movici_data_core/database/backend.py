@@ -23,7 +23,7 @@ from movici_data_core.services import (
     WorkspaceService,
 )
 from movici_data_core.services.update import UpdateService
-from movici_simulation_core import EntityInitDataFormat
+from movici_simulation_core import AttributeSchema, EntityInitDataFormat
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy
 
@@ -54,6 +54,7 @@ class SQLAlchemyServer:
     dbapi_url: str
     serializer: ExternalSerializationStrategy
 
+    schema: AttributeSchema | None
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
@@ -75,6 +76,7 @@ class SQLAlchemyServer:
         self.serializer = serializer or EntityInitDataFormat(
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
         )
+        self.schema = None
 
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._engine: AsyncEngine | None = None
@@ -159,6 +161,7 @@ class SQLAlchemyServer:
             dataset_service_cls=self.dataset_service_cls,
             scenario_service_cls=self.scenario_service_cls,
             update_service_cls=self.update_service_cls,
+            invalidate_schema_callable=self.invalidate_schema_callable,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -184,8 +187,12 @@ class SQLAlchemyServer:
         assert False, f"Unknown database mode {options.mode}"
 
     async def _with_serializer(self, backend: SQLAlchemyBackend):
-        schema = await backend.attribute_types.as_schema()
-        return dataclasses.replace(backend, serializer=self.serializer.with_schema(schema))
+        if self.schema is None:
+            self.schema = await backend.attribute_types.as_schema()
+        return dataclasses.replace(backend, serializer=self.serializer.with_schema(self.schema))
+
+    def invalidate_schema_callable(self):
+        self.schema = None
 
 
 @dataclasses.dataclass
@@ -207,6 +214,12 @@ class SQLAlchemyBackend:
     dataset_service_cls: t.Type[DatasetService] = DatasetService
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
+
+    invalidate_schema_callable: t.Callable[[], None] | None = None
+
+    def invalidate_schema(self):
+        if self.invalidate_schema_callable is not None:
+            self.invalidate_schema_callable()
 
     @property
     def repository(self):
@@ -236,7 +249,7 @@ class SQLAlchemyBackend:
 
     @property
     def attribute_types(self):
-        return self.attribute_type_service_cls(self.repository)
+        return self.attribute_type_service_cls(self.repository, self.invalidate_schema_callable)
 
     @property
     def model_types(self):
@@ -370,5 +383,11 @@ class SQLAlchemyBackend:
             self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
 
     async def update_schema(self):
+        """Update the AttributeSchema for the serializer. For short lived SQLAlchemyBackend
+        instances, the AttributeSchema will be reconstructed every time the SQLAlchemyServer
+        creates a SQLAlchemyBackend. However, when the lifetime of a backend class is longer and
+        spans multiple operations that change AttributeTypes in the database, the schema must be
+        updated and this method can be invoked to update the serializer's AttributeSchema in place
+        """
         schema = await self.attribute_types.as_schema()
         self.serializer = self.serializer.with_schema(schema)

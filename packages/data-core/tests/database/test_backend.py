@@ -5,9 +5,10 @@ import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
-from movici_data_core.domain_model import Scenario, Workspace
+from movici_data_core.domain_model import AttributeType, Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
+from movici_simulation_core import DataType
 
 
 @pytest.fixture
@@ -265,3 +266,28 @@ class TestMultipleWorkspaceBackend:
         assert len(await backend.scenarios.list()) == 1
         await backend.for_scenario(scenario).scenarios.delete()
         assert len(await backend.scenarios.list()) == 0
+
+
+class TestSchemaInvalidation:
+    async def test_caches_schema_between_backends(self, initialized_db: SQLAlchemyServer):
+        async with initialized_db.get_backend() as backend:
+            schema = initialized_db.schema
+            assert backend.serializer.schema is schema  # type: ignore
+            assert schema is not None
+
+        async with initialized_db.get_backend() as backend:
+            assert initialized_db.schema is schema
+            assert backend.serializer.schema is schema  # type: ignore
+
+    async def test_invalidates_schema_when_attribute_types_change(
+        self, initialized_db: SQLAlchemyServer
+    ):
+
+        async with initialized_db.get_backend() as backend:
+            await backend.attribute_types.create(AttributeType("some.attribute", DataType(int)))
+            assert initialized_db.schema is None
+
+        async with initialized_db.get_backend() as backend:
+            new_schema = initialized_db.schema
+            assert new_schema is not None
+            assert "some.attribute" in new_schema.attributes
