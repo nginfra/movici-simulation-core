@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from movici_data_core.database import model as db_model
-from movici_data_core.database.backend import SQLAlchemyServer
+from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.general import _default_flags, get_options, initialize_database
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
@@ -369,7 +369,7 @@ async def an_entity_type(get_repository):
 
 
 @pytest.fixture
-async def an_attribute_type(get_repository) -> AttributeType:
+async def an_attribute_type(get_repository, default_backend: SQLAlchemyBackend) -> AttributeType:
     async with get_repository() as repository:
         attribute_id = await repository.attribute_types.create(
             AttributeType(
@@ -379,6 +379,7 @@ async def an_attribute_type(get_repository) -> AttributeType:
                 description="a description",
             )
         )
+        default_backend.invalidate_schema()
         return t.cast(AttributeType, await repository.attribute_types.get_by_id(attribute_id))
 
 
