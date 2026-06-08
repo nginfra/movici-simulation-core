@@ -38,7 +38,7 @@ class FSMConfig(t.Generic[T]):
         for _, state in itertools.chain.from_iterable(self.states.values()):
             if state not in self.states:
                 raise ValueError(
-                    f"State {state.__name__} was mentioned in a transition but it is not a member"
+                    f"State {state.__name__} was mentioned in a transition but it is not a member "
                     "of 'states' and 'strict' was set"
                 )
 

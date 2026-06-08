@@ -125,10 +125,10 @@ class TimelineController:
     def set_model_to_start(self, model: ConnectedModel):
         model.next_time = self.start
 
-    def set_next_time(self, model: ConnectedModel, next_time: t.Optional[int] = None):
+    def set_next_time(self, model: ConnectedModel, next_time: int | None = None):
         model.next_time = self._get_validated_next_time(next_time)
 
-    def _get_validated_next_time(self, next_time: t.Optional[int]):
+    def _get_validated_next_time(self, next_time: int | None):
         current_time = self.current_time if self.current_time is not None else self.start
         if (
             next_time is None
@@ -149,8 +149,8 @@ class NoUpdateMessage(Message):
     pass
 
 
-Command = t.Union[NewTimeMessage, UpdateMessage, NoUpdateMessage, UpdateSeriesMessage, QuitMessage]
-Response = t.Union[RegistrationMessage, AcknowledgeMessage, ResultMessage, ErrorMessage]
+Command = NewTimeMessage | UpdateMessage | NoUpdateMessage | UpdateSeriesMessage | QuitMessage
+Response = RegistrationMessage | AcknowledgeMessage | ResultMessage | ErrorMessage
 
 
 @dataclass
@@ -169,14 +169,14 @@ class ConnectedModel:
     sub: dict | None = field(default_factory=dict)
 
     busy: bool = field(default=False, init=False)
-    next_time: t.Optional[int] = field(default=None, init=False)
+    next_time: int | None = field(default=None, init=False)
     failed: bool = field(default=False, init=False)
 
     pending_new_time: NewTimeMessage | None = field(default=None, init=False)
-    pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
+    pending_updates: list[UpdateMessage] = field(default_factory=list, init=False)
     pending_quit: QuitMessage | None = field(default=None, init=False)
 
-    fsm_config: FSMConfig | None = None
+    fsm_config: FSMConfig[ConnectedModel] | None = None
     fsm: FSM[ConnectedModel, Message] = field(init=False)
 
     def __post_init__(self):
@@ -197,10 +197,10 @@ class ConnectedModel:
         self.fsm.handle_event(event)
 
     def send_command(self, message: Command) -> None:
-        """Send a message and start the timer. Also, start waiting"""
+        """Send a command message to the model"""
         self.send(message)
 
-    def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
+    def log_invalid(self, message, valid_messages: t.Iterable[type[Message]]):
         self.logger.error(
             f"Received invalid message {message} from model '{self.name}'. Expected one of "
             + ", ".join(m.__name__ for m in valid_messages)
@@ -208,8 +208,8 @@ class ConnectedModel:
 
 
 class BaseModelState(State[ConnectedModel], ABC):
-    valid_commands: t.Tuple[t.Type[Command], ...] = ()
-    valid_responses: t.Tuple[t.Type[Response], ...] = ()
+    valid_commands: tuple[type[Command], ...] = ()
+    valid_responses: tuple[type[Response], ...] = ()
 
 
 class WaitingForMessage(BaseModelState):
@@ -304,14 +304,14 @@ class WaitingForMessage(BaseModelState):
         self.context.pending_quit = None
         self.context.pending_updates = []
 
-    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[t.Type[Response]]):
+    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[type[Response]]):
         self.context.failed = True
         self.context.log_invalid(msg, valid_messages)
         if not self.context.pending_quit:
             self.context.pending_quit = QuitMessage()
             self.context.pending_updates = []
 
-    def notify_subscribers(self, command: t.Optional[Command] = None):
+    def notify_subscribers(self, command: Command | None = None):
         command = command or NoUpdateMessage()
         for model in self.context.publishes_to:
             model.recv_event(command)
