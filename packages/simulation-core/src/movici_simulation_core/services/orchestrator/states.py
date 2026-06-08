@@ -48,7 +48,7 @@ class WaitForModels(OrchestratorState, ABC):
 
         if not (model := self.context.models.get(ident)):
             return
-        model.recv_event(msg)
+        self.context.recv_message(model, msg)
 
 
 class ModelsRegistration(WaitForModels):
@@ -77,7 +77,7 @@ class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Finalizing Phase")
-        self.context.models.queue_all(QuitMessage(due_to_failure=bool(self.context.failed)))
+        self.context.recv_for_all(QuitMessage(due_to_failure=bool(self.context.failed)))
 
 
 class FinalizingWaitForModels(WaitForModels):

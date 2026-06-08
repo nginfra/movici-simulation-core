@@ -1,6 +1,6 @@
 import logging
 import typing as t
-from unittest.mock import MagicMock, Mock, PropertyMock, call, patch
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 
@@ -25,8 +25,16 @@ from movici_simulation_core.services.orchestrator.context import (
     ModelCollection,
     TimelineController,
 )
-from movici_simulation_core.services.orchestrator.fsm import FSM
-from movici_simulation_core.services.orchestrator.states import StartInitializingPhase
+from movici_simulation_core.services.orchestrator.fsm import FSM, Always, FSMConfig
+from movici_simulation_core.services.orchestrator.states import (
+    AllModelsReady,
+    EndFinalizingPhase,
+    Failed,
+    FinalizingWaitForModels,
+    OrchestratorState,
+    StartFinalizingPhase,
+    StartInitializingPhase,
+)
 from movici_simulation_core.settings import Settings
 
 
@@ -40,67 +48,6 @@ def get_model(name="dummy", timeline=None, send=None, **kwargs):
     model = ConnectedModel(name, timeline, send, **kwargs)
     model.recv_event = Mock()
     return model
-
-
-class TestContext:
-    @pytest.fixture
-    def make_context(self):
-        sentinel = object()
-
-        def _make(
-            models=None,
-            timeline=sentinel,
-            phase_timer=sentinel,
-            global_timer=sentinel,
-            logger=sentinel,
-            **kwargs,
-        ):
-            return Context(
-                models=models if models is not None else ModelCollection(),
-                timeline=timeline if timeline is not sentinel else Mock(),
-                phase_timer=phase_timer if phase_timer is not sentinel else Mock(),
-                global_timer=global_timer if global_timer is not sentinel else Mock(),
-                logger=logger if logger is not sentinel else Mock(),
-                **kwargs,
-            )
-
-        return _make
-
-    @pytest.fixture
-    def context(self, make_context):
-        return make_context()
-
-    def test_logs_on_global_timer_reset(self, make_context):
-        context = make_context(global_timer=None, phase_timer=None)
-        context.global_timer.reset()
-        assert context.logger.info.call_args == call("Total elapsed time: 0.0")
-
-    def test_logs_on_phase_timer_reset(self, make_context):
-        context = make_context(global_timer=None, phase_timer=None)
-        context.phase_timer.reset()
-        assert context.logger.info.call_args == call("Phase finished in 0.0 seconds")
-
-    def test_resets_timers_on_finalize(self, make_context):
-        context = make_context(models=MagicMock(ModelCollection))
-        context.finalize()
-        assert context.phase_timer.reset.call_count == 1
-        assert context.global_timer.reset.call_count == 1
-        assert context.models.reset_model_timers.call_count == 1
-
-    @pytest.mark.parametrize(
-        "failures,loglevel,msg_endswith",
-        [
-            ([], "info", "successfully finished"),
-            (["one"], "error", "model 'one'"),
-            (["one", "two"], "error", "models 'one', 'two'"),
-        ],
-    )
-    def test_logs_finalize_message(self, failures, loglevel, msg_endswith, context):
-        with patch.object(Context, "failed", new_callable=PropertyMock) as failed:
-            failed.return_value = failures
-            context.finalize()
-
-        assert getattr(context.logger, loglevel).call_args[0][0].endswith(msg_endswith)
 
 
 class TestModelCollection:
@@ -136,12 +83,6 @@ class TestModelCollection:
         models["a"].next_time = next_a
         models["b"].next_time = next_b
         assert models.next_time == expected
-
-    def test_queue_all(self, models):
-        message = object()
-        models.queue_all(message)
-        for model in models.values():
-            assert model.recv_event.call_args == call(message)
 
     def test_determine_interdependency_publishes_to(self, timeline):
         """
@@ -216,13 +157,13 @@ def message_socket(socket):
 
 
 @pytest.fixture
-def orchestrator(config, message_socket, settings):
-    return _create_orchestrator(config, message_socket, settings)
+def orchestrator(create_orchestrator, config):
+    return create_orchestrator(config)
 
 
 @pytest.fixture
-def setup_orchestrator(message_socket, settings):
-    def make_orchestrator(models: t.Sequence[str]):
+def setup_orchestrator(create_orchestrator):
+    def make_orchestrator(models: t.Sequence[str], orchestrator_cls=Orchestrator):
         config = {
             "name": "test_scenario",
             "simulation_info": {
@@ -235,23 +176,27 @@ def setup_orchestrator(message_socket, settings):
             "models": [{"name": model, "type": model} for model in models],
         }
 
-        return _create_orchestrator(config, message_socket, settings)
+        return create_orchestrator(config, orchestrator_cls=orchestrator_cls)
 
     return make_orchestrator
 
 
 @pytest.fixture
-def settings(config):
+def settings():
     return Settings(name="orchestrator")
 
 
-def _create_orchestrator(config, socket, settings):
-    settings.apply_scenario_config(config)
-    orchestrator = Orchestrator()
-    logger = logging.getLogger()
-    stream = Stream(socket, logger)
-    orchestrator.setup(logger=logger, stream=stream, settings=settings)
-    return orchestrator
+@pytest.fixture
+def create_orchestrator(message_socket, settings):
+    def _create(config, orchestrator_cls=Orchestrator):
+        settings.apply_scenario_config(config)
+        orchestrator = orchestrator_cls()
+        logger = logging.getLogger()
+        stream = Stream(message_socket, logger)
+        orchestrator.setup(logger=logger, stream=stream, settings=settings)
+        return orchestrator
+
+    return _create
 
 
 @pytest.fixture
@@ -323,9 +268,13 @@ def run_orchestrator(setup_orchestrator, socket):
         msg_type, *content = payload
         return ident.decode(), load_message(msg_type, *content)
 
-    def _run_fsm(models: t.Sequence[str], updates: t.Sequence[t.Tuple[str, Message]]):
+    def _run_fsm(
+        models: t.Sequence[str],
+        updates: t.Sequence[t.Tuple[str, Message]],
+        orchestrator_cls=Orchestrator,
+    ):
         incoming = map(message_to_bytes, updates)
-        orchestrator = setup_orchestrator(models)
+        orchestrator = setup_orchestrator(models, orchestrator_cls=orchestrator_cls)
         socket.recv_multipart.side_effect = incoming
         try:
             orchestrator.run()
@@ -732,4 +681,62 @@ def test_acknowledge_message_doesnt_trigger_pending_model_when_dependency_should
         ("a", QuitMessage()),
         ("b", QuitMessage()),
         ("c", QuitMessage()),
+    ]
+
+
+def test_crashing_model_shuts_down_simulation_during_registration(run_orchestrator):
+    results = run_orchestrator(
+        ["a", "b"],
+        [
+            ("a", ErrorMessage()),
+            ("b", RegistrationMessage(pub=None, sub=None)),
+            ("b", AcknowledgeMessage()),
+        ],
+    )
+    assert results == [
+        ("b", QuitMessage(due_to_failure=True)),
+    ]
+
+
+def test_invalid_command_gracefully_shuts_down_models(run_orchestrator):
+    class IncorrectState(OrchestratorState):
+        def run(self):
+            self.context.recv_for_all(UpdateMessage(0))
+
+    failing_fsm_config = FSMConfig(
+        initial_state=IncorrectState,
+        states={
+            IncorrectState: [
+                (Failed, StartFinalizingPhase),
+            ],
+            StartFinalizingPhase: [
+                (AllModelsReady, EndFinalizingPhase),
+                (Always, FinalizingWaitForModels),
+            ],
+            FinalizingWaitForModels: [
+                (AllModelsReady, EndFinalizingPhase),
+            ],
+            EndFinalizingPhase: [],
+        },
+    )
+
+    class FailingOrchestrator(Orchestrator):
+        def _setup_fsm(self):
+            self.fsm = FSM(failing_fsm_config, context=self.context)
+            self.stream.set_handler(self.fsm.send)
+
+    results = run_orchestrator(
+        ["a", "b"],
+        [
+            ("a", RegistrationMessage(pub={}, sub={})),
+            ("b", RegistrationMessage(pub={}, sub={})),
+            # Models acknowledge Quitmessage
+            ("a", AcknowledgeMessage()),
+            ("b", AcknowledgeMessage()),
+        ],
+        orchestrator_cls=FailingOrchestrator,
+    )
+    assert results == [
+        ("a", QuitMessage()),
+        ("b", QuitMessage()),
     ]

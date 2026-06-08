@@ -18,6 +18,10 @@ class SimulationExit(OrchestratorException):
     pass
 
 
+class InvalidCommand(SimulationException):
+    pass
+
+
 class NotReady(SimulationException):
     pass
 

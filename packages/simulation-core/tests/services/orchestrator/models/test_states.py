@@ -2,6 +2,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
+from movici_simulation_core.exceptions import InvalidCommand
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ErrorMessage,
@@ -97,7 +98,7 @@ class TestWaitingForMessage:
         assert context.failed
 
     def test_invalid_command_raises(self, send_message):
-        with pytest.raises(ValueError):
+        with pytest.raises(InvalidCommand):
             send_message(NewTimeMessage(1))
 
 

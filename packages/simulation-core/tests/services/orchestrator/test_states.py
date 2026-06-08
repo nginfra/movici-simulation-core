@@ -114,8 +114,9 @@ class TestStartFinalizingPhase(BaseTestState):
         assert context.phase_timer.restart.call_count == 1
 
     def test_replaces_queue_with_quit_message(self, state, context):
+        context.recv_for_all = Mock()
         state.run()
-        assert type(context.models.queue_all.call_args[0][0]) is QuitMessage
+        assert type(context.recv_for_all.call_args[0][0]) is QuitMessage
 
 
 class TestEndFinalizingPhase(BaseTestState):

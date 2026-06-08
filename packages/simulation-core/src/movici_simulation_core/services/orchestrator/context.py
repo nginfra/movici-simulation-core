@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 from itertools import product
 
+from movici_simulation_core.exceptions import InvalidCommand
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ErrorMessage,
@@ -32,6 +33,7 @@ class Context:
     global_timer: Stopwatch = field(default=None)
     phase_timer: Stopwatch = field(default=None)
     logger: logging.Logger = field(default_factory=logging.getLogger)
+    orchestrator_failed: bool = False
 
     def __post_init__(self):
         self.global_timer = self.global_timer or ReportingStopwatch(
@@ -43,7 +45,7 @@ class Context:
 
     @property
     def failed(self):
-        return self.models.failed
+        return self.orchestrator_failed or self.models.failed
 
     def log_new_phase(self, phase: str):
         self.logger.info(f"Entering {phase}")
@@ -58,11 +60,23 @@ class Context:
 
         if next_time != self.timeline.current_time:
             self.timeline.current_time = next_time
-            self.models.queue_all(NewTimeMessage(next_time))
+            self.recv_for_all(NewTimeMessage(next_time))
 
         for model in self.models.values():
             if model.next_time == next_time:
-                model.recv_event(UpdateMessage(timestamp=next_time))
+                self.recv_message(model, UpdateMessage(timestamp=next_time))
+
+    def recv_for_all(self, message: Message):
+        """Receive a Message for all models"""
+        for model in self.models.values():
+            self.recv_message(model, message)
+
+    def recv_message(self, model: ConnectedModel, message: Message):
+        try:
+            model.recv_event(message)
+        except InvalidCommand:
+            self.logger.exception("Error while sending command")
+            self.orchestrator_failed = True
 
     def log_new_time(self):
         if self.models.next_time != self.timeline.current_time:
@@ -213,7 +227,7 @@ class WaitingForMessage(BaseModelState):
 
     def process_command(self, msg: Command):
         if not isinstance(msg, self.valid_commands):
-            raise ValueError(
+            raise InvalidCommand(
                 f"Received invalid command {msg} for model '{self.context.name}'. Expected one of "
                 + ", ".join(m.__name__ for m in self.valid_commands)
             )
@@ -430,11 +444,6 @@ class ModelCollection(dict[bytes, ConnectedModel]):
     @property
     def failed(self):
         return [model.name for model in self.values() if model.failed]
-
-    def queue_all(self, message: Message):
-        """add a message to the queue of all models"""
-        for model in self.values():
-            model.recv_event(message)
 
     def determine_interdependency(self):
         """calculate the subscribers for every model based on the pub/sub mask."""
