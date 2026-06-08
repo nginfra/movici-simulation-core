@@ -93,7 +93,7 @@ class Orchestrator(Service):
 
     def _setup_fsm(self):
         self.fsm = FSM(FSM_CONFIG, context=self.context)
-        self.stream.set_handler(self.fsm.send)
+        self.stream.set_handler(self.fsm.handle_event)
 
     def _get_connected_model(self, identifier: str):
         model = ConnectedModel(

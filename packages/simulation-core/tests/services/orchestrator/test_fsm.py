@@ -8,10 +8,13 @@ from movici_simulation_core.services.orchestrator.fsm import (
     FSM,
     Always,
     Condition,
-    Event,
     FSMConfig,
     State,
 )
+
+
+class Event:
+    pass
 
 
 @dataclass
@@ -37,10 +40,10 @@ def reset_mock():
 
 
 class EventState(State[DummyContext]):
+    requires_event = True
     is_final = False
 
-    def run(self):
-        event = yield
+    def handle_event(self, event):
         self.context.states.append(type(self))
         self.context.events.append(event)
         if self.is_final:
@@ -182,7 +185,7 @@ def test_evented_state_handles_event():
         raise_on_done=False,
     )
     fsm.start()
-    fsm.send(event)
+    fsm.handle_event(event)
     assert fsm.context.events == [event]
 
 
@@ -245,8 +248,8 @@ def test_fsm_does_more_complex_transitions():
     fsm.start()
     one = Event()
     two = Event()
-    fsm.send(one)
-    fsm.send(two)
+    fsm.handle_event(one)
+    fsm.handle_event(two)
 
     assert fsm.context.states == [StateA, StateB, StateA, StateC]
     assert fsm.context.events == [one, two]
@@ -266,7 +269,7 @@ def test_fsm_raises_when_trying_to_send_when_done():
     )
     fsm.start()
     with pytest.raises(FSMDone):
-        fsm.send(Event())
+        fsm.handle_event(Event())
 
 
 def test_fsm_raises_when_trying_to_start_twice():
@@ -292,7 +295,7 @@ def test_fsm_raises_when_trying_to_start_twice():
     with pytest.raises(FSMStarted):
         fsm.start()
 
-    fsm.send(Event())
+    fsm.handle_event(Event())
 
     with pytest.raises(FSMDone):
         fsm.start()

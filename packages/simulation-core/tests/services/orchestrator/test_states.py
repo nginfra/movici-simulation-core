@@ -5,7 +5,7 @@ import pytest
 from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.messages import QuitMessage
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
-from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError, send_silent
+from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError
 from movici_simulation_core.services.orchestrator.states import (
     EndFinalizingPhase,
     NewTime,
@@ -56,14 +56,11 @@ class TestWaitForModels(BaseTestState):
 
     @pytest.fixture
     def send_message(self, state, event):
-        runner = state.run()
-        send_silent(runner, None)
 
         def _send(name=None, msg=None):
             msg = msg or event
             name = name or "model_a"
-            send_silent(runner, (name, msg))
-            return runner
+            state.handle_event((name, msg))
 
         return _send
 

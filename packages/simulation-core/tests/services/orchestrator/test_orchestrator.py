@@ -723,7 +723,7 @@ def test_invalid_command_gracefully_shuts_down_models(run_orchestrator):
     class FailingOrchestrator(Orchestrator):
         def _setup_fsm(self):
             self.fsm = FSM(failing_fsm_config, context=self.context)
-            self.stream.set_handler(self.fsm.send)
+            self.stream.set_handler(self.fsm.handle_event)
 
     results = run_orchestrator(
         ["a", "b"],
@@ -737,6 +737,6 @@ def test_invalid_command_gracefully_shuts_down_models(run_orchestrator):
         orchestrator_cls=FailingOrchestrator,
     )
     assert results == [
-        ("a", QuitMessage()),
-        ("b", QuitMessage()),
+        ("a", QuitMessage(due_to_failure=True)),
+        ("b", QuitMessage(due_to_failure=True)),
     ]

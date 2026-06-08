@@ -45,7 +45,9 @@ class Context:
 
     @property
     def failed(self):
-        return self.orchestrator_failed or self.models.failed
+        if self.orchestrator_failed:
+            return ["orchestrator", *self.models.failed]
+        return self.models.failed
 
     def log_new_phase(self, phase: str):
         self.logger.info(f"Entering {phase}")
@@ -105,11 +107,11 @@ class Context:
             self.logger.info("Simulation successfully finished")
         elif len(self.failed) == 1:
             self.logger.error(
-                f"Simulation unexpectedly ended due to a failure of model '{self.failed[0]}'"
+                f"Simulation unexpectedly ended due to a failure of component '{self.failed[0]}'"
             )
         else:
             self.logger.error(
-                "Simulation unexpectedly ended due to a failure of models "
+                "Simulation unexpectedly ended due to a failure of components "
                 + ", ".join(f"'{model}'" for model in self.failed)
             )
 
@@ -192,7 +194,7 @@ class ConnectedModel:
         self.fsm.start()
 
     def recv_event(self, event: Message):
-        self.fsm.send(event)
+        self.fsm.handle_event(event)
 
     def send_command(self, message: Command) -> None:
         """Send a message and start the timer. Also, start waiting"""
@@ -211,9 +213,10 @@ class BaseModelState(State[ConnectedModel], ABC):
 
 
 class WaitingForMessage(BaseModelState):
-    def run(self):
-        msg = yield
-        self.recv_message(msg)
+    requires_event = True
+
+    def handle_event(self, event: Message):
+        self.recv_message(event)
 
     def recv_message(self, msg: Message):
         # Here we make use of the fact that for a typing.Union object, __args__ contains the
@@ -425,8 +428,10 @@ class Finalizing(Busy):
 class Done(BaseModelState):
     """The model is either done or failed, ignore any further messages"""
 
-    def run(self):
-        yield
+    requires_event = True
+
+    def handle_event(self, event):
+        return
 
 
 class ModelCollection(dict[bytes, ConnectedModel]):

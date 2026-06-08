@@ -102,8 +102,8 @@ class TestContext:
         "failures,loglevel,msg_endswith",
         [
             ([], "info", "successfully finished"),
-            (["one"], "error", "model 'one'"),
-            (["one", "two"], "error", "models 'one', 'two'"),
+            (["one"], "error", "component 'one'"),
+            (["one", "two"], "error", "components 'one', 'two'"),
         ],
     )
     def test_logs_finalize_message(self, failures, loglevel, msg_endswith, context):
@@ -125,7 +125,6 @@ class TestContext:
         ],
     )
     def test_queue_for_next_time(self, next_a, next_b, exp_a, exp_b, make_context):
-
         context = make_context(
             timeline=TimelineController(start=0, end=20, current_time=0),
         )

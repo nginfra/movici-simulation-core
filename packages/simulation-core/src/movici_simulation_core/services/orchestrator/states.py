@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.messages import ModelMessage, QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
     Condition,
@@ -43,8 +43,10 @@ class StartInitializingPhase(OrchestratorState):
 
 
 class WaitForModels(OrchestratorState, ABC):
-    def run(self):
-        ident, msg = yield
+    requires_event = True
+
+    def handle_event(self, event: ModelMessage):
+        ident, msg = event
 
         if not (model := self.context.models.get(ident)):
             return

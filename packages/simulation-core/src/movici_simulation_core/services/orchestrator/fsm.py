@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
-import functools
-import inspect
 import itertools
 import typing as t
 from abc import ABC, abstractmethod
@@ -11,30 +10,6 @@ from movici_simulation_core.exceptions import FSMDone, FSMError, FSMException, F
 
 T = t.TypeVar("T")
 E = t.TypeVar("E")
-
-
-def send_silent(coro: t.Generator, value: t.Any):
-    try:
-        coro.send(value)
-    except StopIteration:
-        pass
-
-
-def fsm_conditional_raise(attribute: str, exc: t.Type[Exception]):
-    def _decorator(func):
-        @functools.wraps(func)
-        def wrapper(fsm: FSM, *args, **kwargs):
-            if getattr(fsm, attribute):
-                raise exc()
-            return func(fsm, *args, **kwargs)
-
-        return wrapper
-
-    return _decorator
-
-
-not_started = fsm_conditional_raise(attribute="started", exc=FSMStarted)
-not_done = fsm_conditional_raise(attribute="done", exc=FSMDone)
 
 
 @dataclasses.dataclass
@@ -69,7 +44,10 @@ class FSMConfig(t.Generic[T]):
 
 
 class FSM(t.Generic[T, E]):
+    state: State[T]
+
     def __init__(self, config: FSMConfig[T], context: T = None, raise_on_done=True):
+
         self.context = context
         self.config = config
         self.state = config.initial_state(context=self.context)
@@ -79,22 +57,32 @@ class FSM(t.Generic[T, E]):
         self.failure = False
         self.raise_on_done = raise_on_done
 
-    @not_done
-    @not_started
     def start(self):
+        self.ensure_not_done()
+        self.ensure_not_started()
         self.started = True
-        self.runner = self._run()
-        send_silent(self.runner, None)
-
-    def _run(self):
-        try:
+        with self.catch_fsmexceptions():
             self.state.on_enter()
-            while True:
-                if inspect.isgeneratorfunction(self.state.run):
-                    yield from self.state.run()
-                else:
-                    self.state.run()
-                self.transition()
+            self.run_until_event_required()
+
+    def handle_event(self, event: E):
+        self.ensure_not_done()
+        assert self.state.requires_event
+
+        with self.catch_fsmexceptions():
+            self.state.handle_event(event)
+            self.state = self.transition()
+            self.run_until_event_required()
+
+    def run_until_event_required(self):
+        while not self.state.requires_event:
+            self.state.run()
+            self.state = self.transition()
+
+    @contextlib.contextmanager
+    def catch_fsmexceptions(self):
+        try:
+            yield
         except FSMException as e:
             self.done = True
             if isinstance(e, FSMError):
@@ -103,15 +91,19 @@ class FSM(t.Generic[T, E]):
             if self.raise_on_done:
                 raise
 
-    @not_done
-    def send(self, event: E):
-        assert self.runner is not None
-        send_silent(self.runner, event)
-
     def transition(self):
         if new_state := next_state(self.context, self.config.states.get(type(self.state), [])):
             self.state = new_state(self.context)
             self.state.on_enter()
+        return self.state
+
+    def ensure_not_started(self):
+        if self.started:
+            raise FSMStarted()
+
+    def ensure_not_done(self):
+        if self.done:
+            raise FSMDone()
 
 
 def next_state(context, transitions: TransitionsT):
@@ -121,23 +113,20 @@ def next_state(context, transitions: TransitionsT):
     return None
 
 
-class Event:
-    pass
-
-
 class State(ABC, t.Generic[T]):
+    requires_event = False
+
     def __init__(self, context: T):
         self.context = context
 
-    def on_enter(self):
-        pass
-
-    @abstractmethod
     def run(self):
         raise NotImplementedError
 
-    def transitions(self) -> TransitionsT:
-        return []
+    def handle_event(self, event: t.Any):
+        raise NotImplementedError
+
+    def on_enter(self):
+        pass
 
 
 class Condition(ABC, t.Generic[T]):

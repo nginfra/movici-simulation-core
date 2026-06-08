@@ -50,14 +50,8 @@ def state(state_cls, context):
 
 @pytest.fixture
 def send_message(state, context):
-
     def _send(msg: Message):
-        runner = state.run()
-        runner.send(None)
-        try:
-            runner.send(msg)
-        except StopIteration:
-            pass
+        state.handle_event(msg)
 
     return _send
 
@@ -117,12 +111,7 @@ class TestBusyTransitions:
     @pytest.fixture
     def send_message(self, state):
         def _send(msg: Message):
-            runner = state.run()
-            runner.send(None)
-            try:
-                runner.send(msg)
-            except StopIteration:
-                pass
+            state.handle_event(msg)
 
         return _send
 
