@@ -9,7 +9,11 @@ from movici_simulation_core.core.attribute import PUBLISH
 from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.state import TrackedState
 from movici_urban_drainage_model.model import Model
-from movici_urban_drainage_model.simulation_wrapper import IdMapper, SimulationWrapper
+from movici_urban_drainage_model.simulation_wrapper import (
+    IdMapper,
+    SimulationWrapper,
+    branch_at,
+)
 
 DS = "urban_drainage"
 
@@ -490,3 +494,67 @@ class TestMultiRainGage:
         assert dataset.subcatchments.runoff.array[0] > 0.0
         assert dataset.subcatchments.runoff.array[1] == pytest.approx(0.0, abs=1e-9)
         wrapper.close()
+
+
+def _filling_storage_network():
+    """Storage filled by a constant inflow, drained by a small orifice."""
+    return _one_link_network(
+        "drainage_orifice_entities",
+        {
+            "urban_drainage.orifice_type": [1],
+            "urban_drainage.orifice_shape": [1],
+            "urban_drainage.cross_section_geometry": [[0.2, 0.2, 0.0, 0.0]],
+            "urban_drainage.discharge_coefficient": [0.65],
+            "urban_drainage.crest_height": [0.0],
+        },
+        inflow=0.3,
+    )
+
+
+class TestHotstart:
+    def test_checkpoint_branch_restores_state(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper(_filling_storage_network())
+        for target in (300, 600):
+            wrapper.apply_controls()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        volume = dataset.storage.stored_volume.array[0]
+        depth = dataset.storage.water_depth.array[0]
+        assert volume > 0.0
+
+        # fork the run at t=600 (this closes `wrapper`)
+        branch = branch_at(wrapper, dataset, at_seconds=600)
+        try:
+            # the resumed clock is offset back to the checkpoint moment
+            assert branch.elapsed_seconds() == pytest.approx(600, abs=30)
+            # the engine state is restored exactly at the checkpoint instant
+            branch.write_results()
+            assert dataset.storage.stored_volume.array[0] == pytest.approx(volume, rel=1e-4)
+            assert dataset.storage.water_depth.array[0] == pytest.approx(depth, rel=1e-4)
+            # and it can keep stepping forward from there
+            branch.apply_controls()
+            branch.advance_to(900)
+            assert branch.elapsed_seconds() >= 870
+        finally:
+            branch.close()
+
+    def test_branch_responds_to_different_control(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper(_filling_storage_network())
+        for target in (300, 600):
+            wrapper.apply_controls()
+            wrapper.advance_to(target)
+
+        branch = branch_at(wrapper, dataset, at_seconds=600)
+        try:
+            # close the (sole) orifice on the branch and run on
+            if not dataset.orifices.target_setting.has_data():
+                dataset.orifices.target_setting.initialize(len(dataset.orifices))
+            dataset.orifices.target_setting.array[:] = [0.0]
+            branch.apply_controls()
+            branch.advance_to(1200)
+            branch.write_results()
+            # a closed orifice conveys no flow - the branch diverged from the
+            # open-orifice trajectory it was forked from
+            assert dataset.orifices.flow.array[0] < 1e-6
+        finally:
+            branch.close()

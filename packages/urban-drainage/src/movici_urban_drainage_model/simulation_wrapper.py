@@ -767,6 +767,11 @@ class SimulationWrapper:
         self._curve_counter = 0
         self._curve_lines: t.List[str] = []
         self._options: t.Dict[str, t.Any] = {}
+        # Offset (seconds) added to the raw SWMM clock so a simulation resumed
+        # from a hotstart keeps reporting Movici moments. Temp hotstart files
+        # created by checkpoint() are tracked here for cleanup in close().
+        self._time_offset: float = 0.0
+        self._hotstart_files: t.List[str] = []
 
     # -- construction -------------------------------------------------------
 
@@ -784,8 +789,20 @@ class SimulationWrapper:
         """Store simulation options used when synthesising ``[OPTIONS]``."""
         self._options = dict(options or {})
 
-    def initialize(self, dataset: UrbanDrainageNetwork) -> None:
-        """Build the processors, synthesise the ``.inp`` and open the sim."""
+    def initialize(
+        self,
+        dataset: UrbanDrainageNetwork,
+        hotstart_file: t.Optional[str] = None,
+        start_offset: float = 0.0,
+    ) -> None:
+        """Build the processors, synthesise the ``.inp`` and open the sim.
+
+        :param hotstart_file: optional SWMM hotstart (``.hsf``) file to resume the
+            simulation state from (see :meth:`checkpoint`).
+        :param start_offset: seconds to add to the simulation clock, so a run
+            resumed from a checkpoint taken at ``t`` keeps reporting Movici moments
+            relative to ``t`` rather than restarting at zero.
+        """
         self.processors = {
             attr: cls(self, getattr(dataset, attr)) for attr, cls in _PROCESSOR_SPECS
         }
@@ -795,11 +812,35 @@ class SimulationWrapper:
             fh.write(inp_text)
 
         self.sim = Simulation(self._inp_path)
+        if hotstart_file is not None:
+            # must precede start(): seeds the engine state from the snapshot
+            self.sim.use_hotstart(hotstart_file)
         self.sim.start()
+        self._time_offset = float(start_offset)
         self.nodes = Nodes(self.sim)
         self.links = Links(self.sim)
         self.subcatchments = Subcatchments(self.sim)
         self.raingages = RainGages(self.sim)
+
+    def checkpoint(self, path: t.Optional[str] = None) -> str:
+        """Snapshot the current simulation state to a hotstart file.
+
+        The returned path can be passed as ``hotstart_file`` to a later
+        :meth:`initialize` (or :func:`branch_at`) to resume from this instant.
+        May be called at any point during the run.
+
+        :param path: target ``.hsf`` path; a temporary file (cleaned up in
+            :meth:`close`) is created when omitted.
+        :return: the hotstart file path.
+        """
+        if self.sim is None:
+            raise RuntimeError("Cannot checkpoint before initialize()")
+        if path is None:
+            fd, path = tempfile.mkstemp(suffix=".hsf", prefix="movici_swmm_ckpt_")
+            os.close(fd)
+            self._hotstart_files.append(path)
+        self.sim.save_hotstart(path)
+        return path
 
     def _build_inp(self) -> str:
         builder = InpBuilder()
@@ -841,7 +882,8 @@ class SimulationWrapper:
 
     def elapsed_seconds(self) -> float:
         assert self.sim is not None
-        return (self.sim.current_time - self.sim.start_time).total_seconds()
+        raw = (self.sim.current_time - self.sim.start_time).total_seconds()
+        return self._time_offset + raw
 
     def apply_controls(self) -> None:
         """Apply all runtime control inputs to the live simulation objects."""
@@ -901,3 +943,40 @@ class SimulationWrapper:
             except OSError:
                 pass
             self._inp_path = None
+        for hsf in self._hotstart_files:
+            if os.path.exists(hsf):
+                try:
+                    os.remove(hsf)
+                except OSError:
+                    pass
+        self._hotstart_files = []
+
+
+def branch_at(
+    wrapper: SimulationWrapper,
+    dataset: UrbanDrainageNetwork,
+    at_seconds: float,
+) -> SimulationWrapper:
+    """Fork a wrapper at ``at_seconds`` into a fresh wrapper resuming from there.
+
+    Snapshots the live simulation, tears it down (EPA-SWMM allows only one open
+    simulation per process) and opens a new wrapper seeded from the snapshot with
+    its clock offset to ``at_seconds`` - ready to re-run forward from that instant,
+    e.g. with different control inputs. The new wrapper reuses ``wrapper``'s
+    options and logger.
+
+    :param wrapper: the live wrapper to fork (closed by this call).
+    :param dataset: the same dataset the wrapper was initialised with.
+    :param at_seconds: the Movici moment (elapsed seconds) to resume from.
+    :return: a new, started :class:`SimulationWrapper` positioned at ``at_seconds``.
+    """
+    checkpoint = wrapper.checkpoint()
+    new = SimulationWrapper(logger=wrapper.logger)
+    new.configure_options(wrapper._options)
+    # hand ownership of the checkpoint temp file to the new wrapper for cleanup
+    if checkpoint in wrapper._hotstart_files:
+        wrapper._hotstart_files.remove(checkpoint)
+        new._hotstart_files.append(checkpoint)
+    wrapper.close()  # only one simulation may be open per process
+    new.initialize(dataset, hotstart_file=checkpoint, start_offset=at_seconds)
+    return new
