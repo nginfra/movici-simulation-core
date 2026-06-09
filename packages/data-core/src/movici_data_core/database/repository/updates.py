@@ -116,6 +116,7 @@ class UpdateRepository(SQLResourceRepository):
                     iteration=obj.iteration,
                     model_type_id=model_type_id,
                     model_name=obj.model_name,
+                    bounding_box=obj.bounding_box,
                     dataset_id=dataset.id,
                 )
                 .returning(db.Update.id)

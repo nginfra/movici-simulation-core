@@ -7,8 +7,10 @@ from uuid import UUID
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
+from movici_data_core import bounding_box
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
+    BoundingBox,
     Scenario,
     ScenarioDataset,
     ScenarioModel,
@@ -21,8 +23,6 @@ from movici_simulation_core.validate import MoviciDataRefInfo
 from .common import SQLResourceRepository
 
 
-# TODO: implement a `get_bounding_box` function that looks up the bounding boxes for all scnenario
-# datasets and updates and combines it into one. Question: what if the datasets have different CRS?
 @dataclasses.dataclass
 class ScenarioRepository(SQLResourceRepository):
     """A"""
@@ -93,7 +93,8 @@ class ScenarioRepository(SQLResourceRepository):
         )
         if record is None:
             return None
-        return self._load_full_scenario(record)
+        bounding_box = await self._get_bounding_box(record.id)
+        return self._load_full_scenario(record, bounding_box=bounding_box)
 
     async def get(self) -> Scenario | None:
         """Get the active scenario from the database
@@ -104,7 +105,24 @@ class ScenarioRepository(SQLResourceRepository):
         record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
         if record is None:
             return None
-        return self._load_full_scenario(record)
+        bounding_box = await self._get_bounding_box(record.id)
+        return self._load_full_scenario(record, bounding_box=bounding_box)
+
+    async def _get_bounding_box(self, scenario_id: UUID):
+        bboxs_from_datasets = await self.session.scalars(
+            select(db.Dataset.bounding_box)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == scenario_id)
+        )
+        bboxs_from_updates = await self.session.scalars(
+            select(db.Update.bounding_box)
+            .where(db.Update.scenario_id == scenario_id)
+            .where(db.Update.bounding_box.isnot(None))
+        )
+        return bounding_box.calculate_new_bounding_box(
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_datasets),
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
+        )
 
     async def delete(self):
         """Delete de active scenario, if it exists"""
@@ -249,9 +267,10 @@ class ScenarioRepository(SQLResourceRepository):
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
     @classmethod
-    def _load_full_scenario(cls, scenario: db.Scenario) -> Scenario:
+    def _load_full_scenario(cls, scenario: db.Scenario, bounding_box: BoundingBox) -> Scenario:
         return dataclasses.replace(
             scenario.to_domain(),
+            bounding_box=bounding_box,
             datasets=[
                 cls._load_scenario_dataset(ds)
                 for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)

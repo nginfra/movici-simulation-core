@@ -171,6 +171,12 @@ class BoundingBox(t.NamedTuple):
         """
         return BoundingBox(None, None, None, None)
 
+    @classmethod
+    def from_tuple_or_none(
+        cls, obj: tuple[float | None, float | None, float | None, float | None] | None
+    ):
+        return BoundingBox(*obj) if obj else BoundingBox.empty()
+
     def as_tuple_or_none(self):
         if self.min_x is None or self.min_y is None or self.max_x is None or self.max_y is None:
             return None
@@ -325,6 +331,8 @@ class Update:
         scenario must have a unique (timestamp, iteration) combination
     :param model_name: the name of the model in the scenario that produced the update
     :param model_type: the type of the model in the scenario that produced the update
+    :param bounding_box: The bounding_box of the update, in case it contains geospatial attributes.
+        the values should be in the same CRS as its dataset
     :param id: the update ``UUID`` in the database (if any)
     :param created_at: the datetime the update was created
     :param data: the update data payload
@@ -337,6 +345,7 @@ class Update:
     # TODO: use ScenarioModel here
     model_name: str
     model_type: str | None = None
+    bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
 
     id: UUID | None = None
     created_at: datetime.datetime | None = None

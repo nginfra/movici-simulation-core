@@ -1,4 +1,5 @@
 import dataclasses
+import typing as t
 import uuid
 from io import BytesIO
 from unittest.mock import patch
@@ -1038,6 +1039,42 @@ class TestScenarioRepository:
 
         path, _ = next(iter(e.value.iter_messages()))
         assert path == "models.0"
+
+    async def test_scenario_bounding_box_from_datasets_and_updates(
+        self, repository: SQLAlchemyRepository, a_scenario: Scenario, a_dataset
+    ):
+        repository = repository.for_scenario(t.cast(uuid.UUID, a_scenario.id))
+        await repository.datasets.update_with_data(
+            a_dataset.id,
+            dataclasses.replace(a_dataset, bounding_box=BoundingBox(1, 1, 2, 2), data={}),
+        )
+        update = Update(
+            dataset=ScenarioDataset(
+                a_scenario.datasets[0]["name"], a_scenario.datasets[0]["type"]
+            ),
+            timestamp=0,
+            iteration=0,
+            model_name=a_scenario.models[0]["name"],
+            model_type=a_scenario.models[0]["type"],
+            data={},
+        )
+        await repository.updates.create(
+            dataclasses.replace(update, iteration=1, bounding_box=BoundingBox(-1, 2, 2, 2))
+        )
+        await repository.updates.create(
+            # update without bounding box
+            dataclasses.replace(update, iteration=2)
+        )
+        await repository.updates.create(
+            dataclasses.replace(update, iteration=3, bounding_box=BoundingBox(0, 2, 3, 4))
+        )
+        scenario_by_id = await repository.scenarios.get()
+        assert scenario_by_id is not None
+        assert scenario_by_id.bounding_box == BoundingBox(-1, 1, 3, 4)
+
+        scenario_by_name = await repository.scenarios.get_by_name(a_scenario.name)
+        assert scenario_by_name is not None
+        assert scenario_by_name.bounding_box == BoundingBox(-1, 1, 3, 4)
 
 
 class TestUpdateRepository:

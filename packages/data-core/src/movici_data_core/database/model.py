@@ -204,9 +204,7 @@ class Dataset(Base):
             workspace=self.workspace.to_domain(),
             general=self.general,
             epsg_code=self.epsg_code,
-            bounding_box=(
-                BoundingBox(*self.bounding_box) if self.bounding_box else BoundingBox.empty()
-            ),
+            bounding_box=BoundingBox.from_tuple_or_none(self.bounding_box),
             created_at=self.created_at,
             updated_at=self.updated_at,
             has_data=has_raw_data or has_attributes,
@@ -459,6 +457,9 @@ class Update(Base):
 
     timestamp: Mapped[int]
     iteration: Mapped[int]
+    bounding_box: Mapped[tuple[float, float, float, float] | None] = mapped_column(
+        JSONTuple(length=4), default=None
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
 
     scenario: Mapped[Scenario] = relationship()
@@ -475,6 +476,7 @@ class Update(Base):
             model_type=self.model_type.name,
             timestamp=self.timestamp,
             iteration=self.iteration,
+            bounding_box=BoundingBox.from_tuple_or_none(self.bounding_box),
             created_at=self.created_at,
         )
 
