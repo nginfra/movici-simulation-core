@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import dataclasses
 import datetime
 import enum
@@ -28,7 +29,6 @@ class DatasetFormat(str, enum.Enum):
     ENTITY_BASED = "entity_based"
     UNSTRUCTURED = "unstructured"
     BINARY = "binary"
-    UNKNOWN = "unknown"
 
 
 # TODO: implement proper usage of scenariostatus. Invalid/Ready is managed internally based on the
@@ -84,9 +84,14 @@ class DatasetType:
     """
 
     name: str
-    format: DatasetFormat
+    format: DatasetFormat | None = None
     mimetype: str | None = None
     id: UUID | None = dataclasses.field(compare=False, default=None)
+
+    def is_equivalent(self, other: DatasetType):
+        if self.format is None or other.format is None:
+            return self.name == other.name
+        return self == other
 
 
 @dataclasses.dataclass
@@ -149,7 +154,7 @@ class ModelType:
     """
 
     name: str
-    jsonschema: dict
+    jsonschema: dict | None = dataclasses.field(compare=False, default=None)
 
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
@@ -228,15 +233,15 @@ class Scenario:
     :param workspace: The workspace the scenario belongs to (if any)
     :param created_at: the datetime the scenario was created
     :param updated_at: the datetime the scenario was updated
-    :param models: a list of model config dicts for this scenario
-    :param datasets: a list of datasets for this scenario
+    :param models: a list of ``ScenarioModel``\s for this scenario
+    :param datasets: a list of ``ScenarioDataset``\s for this scenario
     """
 
     name: str
     display_name: str
     description: str
 
-    epsg_code: int
+    epsg_code: int | None = None
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     simulation_info: SimulationInfo = dataclasses.field(default_factory=SimulationInfo.default)
     status: ScenarioStatus = ScenarioStatus.READY
@@ -245,9 +250,8 @@ class Scenario:
     workspace: Workspace | None = None
     created_at: datetime.datetime | None = None
     updated_at: datetime.datetime | None = None
-    # TODO: Use ScenarioModel and ScenarioDataset here
-    models: list[dict] = dataclasses.field(default_factory=list)
-    datasets: list[dict] = dataclasses.field(default_factory=list)
+    models: list[ScenarioModel] = dataclasses.field(default_factory=list)
+    datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
     has_updates: bool = False
 
 
@@ -261,8 +265,12 @@ class ScenarioDataset:
     """
 
     name: str
-    type: str
+    dataset_type: DatasetType | None = dataclasses.field(default=None)
     id: UUID | None = dataclasses.field(compare=False, default=None)
+
+    @classmethod
+    def from_dataset(cls, dataset: Dataset):
+        return ScenarioDataset(name=dataset.name, dataset_type=dataset.dataset_type, id=dataset.id)
 
 
 @dataclasses.dataclass
@@ -280,6 +288,22 @@ class ScenarioModel:
     type: ModelType
     config: dict = dataclasses.field(default_factory=dict)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
+
+    def with_populated_config(self):
+        return dataclasses.replace(self, config=self._populated_config())
+
+    def as_dict(self):
+        result = self._populated_config()
+        result["name"] = self.name
+        result["type"] = self.type.name
+        return result
+
+    def _populated_config(self):
+        result = copy.deepcopy(self.config)
+
+        for ref in self.references:
+            ref.set_value(result)
+        return result
 
 
 DatasetData = dict | bytes | t.BinaryIO | pathlib.Path
@@ -321,6 +345,22 @@ class Dataset:
 
 
 @dataclasses.dataclass
+class UpdateModel:
+    """A short form of a ``ScenarioModel`` to be used by ``Update``. Contains only the name and
+    the type, and the type is optional
+    :param name: the model name from the scenario
+    :param type: Optional ``ModelType`` from the scenario.
+    """
+
+    name: str
+    type: ModelType | None = None
+
+    @classmethod
+    def from_scenario_model(cls, scenario_model: ScenarioModel):
+        return UpdateModel(scenario_model.name, type=scenario_model.type)
+
+
+@dataclasses.dataclass
 class Update:
     """An Update is a change to the :term:`World State` in a simulation. An update is always
     produced by a model at a certain timestamp
@@ -342,9 +382,7 @@ class Update:
     timestamp: int
     iteration: int
 
-    # TODO: use ScenarioModel here
-    model_name: str
-    model_type: str | None = None
+    model: UpdateModel
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
 
     id: UUID | None = None

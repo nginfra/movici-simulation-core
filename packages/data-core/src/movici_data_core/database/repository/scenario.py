@@ -12,13 +12,11 @@ from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
     BoundingBox,
     Scenario,
-    ScenarioDataset,
     ScenarioModel,
     ScenarioStatus,
 )
 from movici_data_core.exceptions import InvalidAction, MoviciValidationError, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
-from movici_simulation_core.validate import MoviciDataRefInfo
 
 from .common import SQLResourceRepository
 
@@ -84,6 +82,10 @@ class ScenarioRepository(SQLResourceRepository):
         return await self._exists(
             db.Scenario.workspace_id == workspace_id, db.Scenario.name == name
         )
+
+    async def exists(self):
+        id = self._ensure_scenario_id()
+        return await self._exists(db.Scenario.id == id)
 
     async def get_by_name(self, name: str) -> Scenario | None:
         """Get a scenario by name, in the active workspace"""
@@ -211,9 +213,12 @@ class ScenarioRepository(SQLResourceRepository):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []
         if obj.datasets:
-            scenario_datasets = await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
-            )
+            try:
+                scenario_datasets = await repository.datasets.ensure_scenario_datasets(
+                    obj.datasets
+                )
+            except MoviciValidationError as e:
+                raise MoviciValidationError.from_errors(e, path="datasets") from e
             await self.session.execute(
                 insert(db.ScenarioDataset),
                 [
@@ -225,7 +230,7 @@ class ScenarioRepository(SQLResourceRepository):
             return
 
         model_types = await self.all_data.model_types.ensure_model_types(
-            [model["type"] for model in obj.models if "type" in model]
+            [model.type for model in obj.models]
         )
 
         validator = validator.for_scenario(scenario_datasets, model_types)
@@ -272,39 +277,13 @@ class ScenarioRepository(SQLResourceRepository):
             scenario.to_domain(),
             bounding_box=bounding_box,
             datasets=[
-                cls._load_scenario_dataset(ds)
-                for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
+                ds.to_domain() for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
             ],
             models=[
-                cls._load_scenario_model(model)
+                model.to_domain()
                 for model in sorted(scenario.models, key=lambda model: model.sequence)
             ],
         )
-
-    @staticmethod
-    def _load_scenario_dataset(scenario_dataset: db.ScenarioDataset):
-        return {
-            "id": scenario_dataset.dataset_id,
-            "name": scenario_dataset.dataset.name,
-            "type": scenario_dataset.dataset.dataset_type.name,
-        }
-
-    @classmethod
-    def _load_scenario_model(cls, scenario_model: db.ScenarioModel):
-        result = copy.deepcopy(scenario_model.config)
-        for data_ref in scenario_model.references:
-            value = None
-            if data_ref.dataset is not None:
-                value = data_ref.dataset.name
-            elif data_ref.entity_type is not None:
-                value = data_ref.entity_type.name
-            elif data_ref.attribute_type is not None:
-                value = data_ref.attribute_type.name
-            MoviciDataRefInfo.from_path_string(data_ref.path, value).set_value(result)
-
-        result["name"] = scenario_model.name
-        result["type"] = scenario_model.model_type.name
-        return result
 
     @staticmethod
     def _stripped_config(scenario_model: ScenarioModel):

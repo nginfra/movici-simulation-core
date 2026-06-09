@@ -24,6 +24,7 @@ from movici_data_core.domain_model import (
     SimulationInfo,
 )
 from movici_simulation_core.core import DataType
+from movici_simulation_core.validate import MoviciDataRefInfo
 
 from .db_types import GUID, JSONTuple, TZDateTime
 
@@ -362,7 +363,7 @@ class Scenario(Base):
 
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
-    epsg_code: Mapped[int]
+    epsg_code: Mapped[int | None]
 
     created_at: Mapped[datetime.datetime] = mapped_column(default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
@@ -397,6 +398,11 @@ class ScenarioDataset(Base):
     scenario: Mapped[Scenario] = relationship(Scenario, back_populates="datasets")
     dataset: Mapped[Dataset] = relationship(Dataset)
 
+    def to_domain(self):
+        return domain_model.ScenarioDataset(
+            self.dataset.name, self.dataset.dataset_type.to_domain(), id=self.dataset.id
+        )
+
 
 class ScenarioModel(Base):
     __tablename__ = "scenario_model"
@@ -415,6 +421,14 @@ class ScenarioModel(Base):
     references: Mapped[list[ScenarioModelReference]] = relationship()
 
     model_type: Mapped[ModelType] = relationship()
+
+    def to_domain(self):
+        return domain_model.ScenarioModel(
+            name=self.name,
+            type=self.model_type.to_domain(),
+            config=self.config,
+            references=[ref.to_domain() for ref in self.references],
+        ).with_populated_config()
 
 
 class ScenarioModelReference(Base):
@@ -437,6 +451,17 @@ class ScenarioModelReference(Base):
     dataset: Mapped[Dataset] = relationship()
     entity_type: Mapped[EntityType] = relationship()
     attribute_type: Mapped[AttributeType] = relationship()
+
+    def to_domain(self):
+        value = None
+        if self.dataset is not None:
+            value = self.dataset.name
+        elif self.entity_type is not None:
+            value = self.entity_type.name
+        elif self.attribute_type is not None:
+            value = self.attribute_type.name
+
+        return MoviciDataRefInfo.from_path_string(self.path, value=value)
 
 
 class Update(Base):
@@ -470,10 +495,9 @@ class Update(Base):
         return domain_model.Update(
             id=self.id,
             dataset=domain_model.ScenarioDataset(
-                self.dataset.name, self.dataset.dataset_type.name, id=self.dataset_id
+                self.dataset.name, self.dataset.dataset_type.to_domain(), id=self.dataset_id
             ),
-            model_name=self.model_name,
-            model_type=self.model_type.name,
+            model=domain_model.UpdateModel(self.model_name, type=self.model_type.to_domain()),
             timestamp=self.timestamp,
             iteration=self.iteration,
             bounding_box=BoundingBox.from_tuple_or_none(self.bounding_box),
