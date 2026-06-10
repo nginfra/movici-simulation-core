@@ -90,11 +90,11 @@ class UpdateRepository(SQLResourceRepository):
             select(db.ModelType.id)
             .join(db.ScenarioModel)
             .where(db.ScenarioModel.scenario_id == scenario_id)
-            .where(db.ScenarioModel.name == obj.model_name)
+            .where(db.ScenarioModel.name == obj.model.name)
         )
         if model_type_id is None:
             raise MoviciValidationError(
-                f"{obj.model_name} is not a valid model for this scenario", "model_name"
+                f"{obj.model.name} is not a valid model for this scenario", "model.name"
             )
         dataset = await self.session.scalar(
             select(db.Dataset)
@@ -115,7 +115,8 @@ class UpdateRepository(SQLResourceRepository):
                     timestamp=obj.timestamp,
                     iteration=obj.iteration,
                     model_type_id=model_type_id,
-                    model_name=obj.model_name,
+                    model_name=obj.model.name,
+                    bounding_box=obj.bounding_box,
                     dataset_id=dataset.id,
                 )
                 .returning(db.Update.id)

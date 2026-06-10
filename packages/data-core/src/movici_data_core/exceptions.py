@@ -90,7 +90,10 @@ class UnsupportedFileType(MoviciDataError):
         self.filetype = filetype
 
     def payload(self):
-        return {"message": f"Filetype {self.filetype} is not supported for this operation"}
+        return {
+            "message": f"Filetype {self.filetype.default_extension}"
+            " is not supported for this operation"
+        }
 
 
 class DeserializationError(MoviciDataError):
@@ -104,7 +107,7 @@ class MoviciValidationError(MoviciDataError):
     __error_id__ = "validation_error"
     __error_message__ = "Valdation error"
 
-    def __init__(self, error: str | dict[str, list[str]] | None = None, path=""):
+    def __init__(self, error: str | dict[str, list[str]] | None = None, path: str | int = ""):
         self.path = path
         if isinstance(error, str):
             error = {"": [error]}
@@ -145,7 +148,7 @@ class MoviciValidationError(MoviciDataError):
         return result
 
     def iter_messages(self):
-        prefix = self.path + "." if self.path else ""
+        prefix = f"{str(self.path)}." if self.path else ""
         for key, messages in self.messages.items():
             if not key:
                 path = self.path
