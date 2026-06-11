@@ -83,28 +83,27 @@ class TestIdMapper:
             mapper.register(1, "OF1")
 
 
+# ``global_schema`` is built from ``additional_attributes``, so the model's
+# specs are already registered - no separate ``schema`` fixture is needed.
 @pytest.fixture
 def additional_attributes():
     return Model.get_schema_attributes()
 
 
 @pytest.fixture
-def schema(global_schema):
-    global_schema.register_attributes(Model.get_schema_attributes())
-    return global_schema
+def state(global_schema):
+    return TrackedState(schema=global_schema)
 
 
 @pytest.fixture
-def state(schema):
-    return TrackedState(schema=schema)
-
-
-@pytest.fixture
-def initialize_wrapper(schema, state):
-    converter = EntityInitDataFormat(schema)
-    created = []
+def initialize_wrapper(global_schema, state):
+    converter = EntityInitDataFormat(global_schema)
+    created = None
 
     def _initialize(network=NETWORK, dataset_name=DS):
+        nonlocal created
+        # only one SWMM simulation may be open per process, so a test must open one
+        assert created is None, "initialize_wrapper called more than once in a test"
         # deep-copy: state.process_general_section pops "enum" from the dict
         network = copy.deepcopy(network)
         dataset = Model._register_dataset(state, dataset_name=dataset_name)
@@ -116,18 +115,18 @@ def initialize_wrapper(schema, state):
                 if attr.flags & PUBLISH and not attr.has_data():
                     attr.initialize(len(eg))
         wrapper = SimulationWrapper()
-        created.append(wrapper)
+        created = wrapper
         wrapper.configure_options({"hydraulic_timestep": 30, "report_timestep": 300})
         wrapper.initialize(dataset)
         return wrapper, dataset
 
     yield _initialize
 
-    # EPA-SWMM allows only one open simulation per process, so always release it -
-    # even if a test fails mid-run - or subsequent tests hit MultiSimulationError.
-    for wrapper in created:
+    # always release the simulation - even if a test fails mid-run - or subsequent
+    # tests hit MultiSimulationError.
+    if created is not None:
         try:
-            wrapper.close()
+            created.close()
         except Exception:
             pass
 

@@ -38,6 +38,9 @@ UrbanDrainage_StoredVolume = AttributeSpec(
 # =============================================================================
 # Node static inputs
 # =============================================================================
+# Elevation of the node invert - the bottom (lowest point) of the manhole, basin
+# or outfall - in the dataset's vertical units (metres for metric flow units).
+# Water depth is measured upward from here, and head = invert_elevation + depth.
 UrbanDrainage_InvertElevation = AttributeSpec(
     "urban_drainage.invert_elevation", data_type=DataType(float)
 )
@@ -90,6 +93,9 @@ UrbanDrainage_StorageCurve = AttributeSpec(
 # =============================================================================
 # Link outputs (PUBLISH) - shared by every link type
 # =============================================================================
+# flow:        volumetric flow RATE through the link (e.g. m3/s for CMS units)
+# flow_depth:  water depth inside the conduit/regulator (m)
+# flow_volume: VOLUME of water currently stored in the link (m3)
 UrbanDrainage_Flow = AttributeSpec("urban_drainage.flow", data_type=DataType(float))
 UrbanDrainage_FlowDepth = AttributeSpec("urban_drainage.flow_depth", data_type=DataType(float))
 UrbanDrainage_FlowVolume = AttributeSpec("urban_drainage.flow_volume", data_type=DataType(float))

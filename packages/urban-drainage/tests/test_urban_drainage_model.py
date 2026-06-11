@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 from jsonschema import ValidationError
 
-from movici_simulation_core.core.moment import TimelineInfo
 from movici_urban_drainage_model.model import Model
 
 DS = "urban_drainage"
@@ -50,10 +49,6 @@ class TestUrbanDrainageModelBase:
     @pytest.fixture
     def model_config(self):
         return {"dataset": DS, "options": {"hydraulic_timestep": 30, "report_timestep": 300}}
-
-    @pytest.fixture
-    def global_timeline_info(self):
-        return TimelineInfo(reference=0, time_scale=1, start_time=0)
 
     @pytest.fixture
     def network_data(self):
@@ -241,14 +236,6 @@ class TestPumpControl:
     """A pumped network: inflow -> wet well (storage) -> pump -> outfall."""
 
     @pytest.fixture
-    def additional_attributes(self):
-        return Model.get_schema_attributes()
-
-    @pytest.fixture
-    def global_timeline_info(self):
-        return TimelineInfo(reference=0, time_scale=1, start_time=0)
-
-    @pytest.fixture
     def model_config(self):
         return {"dataset": DS, "options": {"hydraulic_timestep": 30, "report_timestep": 300}}
 
@@ -318,14 +305,6 @@ class TestPumpControl:
 class TestReportStepFromGeneral:
     """report_timestep supplied via the dataset general section must drive both the
     Movici wake cadence and the SWMM report step (single authoritative value)."""
-
-    @pytest.fixture
-    def additional_attributes(self):
-        return Model.get_schema_attributes()
-
-    @pytest.fixture
-    def global_timeline_info(self):
-        return TimelineInfo(reference=0, time_scale=1, start_time=0)
 
     @pytest.fixture
     def model_config(self):
