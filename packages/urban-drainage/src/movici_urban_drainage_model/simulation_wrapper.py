@@ -19,6 +19,7 @@ the synthesised ``.inp``, (b) apply control inputs and (c) read results back.
 
 from __future__ import annotations
 
+import datetime as _datetime
 import logging
 import os
 import tempfile
@@ -668,7 +669,9 @@ class RainGageProcessor(SwmmProcessor[RainGageEntity]):
             builder.add("RAINGAGES", name, rain_format, interval, 1.0, "TIMESERIES", ts_name)
             # Placeholder timeseries (single zero sample); rainfall is driven at
             # runtime via RainGage.total_precip (see apply_controls).
-            builder.add("TIMESERIES", ts_name, START_DATE, START_TIME[:5], 0)
+            builder.add(
+                "TIMESERIES", ts_name, self.wrapper.start_date, self.wrapper.start_time[:5], 0
+            )
             if has_xy:
                 builder.add("SYMBOLS", name, fmt_num(eg.x.array[idx]), fmt_num(eg.y.array[idx]))
 
@@ -712,6 +715,11 @@ _PROCESSOR_SPECS: t.Tuple[t.Tuple[str, t.Type[SwmmProcessor]], ...] = (
 class SimulationWrapper:
     """Owns the live pyswmm :class:`~pyswmm.Simulation` and its processors."""
 
+    # EPA-SWMM permits only one open simulation per process. This tracks the
+    # wrapper that currently holds it, so a second concurrent open fails with a
+    # clear message instead of pyswmm's cryptic MultiSimulationError.
+    _active: t.ClassVar[t.Optional["SimulationWrapper"]] = None
+
     def __init__(self, logger: t.Optional[logging.Logger] = None) -> None:
         self.logger = logger or logging.getLogger(__name__)
         self.processors: t.Dict[str, SwmmProcessor] = {}
@@ -732,6 +740,10 @@ class SimulationWrapper:
         self._time_offset: float = 0.0
         self._hotstart_files: t.List[str] = []
         self._checkpoint_seconds: t.Dict[str, float] = {}
+        # Calendar start for the synthesised model; None falls back to the module
+        # constants. Set from the Movici timeline so SWMM timestamps line up with
+        # the scenario's world time.
+        self._start_datetime: t.Optional[_datetime.datetime] = None
 
     # -- construction -------------------------------------------------------
 
@@ -745,9 +757,26 @@ class SimulationWrapper:
         self._curve_lines.extend(rows)
         return name
 
-    def configure_options(self, options: dict) -> None:
-        """Store simulation options used when synthesising ``[OPTIONS]``."""
+    def configure_options(
+        self, options: dict, start_datetime: t.Optional[_datetime.datetime] = None
+    ) -> None:
+        """Store options (and optional calendar start) for synthesising ``[OPTIONS]``."""
         self._options = dict(options or {})
+        self._start_datetime = start_datetime
+
+    @property
+    def start_date(self) -> str:
+        """SWMM ``MM/DD/YYYY`` start date (from the Movici timeline, else default)."""
+        if self._start_datetime is not None:
+            return self._start_datetime.strftime("%m/%d/%Y")
+        return START_DATE
+
+    @property
+    def start_time(self) -> str:
+        """SWMM ``HH:MM:SS`` start time (from the Movici timeline, else default)."""
+        if self._start_datetime is not None:
+            return self._start_datetime.strftime("%H:%M:%S")
+        return START_TIME
 
     def initialize(self, dataset: UrbanDrainageNetwork) -> None:
         """Build the processors, synthesise the ``.inp`` and open the simulation."""
@@ -768,11 +797,19 @@ class SimulationWrapper:
         serves :meth:`rollback_to`. ``hotstart_file`` seeds the engine state and
         ``start_offset`` keeps the reported Movici time aligned to that snapshot.
         """
+        if SimulationWrapper._active is not None and SimulationWrapper._active is not self:
+            raise RuntimeError(
+                "Another urban_drainage SWMM simulation is already open in this "
+                "process. EPA-SWMM permits only one open simulation at a time; "
+                "close it first, or run the models in separate processes "
+                "(e.g. a distributed simulation)."
+            )
         self.sim = Simulation(self._inp_path)
         if hotstart_file is not None:
             # must precede start(): seeds the engine state from the snapshot
             self.sim.use_hotstart(hotstart_file)
         self.sim.start()
+        SimulationWrapper._active = self
         self._time_offset = float(start_offset)
         self.nodes = Nodes(self.sim)
         self.links = Links(self.sim)
@@ -851,10 +888,10 @@ class SimulationWrapper:
         builder.add("OPTIONS", "FLOW_ROUTING", opt.get("flow_routing", "DYNWAVE"))
         builder.add("OPTIONS", "LINK_OFFSETS", "DEPTH")
         builder.add("OPTIONS", "MIN_SLOPE", 0)
-        builder.add("OPTIONS", "START_DATE", START_DATE)
-        builder.add("OPTIONS", "START_TIME", START_TIME)
-        builder.add("OPTIONS", "REPORT_START_DATE", START_DATE)
-        builder.add("OPTIONS", "REPORT_START_TIME", START_TIME)
+        builder.add("OPTIONS", "START_DATE", self.start_date)
+        builder.add("OPTIONS", "START_TIME", self.start_time)
+        builder.add("OPTIONS", "REPORT_START_DATE", self.start_date)
+        builder.add("OPTIONS", "REPORT_START_TIME", self.start_time)
         builder.add("OPTIONS", "END_DATE", END_DATE)
         builder.add("OPTIONS", "END_TIME", END_TIME)
         builder.add("OPTIONS", "REPORT_STEP", fmt_hms(report_step))
@@ -882,23 +919,21 @@ class SimulationWrapper:
         must already have been applied (see :meth:`apply_controls`).
         """
         assert self.sim is not None
-        elapsed = self.elapsed_seconds()
         # SWMM advances in whole seconds; a sub-second remainder is left for the
         # next update. Movici moments are integer seconds, so this loses nothing.
-        while target_seconds - elapsed >= 1:
-            self.sim.step_advance(int(target_seconds - elapsed))
+        while target_seconds - self.elapsed_seconds() >= 1:
+            before = self.elapsed_seconds()
+            self.sim.step_advance(int(target_seconds - before))
             try:
                 next(self.sim)
             except StopIteration:
                 self.logger.warning(
                     "SWMM simulation reached its end time before "
-                    f"t={target_seconds}s; results frozen at t={elapsed:.0f}s"
+                    f"t={target_seconds}s; results frozen at t={before:.0f}s"
                 )
                 break
-            new_elapsed = self.elapsed_seconds()
-            if new_elapsed <= elapsed:  # no forward progress; avoid an infinite loop
+            if self.elapsed_seconds() <= before:  # defensive: no progress, don't spin
                 break
-            elapsed = new_elapsed
 
     def write_results(self) -> None:
         """Read the current simulation state into the PUBLISH attribute arrays."""
@@ -918,6 +953,8 @@ class SimulationWrapper:
             finally:
                 self.sim.close()
             self.sim = None
+        if SimulationWrapper._active is self:
+            SimulationWrapper._active = None
         self.nodes = None
         self.links = None
         self.subcatchments = None

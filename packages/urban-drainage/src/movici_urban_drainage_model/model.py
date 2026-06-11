@@ -25,7 +25,7 @@ import typing as t
 
 from movici_simulation_core.base_models.tracked_model import TrackedModel
 from movici_simulation_core.core.attribute import PUBLISH
-from movici_simulation_core.core.moment import Moment
+from movici_simulation_core.core.moment import Moment, get_timeline_info
 from movici_simulation_core.core.schema import attributes_from_dict
 from movici_simulation_core.core.state import TrackedState
 
@@ -152,7 +152,20 @@ class Model(TrackedModel, name="urban_drainage"):
         options = self._get_options(state)
         self.report_step = int(options.get("report_step", self.report_step))
         self.next_time = Moment(self.report_step)
-        self.network.configure_options(options)
+
+        # Anchor the SWMM calendar to the Movici timeline so its timestamps line up
+        # with the scenario's world time (rather than an arbitrary fixed epoch).
+        timeline = get_timeline_info()
+        start_datetime = None
+        if timeline is not None:
+            start_datetime = timeline.timestamp_to_datetime(0)
+            if timeline.time_scale != int(timeline.time_scale):
+                self.network.logger.warning(
+                    "Non-integer time_scale %s: SWMM advances in whole seconds, so "
+                    "fractional Movici moments are rounded down when stepping.",
+                    timeline.time_scale,
+                )
+        self.network.configure_options(options, start_datetime=start_datetime)
         self.network.initialize(self.dataset)
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:

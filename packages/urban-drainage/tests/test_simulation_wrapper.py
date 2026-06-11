@@ -562,3 +562,12 @@ class TestHotstart:
         wrapper.write_results()
         # the re-run diverges from the trajectory it was rolled back from
         assert dataset.orifices.flow.array[0] < 1e-6
+
+
+class TestOneSimulationPerProcess:
+    def test_concurrent_simulation_raises_clear_error(self, initialize_wrapper):
+        # the fixture's wrapper holds the one simulation EPA-SWMM allows
+        initialize_wrapper()
+        other = SimulationWrapper()
+        with pytest.raises(RuntimeError, match="already open"):
+            other._open_simulation()
