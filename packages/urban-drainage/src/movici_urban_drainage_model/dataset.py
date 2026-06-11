@@ -31,10 +31,12 @@ from movici_simulation_core.models.common.entity_groups import (
 from .attributes import (
     UrbanDrainage_Area,
     UrbanDrainage_Barrels,
+    UrbanDrainage_Conductivity,
     UrbanDrainage_CrestHeight,
     UrbanDrainage_CrossSectionGeometry,
     UrbanDrainage_CrossSectionShape,
     UrbanDrainage_CurrentSetting,
+    UrbanDrainage_CurveNumber,
     UrbanDrainage_DecayConstant,
     UrbanDrainage_DischargeCoefficient,
     UrbanDrainage_DryTime,
@@ -49,6 +51,7 @@ from .attributes import (
     UrbanDrainage_GeneratedInflow,
     UrbanDrainage_HydraulicHead,
     UrbanDrainage_InfiltrationLoss,
+    UrbanDrainage_InitialDeficit,
     UrbanDrainage_InitialDepth,
     UrbanDrainage_InitialFlow,
     UrbanDrainage_InletOffset,
@@ -90,9 +93,9 @@ from .attributes import (
     UrbanDrainage_StorageCoefficient,
     UrbanDrainage_StorageConstant,
     UrbanDrainage_StorageCurve,
-    UrbanDrainage_StorageCurveType,
     UrbanDrainage_StorageExponent,
     UrbanDrainage_StoredVolume,
+    UrbanDrainage_SuctionHead,
     UrbanDrainage_SurchargeDepth,
     UrbanDrainage_TargetSetting,
     UrbanDrainage_TotalInflow,
@@ -191,7 +194,6 @@ class StorageEntity(DrainageNodeEntity):
     invert_elevation = field(UrbanDrainage_InvertElevation, flags=INIT)
     max_depth = field(UrbanDrainage_MaxDepth, flags=INIT)
 
-    storage_curve_type = field(UrbanDrainage_StorageCurveType, flags=OPT)
     storage_constant = field(UrbanDrainage_StorageConstant, flags=OPT)
     storage_coefficient = field(UrbanDrainage_StorageCoefficient, flags=OPT)
     storage_exponent = field(UrbanDrainage_StorageExponent, flags=OPT)
@@ -322,11 +324,16 @@ class SubcatchmentEntity(PolygonEntity):
     s_perv = field(UrbanDrainage_SPerv, flags=OPT)
     pct_zero = field(UrbanDrainage_PctZero, flags=OPT)
 
-    # OPT Horton infiltration parameters
+    # OPT infiltration parameters; the active subset depends on the configured
+    # infiltration model (Horton / Green-Ampt / Curve Number).
     max_infiltration_rate = field(UrbanDrainage_MaxInfiltrationRate, flags=OPT)
     min_infiltration_rate = field(UrbanDrainage_MinInfiltrationRate, flags=OPT)
     decay_constant = field(UrbanDrainage_DecayConstant, flags=OPT)
     dry_time = field(UrbanDrainage_DryTime, flags=OPT)
+    suction_head = field(UrbanDrainage_SuctionHead, flags=OPT)
+    conductivity = field(UrbanDrainage_Conductivity, flags=OPT)
+    initial_deficit = field(UrbanDrainage_InitialDeficit, flags=OPT)
+    curve_number = field(UrbanDrainage_CurveNumber, flags=OPT)
 
     # PUBLISH outputs
     rainfall = field(UrbanDrainage_Rainfall, flags=PUB)

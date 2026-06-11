@@ -571,3 +571,58 @@ class TestOneSimulationPerProcess:
         other = SimulationWrapper()
         with pytest.raises(RuntimeError, match="already open"):
             other._open_simulation()
+
+
+class TestStorageInference:
+    def test_storage_curve_infers_tabular(self, initialize_wrapper):
+        # a storage_curve (with no functional coefficients) must be emitted as a
+        # TABULAR storage with a [CURVES] entry - the type is inferred, not set
+        network = {
+            "version": 4,
+            "name": DS,
+            "type": DS,
+            "general": {"enum": {"outfall_type": ["FREE", "NORMAL", "FIXED"]}},
+            "data": {
+                "drainage_storage_entities": {
+                    "id": [1],
+                    "geometry.x": [0.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [0.0],
+                    "urban_drainage.max_depth": [5.0],
+                    "urban_drainage.storage_curve": [[[0.0, 100.0], [5.0, 400.0]]],
+                    "urban_drainage.generated_inflow": [0.2],
+                },
+                "drainage_outfall_entities": {
+                    "id": [2],
+                    "geometry.x": [100.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [0.0],
+                    "urban_drainage.outfall_type": [0],
+                },
+                "drainage_weir_entities": {
+                    "id": [20],
+                    "topology.from_node_id": [1],
+                    "topology.to_node_id": [2],
+                    "urban_drainage.weir_type": [0],
+                    "urban_drainage.cross_section_geometry": [[2.0, 3.0, 0.0, 0.0]],
+                    "urban_drainage.discharge_coefficient": [1.8],
+                    "urban_drainage.crest_height": [0.0],
+                },
+            },
+        }
+        network["general"]["enum"]["weir_type"] = [
+            "TRANSVERSE",
+            "SIDEFLOW",
+            "V-NOTCH",
+            "TRAPEZOIDAL",
+            "ROADWAY",
+        ]
+        wrapper, dataset = initialize_wrapper(network)
+        with open(wrapper._inp_path) as fh:
+            inp = fh.read()
+        assert "TABULAR" in inp and "[CURVES]" in inp and "Storage" in inp
+        for target in (300, 600, 900):
+            wrapper.apply_controls()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.storage.stored_volume.array[0] > 0.0

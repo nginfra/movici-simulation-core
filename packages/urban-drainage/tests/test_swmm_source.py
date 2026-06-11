@@ -271,3 +271,32 @@ class TestSWMMSourceWithDatasetCreator:
         # C1: J1 -> J2 ; C2: J2 -> ST1
         assert conduits["topology.from_node_id"] == [name_to_id["J1"], name_to_id["J2"]]
         assert conduits["topology.to_node_id"] == [name_to_id["J2"], name_to_id["ST1"]]
+
+
+GREEN_AMPT_INP = textwrap.dedent("""\
+    [OPTIONS]
+    INFILTRATION GREEN_AMPT
+
+    [SUBCATCHMENTS]
+    S1   RG1  J1   4   50   400   0.5   0
+
+    [SUBAREAS]
+    S1   0.01   0.1   0.05   0.05   25   OUTLET
+
+    [INFILTRATION]
+    S1   110   5   0.26
+
+    [RAINGAGES]
+    RG1  INTENSITY   1:00   1.0   TIMESERIES   TS1
+""")
+
+
+def test_green_ampt_infiltration_is_parsed(tmp_path):
+    path = tmp_path / "ga.inp"
+    path.write_text(GREEN_AMPT_INP)
+    subs = SWMMSource(path)["subcatchments"]
+    assert subs.get_attribute("suction_head") == [110.0]
+    assert subs.get_attribute("conductivity") == [5.0]
+    assert subs.get_attribute("initial_deficit") == [0.26]
+    # Horton-specific columns are not (mis)read for a Green-Ampt file
+    assert subs.get_attribute("max_infiltration_rate") == [None]

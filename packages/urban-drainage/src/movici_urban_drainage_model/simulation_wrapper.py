@@ -312,25 +312,26 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
         eg = self.entity_group
         if not len(eg):
             return
-        curve_type_mask = _defined_mask(eg.storage_curve_type)
         const_mask = _defined_mask(eg.storage_constant)
         coeff_mask = _defined_mask(eg.storage_coefficient)
         exp_mask = _defined_mask(eg.storage_exponent)
         init_depth_mask = _defined_mask(eg.initial_depth)
+        has_curve = eg.storage_curve.has_data()
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             elev = fmt_num(eg.invert_elevation.array[idx])
             ymax = fmt_num(eg.max_depth.array[idx])
             y0 = fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0))
 
-            curve_type = "FUNCTIONAL"
-            if curve_type_mask is not None and curve_type_mask[idx]:
-                curve_type = _enum_kw(eg.storage_curve_type, idx)
-
-            if curve_type == "TABULAR":
-                curve = _extract_csr_curve(eg.storage_curve, idx)
-                if curve is None:
-                    raise ValueError(f"Tabular storage '{name}' requires a storage_curve")
+            # Infer the storage shape from which attributes are set: a
+            # (depth, area) storage_curve -> TABULAR, otherwise FUNCTIONAL.
+            curve = _extract_csr_curve(eg.storage_curve, idx) if has_curve else None
+            if curve is not None:
+                if any(m is not None and m[idx] for m in (const_mask, coeff_mask, exp_mask)):
+                    self.wrapper.logger.warning(
+                        f"Storage '{name}' has both a storage_curve and functional "
+                        "coefficients; using the curve (TABULAR)."
+                    )
                 curve_name = self.wrapper.add_curve(curve, "Storage")
                 builder.add("STORAGE", name, elev, ymax, y0, "TABULAR", curve_name)
             else:
@@ -583,6 +584,11 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
         min_inf_mask = _defined_mask(eg.min_infiltration_rate)
         decay_mask = _defined_mask(eg.decay_constant)
         dry_mask = _defined_mask(eg.dry_time)
+        suction_mask = _defined_mask(eg.suction_head)
+        ksat_mask = _defined_mask(eg.conductivity)
+        imd_mask = _defined_mask(eg.initial_deficit)
+        cn_mask = _defined_mask(eg.curve_number)
+        model = self.wrapper.infiltration_model
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             try:
@@ -621,15 +627,38 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                 fmt_num(_opt_val(eg.pct_zero, idx, pct_zero_mask, 25.0)),
                 "OUTLET",
             )
-            builder.add(
-                "INFILTRATION",
-                name,
-                fmt_num(_opt_val(eg.max_infiltration_rate, idx, max_inf_mask, 76.2)),
-                fmt_num(_opt_val(eg.min_infiltration_rate, idx, min_inf_mask, 3.81)),
-                fmt_num(_opt_val(eg.decay_constant, idx, decay_mask, 4.0)),
-                fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
-                0,
-            )
+            # The [INFILTRATION] row format depends on the configured model.
+            if model in ("HORTON", "MODIFIED_HORTON"):
+                builder.add(
+                    "INFILTRATION",
+                    name,
+                    fmt_num(_opt_val(eg.max_infiltration_rate, idx, max_inf_mask, 76.2)),
+                    fmt_num(_opt_val(eg.min_infiltration_rate, idx, min_inf_mask, 3.81)),
+                    fmt_num(_opt_val(eg.decay_constant, idx, decay_mask, 4.0)),
+                    fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
+                    0,
+                )
+            elif model in ("GREEN_AMPT", "MODIFIED_GREEN_AMPT"):
+                builder.add(
+                    "INFILTRATION",
+                    name,
+                    fmt_num(_opt_val(eg.suction_head, idx, suction_mask, 100.0)),
+                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, 5.0)),
+                    fmt_num(_opt_val(eg.initial_deficit, idx, imd_mask, 0.3)),
+                )
+            elif model == "CURVE_NUMBER":
+                builder.add(
+                    "INFILTRATION",
+                    name,
+                    fmt_num(_opt_val(eg.curve_number, idx, cn_mask, 80.0)),
+                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, 5.0)),
+                    fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
+                )
+            else:
+                raise ValueError(
+                    f"Unsupported infiltration model '{model}'; expected one of "
+                    "HORTON, MODIFIED_HORTON, GREEN_AMPT, MODIFIED_GREEN_AMPT, CURVE_NUMBER"
+                )
 
     def write_results(self) -> None:
         eg = self.entity_group
@@ -778,6 +807,11 @@ class SimulationWrapper:
             return self._start_datetime.strftime("%H:%M:%S")
         return START_TIME
 
+    @property
+    def infiltration_model(self) -> str:
+        """The configured SWMM infiltration model keyword (upper-cased)."""
+        return str(self._options.get("infiltration", "HORTON")).upper()
+
     def initialize(self, dataset: UrbanDrainageNetwork) -> None:
         """Build the processors, synthesise the ``.inp`` and open the simulation."""
         self.processors = {
@@ -884,7 +918,7 @@ class SimulationWrapper:
         report_step = float(opt.get("report_step", 300))
         builder.add("TITLE", "Movici urban drainage model")
         builder.add("OPTIONS", "FLOW_UNITS", opt.get("flow_units", "CMS"))
-        builder.add("OPTIONS", "INFILTRATION", opt.get("infiltration", "HORTON"))
+        builder.add("OPTIONS", "INFILTRATION", self.infiltration_model)
         builder.add("OPTIONS", "FLOW_ROUTING", opt.get("flow_routing", "DYNWAVE"))
         builder.add("OPTIONS", "LINK_OFFSETS", "DEPTH")
         builder.add("OPTIONS", "MIN_SLOPE", 0)

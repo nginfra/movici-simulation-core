@@ -12,7 +12,6 @@ DS = "urban_drainage"
 ENUMS = {
     "xsection_shape": ["CIRCULAR", "RECT_CLOSED", "RECT_OPEN"],
     "outfall_type": ["FREE", "NORMAL", "FIXED", "TIDAL", "TIMESERIES"],
-    "storage_curve_type": ["FUNCTIONAL", "TABULAR"],
     "pump_curve_type": ["IDEAL", "PUMP1", "PUMP2", "PUMP3", "PUMP4"],
     "orifice_type": ["SIDE", "BOTTOM"],
     "orifice_shape": ["CIRCULAR", "RECT_CLOSED"],
@@ -186,6 +185,36 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
         )
         assert reentry_next_time == next_time
         assert tester.model.network.elapsed_seconds() == elapsed_before
+
+    @pytest.mark.parametrize(
+        "infiltration",
+        ["HORTON", "MODIFIED_HORTON", "GREEN_AMPT", "MODIFIED_GREEN_AMPT", "CURVE_NUMBER"],
+    )
+    def test_infiltration_models_run_and_produce_runoff(self, create_model_tester, infiltration):
+        config = {
+            "dataset": DS,
+            "options": {"routing_step": 30, "report_step": 300, "infiltration": infiltration},
+        }
+        tester = create_model_tester(Model, config)
+        tester.initialize()
+        tester.update(0, None)
+        tester.new_time(300)
+        tester.update(
+            300,
+            {
+                DS: {
+                    "drainage_raingage_entities": {
+                        "id": [4],
+                        "urban_drainage.rainfall_intensity": [30.0],
+                    }
+                }
+            },
+        )
+        tester.new_time(600)
+        result, _ = tester.update(600, None)
+        # every model builds a valid .inp, runs, and the impervious area sheds runoff
+        runoff = result[DS]["drainage_subcatchment_entities"]["urban_drainage.runoff"][0]
+        assert runoff > 0.0
 
 
 class TestNextTime(TestUrbanDrainageModelBase):

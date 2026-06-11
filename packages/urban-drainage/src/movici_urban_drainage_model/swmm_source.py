@@ -176,13 +176,15 @@ def _storage_records(inp: SwmmInp) -> t.List[dict]:
             "invert_elevation": get_float_or_none(r, 1),
             "max_depth": get_float_or_none(r, 2),
             "initial_depth": get_float_or_none(r, 3),
-            "storage_curve_type": get_string_or_none(r, 4),
         }
-        if (get_string_or_none(r, 4) or "").upper() == "FUNCTIONAL":
+        # the .inp's shape token (col 4) is mandatory in SWMM but the Movici model
+        # infers TABULAR vs FUNCTIONAL from which attributes are present
+        shape = (get_string_or_none(r, 4) or "").upper()
+        if shape == "FUNCTIONAL":
             rec["storage_coefficient"] = get_float_or_none(r, 5)
             rec["storage_exponent"] = get_float_or_none(r, 6)
             rec["storage_constant"] = get_float_or_none(r, 7)
-        elif (get_string_or_none(r, 4) or "").upper() == "TABULAR":
+        elif shape == "TABULAR":
             rec["storage_curve"] = _curve_points(inp, get_string_or_none(r, 5))
         out.append(rec)
     return out
@@ -286,9 +288,18 @@ def _outlet_records(inp: SwmmInp) -> t.List[dict]:
     return out
 
 
+def _infiltration_model(inp: SwmmInp) -> str:
+    """The ``[OPTIONS] INFILTRATION`` keyword (upper-cased), defaulting to HORTON."""
+    for row in inp.sections.get("OPTIONS", []):
+        if len(row) >= 2 and row[0].upper() == "INFILTRATION":
+            return row[1].upper()
+    return "HORTON"
+
+
 def _subcatchment_records(inp: SwmmInp) -> t.List[dict]:
     subareas = {r[0]: r for r in inp.sections.get("SUBAREAS", [])}
     infil = {r[0]: r for r in inp.sections.get("INFILTRATION", [])}
+    model = _infiltration_model(inp)
     out = []
     for r in inp.sections.get("SUBCATCHMENTS", []):
         name = r[0]
@@ -314,14 +325,31 @@ def _subcatchment_records(inp: SwmmInp) -> t.List[dict]:
             )
         inf = infil.get(name)
         if inf:
-            rec.update(
-                {
-                    "max_infiltration_rate": get_float_or_none(inf, 1),
-                    "min_infiltration_rate": get_float_or_none(inf, 2),
-                    "decay_constant": get_float_or_none(inf, 3),
-                    "dry_time": get_float_or_none(inf, 4),
-                }
-            )
+            if model in ("HORTON", "MODIFIED_HORTON"):
+                rec.update(
+                    {
+                        "max_infiltration_rate": get_float_or_none(inf, 1),
+                        "min_infiltration_rate": get_float_or_none(inf, 2),
+                        "decay_constant": get_float_or_none(inf, 3),
+                        "dry_time": get_float_or_none(inf, 4),
+                    }
+                )
+            elif model in ("GREEN_AMPT", "MODIFIED_GREEN_AMPT"):
+                rec.update(
+                    {
+                        "suction_head": get_float_or_none(inf, 1),
+                        "conductivity": get_float_or_none(inf, 2),
+                        "initial_deficit": get_float_or_none(inf, 3),
+                    }
+                )
+            elif model == "CURVE_NUMBER":
+                rec.update(
+                    {
+                        "curve_number": get_float_or_none(inf, 1),
+                        "conductivity": get_float_or_none(inf, 2),
+                        "dry_time": get_float_or_none(inf, 3),
+                    }
+                )
         out.append(rec)
     return out
 

@@ -70,10 +70,8 @@ UrbanDrainage_FlapGate = AttributeSpec("urban_drainage.flap_gate", data_type=Dat
 # =============================================================================
 # Storage attributes
 # =============================================================================
-# Storage curve type: index into enum "storage_curve_type" -> FUNCTIONAL / TABULAR
-UrbanDrainage_StorageCurveType = AttributeSpec(
-    "urban_drainage.storage_curve_type", data_type=DataType(int), enum_name="storage_curve_type"
-)
+# The storage shape is inferred from which attributes are set: a ``storage_curve``
+# means a TABULAR (depth, area) curve, otherwise the functional coefficients below.
 # Functional storage: area = constant + coefficient * depth ^ exponent
 UrbanDrainage_StorageConstant = AttributeSpec(
     "urban_drainage.storage_constant", data_type=DataType(float)
@@ -225,7 +223,11 @@ UrbanDrainage_NPerv = AttributeSpec("urban_drainage.n_perv", data_type=DataType(
 UrbanDrainage_SImperv = AttributeSpec("urban_drainage.s_imperv", data_type=DataType(float))
 UrbanDrainage_SPerv = AttributeSpec("urban_drainage.s_perv", data_type=DataType(float))
 UrbanDrainage_PctZero = AttributeSpec("urban_drainage.pct_zero", data_type=DataType(float))
-# Horton infiltration parameters.
+# Infiltration parameters. The active model is set by the model config's
+# ``options.infiltration``; each model reads a different subset:
+#  - HORTON / MODIFIED_HORTON: max/min_infiltration_rate, decay_constant, dry_time
+#  - GREEN_AMPT / MODIFIED_GREEN_AMPT: suction_head, conductivity, initial_deficit
+#  - CURVE_NUMBER: curve_number, conductivity, dry_time
 UrbanDrainage_MaxInfiltrationRate = AttributeSpec(
     "urban_drainage.max_infiltration_rate", data_type=DataType(float)
 )
@@ -236,6 +238,14 @@ UrbanDrainage_DecayConstant = AttributeSpec(
     "urban_drainage.decay_constant", data_type=DataType(float)
 )
 UrbanDrainage_DryTime = AttributeSpec("urban_drainage.dry_time", data_type=DataType(float))
+UrbanDrainage_SuctionHead = AttributeSpec("urban_drainage.suction_head", data_type=DataType(float))
+UrbanDrainage_Conductivity = AttributeSpec(
+    "urban_drainage.conductivity", data_type=DataType(float)
+)
+UrbanDrainage_InitialDeficit = AttributeSpec(
+    "urban_drainage.initial_deficit", data_type=DataType(float)
+)
+UrbanDrainage_CurveNumber = AttributeSpec("urban_drainage.curve_number", data_type=DataType(float))
 
 # Subcatchment outputs (PUBLISH)
 UrbanDrainage_Rainfall = AttributeSpec("urban_drainage.rainfall", data_type=DataType(float))
