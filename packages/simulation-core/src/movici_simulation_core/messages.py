@@ -5,6 +5,8 @@ import json
 import typing as t
 from pathlib import Path
 
+from movici_simulation_core.core.priority import Priority
+
 
 @dataclasses.dataclass
 class Message:
@@ -25,6 +27,36 @@ class Message:
 class RegistrationMessage(Message):
     pub: t.Optional[dict]
     sub: t.Optional[dict]
+    priority: int = int(Priority.REGULAR)
+
+    def __post_init__(self):
+        # ``priority`` is used as a dict key when the orchestrator groups publishers; a float
+        # or string sneaking through JSON deserialisation would silently split priority
+        # levels (and the conflict check would never fire). Reject at the boundary.
+        if isinstance(self.priority, bool) or not isinstance(self.priority, int):
+            raise TypeError(
+                f"RegistrationMessage.priority must be int, got {type(self.priority).__name__}"
+            )
+        if self.priority < 0:
+            raise ValueError(
+                f"RegistrationMessage.priority must be non-negative, got {self.priority}"
+            )
+
+
+@dataclasses.dataclass
+class RemapMessage(Message):
+    """Command from the orchestrator instructing a model to publish (or subscribe) under
+    different attribute names than the ones it registered. Sent after all ``READY`` messages
+    have arrived and before the first ``NEW_TIME``. See issue #127.
+
+    ``pub`` is a one-to-one mapping ``{dataset: {entity_group: {original: variant}}}``.
+    ``sub`` is a mapping ``{dataset: {entity_group: {variant: original}}}`` which may be
+    many-to-one (multiple variants resolving to the same original attribute name); a
+    many-to-one ``sub`` section requires the receiving model to implement ``remap()``.
+    """
+
+    pub: t.Optional[dict] = None
+    sub: t.Optional[dict] = None
 
 
 class BaseUpdateMessage:
@@ -171,6 +203,7 @@ class ErrorMessage(Message):
 
 MESSAGE_TYPES = {
     b"READY": RegistrationMessage,
+    b"REMAP": RemapMessage,
     b"UPDATE": UpdateMessage,
     b"UPDATE_SERIES": UpdateSeriesMessage,
     b"RESULT": ResultMessage,
