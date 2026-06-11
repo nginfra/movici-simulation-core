@@ -838,12 +838,19 @@ class SimulationWrapper:
                 "close it first, or run the models in separate processes "
                 "(e.g. a distributed simulation)."
             )
+        # pyswmm acquires its process-global engine lock in the Simulation()
+        # constructor, so claim ownership immediately and release it via close()
+        # if anything below fails - keeping _active in step with the real lock.
         self.sim = Simulation(self._inp_path)
-        if hotstart_file is not None:
-            # must precede start(): seeds the engine state from the snapshot
-            self.sim.use_hotstart(hotstart_file)
-        self.sim.start()
         SimulationWrapper._active = self
+        try:
+            if hotstart_file is not None:
+                # must precede start(): seeds the engine state from the snapshot
+                self.sim.use_hotstart(hotstart_file)
+            self.sim.start()
+        except Exception:
+            self.close()
+            raise
         self._time_offset = float(start_offset)
         self.nodes = Nodes(self.sim)
         self.links = Links(self.sim)
@@ -981,11 +988,19 @@ class SimulationWrapper:
         simulation (and the object collections that reference it) here is what
         lets a subsequent model run open its own simulation.
         """
+        # Teardown must always release the engine lock and ownership, even if
+        # report()/close() raise (e.g. after an abnormal run); a stranded _active
+        # would otherwise block every later SWMM run in the process. So swallow
+        # (and log) engine errors here rather than propagate them out of close().
         if self.sim is not None:
             try:
                 self.sim.report()
-            finally:
+            except Exception:
+                self.logger.warning("Error writing the SWMM report during close()", exc_info=True)
+            try:
                 self.sim.close()
+            except Exception:
+                self.logger.warning("Error closing the SWMM simulation", exc_info=True)
             self.sim = None
         if SimulationWrapper._active is self:
             SimulationWrapper._active = None

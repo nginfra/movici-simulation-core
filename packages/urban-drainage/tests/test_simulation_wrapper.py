@@ -577,6 +577,24 @@ class TestOneSimulationPerProcess:
         with pytest.raises(RuntimeError, match="already open"):
             other._open_simulation()
 
+    def test_close_releases_ownership_even_if_report_raises(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        wrapper.close()  # release the real simulation cleanly
+
+        # simulate an owned simulation whose report() raises on teardown
+        class _BadReportSim:
+            def report(self):
+                raise RuntimeError("report boom")
+
+            def close(self):
+                pass
+
+        wrapper.sim = _BadReportSim()
+        SimulationWrapper._active = wrapper
+        wrapper.close()  # must swallow the error and still release ownership
+        assert SimulationWrapper._active is None
+        assert wrapper.sim is None
+
 
 class TestStorageInference:
     def test_storage_curve_infers_tabular(self, initialize_wrapper):

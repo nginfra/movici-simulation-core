@@ -211,9 +211,13 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
         )
         tester.new_time(600)
         result, _ = tester.update(600, None)
-        # every model builds a valid .inp, runs, and the impervious area sheds runoff
-        runoff = result[DS]["drainage_subcatchment_entities"]["urban_drainage.runoff"][0]
-        assert runoff > 0.0
+        # the impervious area sheds runoff for every model...
+        assert result[DS]["drainage_subcatchment_entities"]["urban_drainage.runoff"][0] > 0.0
+        # ...and infiltration is actually applied to the pervious area, confirming the
+        # model-specific [INFILTRATION] columns are interpreted, not ignored. Read the
+        # live array (infiltration may reach a steady rate and drop out of the delta).
+        subcatchments = tester.model.dataset.subcatchments
+        assert subcatchments.infiltration_loss.array[0] > 0.0
 
 
 class TestNextTime(TestUrbanDrainageModelBase):
