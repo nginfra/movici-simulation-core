@@ -28,13 +28,13 @@ def additional_attributes():
 
 class TestConfigSchema:
     def test_valid_config(self):
-        model = Model({"dataset": "drainage", "options": {"report_step": 600}})
+        model = Model({"dataset": "drainage", "options": {"report_timestep": 600}})
         assert model.dataset_name == "drainage"
-        assert model.report_step == 600
+        assert model.report_timestep == 600
 
     def test_default_report_step(self):
         model = Model({"dataset": "drainage"})
-        assert model.report_step == 300
+        assert model.report_timestep == 300
 
     def test_invalid_config_raises(self):
         with pytest.raises(ValidationError):
@@ -49,7 +49,7 @@ class TestUrbanDrainageModelBase:
 
     @pytest.fixture
     def model_config(self):
-        return {"dataset": DS, "options": {"routing_step": 30, "report_step": 300}}
+        return {"dataset": DS, "options": {"hydraulic_timestep": 30, "report_timestep": 300}}
 
     @pytest.fixture
     def global_timeline_info(self):
@@ -60,7 +60,7 @@ class TestUrbanDrainageModelBase:
         return {
             "version": 4,
             "name": DS,
-            "type": DS,
+            "type": "urban_drainage_network",
             "general": {"enum": ENUMS},
             "data": {
                 "drainage_junction_entities": {
@@ -193,7 +193,11 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
     def test_infiltration_models_run_and_produce_runoff(self, create_model_tester, infiltration):
         config = {
             "dataset": DS,
-            "options": {"routing_step": 30, "report_step": 300, "infiltration": infiltration},
+            "options": {
+                "hydraulic_timestep": 30,
+                "report_timestep": 300,
+                "infiltration": infiltration,
+            },
         }
         tester = create_model_tester(Model, config)
         tester.initialize()
@@ -219,18 +223,18 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
 
 class TestNextTime(TestUrbanDrainageModelBase):
     def test_initial_next_time(self, tester):
-        report_step = tester.model.report_step
+        report_timestep = tester.model.report_timestep
         tester.initialize()
         _, next_time = tester.update(0, None)
-        assert next_time == report_step
+        assert next_time == report_timestep
 
     def test_next_time_progression(self, tester):
-        report_step = tester.model.report_step
+        report_timestep = tester.model.report_timestep
         tester.initialize()
         _, next_time = tester.update(0, None)
         tester.new_time(next_time)
         _, new_next_time = tester.update(next_time, None)
-        assert new_next_time == next_time + report_step
+        assert new_next_time == next_time + report_timestep
 
 
 class TestPumpControl:
@@ -246,14 +250,14 @@ class TestPumpControl:
 
     @pytest.fixture
     def model_config(self):
-        return {"dataset": DS, "options": {"routing_step": 30, "report_step": 300}}
+        return {"dataset": DS, "options": {"hydraulic_timestep": 30, "report_timestep": 300}}
 
     @pytest.fixture
     def network_data(self):
         return {
             "version": 4,
             "name": DS,
-            "type": DS,
+            "type": "urban_drainage_network",
             "general": {"enum": ENUMS},
             "data": {
                 "drainage_storage_entities": {
@@ -312,7 +316,7 @@ class TestPumpControl:
 
 
 class TestReportStepFromGeneral:
-    """report_step supplied via the dataset general section must drive both the
+    """report_timestep supplied via the dataset general section must drive both the
     Movici wake cadence and the SWMM report step (single authoritative value)."""
 
     @pytest.fixture
@@ -325,8 +329,8 @@ class TestReportStepFromGeneral:
 
     @pytest.fixture
     def model_config(self):
-        # no report_step here; it comes from the dataset general section
-        return {"dataset": DS, "options": {"routing_step": 30}}
+        # no report_timestep here; it comes from the dataset general section
+        return {"dataset": DS, "options": {"hydraulic_timestep": 30}}
 
     @pytest.fixture
     def init_data(self):
@@ -336,8 +340,8 @@ class TestReportStepFromGeneral:
                 {
                     "version": 4,
                     "name": DS,
-                    "type": DS,
-                    "general": {"enum": ENUMS, "report_step": 600},
+                    "type": "urban_drainage_network",
+                    "general": {"enum": ENUMS, "report_timestep": 600},
                     "data": {
                         "drainage_junction_entities": {
                             "id": [1],
@@ -372,9 +376,9 @@ class TestReportStepFromGeneral:
 
     def test_report_step_resolved_from_general_section(self, tester):
         # provisional config default before initialize
-        assert tester.model.report_step == 300
+        assert tester.model.report_timestep == 300
         tester.initialize()
         # resolved from the merged options (general section wins) in initialize
-        assert tester.model.report_step == 600
+        assert tester.model.report_timestep == 600
         _, next_time = tester.update(0, None)
         assert next_time == 600

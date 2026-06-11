@@ -91,8 +91,8 @@ class Model(TrackedModel, name="urban_drainage"):
         # initialize() from the options merged with the dataset general section, so
         # the Movici wake cadence and the SWMM REPORT/WET/DRY steps stay in sync.
         options = self.config.get("options", {})
-        self.report_step: int = int(options.get("report_step", 300))
-        self.next_time = Moment(self.report_step)
+        self.report_timestep: int = int(options.get("report_timestep", 300))
+        self.next_time = Moment(self.report_timestep)
 
     def setup(self, state: TrackedState, logger: logging.Logger, **kwargs):
         """Register entity groups and wire up the simulation wrapper."""
@@ -150,8 +150,8 @@ class Model(TrackedModel, name="urban_drainage"):
         # Resolve the cadence from the same merged options the engine uses, so the
         # Movici re-wake cadence matches the SWMM REPORT/WET/DRY steps.
         options = self._get_options(state)
-        self.report_step = int(options.get("report_step", self.report_step))
-        self.next_time = Moment(self.report_step)
+        self.report_timestep = int(options.get("report_timestep", self.report_timestep))
+        self.next_time = Moment(self.report_timestep)
 
         # Anchor the SWMM calendar to the Movici timeline so its timestamps line up
         # with the scenario's world time (rather than an arbitrary fixed epoch).
@@ -180,7 +180,7 @@ class Model(TrackedModel, name="urban_drainage"):
             return self.next_time
 
         # 1. Apply control inputs to the live simulation objects
-        self.network.apply_controls()
+        self.network.process_changes()
         # 2. Step the live simulation forward to the requested moment (no-op at t=0)
         self.network.advance_to(int(moment.seconds))
         # 3. Publish simulation results
@@ -188,7 +188,7 @@ class Model(TrackedModel, name="urban_drainage"):
 
         self.last_calculated = moment
         if moment >= self.next_time:
-            self.next_time = Moment(self.next_time.timestamp + self.report_step)
+            self.next_time = Moment(self.next_time.timestamp + self.report_timestep)
         return self.next_time
 
     def shutdown(self, state: TrackedState):

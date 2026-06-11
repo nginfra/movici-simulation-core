@@ -145,7 +145,7 @@ class SwmmProcessor(t.Generic[T]):
     def build_inp(self, builder: InpBuilder) -> None:
         raise NotImplementedError
 
-    def apply_controls(self) -> None:
+    def process_changes(self) -> None:
         pass
 
     def write_results(self) -> None:
@@ -163,7 +163,7 @@ class NodeProcessor(SwmmProcessor[N]):
                 "COORDINATES", self.swmm_name(entity_id), fmt_num(xs[idx]), fmt_num(ys[idx])
             )
 
-    def apply_controls(self) -> None:
+    def process_changes(self) -> None:
         eg = self.entity_group
         if not len(eg):
             return
@@ -209,7 +209,7 @@ class LinkProcessor(SwmmProcessor[L]):
             ) from None
         return from_name, to_name
 
-    def apply_controls(self) -> None:
+    def process_changes(self) -> None:
         eg = self.entity_group
         if not len(eg):
             return
@@ -697,14 +697,14 @@ class RainGageProcessor(SwmmProcessor[RainGageEntity]):
             ts_name = f"{name}_ts"
             builder.add("RAINGAGES", name, rain_format, interval, 1.0, "TIMESERIES", ts_name)
             # Placeholder timeseries (single zero sample); rainfall is driven at
-            # runtime via RainGage.total_precip (see apply_controls).
+            # runtime via RainGage.total_precip (see process_changes).
             builder.add(
                 "TIMESERIES", ts_name, self.wrapper.start_date, self.wrapper.start_time[:5], 0
             )
             if has_xy:
                 builder.add("SYMBOLS", name, fmt_num(eg.x.array[idx]), fmt_num(eg.y.array[idx]))
 
-    def apply_controls(self) -> None:
+    def process_changes(self) -> None:
         eg = self.entity_group
         if not len(eg):
             return
@@ -914,8 +914,8 @@ class SimulationWrapper:
 
     def _write_options(self, builder: InpBuilder) -> None:
         opt = self._options
-        routing_step = float(opt.get("routing_step", 60))
-        report_step = float(opt.get("report_step", 300))
+        hydraulic_timestep = float(opt.get("hydraulic_timestep", 60))
+        report_timestep = float(opt.get("report_timestep", 300))
         builder.add("TITLE", "Movici urban drainage model")
         builder.add("OPTIONS", "FLOW_UNITS", opt.get("flow_units", "CMS"))
         builder.add("OPTIONS", "INFILTRATION", self.infiltration_model)
@@ -928,10 +928,10 @@ class SimulationWrapper:
         builder.add("OPTIONS", "REPORT_START_TIME", self.start_time)
         builder.add("OPTIONS", "END_DATE", END_DATE)
         builder.add("OPTIONS", "END_TIME", END_TIME)
-        builder.add("OPTIONS", "REPORT_STEP", fmt_hms(report_step))
-        builder.add("OPTIONS", "WET_STEP", fmt_hms(report_step))
-        builder.add("OPTIONS", "DRY_STEP", fmt_hms(report_step))
-        builder.add("OPTIONS", "ROUTING_STEP", fmt_num(routing_step))
+        builder.add("OPTIONS", "REPORT_STEP", fmt_hms(report_timestep))
+        builder.add("OPTIONS", "WET_STEP", fmt_hms(report_timestep))
+        builder.add("OPTIONS", "DRY_STEP", fmt_hms(report_timestep))
+        builder.add("OPTIONS", "ROUTING_STEP", fmt_num(hydraulic_timestep))
         builder.add("EVAPORATION", "CONSTANT", 0.0)
 
     # -- stepping -----------------------------------------------------------
@@ -941,16 +941,16 @@ class SimulationWrapper:
         raw = (self.sim.current_time - self.sim.start_time).total_seconds()
         return self._time_offset + raw
 
-    def apply_controls(self) -> None:
+    def process_changes(self) -> None:
         """Apply all runtime control inputs to the live simulation objects."""
         for processor in self.processors.values():
-            processor.apply_controls()
+            processor.process_changes()
 
     def advance_to(self, target_seconds: int) -> None:
         """Step the live simulation forward until at least *target_seconds*.
 
         SWMM marches forward only, so this never steps backwards. Control inputs
-        must already have been applied (see :meth:`apply_controls`).
+        must already have been applied (see :meth:`process_changes`).
         """
         assert self.sim is not None
         # SWMM advances in whole seconds; a sub-second remainder is left for the

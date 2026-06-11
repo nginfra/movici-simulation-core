@@ -22,7 +22,7 @@ ENUMS = {
 NETWORK = {
     "version": 4,
     "name": DS,
-    "type": DS,
+    "type": "urban_drainage_network",
     "general": {"enum": ENUMS},
     "data": {
         "drainage_junction_entities": {
@@ -117,7 +117,7 @@ def initialize_wrapper(schema, state):
                     attr.initialize(len(eg))
         wrapper = SimulationWrapper()
         created.append(wrapper)
-        wrapper.configure_options({"routing_step": 30, "report_step": 300})
+        wrapper.configure_options({"hydraulic_timestep": 30, "report_timestep": 300})
         wrapper.initialize(dataset)
         return wrapper, dataset
 
@@ -171,12 +171,12 @@ class TestStepping:
 
     def test_advance_reaches_target(self, initialize_wrapper):
         wrapper, _ = initialize_wrapper()
-        routing_step = 30
+        hydraulic_timestep = 30
         wrapper.advance_to(600)
         elapsed = wrapper.elapsed_seconds()
         # advance_to only exits once within <1s of the target, so the lower bound
         # is tight; it may overshoot by at most one routing step.
-        assert 599 <= elapsed <= 600 + routing_step
+        assert 599 <= elapsed <= 600 + hydraulic_timestep
         # re-advancing to the same (already reached) target is a no-op
         wrapper.advance_to(600)
         assert wrapper.elapsed_seconds() == pytest.approx(elapsed)
@@ -189,7 +189,7 @@ class TestStepping:
             dataset.raingages.rainfall_intensity.initialize(len(dataset.raingages))
         dataset.raingages.rainfall_intensity.array[:] = [10.0]
         for target in (300, 600, 900):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         wrapper.write_results()
         assert dataset.raingages.rainfall.array[0] == pytest.approx(10.0, rel=1e-3)
@@ -244,12 +244,18 @@ def _one_link_network(link_group, link_attrs, inflow=0.3):
             **link_attrs,
         },
     }
-    return {"version": 4, "name": DS, "type": DS, "general": {"enum": STRUCT_ENUMS}, "data": data}
+    return {
+        "version": 4,
+        "name": DS,
+        "type": "urban_drainage_network",
+        "general": {"enum": STRUCT_ENUMS},
+        "data": data,
+    }
 
 
 def _run(wrapper, until=2400):
     for target in range(300, until + 1, 300):
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(target)
     wrapper.write_results()
 
@@ -357,11 +363,11 @@ class TestStructures:
             inflow=0.3,
         )
         wrapper, dataset = initialize_wrapper(network)
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(300)
         wrapper.write_results()
         volume_early = dataset.storage.stored_volume.array[0]
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(1200)
         wrapper.write_results()
         st = dataset.storage
@@ -382,7 +388,7 @@ class TestNodeInflowControl:
             dataset.junctions.generated_inflow.initialize(len(dataset.junctions))
         dataset.junctions.generated_inflow.array[:] = [0.2, 0.0]
         for target in (300, 600):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         wrapper.write_results()
         # the injected inflow shows up as inflow on the fed node and routes downstream
@@ -430,7 +436,7 @@ class TestMultiRainGage:
         network = {
             "version": 4,
             "name": DS,
-            "type": DS,
+            "type": "urban_drainage_network",
             "general": {"enum": enums},
             "data": {
                 "drainage_junction_entities": {
@@ -480,7 +486,7 @@ class TestMultiRainGage:
             dataset.raingages.rainfall_intensity.initialize(len(dataset.raingages))
         dataset.raingages.rainfall_intensity.array[:] = [12.0, 0.0]  # gage 5 wet, gage 6 dry
         for target in (300, 600):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         wrapper.write_results()
         # each gage reports its own intensity
@@ -513,7 +519,7 @@ class TestHotstart:
     def test_checkpoint_and_rollback_restores_state(self, initialize_wrapper):
         wrapper, dataset = initialize_wrapper(_filling_storage_network())
         for target in (300, 600):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         wrapper.write_results()
         volume = dataset.storage.stored_volume.array[0]
@@ -523,7 +529,7 @@ class TestHotstart:
         checkpoint = wrapper.checkpoint()  # snapshot the state at t=600
 
         # advance further, then roll back to the checkpoint
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(1200)
         assert wrapper.elapsed_seconds() > 600
         wrapper.rollback_to(checkpoint)
@@ -534,19 +540,19 @@ class TestHotstart:
         assert dataset.storage.stored_volume.array[0] == pytest.approx(volume, rel=1e-4)
         assert dataset.storage.water_depth.array[0] == pytest.approx(depth, rel=1e-4)
         # and it can keep stepping forward from there
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(900)
         assert wrapper.elapsed_seconds() >= 870
 
     def test_rollback_enables_step_replay_with_different_control(self, initialize_wrapper):
         wrapper, dataset = initialize_wrapper(_filling_storage_network())
         for target in (300, 600):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         checkpoint = wrapper.checkpoint()
 
         # re-run [600 -> 900] with the orifice open
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(900)
         wrapper.write_results()
         flow_open = dataset.orifices.flow.array[0]
@@ -557,7 +563,7 @@ class TestHotstart:
         if not dataset.orifices.target_setting.has_data():
             dataset.orifices.target_setting.initialize(len(dataset.orifices))
         dataset.orifices.target_setting.array[:] = [0.0]
-        wrapper.apply_controls()
+        wrapper.process_changes()
         wrapper.advance_to(900)
         wrapper.write_results()
         # the re-run diverges from the trajectory it was rolled back from
@@ -580,7 +586,7 @@ class TestStorageInference:
         network = {
             "version": 4,
             "name": DS,
-            "type": DS,
+            "type": "urban_drainage_network",
             "general": {"enum": {"outfall_type": ["FREE", "NORMAL", "FIXED"]}},
             "data": {
                 "drainage_storage_entities": {
@@ -622,7 +628,7 @@ class TestStorageInference:
             inp = fh.read()
         assert "TABULAR" in inp and "[CURVES]" in inp and "Storage" in inp
         for target in (300, 600, 900):
-            wrapper.apply_controls()
+            wrapper.process_changes()
             wrapper.advance_to(target)
         wrapper.write_results()
         assert dataset.storage.stored_volume.array[0] > 0.0

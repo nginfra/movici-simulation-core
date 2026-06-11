@@ -7,18 +7,19 @@
     "dataset": {
       "type": "string",
       "movici.type": "dataset",
+      "movici.datasetType": "urban_drainage_network",
       "description": "Urban drainage network dataset name"
     },
     "options": {
       "type": "object",
       "description": "SWMM simulation options",
       "properties": {
-        "routing_step": {
+        "hydraulic_timestep": {
           "type": "number",
           "default": 60,
           "description": "SWMM routing (hydraulic) step in seconds (default: 60)"
         },
-        "report_step": {
+        "report_timestep": {
           "type": "number",
           "default": 300,
           "description": "Reporting / control cadence in seconds (default: 300)"
