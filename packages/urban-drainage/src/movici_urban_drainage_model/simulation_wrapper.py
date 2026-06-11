@@ -24,6 +24,7 @@ import logging
 import os
 import tempfile
 import typing as t
+from pathlib import Path
 
 import numpy as np
 from pyswmm import Links, Nodes, RainGages, Simulation, Subcatchments
@@ -1008,17 +1009,16 @@ class SimulationWrapper:
         self.links = None
         self.subcatchments = None
         self.raingages = None
-        if self._inp_path and os.path.exists(self._inp_path):
+        if self._inp_path:
             try:
-                os.remove(self._inp_path)
+                Path(self._inp_path).unlink(missing_ok=True)
             except OSError:
                 pass
             self._inp_path = None
         for hsf in self._hotstart_files:
-            if os.path.exists(hsf):
-                try:
-                    os.remove(hsf)
-                except OSError:
-                    pass
+            try:
+                Path(hsf).unlink(missing_ok=True)
+            except OSError:
+                pass
         self._hotstart_files = []
         self._checkpoint_seconds = {}
