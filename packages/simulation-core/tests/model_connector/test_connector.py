@@ -4,7 +4,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.core.types import ModelAdapterBase
+from movici_simulation_core.core.types import ModelAdapterBase, RemapDecision
 from movici_simulation_core.exceptions import InvalidMessage, StreamDone
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
@@ -16,6 +16,7 @@ from movici_simulation_core.messages import (
     PutDataMessage,
     QuitMessage,
     RegistrationMessage,
+    RemapMessage,
     ResultMessage,
     UpdateMessage,
     UpdateSeriesMessage,
@@ -76,11 +77,16 @@ class TestConnectorStreamHandler:
             (NewTimeMessage(0), "new_time"),
             (UpdateMessage(0), "update"),
             (UpdateSeriesMessage(updates=[]), "update_series"),
+            (RemapMessage(), "remap"),
         ],
     )
     def test_handle_message_dispatches_to_method(self, stream_handler, connector, msg, method):
         stream_handler.handle_message(msg)
         assert getattr(connector, method).call_args == call(msg)
+
+    def test_remap_message_returns_ack(self, stream_handler, connector, stream):
+        stream_handler.handle_message(RemapMessage())
+        assert stream.send.call_args == call(AcknowledgeMessage())
 
     def test_handle_quit_message_calls_close(self, stream_handler, connector):
         with pytest.raises(StreamDone):
@@ -112,6 +118,7 @@ class TestModelConnector:
         mock = Mock(ModelAdapterBase)
         mock.initialize.return_value = data_mask
         mock.update.return_value = ({"some": "result"}, None)
+        mock.priority = 10
         return mock
 
     @pytest.fixture
@@ -216,6 +223,227 @@ class TestModelConnector:
     def test_closes_model(self, initialized_connector, model):
         initialized_connector.close(object())
         assert model.close.call_count == 1
+
+
+class TestModelConnectorRemap:
+    """Connector-level wiring for the REMAP command. See issue #127."""
+
+    @pytest.fixture
+    def data_mask(self):
+        return {
+            "pub": {"ds": {"eg": ["speed"]}},
+            "sub": {"ds": {"eg": ["traffic"]}},
+        }
+
+    @pytest.fixture
+    def model(self, data_mask):
+        mock = Mock(ModelAdapterBase)
+        mock.initialize.return_value = data_mask
+        mock.update.return_value = ({"ds": {"eg": {"speed": [1, 2, 3], "id": [10, 20, 30]}}}, None)
+        mock.remap.return_value = RemapDecision()
+        mock.priority = 10
+        return mock
+
+    @pytest.fixture
+    def update_handler(self):
+        mock = Mock(UpdateDataClient)
+        mock.put.return_value = ("address", "key")
+        return mock
+
+    @pytest.fixture
+    def connector(self, model, update_handler):
+        return ModelConnector(
+            model,
+            updates=update_handler,
+            init_data=Mock(),
+            serialization=JsonSerializer(),
+        )
+
+    @pytest.fixture
+    def initialized_connector(self, connector):
+        connector.initialize()
+        return connector
+
+    def test_pub_remap_renames_outgoing_keys(self, initialized_connector, model, update_handler):
+        # ModelAdapterBase default decision: install both renames.
+        initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
+        initialized_connector.update(UpdateMessage(1))
+        sent_payload = json.loads(update_handler.put.call_args[0][0])
+        assert sent_payload == {"ds": {"eg": {"speed:m:i": [1, 2, 3], "id": [10, 20, 30]}}}
+
+    def test_pub_remap_only_renames_matching_attributes(
+        self, initialized_connector, model, update_handler
+    ):
+        model.update.return_value = (
+            {"ds": {"eg": {"speed": [1], "flow": [2], "id": [3]}}},
+            None,
+        )
+        initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
+        initialized_connector.update(UpdateMessage(1))
+        sent_payload = json.loads(update_handler.put.call_args[0][0])
+        assert sent_payload == {"ds": {"eg": {"speed:m:i": [1], "flow": [2], "id": [3]}}}
+
+    def test_sub_remap_rewrites_data_mask(self, initialized_connector, update_handler):
+        update_handler.get.return_value = b"{}"
+        initialized_connector.remap(
+            RemapMessage(sub={"ds": {"eg": {"traffic:other:i": "traffic"}}})
+        )
+        initialized_connector.update(UpdateMessage(1, "key", "addr"))
+        assert update_handler.get.call_args == call(
+            key="key", address="addr", mask={"ds": {"eg": ["traffic:other:i"]}}
+        )
+
+    def test_sub_remap_renames_incoming_keys_back(
+        self, initialized_connector, model, update_handler
+    ):
+        update_handler.get.return_value = json.dumps(
+            {"ds": {"eg": {"traffic:other:i": [1, 2], "id": [3, 4]}}}
+        ).encode()
+        initialized_connector.remap(
+            RemapMessage(sub={"ds": {"eg": {"traffic:other:i": "traffic"}}})
+        )
+        initialized_connector.update(UpdateMessage(1, "key", "addr"))
+        received = model.update.call_args.kwargs["data"]
+        assert received == {"ds": {"eg": {"traffic": [1, 2], "id": [3, 4]}}}
+
+    def test_sub_remap_back_propagation_keeps_canonical_in_mask(
+        self, initialized_connector, update_handler
+    ):
+        update_handler.get.return_value = b"{}"
+        # back-propagation: canonical name preserved via {canonical: canonical} entry
+        initialized_connector.remap(
+            RemapMessage(sub={"ds": {"eg": {"traffic:other:i": "traffic", "traffic": "traffic"}}})
+        )
+        initialized_connector.update(UpdateMessage(1, "key", "addr"))
+        mask = update_handler.get.call_args.kwargs["mask"]
+        assert set(mask["ds"]["eg"]) == {"traffic", "traffic:other:i"}
+
+    def test_many_to_one_sub_raises_when_model_does_not_implement_remap(
+        self, initialized_connector, model
+    ):
+        # Default Model.remap returns None; many-to-one sub must raise. Wire that through
+        # the real base-class decision logic instead of the mock.
+        from movici_simulation_core.exceptions import RemapError
+
+        def real_decide(msg):
+            return ModelAdapterBase.remap(model, msg)
+
+        # The default Model.remap on a Mock returns a Mock — set it to actual None.
+        model.model = Mock()
+        model.model.remap = Mock(return_value=None)
+        model.remap.side_effect = real_decide
+        with pytest.raises(RemapError) as exc_info:
+            initialized_connector.remap(
+                RemapMessage(sub={"ds": {"eg": {"a:m1:i": "a", "a:m2:i": "a"}}})
+            )
+        assert "many-to-one" in str(exc_info.value)
+
+    def test_many_to_one_sub_with_model_returning_true_installs_no_middleware(
+        self, initialized_connector, model, update_handler
+    ):
+        # Model takes full responsibility — connector does not rename, but the data_mask
+        # update still happens so the connector subscribes to the variants.
+        def real_decide(msg):
+            return ModelAdapterBase.remap(model, msg)
+
+        model.model = Mock()
+        model.model.remap = Mock(return_value=True)
+        model.remap.side_effect = real_decide
+        update_handler.get.return_value = json.dumps(
+            {"ds": {"eg": {"a:m1:i": [1], "a:m2:i": [2]}}}
+        ).encode()
+        initialized_connector.remap(
+            RemapMessage(sub={"ds": {"eg": {"a:m1:i": "a", "a:m2:i": "a"}}})
+        )
+        initialized_connector.update(UpdateMessage(1, "key", "addr"))
+        # data_mask was updated to subscribe to the variants alongside the existing
+        # ``traffic`` subscription, since the REMAP did not list ``traffic`` as an original
+        # to drop.
+        mask = update_handler.get.call_args.kwargs["mask"]
+        assert set(mask["ds"]["eg"]) == {"a:m1:i", "a:m2:i", "traffic"}
+        # but the model received raw :i keys (no rename middleware installed)
+        received = model.update.call_args.kwargs["data"]
+        assert received == {"ds": {"eg": {"a:m1:i": [1], "a:m2:i": [2]}}}
+
+    def test_empty_remap_is_noop(self, initialized_connector, model, update_handler):
+        # A REMAP with no pub or sub section should not perturb the connector state.
+        original_mask = json.dumps(initialized_connector.data_mask)
+        initialized_connector.remap(RemapMessage())
+        assert json.dumps(initialized_connector.data_mask) == original_mask
+        # Subsequent updates pass through unchanged.
+        initialized_connector.update(UpdateMessage(1))
+        sent_payload = json.loads(update_handler.put.call_args[0][0])
+        assert sent_payload == {"ds": {"eg": {"speed": [1, 2, 3], "id": [10, 20, 30]}}}
+
+    def test_wildcard_sub_mask_preserved_across_remap(
+        self, model, update_handler, init_data_handler
+    ):
+        # A connector initialised with a wildcard sub (``sub=None``) must keep that
+        # wildcard after REMAP, otherwise it silently loses every attribute that wasn't
+        # named in the REMAP. Adversarial-review critical finding.
+        model.initialize.return_value = {"pub": {}, "sub": None}
+        connector = ModelConnector(
+            model,
+            updates=update_handler,
+            init_data=init_data_handler,
+            serialization=JsonSerializer(),
+        )
+        connector.initialize()
+        connector.remap(RemapMessage(sub={"ds": {"eg": {"a:m1:i": "a"}}}))
+        assert connector.data_mask["sub"] is None
+
+    def test_pub_rename_rejects_non_dict_model_output(
+        self, initialized_connector, model, update_handler
+    ):
+        # If a model returns a non-dict at the entity-group level the connector must fail
+        # closed instead of serialising the corruption downstream. Adversarial-review
+        # major finding.
+        model.update.return_value = ({"ds": {"eg": ["bad", "data"]}}, None)
+        initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
+        with pytest.raises(ValueError, match="malformed update at"):
+            initialized_connector.update(UpdateMessage(1))
+
+    def test_sub_rename_rejects_non_dict_incoming_data(
+        self, initialized_connector, model, update_handler
+    ):
+        update_handler.get.return_value = json.dumps({"ds": {"eg": [1, 2, 3]}}).encode()
+        initialized_connector.remap(
+            RemapMessage(sub={"ds": {"eg": {"traffic:other:i": "traffic"}}})
+        )
+        with pytest.raises(ValueError, match="malformed update at"):
+            initialized_connector.update(UpdateMessage(1, "key", "addr"))
+
+
+class TestModelAdapterBasePriority:
+    """The ``ModelAdapterBase.priority`` property is the single boundary where the
+    user-supplied priority is validated before it reaches the orchestrator. See issue #127.
+    """
+
+    def test_returns_inner_model_priority(self):
+        class _M:
+            priority = 20
+
+        adapter = Mock(ModelAdapterBase)
+        adapter.model = _M()
+        assert ModelAdapterBase.priority.fget(adapter) == 20
+
+    def test_rejects_non_int_priority(self):
+        class _M:
+            priority = "high"
+
+        adapter = Mock(ModelAdapterBase)
+        adapter.model = _M()
+        with pytest.raises(TypeError, match="priority must be int"):
+            ModelAdapterBase.priority.fget(adapter)
+
+    def test_rejects_bool_priority(self):
+        class _M:
+            priority = True
+
+        adapter = Mock(ModelAdapterBase)
+        adapter.model = _M()
+        with pytest.raises(TypeError, match="priority must be int"):
+            ModelAdapterBase.priority.fget(adapter)
 
 
 class TestUpdateHandler:
