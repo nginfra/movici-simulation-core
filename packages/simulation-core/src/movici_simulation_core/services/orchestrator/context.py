@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 from itertools import product
 
+from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ErrorMessage,
@@ -14,14 +15,20 @@ from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
     RegistrationMessage,
+    RemapMessage,
     ResultMessage,
     UpdateMessage,
     UpdateSeriesMessage,
 )
-from movici_simulation_core.utils.data_mask import masks_overlap
+from movici_simulation_core.utils.data_mask import (
+    apply_remap_to_pub_mask,
+    apply_remap_to_sub_mask,
+    masks_overlap,
+)
 
 from .fsm import FSM, Always, State, TransitionsT
 from .interconnectivity import format_matrix
+from .remap import ModelRegistration, compute_remap_plan
 from .stopwatch import ReportingStopwatch, Stopwatch
 
 
@@ -121,7 +128,14 @@ class NoUpdateMessage(Message):
     pass
 
 
-Command = t.Union[NewTimeMessage, UpdateMessage, NoUpdateMessage, UpdateSeriesMessage, QuitMessage]
+Command = t.Union[
+    NewTimeMessage,
+    UpdateMessage,
+    NoUpdateMessage,
+    UpdateSeriesMessage,
+    QuitMessage,
+    RemapMessage,
+]
 Response = t.Union[RegistrationMessage, AcknowledgeMessage, ResultMessage, ErrorMessage]
 
 
@@ -144,6 +158,8 @@ class ConnectedModel:
     next_time: t.Optional[int] = field(default=None, init=False)
     failed: bool = field(default=False, init=False)
     ack: bool = field(default=False, init=False)
+    # Publishing priority, set from the RegistrationMessage. See issue #127.
+    priority: int = field(default=int(Priority.REGULAR), init=False)
 
     quit: t.Optional[QuitMessage] = field(default=None, init=False)
     pending_updates: t.List[UpdateMessage] = field(default_factory=list, init=False)
@@ -218,6 +234,8 @@ class WaitingForMessage(BaseModelState):
             self.process_no_update(msg)
         if isinstance(msg, UpdateMessage):
             self.process_update(msg)
+        if isinstance(msg, RemapMessage):
+            self.process_remap(msg)
         if isinstance(msg, QuitMessage):
             self.process_quit(msg)
 
@@ -240,6 +258,9 @@ class WaitingForMessage(BaseModelState):
     def process_update(self, msg: UpdateMessage):
         pass
 
+    def process_remap(self, msg: RemapMessage):
+        pass
+
     def process_quit(self, msg: QuitMessage):
         pass
 
@@ -252,6 +273,7 @@ class WaitingForMessage(BaseModelState):
         self.context.timeline.set_model_to_start(self.context)
         self.context.pub = msg.pub
         self.context.sub = msg.sub
+        self.context.priority = msg.priority
 
     @_handle_response.register
     def _(self, msg: AcknowledgeMessage) -> None:
@@ -349,6 +371,39 @@ class Registration(Busy):
     def on_enter(self):
         self.context.busy = True
         self.context.timer.start()
+
+    def _transitions(self):
+        # After receiving a RegistrationMessage, transition to AwaitingRemap (instead of
+        # the regular Idle) so the orchestrator can optionally send a REMAP command before
+        # the first NewTime. See issue #127.
+        return [
+            (lambda c: c.failed, Done),
+            (lambda c: (not c.busy) and c.quit, ProcessPendingQuit),
+            (lambda c: not c.busy, AwaitingRemap),
+        ]
+
+
+class AwaitingRemap(Idle):
+    """Post-registration state: model is ready, but the orchestrator may still send a
+    REMAP command before the simulation actually starts (issue #127). This is an Idle-like
+    state — it can also receive NewTime, UpdateMessage, or QuitMessage and behave exactly
+    like Idle for those, which lets the orchestrator skip REMAP entirely for models that
+    don't need one and proceed straight to NewTime."""
+
+    valid_commands = (RemapMessage, NewTimeMessage, NoUpdateMessage, UpdateMessage, QuitMessage)
+    valid_responses = ()
+
+    def process_remap(self, msg: RemapMessage):
+        self.context.ack = False
+        self.context.send_command(msg)
+        self.next_state = Remapping
+
+
+class Remapping(Busy):
+    """A REMAP message has been sent to the model, and it must Acknowledge it. See issue #127."""
+
+    valid_commands = (UpdateMessage, NoUpdateMessage, QuitMessage)
+    valid_responses = (AcknowledgeMessage, ErrorMessage)
 
 
 class NewTime(Busy):
@@ -491,3 +546,27 @@ class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
     def reset_model_timers(self):
         for model in self.values():
             model.timer.reset()
+
+    def compute_remap_plan(self) -> t.Dict[str, RemapMessage]:
+        """Compute the REMAP plan from the post-registration pub/sub masks and priorities
+        of every connected model. Raises ``RemapConflictError`` on an unresolved
+        multi-publisher conflict. See issue #127."""
+        registrations = [
+            ModelRegistration(
+                name=model.name, pub=model.pub, sub=model.sub, priority=model.priority
+            )
+            for model in self.values()
+        ]
+        return compute_remap_plan(registrations)
+
+    def apply_remap_plan(self, plan: t.Mapping[str, RemapMessage]) -> None:
+        """Send each REMAP message to its target model AND update the orchestrator's
+        in-memory copy of that model's pub/sub mask so ``determine_interdependency``
+        sees the post-REMAP routing graph. See issue #127."""
+        for name, message in plan.items():
+            model = self.get(name)
+            if model is None:
+                continue
+            model.pub = apply_remap_to_pub_mask(model.pub, message.pub)
+            model.sub = apply_remap_to_sub_mask(model.sub, message.sub)
+            model.recv_event(message)

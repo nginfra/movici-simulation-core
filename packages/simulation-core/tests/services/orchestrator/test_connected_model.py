@@ -2,13 +2,22 @@ from unittest.mock import Mock, call
 
 import pytest
 
+from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
+    NewTimeMessage,
     RegistrationMessage,
+    RemapMessage,
     ResultMessage,
     UpdateMessage,
 )
-from movici_simulation_core.services.orchestrator.context import ConnectedModel, TimelineController
+from movici_simulation_core.services.orchestrator.context import (
+    AwaitingRemap,
+    ConnectedModel,
+    Idle,
+    Remapping,
+    TimelineController,
+)
 
 
 @pytest.fixture
@@ -116,3 +125,66 @@ class TestConnectedModel:
         assert not running_model.failed
         running_model.recv_event(AcknowledgeMessage())
         assert running_model.failed
+
+
+class TestConnectedModelRemap:
+    """Per-model FSM behaviour around REMAP. See issue #127."""
+
+    @pytest.fixture
+    def model(self, timeline):
+        model = get_model(timeline=timeline)
+        model.recv_event(RegistrationMessage(None, None))
+        return model
+
+    def test_registration_captures_priority(self, timeline):
+        model = get_model(timeline=timeline)
+        model.recv_event(RegistrationMessage(None, None, priority=int(Priority.SOLVER_HELPER)))
+        assert model.priority == int(Priority.SOLVER_HELPER)
+
+    def test_registration_default_priority(self, model):
+        # The default value is REGULAR (10).
+        assert model.priority == int(Priority.REGULAR)
+
+    def test_post_registration_state_is_awaiting_remap(self, model):
+        assert isinstance(model.fsm.state, AwaitingRemap)
+
+    def test_remap_message_sent_to_model(self, model):
+        msg = RemapMessage(pub={"ds": {"eg": {"x": "x:m:i"}}})
+        model.recv_event(msg)
+        assert model.send.call_args == call(msg)
+
+    def test_remap_busy_until_ack(self, model):
+        model.recv_event(RemapMessage(pub={"ds": {"eg": {"x": "x:m:i"}}}))
+        assert model.busy
+        assert isinstance(model.fsm.state, Remapping)
+
+    def test_remap_ack_transitions_to_idle(self, model):
+        model.recv_event(RemapMessage(pub={"ds": {"eg": {"x": "x:m:i"}}}))
+        model.recv_event(AcknowledgeMessage())
+        assert not model.busy
+        assert isinstance(model.fsm.state, Idle)
+
+    def test_new_time_in_awaiting_remap_falls_through(self, model):
+        # Models that don't get a REMAP can receive NewTime directly while sitting in
+        # AwaitingRemap. This is the path for the no-conflict no-helper case.
+        msg = NewTimeMessage(0)
+        model.recv_event(msg)
+        assert model.send.call_args == call(msg)
+
+    def test_remap_with_quit_pending_drops_remap(self, model):
+        # If a QuitMessage arrives in AwaitingRemap before the orchestrator's REMAP, we
+        # transition out via the standard quit path and never honour the REMAP.
+        from movici_simulation_core.messages import QuitMessage
+
+        model.recv_event(QuitMessage())
+        assert model.quit is not None
+
+    def test_update_message_in_awaiting_remap_queues_pending(self, model):
+        # AwaitingRemap inherits Idle's update handling: an UpdateMessage that arrives
+        # before any NewTime is queued to pending_updates and the model transitions out
+        # to ProcessPendingUpdates. Adversarial-review test-coverage gap.
+        update = UpdateMessage(0)
+        model.recv_event(update)
+        # The original UpdateMessage was consumed by ProcessPendingUpdates and dispatched
+        # to the model — pending_updates is drained, but the dispatch went out the wire.
+        assert any(call_args == call(update) for call_args in model.send.call_args_list)

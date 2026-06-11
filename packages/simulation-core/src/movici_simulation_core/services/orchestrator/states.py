@@ -12,6 +12,7 @@ from movici_simulation_core.services.orchestrator.fsm import (
     State,
     TransitionsT,
 )
+from movici_simulation_core.services.orchestrator.remap import RemapConflictError
 
 
 class OrchestratorCondition(Condition[Context], ABC):
@@ -57,6 +58,46 @@ class WaitForModels(OrchestratorState, ABC):
 
 
 class ModelsRegistration(WaitForModels):
+    def transitions(self) -> TransitionsT:
+        return [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, ComputeAndSendRemap),
+        ]
+
+
+class ComputeAndSendRemap(OrchestratorState):
+    """Compute the REMAP plan from the registered pub/sub masks + priorities and queue a
+    REMAP command for every affected model. Each affected model transitions to its
+    Remapping state (Busy) and must acknowledge. Models that need no remap stay in
+    AwaitingRemap (not busy) and pass through transparently. See issue #127."""
+
+    def run(self):
+        try:
+            plan = self.context.models.compute_remap_plan()
+        except RemapConflictError as exc:
+            # Conflict — log a user-actionable message and tear the simulation down via
+            # the standard finalize path so any partially-registered models still get a
+            # clean QUIT.
+            self.context.logger.error(str(exc))
+            for model in self.context.models.values():
+                model.failed = True
+            return
+        if not plan:
+            return
+        self.context.models.apply_remap_plan(plan)
+
+    def transitions(self) -> TransitionsT:
+        return [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+            (Always, WaitForRemapAcks),
+        ]
+
+
+class WaitForRemapAcks(WaitForModels):
+    """Wait until every model that received a REMAP has acknowledged before proceeding to
+    the Running phase. See issue #127."""
+
     def transitions(self) -> TransitionsT:
         return [
             (Failed, StartFinalizingPhase),
