@@ -86,7 +86,7 @@ def _defined_mask(attr) -> t.Optional[np.ndarray]:
     return ~attr.is_undefined()
 
 
-def _val(attr, idx: int, mask: t.Optional[np.ndarray], default):
+def _opt_val(attr, idx: int, mask: t.Optional[np.ndarray], default):
     """Optional scalar value at *idx*, returning *default* when undefined."""
     if mask is not None and mask[idx]:
         return type(default)(attr.array[idx])
@@ -176,32 +176,17 @@ class NodeProcessor(SwmmProcessor[N]):
 
     def write_results(self) -> None:
         eg = self.entity_group
-        n = len(eg)
-        if not n:
+        if not len(eg):
             return
-        depth = np.empty(n)
-        head = np.empty(n)
-        flooding = np.empty(n)
-        total_inflow = np.empty(n)
-        total_outflow = np.empty(n)
-        lateral_inflow = np.empty(n)
-        volume = np.empty(n)
         for idx, entity_id in enumerate(eg.index.ids):
             node = self.wrapper.nodes[self.swmm_name(entity_id)]
-            depth[idx] = node.depth
-            head[idx] = node.head
-            flooding[idx] = node.flooding
-            total_inflow[idx] = node.total_inflow
-            total_outflow[idx] = node.total_outflow
-            lateral_inflow[idx] = node.lateral_inflow
-            volume[idx] = node.volume
-        eg.water_depth.array[:] = depth
-        eg.hydraulic_head.array[:] = head
-        eg.flooding.array[:] = flooding
-        eg.total_inflow.array[:] = total_inflow
-        eg.total_outflow.array[:] = total_outflow
-        eg.lateral_inflow.array[:] = lateral_inflow
-        eg.stored_volume.array[:] = volume
+            eg.water_depth.array[idx] = node.depth
+            eg.hydraulic_head.array[idx] = node.head
+            eg.flooding.array[idx] = node.flooding
+            eg.total_inflow.array[idx] = node.total_inflow
+            eg.total_outflow.array[idx] = node.total_outflow
+            eg.lateral_inflow.array[idx] = node.lateral_inflow
+            eg.stored_volume.array[idx] = node.volume
 
 
 class LinkProcessor(SwmmProcessor[L]):
@@ -237,26 +222,15 @@ class LinkProcessor(SwmmProcessor[L]):
 
     def write_results(self) -> None:
         eg = self.entity_group
-        n = len(eg)
-        if not n:
+        if not len(eg):
             return
-        flow = np.empty(n)
-        depth = np.empty(n)
-        volume = np.empty(n)
-        froude = np.empty(n)
-        setting = np.empty(n)
         for idx, entity_id in enumerate(eg.index.ids):
             link = self.wrapper.links[self.swmm_name(entity_id)]
-            flow[idx] = link.flow
-            depth[idx] = link.depth
-            volume[idx] = link.volume
-            froude[idx] = link.froude
-            setting[idx] = link.current_setting
-        eg.flow.array[:] = flow
-        eg.flow_depth.array[:] = depth
-        eg.flow_volume.array[:] = volume
-        eg.froude_number.array[:] = froude
-        eg.current_setting.array[:] = setting
+            eg.flow.array[idx] = link.flow
+            eg.flow_depth.array[idx] = link.depth
+            eg.flow_volume.array[idx] = link.volume
+            eg.froude_number.array[idx] = link.froude
+            eg.current_setting.array[idx] = link.current_setting
 
 
 # ---------------------------------------------------------------------------
@@ -280,10 +254,10 @@ class JunctionProcessor(NodeProcessor[JunctionEntity]):
                 "JUNCTIONS",
                 self.swmm_name(entity_id),
                 fmt_num(eg.invert_elevation.array[idx]),
-                fmt_num(_val(eg.max_depth, idx, max_depth_mask, 0.0)),
-                fmt_num(_val(eg.initial_depth, idx, init_depth_mask, 0.0)),
-                fmt_num(_val(eg.surcharge_depth, idx, sur_mask, 0.0)),
-                fmt_num(_val(eg.ponded_area, idx, pond_mask, 0.0)),
+                fmt_num(_opt_val(eg.max_depth, idx, max_depth_mask, 0.0)),
+                fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0)),
+                fmt_num(_opt_val(eg.surcharge_depth, idx, sur_mask, 0.0)),
+                fmt_num(_opt_val(eg.ponded_area, idx, pond_mask, 0.0)),
             )
         self._add_coordinates(builder)
 
@@ -299,9 +273,9 @@ class OutfallProcessor(NodeProcessor[OutfallEntity]):
         gate_mask = _defined_mask(eg.flap_gate)
         for idx, entity_id in enumerate(eg.index.ids):
             outfall_type = _enum_kw(eg.outfall_type, idx)
-            gated = "YES" if _val(eg.flap_gate, idx, gate_mask, False) else "NO"
+            gated = "YES" if _opt_val(eg.flap_gate, idx, gate_mask, False) else "NO"
             if outfall_type == "FIXED":
-                stage = fmt_num(_val(eg.fixed_stage, idx, stage_mask, 0.0))
+                stage = fmt_num(_opt_val(eg.fixed_stage, idx, stage_mask, 0.0))
                 builder.add(
                     "OUTFALLS",
                     self.swmm_name(entity_id),
@@ -346,7 +320,7 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
             name = self.swmm_name(entity_id)
             elev = fmt_num(eg.invert_elevation.array[idx])
             ymax = fmt_num(eg.max_depth.array[idx])
-            y0 = fmt_num(_val(eg.initial_depth, idx, init_depth_mask, 0.0))
+            y0 = fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0))
 
             curve_type = "FUNCTIONAL"
             if curve_type_mask is not None and curve_type_mask[idx]:
@@ -359,9 +333,9 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
                 curve_name = self.wrapper.add_curve(curve, "Storage")
                 builder.add("STORAGE", name, elev, ymax, y0, "TABULAR", curve_name)
             else:
-                coeff = _val(eg.storage_coefficient, idx, coeff_mask, 0.0)
-                expon = _val(eg.storage_exponent, idx, exp_mask, 0.0)
-                const = _val(eg.storage_constant, idx, const_mask, 0.0)
+                coeff = _opt_val(eg.storage_coefficient, idx, coeff_mask, 0.0)
+                expon = _opt_val(eg.storage_exponent, idx, exp_mask, 0.0)
+                const = _opt_val(eg.storage_constant, idx, const_mask, 0.0)
                 if coeff == 0.0 and const == 0.0:
                     # A storage unit needs a non-zero surface area; fall back to a
                     # sensible constant area and warn rather than producing an
@@ -411,13 +385,13 @@ class ConduitProcessor(LinkProcessor[ConduitEntity]):
                 to_name,
                 fmt_num(eg.length.array[idx]),
                 fmt_num(eg.roughness.array[idx]),
-                fmt_num(_val(eg.inlet_offset, idx, in_off_mask, 0.0)),
-                fmt_num(_val(eg.outlet_offset, idx, out_off_mask, 0.0)),
-                fmt_num(_val(eg.initial_flow, idx, init_flow_mask, 0.0)),
+                fmt_num(_opt_val(eg.inlet_offset, idx, in_off_mask, 0.0)),
+                fmt_num(_opt_val(eg.outlet_offset, idx, out_off_mask, 0.0)),
+                fmt_num(_opt_val(eg.initial_flow, idx, init_flow_mask, 0.0)),
                 0,
             )
             geom = eg.cross_section_geometry.array[idx]
-            barrels = int(_val(eg.barrels, idx, barrels_mask, 1))
+            barrels = _opt_val(eg.barrels, idx, barrels_mask, 1)
             builder.add(
                 "XSECTIONS",
                 name,
@@ -468,8 +442,8 @@ class PumpProcessor(LinkProcessor[PumpEntity]):
                 to_name,
                 curve_name,
                 "ON",
-                fmt_num(_val(eg.startup_depth, idx, startup_mask, 0.0)),
-                fmt_num(_val(eg.shutoff_depth, idx, shutoff_mask, 0.0)),
+                fmt_num(_opt_val(eg.startup_depth, idx, startup_mask, 0.0)),
+                fmt_num(_opt_val(eg.shutoff_depth, idx, shutoff_mask, 0.0)),
             )
 
 
@@ -485,14 +459,14 @@ class OrificeProcessor(LinkProcessor[OrificeEntity]):
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             from_name, to_name = self._from_to(idx, entity_id)
-            gated = "YES" if _val(eg.flap_gate, idx, gate_mask, False) else "NO"
+            gated = "YES" if _opt_val(eg.flap_gate, idx, gate_mask, False) else "NO"
             builder.add(
                 "ORIFICES",
                 name,
                 from_name,
                 to_name,
                 _enum_kw(eg.orifice_type, idx),
-                fmt_num(_val(eg.crest_height, idx, offset_mask, 0.0)),
+                fmt_num(_opt_val(eg.crest_height, idx, offset_mask, 0.0)),
                 fmt_num(eg.discharge_coefficient.array[idx]),
                 gated,
                 0,
@@ -522,7 +496,7 @@ class WeirProcessor(LinkProcessor[WeirEntity]):
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             from_name, to_name = self._from_to(idx, entity_id)
-            gated = "YES" if _val(eg.flap_gate, idx, gate_mask, False) else "NO"
+            gated = "YES" if _opt_val(eg.flap_gate, idx, gate_mask, False) else "NO"
             geom = eg.cross_section_geometry.array[idx]
             weir_type = _enum_kw(eg.weir_type, idx)
             # SWMM requires the opening cross-section shape to match the weir type
@@ -534,7 +508,7 @@ class WeirProcessor(LinkProcessor[WeirEntity]):
                 from_name,
                 to_name,
                 weir_type,
-                fmt_num(_val(eg.crest_height, idx, offset_mask, 0.0)),
+                fmt_num(_opt_val(eg.crest_height, idx, offset_mask, 0.0)),
                 fmt_num(eg.discharge_coefficient.array[idx]),
                 gated,
                 0,
@@ -569,8 +543,8 @@ class OutletProcessor(LinkProcessor[OutletEntity]):
             name = self.swmm_name(entity_id)
             from_name, to_name = self._from_to(idx, entity_id)
             rating_type = _enum_kw(eg.outlet_rating_type, idx)
-            gated = "YES" if _val(eg.flap_gate, idx, gate_mask, False) else "NO"
-            offset = fmt_num(_val(eg.crest_height, idx, offset_mask, 0.0))
+            gated = "YES" if _opt_val(eg.flap_gate, idx, gate_mask, False) else "NO"
+            offset = fmt_num(_opt_val(eg.crest_height, idx, offset_mask, 0.0))
             if "TABULAR" in rating_type:
                 curve = _extract_csr_curve(eg.rating_curve, idx)
                 if curve is None:
@@ -580,8 +554,8 @@ class OutletProcessor(LinkProcessor[OutletEntity]):
                     "OUTLETS", name, from_name, to_name, offset, rating_type, curve_name, gated
                 )
             else:
-                coeff = fmt_num(_val(eg.rating_coefficient, idx, coeff_mask, 1.0))
-                expon = fmt_num(_val(eg.rating_exponent, idx, exp_mask, 0.5))
+                coeff = fmt_num(_opt_val(eg.rating_coefficient, idx, coeff_mask, 1.0))
+                expon = fmt_num(_opt_val(eg.rating_exponent, idx, exp_mask, 0.5))
                 builder.add(
                     "OUTLETS", name, from_name, to_name, offset, rating_type, coeff, expon, gated
                 )
@@ -639,48 +613,35 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
             builder.add(
                 "SUBAREAS",
                 name,
-                fmt_num(_val(eg.n_imperv, idx, n_imperv_mask, 0.01)),
-                fmt_num(_val(eg.n_perv, idx, n_perv_mask, 0.1)),
-                fmt_num(_val(eg.s_imperv, idx, s_imperv_mask, 0.05)),
-                fmt_num(_val(eg.s_perv, idx, s_perv_mask, 0.05)),
-                fmt_num(_val(eg.pct_zero, idx, pct_zero_mask, 25.0)),
+                fmt_num(_opt_val(eg.n_imperv, idx, n_imperv_mask, 0.01)),
+                fmt_num(_opt_val(eg.n_perv, idx, n_perv_mask, 0.1)),
+                fmt_num(_opt_val(eg.s_imperv, idx, s_imperv_mask, 0.05)),
+                fmt_num(_opt_val(eg.s_perv, idx, s_perv_mask, 0.05)),
+                fmt_num(_opt_val(eg.pct_zero, idx, pct_zero_mask, 25.0)),
                 "OUTLET",
             )
             builder.add(
                 "INFILTRATION",
                 name,
-                fmt_num(_val(eg.max_infiltration_rate, idx, max_inf_mask, 76.2)),
-                fmt_num(_val(eg.min_infiltration_rate, idx, min_inf_mask, 3.81)),
-                fmt_num(_val(eg.decay_constant, idx, decay_mask, 4.0)),
-                fmt_num(_val(eg.dry_time, idx, dry_mask, 7.0)),
+                fmt_num(_opt_val(eg.max_infiltration_rate, idx, max_inf_mask, 76.2)),
+                fmt_num(_opt_val(eg.min_infiltration_rate, idx, min_inf_mask, 3.81)),
+                fmt_num(_opt_val(eg.decay_constant, idx, decay_mask, 4.0)),
+                fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
                 0,
             )
 
     def write_results(self) -> None:
         eg = self.entity_group
-        n = len(eg)
-        if not n:
+        if not len(eg):
             return
-        rainfall = np.empty(n)
-        runoff = np.empty(n)
-        runon = np.empty(n)
-        infiltration = np.empty(n)
-        evaporation = np.empty(n)
-        snow = np.empty(n)
         for idx, entity_id in enumerate(eg.index.ids):
             sub = self.wrapper.subcatchments[self.swmm_name(entity_id)]
-            rainfall[idx] = sub.rainfall
-            runoff[idx] = sub.runoff
-            runon[idx] = sub.runon
-            infiltration[idx] = sub.infiltration_loss
-            evaporation[idx] = sub.evaporation_loss
-            snow[idx] = sub.snow_depth
-        eg.rainfall.array[:] = rainfall
-        eg.runoff.array[:] = runoff
-        eg.runon.array[:] = runon
-        eg.infiltration_loss.array[:] = infiltration
-        eg.evaporation_loss.array[:] = evaporation
-        eg.snow_depth.array[:] = snow
+            eg.rainfall.array[idx] = sub.rainfall
+            eg.runoff.array[idx] = sub.runoff
+            eg.runon.array[idx] = sub.runon
+            eg.infiltration_loss.array[idx] = sub.infiltration_loss
+            eg.evaporation_loss.array[idx] = sub.evaporation_loss
+            eg.snow_depth.array[idx] = sub.snow_depth
 
 
 class RainGageProcessor(SwmmProcessor[RainGageEntity]):
@@ -700,7 +661,7 @@ class RainGageProcessor(SwmmProcessor[RainGageEntity]):
                 rain_format = _enum_kw(eg.rainfall_format, idx)
             # Rain gage interval is an "H:MM" value at minute resolution; clamp to
             # at least one minute so sub-minute intervals don't round to "0:00".
-            interval_seconds = _val(eg.rainfall_interval, idx, interval_mask, 3600.0)
+            interval_seconds = _opt_val(eg.rainfall_interval, idx, interval_mask, 3600.0)
             interval_minutes = max(1, int(round(interval_seconds / 60)))
             interval = f"{interval_minutes // 60:d}:{interval_minutes % 60:02d}"
             ts_name = f"{name}_ts"
@@ -725,13 +686,10 @@ class RainGageProcessor(SwmmProcessor[RainGageEntity]):
 
     def write_results(self) -> None:
         eg = self.entity_group
-        n = len(eg)
-        if not n:
+        if not len(eg):
             return
-        rainfall = np.empty(n)
         for idx, entity_id in enumerate(eg.index.ids):
-            rainfall[idx] = self.wrapper.raingages[self.swmm_name(entity_id)].rainfall
-        eg.rainfall.array[:] = rainfall
+            eg.rainfall.array[idx] = self.wrapper.raingages[self.swmm_name(entity_id)].rainfall
 
 
 # Processor registry: (attribute on UrbanDrainageNetwork, processor class).
@@ -880,7 +838,7 @@ class SimulationWrapper:
         for processor in self.processors.values():
             processor.build_inp(builder)
         for line in self._curve_lines:
-            builder.add_raw("CURVES", line)
+            builder.add("CURVES", line)
         return builder.render()
 
     def _write_options(self, builder: InpBuilder) -> None:

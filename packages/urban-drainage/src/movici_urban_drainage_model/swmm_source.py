@@ -29,7 +29,7 @@ from movici_simulation_core.preprocessing import DataSource, MultipleEntityTypeS
 from movici_simulation_core.preprocessing.data_sources import GeometryType
 
 
-def _num(row: t.Sequence[str], idx: int) -> t.Optional[float]:
+def get_float_or_none(row: t.Sequence[str], idx: int) -> t.Optional[float]:
     """Return ``float(row[idx])`` or ``None`` if the column is absent/non-numeric."""
     if idx >= len(row):
         return None
@@ -39,7 +39,7 @@ def _num(row: t.Sequence[str], idx: int) -> t.Optional[float]:
         return None
 
 
-def _str(row: t.Sequence[str], idx: int) -> t.Optional[str]:
+def get_string_or_none(row: t.Sequence[str], idx: int) -> t.Optional[str]:
     return row[idx] if idx < len(row) else None
 
 
@@ -114,12 +114,12 @@ def _xsection_attrs(inp: SwmmInp, name: str) -> dict:
     if not xs:
         return {}
     return {
-        "cross_section_shape": _str(xs, 1),
+        "cross_section_shape": get_string_or_none(xs, 1),
         "cross_section_geometry": [
-            _num(xs, 2) or 0.0,
-            _num(xs, 3) or 0.0,
-            _num(xs, 4) or 0.0,
-            _num(xs, 5) or 0.0,
+            get_float_or_none(xs, 2) or 0.0,
+            get_float_or_none(xs, 3) or 0.0,
+            get_float_or_none(xs, 4) or 0.0,
+            get_float_or_none(xs, 5) or 0.0,
         ],
     }
 
@@ -140,11 +140,11 @@ def _junction_records(inp: SwmmInp) -> t.List[dict]:
         out.append(
             {
                 "name": r[0],
-                "invert_elevation": _num(r, 1),
-                "max_depth": _num(r, 2),
-                "initial_depth": _num(r, 3),
-                "surcharge_depth": _num(r, 4),
-                "ponded_area": _num(r, 5),
+                "invert_elevation": get_float_or_none(r, 1),
+                "max_depth": get_float_or_none(r, 2),
+                "initial_depth": get_float_or_none(r, 3),
+                "surcharge_depth": get_float_or_none(r, 4),
+                "ponded_area": get_float_or_none(r, 5),
             }
         )
     return out
@@ -153,13 +153,17 @@ def _junction_records(inp: SwmmInp) -> t.List[dict]:
 def _outfall_records(inp: SwmmInp) -> t.List[dict]:
     out = []
     for r in inp.sections.get("OUTFALLS", []):
-        outfall_type = _str(r, 2)
-        rec = {"name": r[0], "invert_elevation": _num(r, 1), "outfall_type": outfall_type}
+        outfall_type = get_string_or_none(r, 2)
+        rec = {
+            "name": r[0],
+            "invert_elevation": get_float_or_none(r, 1),
+            "outfall_type": outfall_type,
+        }
         if outfall_type and outfall_type.upper() in ("FIXED", "TIDAL", "TIMESERIES"):
-            rec["fixed_stage"] = _num(r, 3)
-            rec["flap_gate"] = _str(r, 4)
+            rec["fixed_stage"] = get_float_or_none(r, 3)
+            rec["flap_gate"] = get_string_or_none(r, 4)
         else:
-            rec["flap_gate"] = _str(r, 3)
+            rec["flap_gate"] = get_string_or_none(r, 3)
         out.append(rec)
     return out
 
@@ -169,17 +173,17 @@ def _storage_records(inp: SwmmInp) -> t.List[dict]:
     for r in inp.sections.get("STORAGE", []):
         rec = {
             "name": r[0],
-            "invert_elevation": _num(r, 1),
-            "max_depth": _num(r, 2),
-            "initial_depth": _num(r, 3),
-            "storage_curve_type": _str(r, 4),
+            "invert_elevation": get_float_or_none(r, 1),
+            "max_depth": get_float_or_none(r, 2),
+            "initial_depth": get_float_or_none(r, 3),
+            "storage_curve_type": get_string_or_none(r, 4),
         }
-        if (_str(r, 4) or "").upper() == "FUNCTIONAL":
-            rec["storage_coefficient"] = _num(r, 5)
-            rec["storage_exponent"] = _num(r, 6)
-            rec["storage_constant"] = _num(r, 7)
-        elif (_str(r, 4) or "").upper() == "TABULAR":
-            rec["storage_curve"] = _curve_points(inp, _str(r, 5))
+        if (get_string_or_none(r, 4) or "").upper() == "FUNCTIONAL":
+            rec["storage_coefficient"] = get_float_or_none(r, 5)
+            rec["storage_exponent"] = get_float_or_none(r, 6)
+            rec["storage_constant"] = get_float_or_none(r, 7)
+        elif (get_string_or_none(r, 4) or "").upper() == "TABULAR":
+            rec["storage_curve"] = _curve_points(inp, get_string_or_none(r, 5))
         out.append(rec)
     return out
 
@@ -189,13 +193,13 @@ def _conduit_records(inp: SwmmInp) -> t.List[dict]:
     for r in inp.sections.get("CONDUITS", []):
         rec = {
             "name": r[0],
-            "from_node": _str(r, 1),
-            "to_node": _str(r, 2),
-            "length": _num(r, 3),
-            "roughness": _num(r, 4),
-            "inlet_offset": _num(r, 5),
-            "outlet_offset": _num(r, 6),
-            "initial_flow": _num(r, 7),
+            "from_node": get_string_or_none(r, 1),
+            "to_node": get_string_or_none(r, 2),
+            "length": get_float_or_none(r, 3),
+            "roughness": get_float_or_none(r, 4),
+            "inlet_offset": get_float_or_none(r, 5),
+            "outlet_offset": get_float_or_none(r, 6),
+            "initial_flow": get_float_or_none(r, 7),
         }
         rec.update(_xsection_attrs(inp, r[0]))
         out.append(rec)
@@ -205,13 +209,13 @@ def _conduit_records(inp: SwmmInp) -> t.List[dict]:
 def _pump_records(inp: SwmmInp) -> t.List[dict]:
     out = []
     for r in inp.sections.get("PUMPS", []):
-        curve_name = _str(r, 3)
+        curve_name = get_string_or_none(r, 3)
         rec = {
             "name": r[0],
-            "from_node": _str(r, 1),
-            "to_node": _str(r, 2),
-            "startup_depth": _num(r, 5),
-            "shutoff_depth": _num(r, 6),
+            "from_node": get_string_or_none(r, 1),
+            "to_node": get_string_or_none(r, 2),
+            "startup_depth": get_float_or_none(r, 5),
+            "shutoff_depth": get_float_or_none(r, 6),
             "pump_curve_type": None,
             "pump_curve": None,
         }
@@ -229,12 +233,12 @@ def _orifice_records(inp: SwmmInp) -> t.List[dict]:
     for r in inp.sections.get("ORIFICES", []):
         rec = {
             "name": r[0],
-            "from_node": _str(r, 1),
-            "to_node": _str(r, 2),
-            "orifice_type": _str(r, 3),
-            "crest_height": _num(r, 4),
-            "discharge_coefficient": _num(r, 5),
-            "flap_gate": _str(r, 6),
+            "from_node": get_string_or_none(r, 1),
+            "to_node": get_string_or_none(r, 2),
+            "orifice_type": get_string_or_none(r, 3),
+            "crest_height": get_float_or_none(r, 4),
+            "discharge_coefficient": get_float_or_none(r, 5),
+            "flap_gate": get_string_or_none(r, 6),
         }
         xs = _xsection_attrs(inp, r[0])
         rec["orifice_shape"] = xs.get("cross_section_shape")
@@ -248,12 +252,12 @@ def _weir_records(inp: SwmmInp) -> t.List[dict]:
     for r in inp.sections.get("WEIRS", []):
         rec = {
             "name": r[0],
-            "from_node": _str(r, 1),
-            "to_node": _str(r, 2),
-            "weir_type": _str(r, 3),
-            "crest_height": _num(r, 4),
-            "discharge_coefficient": _num(r, 5),
-            "flap_gate": _str(r, 6),
+            "from_node": get_string_or_none(r, 1),
+            "to_node": get_string_or_none(r, 2),
+            "weir_type": get_string_or_none(r, 3),
+            "crest_height": get_float_or_none(r, 4),
+            "discharge_coefficient": get_float_or_none(r, 5),
+            "flap_gate": get_string_or_none(r, 6),
         }
         rec["cross_section_geometry"] = _xsection_attrs(inp, r[0]).get("cross_section_geometry")
         out.append(rec)
@@ -263,21 +267,21 @@ def _weir_records(inp: SwmmInp) -> t.List[dict]:
 def _outlet_records(inp: SwmmInp) -> t.List[dict]:
     out = []
     for r in inp.sections.get("OUTLETS", []):
-        rating_type = _str(r, 4)
+        rating_type = get_string_or_none(r, 4)
         rec = {
             "name": r[0],
-            "from_node": _str(r, 1),
-            "to_node": _str(r, 2),
-            "crest_height": _num(r, 3),
+            "from_node": get_string_or_none(r, 1),
+            "to_node": get_string_or_none(r, 2),
+            "crest_height": get_float_or_none(r, 3),
             "outlet_rating_type": rating_type,
         }
         if rating_type and "TABULAR" in rating_type.upper():
-            rec["rating_curve"] = _curve_points(inp, _str(r, 5))
-            rec["flap_gate"] = _str(r, 6)
+            rec["rating_curve"] = _curve_points(inp, get_string_or_none(r, 5))
+            rec["flap_gate"] = get_string_or_none(r, 6)
         else:
-            rec["rating_coefficient"] = _num(r, 5)
-            rec["rating_exponent"] = _num(r, 6)
-            rec["flap_gate"] = _str(r, 7)
+            rec["rating_coefficient"] = get_float_or_none(r, 5)
+            rec["rating_exponent"] = get_float_or_none(r, 6)
+            rec["flap_gate"] = get_string_or_none(r, 7)
         out.append(rec)
     return out
 
@@ -290,32 +294,32 @@ def _subcatchment_records(inp: SwmmInp) -> t.List[dict]:
         name = r[0]
         rec = {
             "name": name,
-            "raingage": _str(r, 1),
-            "outlet_node": _str(r, 2),
-            "area": _num(r, 3),
-            "percent_impervious": _num(r, 4),
-            "width": _num(r, 5),
-            "slope": _num(r, 6),
+            "raingage": get_string_or_none(r, 1),
+            "outlet_node": get_string_or_none(r, 2),
+            "area": get_float_or_none(r, 3),
+            "percent_impervious": get_float_or_none(r, 4),
+            "width": get_float_or_none(r, 5),
+            "slope": get_float_or_none(r, 6),
         }
         sa = subareas.get(name)
         if sa:
             rec.update(
                 {
-                    "n_imperv": _num(sa, 1),
-                    "n_perv": _num(sa, 2),
-                    "s_imperv": _num(sa, 3),
-                    "s_perv": _num(sa, 4),
-                    "pct_zero": _num(sa, 5),
+                    "n_imperv": get_float_or_none(sa, 1),
+                    "n_perv": get_float_or_none(sa, 2),
+                    "s_imperv": get_float_or_none(sa, 3),
+                    "s_perv": get_float_or_none(sa, 4),
+                    "pct_zero": get_float_or_none(sa, 5),
                 }
             )
         inf = infil.get(name)
         if inf:
             rec.update(
                 {
-                    "max_infiltration_rate": _num(inf, 1),
-                    "min_infiltration_rate": _num(inf, 2),
-                    "decay_constant": _num(inf, 3),
-                    "dry_time": _num(inf, 4),
+                    "max_infiltration_rate": get_float_or_none(inf, 1),
+                    "min_infiltration_rate": get_float_or_none(inf, 2),
+                    "decay_constant": get_float_or_none(inf, 3),
+                    "dry_time": get_float_or_none(inf, 4),
                 }
             )
         out.append(rec)
@@ -328,8 +332,8 @@ def _raingage_records(inp: SwmmInp) -> t.List[dict]:
         out.append(
             {
                 "name": r[0],
-                "rainfall_format": _str(r, 1),
-                "rainfall_interval": _str(r, 2),
+                "rainfall_format": get_string_or_none(r, 1),
+                "rainfall_interval": get_string_or_none(r, 2),
             }
         )
     return out

@@ -160,12 +160,10 @@ class Model(TrackedModel, name="urban_drainage"):
 
         Control inputs are applied to the live simulation before advancing,
         since SWMM marches forward and cannot rewind. When updated again at a
-        timestep already simulated, we only push the (late-arriving) control
-        changes; they take effect on the next forward step.
+        timestep already simulated, there is nothing to do: the (late-arriving)
+        control changes are read from the arrays on the next forward step.
         """
         if self.last_calculated is not None and self.last_calculated >= moment:
-            # Already simulated up to this moment - only push control changes
-            self.network.apply_controls()
             return self.next_time
 
         # 1. Apply control inputs to the live simulation objects

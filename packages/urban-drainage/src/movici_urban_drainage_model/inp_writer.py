@@ -37,7 +37,7 @@ SECTION_ORDER: t.Tuple[str, ...] = (
     "REPORT",
     "COORDINATES",
     "VERTICES",
-    "Polygons",
+    "POLYGONS",
     "SYMBOLS",
 )
 
@@ -50,12 +50,18 @@ def fmt_hms(seconds: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{secs:02d}"
 
 
-def fmt_num(value: float) -> str:
-    """Format a numeric value compactly for an ``.inp`` cell."""
+def fmt_num(value: float, max_decimals: t.Optional[int] = None) -> t.Union[int, float]:
+    """Coerce a numeric value for an ``.inp`` cell, keeping full precision by default.
+
+    Returns an ``int`` for whole values (so ``10`` rather than ``10.0``) and otherwise
+    the float unchanged; the builder renders it with ``str()``, which round-trips full
+    ``float64`` precision (SWMM parses ``.inp`` numbers into doubles, so nothing is
+    truncated). Pass ``max_decimals`` to round for a more compact file.
+    """
     fval = float(value)
-    if fval == int(fval):
-        return str(int(fval))
-    return repr(fval)
+    if max_decimals is not None:
+        fval = round(fval, max_decimals)
+    return int(fval) if fval == int(fval) else fval
 
 
 class InpBuilder:
@@ -69,11 +75,7 @@ class InpBuilder:
         row = "  ".join(str(c) for c in cells)
         self._sections.setdefault(section, []).append(row)
 
-    def add_raw(self, section: str, line: str) -> None:
-        """Append a pre-formatted *line* to *section*."""
-        self._sections.setdefault(section, []).append(line)
-
-    def has(self, section: str) -> bool:
+    def __contains__(self, section: str) -> bool:
         return bool(self._sections.get(section))
 
     def render(self) -> str:
