@@ -278,16 +278,18 @@ class WaitingForMessage(BaseModelState):
 
     @_handle_response.register
     def _(self, msg: AcknowledgeMessage) -> None:
-        """when a model sends an accepted message, don't do extra logic"""
+        """when a model sends an acknowledge message, do nothing but notify subscribers that the
+        model has returned
+        """
         if not self.context.pending_updates:
-            self.notify_subscribers()
+            self.notify_subscribers(NoUpdateMessage())
 
     @_handle_response.register
     def _(self, msg: ResultMessage) -> None:
-        """When a result comes set the model's next_time and possibly add a message to the
-        subscribers queues"""
+        """When a result comes set the model's next_time and notify subscribers that this model
+        has returned, with possible data"""
         self.context.timeline.set_next_time(self.context, msg.next_time)
-        command = None
+        command = NoUpdateMessage()
         if msg.has_data:
             command = UpdateMessage(
                 timestamp=self.context.timeline.current_time,
@@ -311,9 +313,14 @@ class WaitingForMessage(BaseModelState):
             self.context.pending_quit = QuitMessage()
             self.context.pending_updates = []
 
-    def notify_subscribers(self, command: Command | None = None):
-        command = command or NoUpdateMessage()
+    def notify_subscribers(self, command: UpdateMessage | NoUpdateMessage):
+        """Notify subscribers that this ConnectedModel's model has returned."""
         for model in self.context.publishes_to:
+            # This method may technically raise InvalidCommand if any of the subscribed models
+            # does not accept an UpdateMessage or NoUpdateMessage, but the (default)
+            # ``ConnectedModel.fsm_config`` ensures that this cannot happen. In case of a custom
+            # ``fsm_config`` and this method raises ``InvalidCommand``, this is caught upstream by
+            # the orchestrator's ``Config``
             model.recv_event(command)
 
 

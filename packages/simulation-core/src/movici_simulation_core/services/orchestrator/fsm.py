@@ -51,7 +51,6 @@ class FSM(t.Generic[T, E]):
         self.context = context
         self.config = config
         self.state = config.initial_state(context=self.context)
-        self.runner = None
         self.started = False
         self.done = False
         self.failure = False

@@ -14,10 +14,6 @@ class OrchestratorException(SimulationException):
     pass
 
 
-class SimulationExit(OrchestratorException):
-    pass
-
-
 class InvalidCommand(SimulationException):
     pass
 
