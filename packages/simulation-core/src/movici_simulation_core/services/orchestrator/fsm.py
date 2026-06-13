@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import functools
-import inspect
+import contextlib
+import dataclasses
+import itertools
 import typing as t
 from abc import ABC, abstractmethod
 
@@ -11,55 +12,76 @@ T = t.TypeVar("T")
 E = t.TypeVar("E")
 
 
-def send_silent(coro: t.Generator, value: t.Any):
-    try:
-        coro.send(value)
-    except StopIteration:
-        pass
+@dataclasses.dataclass
+class FSMConfig(t.Generic[T]):
+    """A config for setting up a :class:`FSM` final state machine
 
+    :param initial_state: the initial state
+    :param states: a dictionary of all possible states as ``type``s and their transitions.
+        Transitions are a sequence of ``(type[Condition], type[State])`` tuples
+    :param strict: a boolean whether to validate that all states mentioned in the transitions
+        and ``initial`` state must have an entry in the states  dictionary
+    """
 
-def fsm_conditional_raise(func=None, attribute: str = None, exc: t.Type[Exception] = None):
-    if func is None:
-        return functools.partial(fsm_conditional_raise, attribute=attribute, exc=exc)
+    initial_state: type[State[T]]
+    states: dict[type[State[T]], TransitionsT] = dataclasses.field(default_factory=dict)
+    strict: bool = True
 
-    @functools.wraps(func)
-    def wrapper(fsm: FSM, *args, **kwargs):
-        if getattr(fsm, attribute):
-            raise exc()
-        return func(fsm, *args, **kwargs)
-
-    return wrapper
-
-
-not_started = fsm_conditional_raise(attribute="started", exc=FSMStarted)
-not_done = fsm_conditional_raise(attribute="done", exc=FSMDone)
+    def __post_init__(self):
+        if not self.strict:
+            return
+        if self.initial_state not in self.states:
+            raise ValueError(
+                f"'initial_state' {self.initial_state.__name__} is not a member of 'states' "
+                "and 'strict' was set"
+            )
+        for _, state in itertools.chain.from_iterable(self.states.values()):
+            if state not in self.states:
+                raise ValueError(
+                    f"State {state.__name__} was mentioned in a transition but it is not a member "
+                    "of 'states' and 'strict' was set"
+                )
 
 
 class FSM(t.Generic[T, E]):
-    def __init__(self, initial_state: t.Type[State], context: T = None, raise_on_done=True):
+    state: State[T]
+
+    def __init__(self, config: FSMConfig[T], context: T = None, raise_on_done=True):
+
         self.context = context
-        self.state = initial_state(context=self.context)
-        self.runner = None
+        self.config = config
+        self.state = config.initial_state(context=self.context)
         self.started = False
         self.done = False
         self.failure = False
         self.raise_on_done = raise_on_done
 
-    @not_done
-    @not_started
     def start(self):
+        self.ensure_not_done()
+        self.ensure_not_started()
         self.started = True
-        self.runner = self._run()
-        send_silent(self.runner, None)
+        with self.catch_fsmexceptions():
+            self.state.on_enter()
+            self.run_until_event_required()
 
-    def _run(self):
+    def handle_event(self, event: E):
+        self.ensure_not_done()
+        assert self.state.requires_event
+
+        with self.catch_fsmexceptions():
+            self.state.handle_event(event)
+            self.state = self.transition()
+            self.run_until_event_required()
+
+    def run_until_event_required(self):
+        while not self.state.requires_event:
+            self.state.run()
+            self.state = self.transition()
+
+    @contextlib.contextmanager
+    def catch_fsmexceptions(self):
         try:
-            while True:
-                if inspect.isgeneratorfunction(self.state.run):
-                    yield from self.state.run()
-                else:
-                    self.state.run()
-                self.transition()
+            yield
         except FSMException as e:
             self.done = True
             if isinstance(e, FSMError):
@@ -68,40 +90,42 @@ class FSM(t.Generic[T, E]):
             if self.raise_on_done:
                 raise
 
-    @not_done
-    def send(self, event: E):
-        send_silent(self.runner, event)
-
     def transition(self):
-        if new_state := next_state(self.state):
+        if new_state := next_state(self.context, self.config.states.get(type(self.state), [])):
             self.state = new_state(self.context)
+            self.state.on_enter()
+        return self.state
+
+    def ensure_not_started(self):
+        if self.started:
+            raise FSMStarted()
+
+    def ensure_not_done(self):
+        if self.done:
+            raise FSMDone()
 
 
-def next_state(state: State) -> t.Optional[t.Type[State]]:
-    for cond, new_state in state.transitions():
-        if cond(state.context):
+def next_state(context, transitions: TransitionsT):
+    for cond, new_state in transitions:
+        if cond(context):
             return new_state
     return None
 
 
-class Event:
-    pass
-
-
 class State(ABC, t.Generic[T]):
+    requires_event = False
+
     def __init__(self, context: T):
         self.context = context
-        self.on_enter()
 
-    def on_enter(self):
-        pass
-
-    @abstractmethod
     def run(self):
         raise NotImplementedError
 
-    def transitions(self) -> TransitionsT:
-        return []
+    def handle_event(self, event: t.Any):
+        raise NotImplementedError
+
+    def on_enter(self):
+        pass
 
 
 class Condition(ABC, t.Generic[T]):
@@ -121,4 +145,4 @@ class Always(Condition):
         return True
 
 
-TransitionsT = t.List[t.Tuple[t.Type[Condition], t.Type[State]]]
+TransitionsT = t.Sequence[tuple[type[Condition], type[State]]]
