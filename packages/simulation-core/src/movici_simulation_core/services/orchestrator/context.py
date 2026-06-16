@@ -221,9 +221,9 @@ class WaitingForMessage(BaseModelState):
     def recv_message(self, msg: Message):
         # Here we make use of the fact that for a typing.Union object, __args__ contains the
         # classes inside the union
-        if isinstance(msg, Command.__args__):
+        if isinstance(msg, Command):
             self.process_command(msg)
-        elif isinstance(msg, Response.__args__):
+        elif isinstance(msg, Response):
             self.handle_response(msg)
         else:
             raise TypeError("Unknown Message")
@@ -320,7 +320,7 @@ class WaitingForMessage(BaseModelState):
             # does not accept an UpdateMessage or NoUpdateMessage, but the (default)
             # ``ConnectedModel.fsm_config`` ensures that this cannot happen. In case of a custom
             # ``fsm_config`` and this method raises ``InvalidCommand``, this is caught upstream by
-            # the orchestrator's ``Config``
+            # the orchestrator's ``Context``
             model.recv_event(command)
 
 
@@ -328,6 +328,14 @@ class Idle(WaitingForMessage):
     """Base class for if a model is awaiting further instructions"""
 
     valid_commands = (NewTimeMessage, NoUpdateMessage, UpdateMessage, QuitMessage)
+
+    # In an Idle state, we don't expect any messages from a model. It is supposed to wait for
+    # further instructions. The model's current Stream implementation blocks the zmq.Socket while
+    # idle, so there is no way that the model can actually send a message. However, future
+    # implementations may allow for a model to asynchronously send a message that is not a response
+    # to a command, most likely to send an ErrorMessage if it has crashed due to external
+    # circumstance. Until that time tough, there are no valid responses while idle, since there is
+    # nothing to repond to
     valid_responses = ()
 
 

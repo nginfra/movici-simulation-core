@@ -299,3 +299,49 @@ def test_fsm_raises_when_trying_to_start_twice():
 
     with pytest.raises(FSMDone):
         fsm.start()
+
+
+class TestFSMConfig:
+    def test_validates_initial_state(self):
+        class StateA(State):
+            def run(self):
+                pass
+
+        class StateB(State):
+            def run(self):
+                pass
+
+        with pytest.raises(ValueError, match="StateA is not a member of 'states"):
+            FSMConfig(initial_state=StateA, states={StateB: []})
+
+    def test_all_transition_states_are_given(self):
+        class StateA(State):
+            def run(self):
+                pass
+
+        class StateB(State):
+            def run(self):
+                pass
+
+        with pytest.raises(ValueError, match="State StateB was mentioned in a transition"):
+            FSMConfig(initial_state=StateA, states={StateA: [(Always, StateB)]})
+
+    def test_validates_require_event_state_has_handle_event_method(self):
+        class StateA(State):
+            requires_event = True
+
+            def run(self):
+                pass
+
+        with pytest.raises(ValueError, match="did not implement a 'handle_event' method"):
+            FSMConfig(initial_state=StateA, states={StateA: []})
+
+    def test_validates_not_require_event_state_has_run_method(self):
+        class StateA(State):
+            requires_event = False
+
+            def handle_event(self, event):
+                pass
+
+        with pytest.raises(ValueError, match="did not implement a 'run' method"):
+            FSMConfig(initial_state=StateA, states={StateA: []})

@@ -547,6 +547,24 @@ def test_invalid_response_in_finalizing_doesnt_trigger_another_quit(run_orchestr
     ]
 
 
+def test_invalid_response_after_another_model_crashes_terminates_the_model(run_orchestrator):
+    results = run_orchestrator(
+        ["model_a", "model_b"],
+        [
+            ("model_a", RegistrationMessage(pub={"a": None}, sub={})),
+            ("model_b", RegistrationMessage(pub={}, sub={"a": None})),
+            ("model_a", ErrorMessage()),
+            ("model_b", ResultMessage()),  # should have been AcknowledgeMessage
+            ("model_b", AcknowledgeMessage()),  # acknowledge the QuitMessage
+        ],
+    )
+    assert results == [
+        ("model_a", NewTimeMessage(0)),
+        ("model_b", NewTimeMessage(0)),
+        ("model_b", QuitMessage(due_to_failure=True)),  # send the original QuitMessage
+    ]
+
+
 def test_acknowledge_message_triggers_pending_model_with_NoUpdateMessage(run_orchestrator):
     results = run_orchestrator(
         ["a", "b", "c"],
