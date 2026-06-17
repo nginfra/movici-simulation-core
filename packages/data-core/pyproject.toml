@@ -33,7 +33,7 @@ dependencies = [
   "orjson>=3.11.7",
   "sqlalchemy",
   "movici-simulation-core",
-  "pydantic",
+  "pydantic>=2.7",
 ]
 [project.optional-dependencies]
 sqlite = ["aiosqlite>=0.22.1"]

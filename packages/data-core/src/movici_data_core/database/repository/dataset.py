@@ -195,9 +195,9 @@ class DatasetRepository(SQLResourceRepository):
         )
 
     async def update(self, id: UUID, obj: Dataset, chunk_size=0):
-        """Update a dataset when providing a full dataset with data, processes all fields, except
-        the data section, which must be processed separately using the
-        :class:`DatasetDataRepository`.
+        """Update a dataset. When not given ``obj.data``, only the ``name`` and ``display_name``
+        are updated. Otherwise this method als processes the data and updates the ``general``,
+        ``epsg_code`` and ``bounding_box`` field.
 
         :param id: the UUID of the stored ``Dataset``
         :param obj: the ``Dataset`` object with the changes
@@ -217,8 +217,6 @@ class DatasetRepository(SQLResourceRepository):
                 raise InvalidAction("Cannot change dataset type when updating data")
             payload.update(
                 dict(
-                    name=obj.name,
-                    display_name=obj.display_name,
                     general=obj.general,
                     epsg_code=obj.epsg_code,
                     bounding_box=obj.bounding_box.as_tuple_or_none(),
@@ -283,7 +281,8 @@ class DatasetRepository(SQLResourceRepository):
                     raise MoviciValidationError(
                         {
                             "type": [
-                                f"dataset type '{scenario_dataset.dataset_type}' does not exist"
+                                f"dataset type '{scenario_dataset.dataset_type.name}'"
+                                " does not exist"
                             ]
                         },
                         path=idx,
@@ -319,8 +318,8 @@ class DatasetRepository(SQLResourceRepository):
                     )
                     existing_types[new_type.name] = new_type
 
-            created_ids = await self.session.scalars(
-                insert(db.Dataset).returning(db.Dataset.id),
+            created_ids_and_names = await self.session.execute(
+                insert(db.Dataset).returning(db.Dataset.id, db.Dataset.name),
                 [
                     {
                         "name": ds.name,
@@ -333,6 +332,7 @@ class DatasetRepository(SQLResourceRepository):
                     for ds in to_create
                 ],
             )
+            ids_by_name = {name: id for id, name in created_ids_and_names}
 
             existing_datasets.update(
                 (
@@ -340,10 +340,10 @@ class DatasetRepository(SQLResourceRepository):
                     ScenarioDataset(
                         ds.name,
                         dataset_type=existing_types[t.cast(DatasetType, ds.dataset_type).name],
-                        id=id,
+                        id=ids_by_name[ds.name],
                     ),
                 )
-                for id, ds in zip(created_ids, to_create)
+                for ds in to_create
             )
 
         return [existing_datasets[ds.name] for ds in datasets]

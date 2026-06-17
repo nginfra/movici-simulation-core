@@ -23,14 +23,14 @@ from .common import SQLResourceRepository
 
 @dataclasses.dataclass
 class ScenarioRepository(SQLResourceRepository):
-    """A"""
-
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
     def for_id(self, scenario_id: UUID):
         """Bind the ScenarioRepository to a specific scenario"""
-        self._ensure_no_scenario_id()
+        if scenario_id == self.scenario_id:
+            return self
+        self._ensure_not_single_scenario_mode()
         return dataclasses.replace(self, scenario_id=scenario_id)
 
     def _ensure_workspace_id(self) -> UUID:
@@ -43,8 +43,8 @@ class ScenarioRepository(SQLResourceRepository):
             raise ValueError("ScenarioRepository.scenario_id is required")
         return self.scenario_id
 
-    def _ensure_no_scenario_id(self):
-        if self.scenario_id is not None:
+    def _ensure_not_single_scenario_mode(self):
+        if self.options.mode == db.DatabaseMode.SINGLE_SCENARIO:
             raise InvalidAction("Unsupported operation for this mode")
 
     async def list(self) -> list[Scenario]:
@@ -141,7 +141,7 @@ class ScenarioRepository(SQLResourceRepository):
         :return: the newly created Scenario UUID
         """
 
-        self._ensure_no_scenario_id()
+        self._ensure_not_single_scenario_mode()
         workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
             insert(db.Scenario)
@@ -239,12 +239,9 @@ class ScenarioRepository(SQLResourceRepository):
         except MoviciValidationError as e:
             raise MoviciValidationError.from_errors(e, path="models") from e
 
-        # In the previous step where we create the model_type list, there is the possibility of
-        # a model config that does not specify a type, and we potentially end up with a list of
-        # model_types that is shorter that the number of scenario_models. However, validation must
-        # have caught this and raise an error if a model does not have a "type" field. So we
-        # can assert that we always have the correct length of lists here
-        assert len(scenario_models) == len(model_types)
+        # both self.all_data.model_types.ensure_model_types and validator.process_model_configs
+        # return a list the length of obj.models. Let's assert that to be absolutely sure
+        assert len(scenario_models) == len(model_types) == len(obj.models)
         scenario_model_records = await self.session.scalars(
             insert(db.ScenarioModel).returning(db.ScenarioModel),
             [

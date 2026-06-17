@@ -33,11 +33,13 @@ def calculate_bounding_box_from_data(data: DatasetData) -> BoundingBox:
             if attr not in entity_data:
                 continue
             data_array = _get_data(entity_data, attr)
+            if not len(data_array):
+                continue
             min_x, max_x = DataType(float).get_min_max(data_array[:, 0])
             min_y, max_y = DataType(float).get_min_max(data_array[:, 1])
 
             bounding_box = calculate_new_bounding_box(
-                bounding_box, BoundingBox(min_x, min_y, min_y, max_y)
+                bounding_box, BoundingBox(min_x, min_y, max_x, max_y)
             )
     return bounding_box
 

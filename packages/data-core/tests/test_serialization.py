@@ -7,12 +7,12 @@ from movici_simulation_core.types import FileType
 
 def test_serialize_and_deserialize_json():
     data = {"some": "data"}
-    assert load_dict(dump_dict(data, FileType.JSON), filetype=FileType.JSON)
+    assert load_dict(dump_dict(data, FileType.JSON), filetype=FileType.JSON) == data
 
 
 def test_serialize_and_deserialize_mspack():
     data = {"some": "data"}
-    assert load_dict(dump_dict(data, FileType.MSGPACK), filetype=FileType.MSGPACK)
+    assert load_dict(dump_dict(data, FileType.MSGPACK), filetype=FileType.MSGPACK) == data
 
 
 def test_raises_on_unsupported_filetype_on_load():

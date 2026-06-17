@@ -21,7 +21,7 @@ from movici_data_core.serialization import dump_dict
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
-from .common import random_suffix
+from .common import tempfile_delete_on_error
 
 
 class DatasetService:
@@ -33,7 +33,7 @@ class DatasetService:
     ):
         self.repository = repository
         self.serializer = serializer
-        if not tmpfile_dir.exists() and tmpfile_dir.is_dir():
+        if not tmpfile_dir.is_dir():
             raise OSError(f"{tmpfile_dir} is not a valid directory")
         self.tmpfile_dir = tmpfile_dir
 
@@ -63,48 +63,49 @@ class DatasetService:
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
             raise ResourceDoesNotExist("dataset", id=dataset_id)
-        outfile = (
-            self.tmpfile_dir / f"dataset-{existing.id}-{existing.name}-{random_suffix()}"
-        ).with_suffix(filetype.default_extension)
 
-        match existing.dataset_type.format:
-            case DatasetFormat.ENTITY_BASED:
-                if filetype not in self.serializer.supported_file_types():
-                    raise UnsupportedFileType(filetype)
+        with tempfile_delete_on_error(
+            suffix=filetype.default_extension,
+            prefix=f"dataset-{existing.id}-{existing.name}-",
+            dir=self.tmpfile_dir,
+        ) as outfile:
+            match existing.dataset_type.format:
+                case DatasetFormat.ENTITY_BASED:
+                    if filetype not in self.serializer.supported_file_types():
+                        raise UnsupportedFileType(filetype)
 
-                data = await self.repository.dataset_data.get_entity_data(dataset_id)
+                    data = await self.repository.dataset_data.get_entity_data(dataset_id)
 
-                # prevent pydantic from processing the data section
-                raw_data = DatasetWithDataOut.from_domain(
-                    dataclasses.replace(existing, data={})
-                ).model_dump(mode="json")
-                raw_data["data"] = data
-                outfile.write_bytes(
-                    self.serializer.dumps(
-                        raw_data,
-                        filetype=filetype,
-                        non_data_dict_keys=NON_DATA_DICT_KEYS + ("type", "dataset_type"),
+                    # prevent pydantic from processing the data section
+                    raw_data = DatasetWithDataOut.from_domain(
+                        dataclasses.replace(existing, data={})
+                    ).model_dump(mode="json")
+                    raw_data["data"] = data
+                    outfile.write(
+                        self.serializer.dumps(
+                            raw_data,
+                            filetype=filetype,
+                            non_data_dict_keys=NON_DATA_DICT_KEYS + ("type", "dataset_type"),
+                        )
                     )
-                )
 
-            case DatasetFormat.UNSTRUCTURED:
-                data = await self.repository.dataset_data.get_unstructured_data(dataset_id)
-                #
-                # prevent pydantic from processing the data section
-                raw_data = DatasetWithDataOut.from_domain(
-                    dataclasses.replace(existing, data={})
-                ).model_dump(mode="json")
-                raw_data["data"] = data
-                outfile.write_bytes(dump_dict(raw_data, filetype=filetype))
+                case DatasetFormat.UNSTRUCTURED:
+                    data = await self.repository.dataset_data.get_unstructured_data(dataset_id)
+                    #
+                    # prevent pydantic from processing the data section
+                    raw_data = DatasetWithDataOut.from_domain(
+                        dataclasses.replace(existing, data={})
+                    ).model_dump(mode="json")
+                    raw_data["data"] = data
+                    outfile.write(dump_dict(raw_data, filetype=filetype))
 
-            case DatasetFormat.BINARY:
-                with open(outfile, "wb") as fp:
+                case DatasetFormat.BINARY:
                     streamer = await self.repository.dataset_data.stream_binary_data(dataset_id)
                     async for chunk in streamer:
-                        fp.write(chunk)
-            case _:
-                raise UnsupportedFileType(filetype)
-        return outfile
+                        outfile.write(chunk)
+                case _:
+                    raise UnsupportedFileType(filetype)
+        return pathlib.Path(outfile.name)
 
     async def get_entity_data(self, dataset_id: UUID):
         return await self.repository.dataset_data.get_entity_data(dataset_id)
@@ -112,8 +113,15 @@ class DatasetService:
     async def get_unstructured_data(self, dataset_id: UUID):
         return await self.repository.dataset_data.get_unstructured_data(dataset_id)
 
+    async def get_binary_data(self, dataset_id: UUID):
+        gen = await self.repository.dataset_data.stream_binary_data(dataset_id)
+        result = b""
+        async for chunk in gen:
+            result += chunk
+        return result
+
     async def stream_binary_data(self, dataset_id: UUID):
-        return self.repository.dataset_data.stream_binary_data(dataset_id)
+        return await self.repository.dataset_data.stream_binary_data(dataset_id)
 
     async def update_from_file(
         self, dataset_id: UUID, path: pathlib.Path, mimetype: str | None = None
@@ -186,16 +194,6 @@ class DatasetService:
         return await self.repository.datasets.update(
             dataset.id, obj=dataclasses.replace(dataset, data=path)
         )
-
-    @staticmethod
-    def _ensure_supported_file_type(
-        path: pathlib.Path,
-        supported_file_types: t.Container[FileType],
-    ):
-        file_type = FileType.from_extension(path.suffix)
-        if file_type not in supported_file_types:
-            raise UnsupportedFileType(file_type)
-        return file_type
 
     @staticmethod
     def _ensure_compatible_dataset_type(existing: DatasetType, new: DatasetType, dataset_id: UUID):

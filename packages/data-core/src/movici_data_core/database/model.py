@@ -325,7 +325,7 @@ class RawData(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
     encoding: Mapped[str | None]
-    compresion: Mapped[str | None]
+    compression: Mapped[str | None]
 
 
 class RawDataChunk(Base):

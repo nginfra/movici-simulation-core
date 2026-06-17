@@ -50,7 +50,7 @@ AttributeDataType = type[bool | int | float | str]
 
 
 def utcnow():
-    return datetime.datetime.now(tz=datetime.UTC)
+    return datetime.datetime.now(tz=datetime.timezone.utc)
 
 
 @dataclasses.dataclass
@@ -260,7 +260,7 @@ class ScenarioDataset:
     """A representation of a dataset in a scenario
 
     :param name: the dataset name
-    :param type: the dataset dataset type
+    :param dataset_type: the dataset dataset type
     :param id: the dataset ``UUID`` in the database (if any)
     """
 
@@ -369,8 +369,7 @@ class Update:
     :param timestamp: the discrete time step this update was produced in the simulation
     :param iteration: the iteration at the timestamp this update was created. Every update in a
         scenario must have a unique (timestamp, iteration) combination
-    :param model_name: the name of the model in the scenario that produced the update
-    :param model_type: the type of the model in the scenario that produced the update
+    :param model: the model in the scenario that produced the update
     :param bounding_box: The bounding_box of the update, in case it contains geospatial attributes.
         the values should be in the same CRS as its dataset
     :param id: the update ``UUID`` in the database (if any)

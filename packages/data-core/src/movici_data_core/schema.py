@@ -5,7 +5,6 @@ import datetime
 import functools
 import pathlib
 import typing as t
-from operator import attrgetter, methodcaller
 from uuid import UUID
 
 from pydantic import (
@@ -22,8 +21,10 @@ from movici_data_core.domain_model import (
     BoundingBox,
     DatasetType,
     ModelType,
+    Scenario,
     ScenarioDataset,
     ScenarioModel,
+    SimulationInfo,
     Update,
     UpdateModel,
 )
@@ -41,7 +42,7 @@ T_dom = t.TypeVar("T_dom")
 
 BoundingBoxField = t.Annotated[
     BoundingBox,
-    PlainSerializer(methodcaller("as_tuple_or_none")),
+    PlainSerializer(lambda bbox: bbox.as_tuple_or_none()),
     WithJsonSchema(
         {
             "title": "Bounding Box",
@@ -117,7 +118,7 @@ class ScenarioIn(BaseModel):
     display_name: str
     description: str = ""
     epsg_code: int | None = None
-    simulation_info: SimulationInfoIn
+    simulation_info: SimulationInfoInOut
     models: list[ScenarioModelIn]
     datasets: list[ScenarioDatasetIn]
 
@@ -133,10 +134,11 @@ class ScenarioIn(BaseModel):
         )
 
 
-class SimulationInfoIn:
+class SimulationInfoInOut(OutModel[SimulationInfo]):
     duration: int
-    reference: int
+    reference: float
     time_scale: float
+    start_time: int
     mode: t.Literal["time_oriented"] = "time_oriented"
 
     def to_domain(self):
@@ -144,16 +146,18 @@ class SimulationInfoIn:
             duration=self.duration,
             reference=self.reference,
             time_scale=self.time_scale,
+            start_time=self.start_time,
             mode=self.mode,
         )
 
 
 class ScenarioDatasetIn(BaseModel):
     name: str
-    type: DatasetType | None
+    type: DatasetType | str | None
 
     def to_domain(self):
-        return ScenarioDataset(name=self.name, dataset_type=self.type)
+        dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
+        return ScenarioDataset(name=self.name, dataset_type=dataset_type)
 
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
@@ -178,7 +182,24 @@ class ScenarioModelIn(BaseModel):
 class ScenarioModelOut(OutModel[ScenarioModel]):
     model_config = ConfigDict(extra="allow")
     name: str
-    type: t.Annotated[str, BeforeValidator(attrgetter("name"))]
+    type: t.Annotated[
+        str | ModelType, BeforeValidator(lambda v: v.name if isinstance(v, ModelType) else v)
+    ]
+
+    @classmethod
+    def from_domain(cls, obj: ScenarioModel):
+        return ScenarioModelOut(name=obj.name, type=obj.type, **obj.config)
+
+
+class ScenarioOut(OutModel[Scenario]):
+    id: UUID
+    name: str
+    display_name: str
+    description: str
+    epsg_code: int | None
+    simulation_info: SimulationInfoInOut
+    models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
+    datasets: list[ScenarioDatasetOut]
 
 
 class DatasetWithDataIn(ShortDatasetIn):
@@ -257,7 +278,7 @@ class UpdateModelIn(BaseModel):
 class UpdateModelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str
-    type: t.Annotated[str, BeforeValidator(attrgetter("name"))]
+    type: t.Annotated[str, BeforeValidator(lambda v: v.name)]
 
 
 class ShortUpdateOut(OutModel[Update]):
@@ -276,17 +297,25 @@ class UpdateWithDataOut(ShortUpdateOut):
     def write_to_file(
         cls,
         update: Update,
-        path: pathlib.Path,
+        path: pathlib.Path | t.BinaryIO,
         serializer: ExternalSerializationStrategy,
-        filetype=None,
+        filetype: FileType,
     ):
+        """
+        Serialize and write an Update to a file.
+
+        :param update: the Update to write
+        :param file: Either a ``pathlib.Path`` or a file-like object. If given a file-like object
+            it must be opened writable in bytes mode. This method will not open or close the object
+        :param serializer: an object implementing ``ExternalSerializationStrategy``, usually
+            ``EntityInitDataFormat``
+        :param filetype: A :class:`FileType`. This must be a ``FileType`` that is supported by
+            the serializer
+        """
         if not isinstance(update.data, dict):
             raise TypeError(
                 f"Update data must be of type dict, not type {type(update.data).__name__}"
             )
-        filetype = filetype or FileType.from_extension(path.suffix)
-        if filetype not in serializer.supported_file_types():
-            raise UnsupportedFileType(filetype)
 
         # strip data from the update since it interferes with pydantic
         data = update.data
@@ -300,7 +329,10 @@ class UpdateWithDataOut(ShortUpdateOut):
             filetype=filetype,
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("model", "dataset"),
         )
-        path.write_bytes(raw_data)
+        if isinstance(path, pathlib.Path):
+            path.write_bytes(raw_data)
+        else:
+            path.write(raw_data)
 
 
 class UpdateIn(BaseModel):

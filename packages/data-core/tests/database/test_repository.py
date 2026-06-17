@@ -952,6 +952,31 @@ class TestScenarioRepository:
             ],
         )
 
+    async def test_for_id_changes_scenario_id(self, repository: SQLAlchemyRepository):
+        new_id = uuid.uuid4()
+        assert repository.scenarios.for_id(new_id).scenario_id == new_id
+
+    async def test_cannot_change_scenario_id_in_single_scenario_mode(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+
+        assert a_scenario.id is not None
+        repository = repository.for_scenario(a_scenario.id)
+        repository.options.mode = db.DatabaseMode.SINGLE_SCENARIO
+
+        new_id = uuid.uuid4()
+        with pytest.raises(InvalidAction):
+            assert repository.scenarios.for_id(new_id)
+
+    async def test_change_scenario_id_to_current_id_in_single_scenario_mode(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+        assert a_scenario.id is not None
+        repository = repository.for_scenario(a_scenario.id)
+        repository.options.mode = db.DatabaseMode.SINGLE_SCENARIO
+
+        assert repository.scenarios.for_id(a_scenario.id).scenario_id == a_scenario.id
+
     async def test_list_scenarios(self, repository: SQLAlchemyRepository, a_scenario):
         return len(await repository.scenarios.list()) == 1
 

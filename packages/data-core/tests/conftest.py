@@ -195,7 +195,7 @@ async def create_update(
     async def _create_update(timestamp, iteration, ids, array, scenario_id=None):
         scenario_id = scenario_id or a_scenario.id
         update = Update(
-            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
             timestamp=timestamp,
             iteration=iteration,
             model=UpdateModel(name=a_scenario.models[0].name, type=a_scenario.models[0].type),

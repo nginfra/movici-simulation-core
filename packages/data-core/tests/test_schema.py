@@ -1,4 +1,6 @@
 import datetime
+import pathlib
+import uuid
 
 import pytest
 
@@ -19,8 +21,9 @@ from movici_data_core.exceptions import (
     MoviciValidationError,
     UnsupportedFileType,
 )
-from movici_data_core.schema import DatasetWithDataIn, ScenarioIn, UpdateIn
+from movici_data_core.schema import DatasetWithDataIn, ScenarioIn, ScenarioOut, UpdateIn
 from movici_data_core.serialization import dump_dict
+from movici_data_core.services.common import tempfile_delete_on_error
 from movici_simulation_core import AttributeSchema, AttributeSpec, EntityInitDataFormat
 from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import FileType
@@ -54,9 +57,9 @@ def store_dict(tmp_path, filetype):
 
     def _store_dict(update_dict, filetype=None):
         filetype = filetype or default_filetype
-        path = (tmp_path / "").with_suffix(filetype.default_extension)
-        path.write_bytes(dump_dict(update_dict, filetype))
-        return path
+        with tempfile_delete_on_error(suffix=filetype.default_extension, dir=tmp_path) as file:
+            file.write(dump_dict(update_dict, filetype))
+        return pathlib.Path(file.name)
 
     return _store_dict
 
@@ -146,7 +149,7 @@ class TestDatasetWithDataIn:
 class TestUpdateIn:
     @pytest.fixture
     def created_at(self):
-        return datetime.datetime.now(tz=datetime.UTC)
+        return datetime.datetime.now(tz=datetime.timezone.utc)
 
     @pytest.fixture
     def update_dict(self, data_section, created_at: datetime.datetime):
@@ -230,7 +233,7 @@ class TestUpdateIn:
             UpdateIn.read_from_file(path, serializer)
 
 
-class TestScenarioIn:
+class TestScenarioInOut:
     @pytest.fixture
     def scenario_config(self):
         return {
@@ -252,7 +255,6 @@ class TestScenarioIn:
             "datasets": [{"name": "dataset_a", "type": "some_type"}],
         }
 
-    @pytest.fixture
     def test_validate_scenario_config_in(self, scenario_config):
         assert ScenarioIn.model_validate(scenario_config).to_domain() == Scenario(
             name="a_scenario",
@@ -269,4 +271,51 @@ class TestScenarioIn:
                 ScenarioModel("model3", type=ModelType("model_c"), config={}),
             ],
             datasets=[ScenarioDataset(name="dataset_a", dataset_type=DatasetType("some_type"))],
+        )
+
+    def test_dump_scenario_out(self, scenario_config):
+        scenario_id = uuid.uuid4()
+        dataset_id = uuid.uuid4()
+        dataset_type_id = uuid.uuid4()
+        scenario_config["id"] = scenario_id
+        scenario_config["datasets"][0]["id"] = dataset_id
+        scenario_config["datasets"][0]["type"] = {
+            "name": scenario_config["datasets"][0]["type"],
+            "id": dataset_type_id,
+            "format": DatasetFormat.ENTITY_BASED,
+            "mimetype": None,
+        }
+        assert (
+            ScenarioOut.from_domain(
+                Scenario(
+                    name="a_scenario",
+                    id=scenario_id,
+                    display_name="A scenario",
+                    description="lalala description",
+                    epsg_code=1234,
+                    simulation_info=SimulationInfo(
+                        start_time=12,
+                        duration=42,
+                        time_scale=1.5,
+                        reference=9000.1,
+                        mode="time_oriented",
+                    ),
+                    models=[
+                        ScenarioModel(
+                            "model1", type=ModelType("model_a"), config={"dataset": "a_dataset"}
+                        ),
+                        ScenarioModel("model3", type=ModelType("model_c"), config={}),
+                    ],
+                    datasets=[
+                        ScenarioDataset(
+                            id=dataset_id,
+                            name="dataset_a",
+                            dataset_type=DatasetType(
+                                "some_type", id=dataset_type_id, format=DatasetFormat.ENTITY_BASED
+                            ),
+                        )
+                    ],
+                )
+            ).model_dump()
+            == scenario_config
         )

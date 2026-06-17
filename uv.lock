@@ -1295,7 +1295,7 @@ requires-dist = [
     { name = "movici-simulation-core", editable = "packages/simulation-core" },
     { name = "numpy" },
     { name = "orjson", specifier = ">=3.11.7" },
-    { name = "pydantic" },
+    { name = "pydantic", specifier = ">=2.7" },
     { name = "sqlalchemy" },
 ]
 provides-extras = ["sqlite"]
@@ -1408,7 +1408,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "orjson", specifier = ">=3" },
     { name = "pandas", specifier = ">=1.2.0" },
-    { name = "pydantic", specifier = ">=1.8.2" },
+    { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-settings" },
     { name = "pyparsing" },
     { name = "pyproj" },

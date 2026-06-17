@@ -41,8 +41,11 @@ class WorkspaceService(GenericService[Workspace]):
 
         return workspace_obj
 
-    async def with_counts(self, workspace: Workspace):
-        return await self._repository.with_counts(workspace)
+    async def get_with_counts(self, name: str | None = None, id: UUID | None = None):
+        result = await self.get(name, id)
+        if result is None:
+            return result
+        return await self._repository.with_counts(result)
 
 
 class DatasetTypeService(GenericService[DatasetType]):

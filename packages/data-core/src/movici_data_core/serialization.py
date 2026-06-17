@@ -10,12 +10,18 @@ from movici_simulation_core.types import FileType
 def load_dict(data: bytes, filetype: FileType) -> dict:
     try:
         if filetype == FileType.JSON:
-            return t.cast(dict, orjson.loads(data))
-        if filetype == FileType.MSGPACK:
-            return t.cast(dict, msgpack.unpackb(data))
+            result = orjson.loads(data)
+        elif filetype == FileType.MSGPACK:
+            result = msgpack.unpackb(data)
+        else:
+            raise UnsupportedFileType(filetype)
     except (OSError, ValueError) as e:
         raise DeserializationError from e
-    raise UnsupportedFileType(filetype)
+
+    if not isinstance(result, dict):
+        raise DeserializationError
+
+    return result
 
 
 def dump_dict(data: dict, filetype: FileType) -> bytes:

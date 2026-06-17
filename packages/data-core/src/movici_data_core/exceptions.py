@@ -108,7 +108,7 @@ class MoviciValidationError(MoviciDataError):
     __error_message__ = "Valdation error"
 
     def __init__(self, error: str | dict[str, list[str]] | None = None, path: str | int = ""):
-        self.path = path
+        self.path = str(path)
         if isinstance(error, str):
             error = {"": [error]}
         self.messages: dict[str, list[str]] = error or {}

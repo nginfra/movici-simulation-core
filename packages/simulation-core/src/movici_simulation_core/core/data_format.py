@@ -128,7 +128,7 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
 def load_from_json(
     data,
-    schema: t.Optional[AttributeSchema] = None,
+    schema: AttributeSchema,
     non_data_dict_keys=NON_DATA_DICT_KEYS,
     cache_inferred_attributes=False,
 ):

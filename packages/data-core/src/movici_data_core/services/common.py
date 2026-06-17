@@ -1,6 +1,7 @@
-import random
+import contextlib
+import os
+import tempfile
 import typing as t
-from string import ascii_lowercase
 from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
@@ -10,8 +11,21 @@ from movici_data_core.exceptions import InvalidAction
 T_dom = t.TypeVar("T_dom")
 
 
-def random_suffix(length=6):
-    return "".join(random.choice(ascii_lowercase) for _ in range(length))  # noqa: S311
+@contextlib.contextmanager
+def tempfile_delete_on_error(mode="w+b", suffix=None, prefix=None, dir=None):
+    file = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode=mode, suffix=suffix, prefix=prefix, dir=dir, delete=False
+        ) as file:
+            yield file
+    except Exception:
+        try:
+            if file is not None:
+                os.unlink(file.name)
+        except OSError:
+            pass
+        raise
 
 
 class GenericService(t.Generic[T_dom]):

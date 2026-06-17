@@ -4,9 +4,10 @@ import typing as t
 import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend
-from movici_data_core.domain_model import Dataset
+from movici_data_core.domain_model import Dataset, DatasetFormat
 from movici_data_core.exceptions import InvalidResource
 from movici_data_core.serialization import dump_dict, load_dict
+from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import FileType
 
 
@@ -147,6 +148,45 @@ class TestDatasetService:
         path = store_dataset(dataset_data)
         with pytest.raises(InvalidResource):
             await backend.datasets.update_from_file(a_dataset.id, path)
+
+    async def test_get_entity_data(self, a_dataset, dataset_data, backend: SQLAlchemyBackend):
+        await backend.repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy(dataset_data["data"]),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
+        result = await backend.datasets.get_entity_data(a_dataset.id)
+        assert result.keys() == {"transport_nodes"}
+
+    async def test_get_unstructured_data(self, a_dataset, backend: SQLAlchemyBackend):
+        await backend.repository.dataset_data.create(
+            a_dataset.id,
+            {"some": "data"},
+            format=DatasetFormat.UNSTRUCTURED,
+        )
+
+        result = await backend.datasets.get_unstructured_data(a_dataset.id)
+        assert result == {"some": "data"}
+
+    async def test_get_binary_data(self, a_dataset, backend: SQLAlchemyBackend):
+        await backend.repository.dataset_data.create(
+            a_dataset.id, b"somebinarydata", format=DatasetFormat.BINARY
+        )
+
+        result = await backend.datasets.get_binary_data(a_dataset.id)
+        assert result == b"somebinarydata"
+
+    async def test_stream_binary_data(self, a_dataset, backend: SQLAlchemyBackend):
+        await backend.repository.dataset_data.create(
+            a_dataset.id, b"somebinarydata", format=DatasetFormat.UNSTRUCTURED, chunk_size=2
+        )
+
+        result = b""
+        async for chunk in await backend.datasets.stream_binary_data(a_dataset.id):
+            result += chunk
+
+        assert result == b"somebinarydata"
 
     @pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
     async def test_get_entity_data_as_file(

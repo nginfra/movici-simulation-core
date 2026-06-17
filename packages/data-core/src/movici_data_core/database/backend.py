@@ -111,7 +111,18 @@ class SQLAlchemyServer:
 
     def _build_backend(self, session: AsyncSession, options: db.Options):
         backend = SQLAlchemyBackend(
-            session, options, serializer=self.serializer, tmpfile_dir=self.tmpfile_dir
+            session,
+            options,
+            serializer=self.serializer,
+            tmpfile_dir=self.tmpfile_dir,
+            workspace_service_cls=self.workspace_service_cls,
+            dataset_type_service_cls=self.dataset_type_service_cls,
+            entity_type_service_cls=self.entity_type_service_cls,
+            attribute_type_service_cls=self.attribute_type_service_cls,
+            model_type_service_cls=self.model_type_service_cls,
+            dataset_service_cls=self.dataset_service_cls,
+            scenario_service_cls=self.scenario_service_cls,
+            update_service_cls=self.update_service_cls,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -247,10 +258,12 @@ class SQLAlchemyBackend:
                 await self._upgrade_to_single_workspace_mode()
 
     async def _upgrade_to_single_workspace_mode(self):
+        self.options.mode = db.DatabaseMode.SINGLE_WORKSPACE
         self.options.default_scenario = None
         self.single_scenario_mode = False
 
     async def _upgrade_to_multiple_workspaces_mode(self):
+        self.options.mode = db.DatabaseMode.MULTIPLE_WORKSPACES
         self.options.default_workspace = None
         self.single_workspace_mode = False
 

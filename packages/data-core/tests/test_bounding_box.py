@@ -1,5 +1,7 @@
 import typing as t
 
+import pytest
+
 from movici_data_core.bounding_box import (
     calculate_bounding_box_from_data,
     calculate_new_bounding_box,
@@ -9,7 +11,36 @@ from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import DatasetData
 
 
-def test_get_bounding_box_from_data():
+@pytest.mark.parametrize(
+    "data, expected",
+    [
+        ({"geometry.x": [1, 2, 3], "geometry.y": [4, 4, 5]}, BoundingBox(1, 4, 3, 5)),
+        (
+            {
+                "geometry.polygon_2d": [[-1, 2], [1, -2]],
+            },
+            BoundingBox(-1, -2, 1, 2),
+        ),
+        (
+            {
+                "geometry.polygon_3d": [[-1, 2, -3], [1, -2, 5]],
+            },
+            BoundingBox(-1, -2, 1, 2),
+        ),
+        (
+            {
+                "geometry.polygon_3d": [],
+            },
+            BoundingBox(None, None, None, None),
+        ),
+    ],
+)
+def test_get_bounding_box_from_data(data, expected):
+    dataset_data = dataset_data_to_numpy({"some_entities": data})
+    assert calculate_bounding_box_from_data(t.cast(DatasetData, dataset_data)) == expected
+
+
+def test_get_bounding_box_from_data_from_multiple_entity_groups():
     dataset_data = dataset_data_to_numpy(
         {
             "some_entities": {

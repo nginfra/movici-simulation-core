@@ -28,7 +28,8 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource_type_name__ = "dataset_type"
 
     async def create(self, obj: DatasetType) -> UUID:
-        """Store a :class:``DatasetType`` in the database
+        """Store a :class:``DatasetType`` in the database. When storing a ``DatasetType``, its
+        ``format`` field may not be set to ``None``.
 
         :param obj: the ``DatasetType`` object
         :return: the UUID of the stored ``DatasetType``
@@ -71,7 +72,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         does not exist and the database option ``STRICT_DATASET_TYPES`` is unset, the dataset
         type will be created. If the ``STRICT_DATASET_TYPES`` options is set, an error is raised
         instead. An error will also be raised if an attempt is made to create a DatasetType with
-        the ``DatasetType.UNKNOWN`` format.
+        its ``format`` field set to ``None``
 
         :param dataset_type: the ``DatasetType`` object to ensure.
         :return: the ``DatasetType`` object as it exists in the database
@@ -260,7 +261,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         :param obj: the ``ModelType`` object with the changes
         """
         if obj.jsonschema is None:
-            raise InvalidAction("Cannot ModelType.jsonschema to None")
+            raise InvalidAction("Cannot set ModelType.jsonschema to None")
         await self.session.execute(
             update(db.ModelType)
             .where(db.ModelType.id == id)

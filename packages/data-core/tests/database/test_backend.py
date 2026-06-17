@@ -120,6 +120,7 @@ async def test_change_mode(
             )
     if can_change:
         await backend.set_database_mode(new_mode)
+        assert backend.options.mode == new_mode
         if new_mode == DatabaseMode.SINGLE_SCENARIO:
             assert backend.single_scenario_mode
             assert backend.scenario_id is not None
@@ -132,6 +133,31 @@ async def test_change_mode(
     else:
         with pytest.raises(InvalidAction):
             await backend.set_database_mode(new_mode)
+
+
+@pytest.mark.parametrize(
+    "database_mode, new_mode",
+    [
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.SINGLE_SCENARIO),
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.SINGLE_WORKSPACE),
+        (DatabaseMode.SINGLE_SCENARIO, DatabaseMode.MULTIPLE_WORKSPACES),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_SCENARIO),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.SINGLE_WORKSPACE),
+        (DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_SCENARIO),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.SINGLE_WORKSPACE),
+        (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.MULTIPLE_WORKSPACES),
+    ],
+)
+async def test_mode_persists_after_change(
+    initialized_db: SQLAlchemyServer, database_mode, new_mode
+):
+    async with initialized_db.get_backend() as backend:
+        assert backend.options.mode == database_mode
+        await backend.set_database_mode(new_mode)
+
+    async with initialized_db.get_backend() as backend:
+        assert backend.options.mode == new_mode
 
 
 class TestSingleScenarioBackend:
