@@ -162,3 +162,40 @@ def test_combiner_resolves_conflict_and_produces_canonical(data_dir, storage_dir
     # Suppress an "unused" warning on the logger import — kept available in case the test
     # is extended to assert on orchestrator log lines.
     logging.getLogger("movici").debug("REMAP e2e test completed")
+
+
+class _BrokenCombiner(Combiner):
+    """A combiner whose remap() callback raises, used to prove that a solver-helper
+    failure during the REMAP round terminates the simulation. See issue #127."""
+
+    def remap(self, payload):
+        raise RuntimeError("intentional failure in remap")
+
+
+def test_solver_helper_remap_failure_terminates_simulation(data_dir, storage_dir, init_data):
+    # If a solver helper raises while handling its REMAP, the simulation must terminate
+    # (non-zero exit) rather than hang or silently proceed with an unresolved conflict.
+    # Confirmed with the issue author: a remap() failure is fatal, like any model failure.
+    attribute = {
+        "dataset": "the_dataset",
+        "entity_group": "the_entities",
+        "name": "cargo_demand",
+    }
+    sim = Simulation(data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=False)
+    sim.add_model(
+        "demand_a",
+        _Emitter({"name": "demand_a", "type": "_emitter", "attribute": attribute, "value": 10.0}),
+    )
+    sim.add_model(
+        "demand_b",
+        _Emitter({"name": "demand_b", "type": "_emitter", "attribute": attribute, "value": 30.0}),
+    )
+    sim.add_model(
+        "combiner",
+        _BrokenCombiner(
+            {"name": "combiner", "type": "combiner", "attribute": attribute, "method": "mean"}
+        ),
+    )
+    sim.set_timeline_info(TimelineInfo(0, 1, 0, duration=1))
+    exit_code = sim.run()
+    assert exit_code != 0

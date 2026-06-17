@@ -46,8 +46,12 @@ class RegistrationMessage(Message):
 @dataclasses.dataclass
 class RemapMessage(Message):
     """Command from the orchestrator instructing a model to publish (or subscribe) under
-    different attribute names than the ones it registered. Sent after all ``READY`` messages
-    have arrived and before the first ``NEW_TIME``. See issue #127.
+    different attribute names than the ones it registered. Sent exactly once, after all
+    ``READY`` messages have arrived and before the first ``NEW_TIME``. See issue #127.
+
+    REMAP is one-shot: a model receives at most one ``RemapMessage`` per run, and attribute
+    ownership is fixed for the whole simulation. The orchestrator never re-plans ownership
+    mid-run (runtime ownership transfer is deliberately out of scope).
 
     ``pub`` is a one-to-one mapping ``{dataset: {entity_group: {original: variant}}}``.
     ``sub`` is a mapping ``{dataset: {entity_group: {variant: original}}}`` which may be

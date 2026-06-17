@@ -69,7 +69,13 @@ class ComputeAndSendRemap(OrchestratorState):
     """Compute the REMAP plan from the registered pub/sub masks + priorities and queue a
     REMAP command for every affected model. Each affected model transitions to its
     Remapping state (Busy) and must acknowledge. Models that need no remap stay in
-    AwaitingRemap (not busy) and pass through transparently. See issue #127."""
+    AwaitingRemap (not busy) and pass through transparently. See issue #127.
+
+    REMAP is one-shot: this state runs exactly once, after all models have registered and
+    before the first ``NEW_TIME``. Attribute ownership (and therefore the pub/sub renaming)
+    is fixed for the whole run — there is no path that re-enters this state, so priorities
+    cannot change mid-simulation. Runtime ownership transfer is deliberately out of scope
+    (see issue #127)."""
 
     def run(self):
         try:

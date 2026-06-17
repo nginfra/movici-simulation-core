@@ -413,6 +413,14 @@ class TestModelConnectorRemap:
         with pytest.raises(ValueError, match="malformed update at"):
             initialized_connector.update(UpdateMessage(1, "key", "addr"))
 
+    def test_remap_failure_propagates(self, initialized_connector, model):
+        # A failure while handling a REMAP must propagate out of the connector so the
+        # runner can turn it into an ErrorMessage and terminate the simulation, rather than
+        # being swallowed and leaving the model in an inconsistent state. See issue #127.
+        model.remap.side_effect = RuntimeError("boom in remap")
+        with pytest.raises(RuntimeError, match="boom in remap"):
+            initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
+
 
 class TestModelAdapterBasePriority:
     """The ``ModelAdapterBase.priority`` property is the single boundary where the
