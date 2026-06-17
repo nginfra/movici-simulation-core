@@ -110,7 +110,6 @@ class FSM(t.Generic[T, E]):
             self.run_until_event_required()
 
     def handle_event(self, event: E):
-        """When an"""
         self.ensure_not_done()
         assert self.state.requires_event
 
@@ -185,7 +184,7 @@ class State(ABC, t.Generic[T]):
 
     def handle_event(self, event: t.Any):
         """Entry point for a state that requires an event. This method will be called by the FSM
-        when the class variable ``requires_event`` is set to ``True `` and it receives an event
+        when the class variable ``requires_event`` is set to ``True`` and it receives an event
         from upstream
         """
         raise NotImplementedError(
