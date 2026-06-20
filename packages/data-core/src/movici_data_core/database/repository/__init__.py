@@ -3,6 +3,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from movici_data_core.database.general import get_options
+
 from ..model import Options
 from .dataset import DatasetDataRepository, DatasetRepository
 from .general import (
@@ -33,6 +35,16 @@ class SQLAlchemyRepository:
     options: Options
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
+
+    @classmethod
+    async def for_session(cls, session: AsyncSession):
+        options = await get_options(session)
+        return SQLAlchemyRepository(
+            session,
+            options,
+            workspace_id=options.default_workspace_id,
+            scenario_id=options.default_scenario_id,
+        )
 
     def for_workspace(self, workspace_id: UUID):
         """Bind the repository to a specific workspace. This is generally done automatically by the

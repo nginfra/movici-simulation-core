@@ -13,9 +13,7 @@ from movici_simulation_core.types import FileType
 
 class TestDatasetService:
     @pytest.fixture
-    async def backend(self, backend: SQLAlchemyBackend, a_dataset, create_default_types):
-        await create_default_types(backend.repository)
-        await backend.update_schema()
+    async def backend(self, backend: SQLAlchemyBackend, a_dataset):
         return backend.for_workspace(a_dataset.workspace.id)
 
     @pytest.fixture

@@ -92,14 +92,17 @@ class SQLAlchemyServer:
     @contextlib.asynccontextmanager
     async def get_backend(self, session_kwargs: dict[str, t.Any] | None = None):
         async with self.get_session(**(session_kwargs or {})) as session:
-            options = await get_options(session)
             try:
-                yield await self._with_serializer(self._build_backend(session, options))
+                yield await self.get_backend_for_session(session)
             except Exception:
                 await session.rollback()
                 raise
             else:
                 await session.commit()
+
+    async def get_backend_for_session(self, session: AsyncSession):
+        options = await get_options(session)
+        return await self._with_serializer(self._build_backend(session, options))
 
     async def setup_db(self, mode: db.DatabaseMode = db.DatabaseMode.SINGLE_SCENARIO):
         async with self.engine.begin() as conn:
@@ -157,12 +160,12 @@ class SQLAlchemyBackend:
     session: AsyncSession
     options: db.Options
     serializer: ExternalSerializationStrategy
+    tmpfile_dir: pathlib.Path
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
     single_scenario_mode: bool = False
     single_workspace_mode: bool = False
 
-    tmpfile_dir: pathlib.Path | None = None
     workspace_service_cls: type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: type[EntityTypeService] = EntityTypeService
@@ -208,10 +211,6 @@ class SQLAlchemyBackend:
 
     @property
     def datasets(self):
-        if self.serializer is None:
-            raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        if self.tmpfile_dir is None:
-            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
         return self.dataset_service_cls(self.repository, self.serializer, self.tmpfile_dir)
 
     @property
@@ -222,10 +221,6 @@ class SQLAlchemyBackend:
 
     @property
     def updates(self):
-        if self.serializer is None:
-            raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        if self.tmpfile_dir is None:
-            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
         return self.update_service_cls(
             self.repository, serializer=self.serializer, tmpfile_dir=self.tmpfile_dir
         )

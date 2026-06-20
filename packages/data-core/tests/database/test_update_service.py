@@ -12,17 +12,6 @@ from movici_simulation_core.types import FileType
 
 class TestUpdateService:
     @pytest.fixture
-    async def backend(
-        self,
-        backend: SQLAlchemyBackend,
-        an_attribute_type,  # Required to prevent warning about attribute data type inference
-        create_default_types,
-    ):
-        await create_default_types(backend.repository)
-        await backend.update_schema()
-        return backend
-
-    @pytest.fixture
     def update_data(
         self, a_dataset: Dataset, a_scenario: Scenario, an_entity_type, an_attribute_type
     ):
