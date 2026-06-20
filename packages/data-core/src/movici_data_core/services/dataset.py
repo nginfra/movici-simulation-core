@@ -58,6 +58,9 @@ class DatasetService:
     async def update(self, dataset_id: UUID, dataset: Dataset):
         return await self.repository.datasets.update(dataset_id, dataset)
 
+    async def delete(self, dataset_id: UUID):
+        return await self.repository.datasets.delete(dataset_id)
+
     async def get_dataset_as_file(self, dataset_id: UUID, filetype: FileType = FileType.JSON):
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
@@ -146,6 +149,9 @@ class DatasetService:
                 )
 
         assert False, "should not get here"
+
+    async def prune(self, dataset_id: UUID):
+        return await self.repository.dataset_data.delete(dataset_id)
 
     async def _update_entity_based_dataset_from_file(
         self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path

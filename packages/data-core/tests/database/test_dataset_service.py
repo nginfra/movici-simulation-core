@@ -292,10 +292,12 @@ class TestDatasetService:
         assert created is not None
         assert not created.has_data
 
+        data = b"somedata" * 10
+
         await backend.datasets.update_from_file(
             dataset_id,
             store_dataset(
-                b"somedata" * 10,
+                data,
                 name="some_dataset",
                 filetype=filetype,
             ),
@@ -305,5 +307,25 @@ class TestDatasetService:
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
 
-        result = file.read_bytes()
-        assert result == b"somedata" * 10
+        assert file.read_bytes() == data
+
+    async def test_prune_dataset_deletes_data(
+        self,
+        a_dataset: Dataset,
+        dataset_path,
+        backend: SQLAlchemyBackend,
+    ):
+        assert not a_dataset.has_data
+
+        assert a_dataset.id is not None
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+
+        dataset = await backend.datasets.get(id=a_dataset.id)
+        assert dataset is not None
+        assert dataset.has_data
+
+        await backend.datasets.prune(a_dataset.id)
+
+        dataset = await backend.datasets.get(id=a_dataset.id)
+        assert dataset is not None
+        assert not dataset.has_data
