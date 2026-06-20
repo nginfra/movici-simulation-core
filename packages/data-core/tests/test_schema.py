@@ -21,9 +21,9 @@ from movici_data_core.exceptions import (
     MoviciValidationError,
     UnsupportedFileType,
 )
+from movici_data_core.file_helpers import tempfile_delete_on_error
 from movici_data_core.schema import DatasetWithDataIn, ScenarioIn, ScenarioOut, UpdateIn
 from movici_data_core.serialization import dump_dict
-from movici_data_core.services.common import tempfile_delete_on_error
 from movici_simulation_core import AttributeSchema, AttributeSpec, EntityInitDataFormat
 from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import FileType
