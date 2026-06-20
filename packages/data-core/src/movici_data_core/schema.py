@@ -14,6 +14,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     WithJsonSchema,
+    model_serializer,
 )
 
 from movici_data_core import domain_model
@@ -414,3 +415,13 @@ class UpdateIn(BaseModel):
             model=self.model.to_domain(),
             created_at=self.created_at,
         )
+
+
+class OperationSuccess(BaseModel):
+    resource: str
+    id: UUID | str
+    verb: str
+
+    @model_serializer
+    def serialize(self):
+        return {"result": "ok", "id": self.id, "message": f"{self.resource} {self.verb}"}

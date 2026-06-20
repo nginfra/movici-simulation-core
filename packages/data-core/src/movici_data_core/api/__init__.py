@@ -14,13 +14,15 @@ from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import MoviciDataError
 
+from .workspaces import workspace_router
+
 # TODO: make this part of MoviciWebApiBuilder (or similar builder/factory class)
 SQLITE_DB_FILE = "movici.db"
 DBAPI_URL = f"sqlite+aiosqlite:///{SQLITE_DB_FILE}"
 TMPFILE_DIR = "tmp"
 
 DATABASE_MODE = DatabaseMode.SINGLE_SCENARIO
-DEFAULT_ROUTERS = ()
+DEFAULT_ROUTERS = (workspace_router,)
 logger = logging.getLogger(__name__)
 logging.basicConfig()
 
