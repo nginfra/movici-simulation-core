@@ -300,3 +300,42 @@ def test_green_ampt_infiltration_is_parsed(tmp_path):
     assert subs.get_attribute("initial_deficit") == [0.26]
     # Horton-specific columns are not (mis)read for a Green-Ampt file
     assert subs.get_attribute("max_infiltration_rate") == [None]
+
+
+def test_outfall_flap_gate_parsed_as_bool(inp_file):
+    # "O1 ... FREE NO": flap_gate is DataType(bool), so it must parse to the bool
+    # False - not the string "NO" (bool("NO") is True, which would flip an open
+    # gate to closed when loaded into a bool array).
+    outfalls = SWMMSource(inp_file)["outfalls"]
+    assert outfalls.get_attribute("flap_gate")[0] is False
+
+
+def test_raingage_interval_parsed_as_seconds(inp_file):
+    # "RG1 INTENSITY 1:00 ...": rainfall_interval is DataType(float) seconds, so the
+    # "H:MM" string must convert to 3600.0, not be stored verbatim.
+    gages = SWMMSource(inp_file)["raingages"]
+    assert gages.get_attribute("rainfall_interval") == [3600.0]
+
+
+GEOMETRIC_STORAGE_INP = textwrap.dedent("""\
+    [STORAGE]
+    ;Name Elev Ymax Y0 Shape L W Z
+    ST1  0  10  0  CYLINDRICAL  10  5  0
+    ST2  0  10  0  PARABOLIC    10  5  8
+
+    [COORDINATES]
+    ST1  0    0
+    ST2  50   0
+""")
+
+
+def test_geometric_storage_imported_with_shape_and_params(tmp_path):
+    # Geometric storage shapes must be preserved (storage_geometry + L/W/Z), not
+    # silently dropped (which would later default to a constant 1000 area).
+    path = tmp_path / "geom.inp"
+    path.write_text(GEOMETRIC_STORAGE_INP)
+    storage = SWMMSource(path)["storage"]
+    assert storage.get_attribute("storage_geometry") == ["CYLINDRICAL", "PARABOLIC"]
+    params = storage.get_attribute("storage_geometry_parameters")
+    assert params[0] == [10.0, 5.0, 0.0]
+    assert params[1] == [10.0, 5.0, 8.0]

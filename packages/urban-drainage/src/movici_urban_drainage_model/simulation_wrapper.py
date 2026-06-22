@@ -23,6 +23,7 @@ import datetime as _datetime
 import logging
 import os
 import tempfile
+import threading
 import typing as t
 from pathlib import Path
 
@@ -64,6 +65,30 @@ END_TIME = "00:00:00"
 # SWMM requires a weir's opening cross-section shape to match its type. Types not
 # listed here use a rectangular opening (RECT_OPEN).
 _WEIR_XSECTION_SHAPE = {"V-NOTCH": "TRIANGULAR", "TRAPEZOIDAL": "TRAPEZOIDAL"}
+
+# SWMM's entire unit system is selected by FLOW_UNITS: CFS/GPM/MGD => US (inches),
+# CMS/LPS/MLD => SI (millimetres). Depression-storage depths and infiltration rates
+# therefore differ between the two. These defaults (the same physical values in each
+# system) are only used when the dataset omits the corresponding optional attribute.
+_US_FLOW_UNITS = frozenset({"CFS", "GPM", "MGD"})
+_SUBAREA_INFIL_DEFAULTS: t.Dict[str, t.Dict[str, float]] = {
+    "SI": {  # millimetres / mm-per-hour
+        "s_imperv": 1.27,
+        "s_perv": 2.54,
+        "horton_max": 76.2,
+        "horton_min": 3.81,
+        "suction_head": 100.0,
+        "conductivity": 5.0,
+    },
+    "US": {  # inches / inch-per-hour
+        "s_imperv": 0.05,
+        "s_perv": 0.1,
+        "horton_max": 3.0,
+        "horton_min": 0.15,
+        "suction_head": 4.0,
+        "conductivity": 0.2,
+    },
+}
 
 
 def _extract_csr_curve(csr_attribute, idx: int) -> t.Optional[np.ndarray]:
@@ -309,6 +334,10 @@ class OutfallProcessor(NodeProcessor[OutfallEntity]):
 class StorageProcessor(NodeProcessor[StorageEntity]):
     PREFIX = "ST"
 
+    # Functional geometric shapes: [STORAGE] row is "... SHAPE L W Z". SWMM's
+    # keyword is PARABOLIC (it rejects PARABOLOID, which some docs use).
+    GEOMETRIC_SHAPES = ("CYLINDRICAL", "CONICAL", "PARABOLIC", "PYRAMIDAL")
+
     def build_inp(self, builder: InpBuilder) -> None:
         eg = self.entity_group
         if not len(eg):
@@ -317,6 +346,7 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
         coeff_mask = _defined_mask(eg.storage_coefficient)
         exp_mask = _defined_mask(eg.storage_exponent)
         init_depth_mask = _defined_mask(eg.initial_depth)
+        geom_mask = _defined_mask(eg.storage_geometry)
         has_curve = eg.storage_curve.has_data()
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
@@ -324,11 +354,25 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
             ymax = fmt_num(eg.max_depth.array[idx])
             y0 = fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0))
 
-            # Infer the storage shape from which attributes are set: a
-            # (depth, area) storage_curve -> TABULAR, otherwise FUNCTIONAL.
+            # An explicit storage_geometry is authoritative; otherwise infer the
+            # shape from which attributes are set (storage_curve -> TABULAR, else
+            # FUNCTIONAL) for backward compatibility.
+            shape = None
+            if geom_mask is not None and geom_mask[idx]:
+                shape = _enum_kw(eg.storage_geometry, idx)
+                if shape == "PARABOLOID":  # accept the common misspelling
+                    shape = "PARABOLIC"
             curve = _extract_csr_curve(eg.storage_curve, idx) if has_curve else None
-            if curve is not None:
-                if any(m is not None and m[idx] for m in (const_mask, coeff_mask, exp_mask)):
+
+            if shape in self.GEOMETRIC_SHAPES:
+                params = self._geometry_parameters(name, idx, shape)
+                builder.add("STORAGE", name, elev, ymax, y0, shape, *params)
+            elif shape == "TABULAR" or (shape is None and curve is not None):
+                if curve is None:
+                    raise ValueError(f"Tabular storage '{name}' requires a storage_curve")
+                if shape is None and any(
+                    m is not None and m[idx] for m in (const_mask, coeff_mask, exp_mask)
+                ):
                     self.wrapper.logger.warning(
                         f"Storage '{name}' has both a storage_curve and functional "
                         "coefficients; using the curve (TABULAR)."
@@ -336,17 +380,15 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
                 curve_name = self.wrapper.add_curve(curve, "Storage")
                 builder.add("STORAGE", name, elev, ymax, y0, "TABULAR", curve_name)
             else:
+                # FUNCTIONAL (explicit) or inferred default.
                 coeff = _opt_val(eg.storage_coefficient, idx, coeff_mask, 0.0)
                 expon = _opt_val(eg.storage_exponent, idx, exp_mask, 0.0)
                 const = _opt_val(eg.storage_constant, idx, const_mask, 0.0)
                 if coeff == 0.0 and const == 0.0:
-                    # A storage unit needs a non-zero surface area; fall back to a
-                    # sensible constant area and warn rather than producing an
-                    # invalid (zero-area) node.
-                    const = 1000.0
-                    self.wrapper.logger.warning(
-                        f"Storage '{name}' has no surface-area definition; "
-                        f"defaulting to a constant {const} area"
+                    raise ValueError(
+                        f"Storage '{name}' has no surface-area definition; set "
+                        "storage_geometry (with storage_geometry_parameters), a "
+                        "storage_curve, or functional storage_coefficient/storage_constant"
                     )
                 builder.add(
                     "STORAGE",
@@ -360,6 +402,27 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
                     fmt_num(const),
                 )
         self._add_coordinates(builder)
+
+    def _geometry_parameters(self, name: str, idx: int, shape: str) -> t.Tuple[t.Any, ...]:
+        """Return the (L, W, Z) cells for a geometric storage shape, validated."""
+        eg = self.entity_group
+        if not eg.storage_geometry_parameters.has_data():
+            raise ValueError(
+                f"Storage '{name}' has storage_geometry '{shape}' but no "
+                "storage_geometry_parameters (L, W, Z)"
+            )
+        params = eg.storage_geometry_parameters.array[idx]
+        if np.all(np.isnan(params)):
+            raise ValueError(
+                f"Storage '{name}' has storage_geometry '{shape}' but no "
+                "storage_geometry_parameters (L, W, Z)"
+            )
+        if shape == "PARABOLIC" and not float(params[2]) > 0:
+            raise ValueError(
+                f"Storage '{name}' PARABOLIC geometry requires a positive full height "
+                "in storage_geometry_parameters[2]"
+            )
+        return (fmt_num(params[0]), fmt_num(params[1]), fmt_num(params[2]))
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +444,12 @@ class ConduitProcessor(LinkProcessor[ConduitEntity]):
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             from_name, to_name = self._from_to(idx, entity_id)
+            length = float(eg.length.array[idx])
+            if not length > 0:
+                raise ValueError(
+                    f"Conduit #{entity_id} has non-positive length {length}; "
+                    "SWMM requires a positive conduit length"
+                )
             builder.add(
                 "CONDUITS",
                 name,
@@ -590,6 +659,9 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
         imd_mask = _defined_mask(eg.initial_deficit)
         cn_mask = _defined_mask(eg.curve_number)
         model = self.wrapper.infiltration_model
+        # SWMM's unit system (and so the magnitude of these defaults) follows
+        # flow_units: US (inches) for CFS/GPM/MGD, SI (mm) for CMS/LPS/MLD.
+        defaults = self.wrapper.subarea_defaults
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             try:
@@ -607,6 +679,16 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                     f"for subcatchment #{entity_id}"
                 ) from None
 
+            area = float(eg.area.array[idx])
+            width = float(eg.width.array[idx])
+            slope = float(eg.slope.array[idx])
+            if not area > 0:
+                raise ValueError(f"Subcatchment #{entity_id} has non-positive area {area}")
+            if not width > 0:
+                raise ValueError(f"Subcatchment #{entity_id} has non-positive width {width}")
+            if slope < 0:
+                raise ValueError(f"Subcatchment #{entity_id} has negative slope {slope}")
+
             builder.add(
                 "SUBCATCHMENTS",
                 name,
@@ -623,8 +705,8 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                 name,
                 fmt_num(_opt_val(eg.n_imperv, idx, n_imperv_mask, 0.01)),
                 fmt_num(_opt_val(eg.n_perv, idx, n_perv_mask, 0.1)),
-                fmt_num(_opt_val(eg.s_imperv, idx, s_imperv_mask, 0.05)),
-                fmt_num(_opt_val(eg.s_perv, idx, s_perv_mask, 0.05)),
+                fmt_num(_opt_val(eg.s_imperv, idx, s_imperv_mask, defaults["s_imperv"])),
+                fmt_num(_opt_val(eg.s_perv, idx, s_perv_mask, defaults["s_perv"])),
                 fmt_num(_opt_val(eg.pct_zero, idx, pct_zero_mask, 25.0)),
                 "OUTLET",
             )
@@ -633,8 +715,16 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                 builder.add(
                     "INFILTRATION",
                     name,
-                    fmt_num(_opt_val(eg.max_infiltration_rate, idx, max_inf_mask, 76.2)),
-                    fmt_num(_opt_val(eg.min_infiltration_rate, idx, min_inf_mask, 3.81)),
+                    fmt_num(
+                        _opt_val(
+                            eg.max_infiltration_rate, idx, max_inf_mask, defaults["horton_max"]
+                        )
+                    ),
+                    fmt_num(
+                        _opt_val(
+                            eg.min_infiltration_rate, idx, min_inf_mask, defaults["horton_min"]
+                        )
+                    ),
                     fmt_num(_opt_val(eg.decay_constant, idx, decay_mask, 4.0)),
                     fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
                     0,
@@ -643,8 +733,10 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                 builder.add(
                     "INFILTRATION",
                     name,
-                    fmt_num(_opt_val(eg.suction_head, idx, suction_mask, 100.0)),
-                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, 5.0)),
+                    fmt_num(
+                        _opt_val(eg.suction_head, idx, suction_mask, defaults["suction_head"])
+                    ),
+                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, defaults["conductivity"])),
                     fmt_num(_opt_val(eg.initial_deficit, idx, imd_mask, 0.3)),
                 )
             elif model == "CURVE_NUMBER":
@@ -652,7 +744,7 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                     "INFILTRATION",
                     name,
                     fmt_num(_opt_val(eg.curve_number, idx, cn_mask, 80.0)),
-                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, 5.0)),
+                    fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, defaults["conductivity"])),
                     fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
                 )
             else:
@@ -747,8 +839,10 @@ class SimulationWrapper:
 
     # EPA-SWMM permits only one open simulation per process. This tracks the
     # wrapper that currently holds it, so a second concurrent open fails with a
-    # clear message instead of pyswmm's cryptic MultiSimulationError.
+    # clear message instead of pyswmm's cryptic MultiSimulationError. The lock
+    # guards the check-and-claim of ``_active`` against concurrent opens.
     _active: t.ClassVar[t.Optional["SimulationWrapper"]] = None
+    _lock: t.ClassVar[threading.Lock] = threading.Lock()
 
     def __init__(self, logger: t.Optional[logging.Logger] = None) -> None:
         self.logger = logger or logging.getLogger(__name__)
@@ -813,6 +907,16 @@ class SimulationWrapper:
         """The configured SWMM infiltration model keyword (upper-cased)."""
         return str(self._options.get("infiltration", "HORTON")).upper()
 
+    @property
+    def is_us_units(self) -> bool:
+        """True when flow_units selects SWMM's US (inch) unit system."""
+        return str(self._options.get("flow_units", "CMS")).upper() in _US_FLOW_UNITS
+
+    @property
+    def subarea_defaults(self) -> t.Dict[str, float]:
+        """Default subarea/infiltration parameters for the active unit system."""
+        return _SUBAREA_INFIL_DEFAULTS["US" if self.is_us_units else "SI"]
+
     def initialize(self, dataset: UrbanDrainageNetwork) -> None:
         """Build the processors, synthesise the ``.inp`` and open the simulation."""
         self.processors = {
@@ -832,18 +936,21 @@ class SimulationWrapper:
         serves :meth:`rollback_to`. ``hotstart_file`` seeds the engine state and
         ``start_offset`` keeps the reported Movici time aligned to that snapshot.
         """
-        if SimulationWrapper._active is not None and SimulationWrapper._active is not self:
-            raise RuntimeError(
-                "Another urban_drainage SWMM simulation is already open in this "
-                "process. EPA-SWMM permits only one open simulation at a time; "
-                "close it first, or run the models in separate processes "
-                "(e.g. a distributed simulation)."
-            )
-        # pyswmm acquires its process-global engine lock in the Simulation()
-        # constructor, so claim ownership immediately and release it via close()
-        # if anything below fails - keeping _active in step with the real lock.
-        self.sim = Simulation(self._inp_path)
-        SimulationWrapper._active = self
+        # Check-and-claim ownership under a lock so two threads can't both pass the
+        # guard and race into pyswmm's (non-thread-safe) global engine lock. The
+        # Simulation() constructor (where pyswmm takes that lock) runs inside the
+        # critical section; we release before start() so the failure path's close()
+        # can re-acquire the lock without deadlocking.
+        with SimulationWrapper._lock:
+            if SimulationWrapper._active is not None and SimulationWrapper._active is not self:
+                raise RuntimeError(
+                    "Another urban_drainage SWMM simulation is already open in this "
+                    "process. EPA-SWMM permits only one open simulation at a time; "
+                    "close it first, or run the models in separate processes "
+                    "(e.g. a distributed simulation)."
+                )
+            self.sim = Simulation(self._inp_path)
+            SimulationWrapper._active = self
         try:
             if hotstart_file is not None:
                 # must precede start(): seeds the engine state from the snapshot
@@ -1003,17 +1110,23 @@ class SimulationWrapper:
             except Exception:
                 self.logger.warning("Error closing the SWMM simulation", exc_info=True)
             self.sim = None
-        if SimulationWrapper._active is self:
-            SimulationWrapper._active = None
+        with SimulationWrapper._lock:
+            if SimulationWrapper._active is self:
+                SimulationWrapper._active = None
         self.nodes = None
         self.links = None
         self.subcatchments = None
         self.raingages = None
         if self._inp_path:
-            try:
-                Path(self._inp_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+            # pyswmm derives the report (.rpt) and binary output (.out) files from
+            # the .inp path, so remove those siblings too or they accumulate in the
+            # temp dir on every run.
+            inp = Path(self._inp_path)
+            for path in (inp, inp.with_suffix(".rpt"), inp.with_suffix(".out")):
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
             self._inp_path = None
         for hsf in self._hotstart_files:
             try:

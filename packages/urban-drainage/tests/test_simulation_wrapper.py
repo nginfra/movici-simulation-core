@@ -158,6 +158,22 @@ class TestInpSynthesis:
         assert wrapper.id_mapper.get_swmm_name(10) == "C10"
         wrapper.close()
 
+    def test_partial_cross_section_geometry_builds(self, initialize_wrapper):
+        # A CIRCULAR conduit uses only Geom1; leaving the other slots unspecified
+        # (null -> NaN) must not crash .inp synthesis (fmt_num coerces NaN -> 0).
+        network = copy.deepcopy(NETWORK)
+        network["data"]["drainage_conduit_entities"]["urban_drainage.cross_section_geometry"] = [
+            [1.0, None, None, None],
+            [1.0, None, None, None],
+        ]
+        wrapper, _ = initialize_wrapper(network)
+        with open(wrapper._inp_path) as fh:
+            inp = fh.read()
+        # the unspecified slots were emitted as 0, and SWMM accepted the model
+        assert "[XSECTIONS]" in inp
+        wrapper.advance_to(0)
+        wrapper.close()
+
 
 class TestStepping:
     def test_t0_reads_initial_conditions(self, initialize_wrapper):
@@ -309,7 +325,8 @@ class TestStructures:
         with open(wrapper._inp_path) as fh:
             assert "TRAPEZOIDAL" in fh.read()
         _run(wrapper)
-        assert dataset.weirs.flow.array[0] >= 0.0  # built and runs without ERROR 143
+        # the storage fills and drains through the sole weir, so flow is positive
+        assert dataset.weirs.flow.array[0] > 0.0
 
     def test_functional_outlet_runs(self, initialize_wrapper):
         network = _one_link_network(
@@ -345,6 +362,25 @@ class TestStructures:
             {"urban_drainage.outlet_rating_type": [2]},  # TABULAR but no rating_curve
         )
         with pytest.raises(ValueError, match="requires a rating_curve"):
+            initialize_wrapper(network)
+
+    @pytest.mark.parametrize("outfall_index", [3, 4])  # TIDAL, TIMESERIES
+    def test_unsupported_outfall_type_raises(self, initialize_wrapper, outfall_index):
+        # TIDAL / TIMESERIES need an external tide curve / timeseries the model does
+        # not synthesise, so build_inp must fail fast rather than emit a bad row.
+        network = _one_link_network(
+            "drainage_conduit_entities",
+            {
+                "shape.length": [100.0],
+                "urban_drainage.roughness": [0.01],
+                "urban_drainage.cross_section_shape": [0],
+                "urban_drainage.cross_section_geometry": [[1.0, 0.0, 0.0, 0.0]],
+            },
+        )
+        network["data"]["drainage_outfall_entities"]["urban_drainage.outfall_type"] = [
+            outfall_index
+        ]
+        with pytest.raises(ValueError, match="unsupported outfall_type"):
             initialize_wrapper(network)
 
     def test_storage_volume_and_inflow_mapping(self, initialize_wrapper):
@@ -649,3 +685,119 @@ class TestStorageInference:
             wrapper.advance_to(target)
         wrapper.write_results()
         assert dataset.storage.stored_volume.array[0] > 0.0
+
+
+_STORAGE_GEOMETRY_ENUM = [
+    "FUNCTIONAL",
+    "TABULAR",
+    "CYLINDRICAL",
+    "CONICAL",
+    "PARABOLIC",
+    "PYRAMIDAL",
+]
+
+
+def _geometric_storage_network(geometry_index, params, inflow=0.3):
+    """A storage with an explicit geometric shape, filled by inflow, drained."""
+    enums = {
+        "outfall_type": ["FREE", "NORMAL", "FIXED"],
+        "orifice_type": ["SIDE", "BOTTOM"],
+        "orifice_shape": ["CIRCULAR", "RECT_CLOSED"],
+        "storage_geometry": _STORAGE_GEOMETRY_ENUM,
+    }
+    return {
+        "version": 4,
+        "name": DS,
+        "type": "urban_drainage_network",
+        "general": {"enum": enums},
+        "data": {
+            "drainage_storage_entities": {
+                "id": [1],
+                "geometry.x": [0.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [0.0],
+                "urban_drainage.max_depth": [10.0],
+                "urban_drainage.storage_geometry": [geometry_index],
+                "urban_drainage.storage_geometry_parameters": [params],
+                "urban_drainage.generated_inflow": [inflow],
+            },
+            "drainage_outfall_entities": {
+                "id": [2],
+                "geometry.x": [100.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [0.0],
+                "urban_drainage.outfall_type": [0],
+            },
+            "drainage_orifice_entities": {
+                "id": [20],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "urban_drainage.orifice_type": [1],
+                "urban_drainage.orifice_shape": [1],
+                "urban_drainage.cross_section_geometry": [[0.3, 0.3, 0.0, 0.0]],
+                "urban_drainage.discharge_coefficient": [0.65],
+                "urban_drainage.crest_height": [0.0],
+            },
+        },
+    }
+
+
+class TestStorageGeometry:
+    @pytest.mark.parametrize(
+        "shape, index, params",
+        [
+            ("CYLINDRICAL", 2, [10.0, 5.0, 0.0]),
+            ("CONICAL", 3, [10.0, 5.0, 2.0]),
+            ("PARABOLIC", 4, [10.0, 5.0, 10.0]),
+            ("PYRAMIDAL", 5, [10.0, 5.0, 2.0]),
+        ],
+    )
+    def test_geometric_shape_builds_and_runs(self, initialize_wrapper, shape, index, params):
+        wrapper, dataset = initialize_wrapper(_geometric_storage_network(index, params))
+        with open(wrapper._inp_path) as fh:
+            assert shape in fh.read()  # explicit geometry emitted, not a 1000-area default
+        for target in (300, 600, 900):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.storage.stored_volume.array[0] > 0.0
+
+    def test_parabolic_requires_positive_height(self, initialize_wrapper):
+        # PARABOLIC needs a positive full height (Z); SWMM rejects Z == 0
+        network = _geometric_storage_network(4, [10.0, 5.0, 0.0])
+        with pytest.raises(ValueError, match="PARABOLIC"):
+            initialize_wrapper(network)
+
+    def test_storage_without_area_definition_raises(self, initialize_wrapper):
+        # No storage_geometry, no storage_curve, no functional coefficients: rather
+        # than silently substituting a constant area, the build must fail clearly.
+        network = _geometric_storage_network(4, [10.0, 5.0, 10.0])
+        storage = network["data"]["drainage_storage_entities"]
+        del storage["urban_drainage.storage_geometry"]
+        del storage["urban_drainage.storage_geometry_parameters"]
+        with pytest.raises(ValueError, match="no surface-area definition"):
+            initialize_wrapper(network)
+
+
+class TestTempFileCleanup:
+    def test_close_removes_inp_report_and_output_siblings(self, initialize_wrapper):
+        import os
+
+        wrapper, _ = initialize_wrapper()
+        wrapper.advance_to(0)
+        stem = wrapper._inp_path[:-4]
+        wrapper.close()
+        # pyswmm derives .rpt/.out from the .inp path; all three must be cleaned up
+        for suffix in (".inp", ".rpt", ".out"):
+            assert not os.path.exists(stem + suffix), f"{suffix} leaked"
+
+
+class TestUnitSystemDefaults:
+    def test_flow_units_select_unit_appropriate_defaults(self):
+        wrapper = SimulationWrapper()
+        wrapper.configure_options({"flow_units": "CFS"})  # US (inches)
+        assert wrapper.is_us_units
+        assert wrapper.subarea_defaults["horton_max"] == 3.0  # in/hr
+        wrapper.configure_options({"flow_units": "CMS"})  # SI (mm)
+        assert not wrapper.is_us_units
+        assert wrapper.subarea_defaults["horton_max"] == 76.2  # mm/hr

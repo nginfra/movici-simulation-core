@@ -11,6 +11,7 @@ ordered, whitespace-delimited text that SWMM expects.
 
 from __future__ import annotations
 
+import math
 import typing as t
 
 # The order in which sections are written. SWMM is largely order-tolerant, but a
@@ -57,8 +58,15 @@ def fmt_num(value: float, max_decimals: t.Optional[int] = None) -> t.Union[int, 
     the float unchanged; the builder renders it with ``str()``, which round-trips full
     ``float64`` precision (SWMM parses ``.inp`` numbers into doubles, so nothing is
     truncated). Pass ``max_decimals`` to round for a more compact file.
+
+    Undefined (``NaN``) values are coerced to ``0``: fixed-shape geometry attributes
+    (e.g. ``cross_section_geometry`` with 4 slots) often leave the slots a given SWMM
+    shape does not use unspecified, which surfaces as ``NaN`` here. SWMM ignores the
+    unused ``Geom`` cells, so emitting ``0`` is correct and avoids ``int(nan)`` raising.
     """
     fval = float(value)
+    if math.isnan(fval):
+        return 0
     if max_decimals is not None:
         fval = round(fval, max_decimals)
     return int(fval) if fval == int(fval) else fval

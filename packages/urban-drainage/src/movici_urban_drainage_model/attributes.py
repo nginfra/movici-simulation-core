@@ -73,8 +73,14 @@ UrbanDrainage_FlapGate = AttributeSpec("urban_drainage.flap_gate", data_type=Dat
 # =============================================================================
 # Storage attributes
 # =============================================================================
-# The storage shape is inferred from which attributes are set: a ``storage_curve``
-# means a TABULAR (depth, area) curve, otherwise the functional coefficients below.
+# Storage shape: index into enum "storage_geometry" with keywords
+# FUNCTIONAL / TABULAR / CYLINDRICAL / CONICAL / PARABOLIC / PYRAMIDAL.
+# When set it is authoritative; when unset the shape is inferred from which of the
+# attributes below are set (a ``storage_curve`` -> TABULAR, otherwise FUNCTIONAL).
+# NOTE: SWMM's keyword is PARABOLIC (not PARABOLOID, which the engine rejects).
+UrbanDrainage_StorageGeometry = AttributeSpec(
+    "urban_drainage.storage_geometry", data_type=DataType(int), enum_name="storage_geometry"
+)
 # Functional storage: area = constant + coefficient * depth ^ exponent
 UrbanDrainage_StorageConstant = AttributeSpec(
     "urban_drainage.storage_constant", data_type=DataType(float)
@@ -88,6 +94,14 @@ UrbanDrainage_StorageExponent = AttributeSpec(
 # Tabular storage: CSR array of (depth, surface_area) points
 UrbanDrainage_StorageCurve = AttributeSpec(
     "urban_drainage.storage_curve", data_type=DataType(float, (2,), csr=True)
+)
+# Geometric storage (CYLINDRICAL/CONICAL/PARABOLIC/PYRAMIDAL): the SWMM L, W, Z
+# parameters. Their meaning depends on the shape (per the SWMM [STORAGE] format):
+#  - CYLINDRICAL: L=major axis, W=minor axis, Z unused
+#  - CONICAL / PYRAMIDAL: L=base major, W=base minor, Z=side slope (run/rise)
+#  - PARABOLIC: L=major axis at full height, W=minor axis at full height, Z=full height (>0)
+UrbanDrainage_StorageGeometryParameters = AttributeSpec(
+    "urban_drainage.storage_geometry_parameters", data_type=DataType(float, (3,))
 )
 
 # =============================================================================
@@ -152,8 +166,9 @@ UrbanDrainage_DischargeCoefficient = AttributeSpec(
 # =============================================================================
 # Pump attributes
 # =============================================================================
-# Pump curve type: index into enum "pump_curve_type" -> TYPE1..TYPE5 / IDEAL.
-# When IDEAL (or no pump_curve provided) the pump passes its inlet inflow.
+# Pump curve type: index into enum "pump_curve_type" -> PUMP1..PUMP4 / IDEAL
+# (the SWMM [CURVES] pump-curve keywords). When IDEAL (or no pump_curve provided)
+# the pump passes its inlet inflow.
 UrbanDrainage_PumpCurveType = AttributeSpec(
     "urban_drainage.pump_curve_type", data_type=DataType(int), enum_name="pump_curve_type"
 )

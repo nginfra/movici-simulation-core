@@ -43,6 +43,47 @@ def get_string_or_none(row: t.Sequence[str], idx: int) -> t.Optional[str]:
     return row[idx] if idx < len(row) else None
 
 
+def get_gate_or_none(row: t.Sequence[str], idx: int) -> t.Optional[bool]:
+    """Parse a SWMM gate flag ("YES"/"NO") into a ``bool`` for a ``bool`` attribute.
+
+    The attribute is declared ``DataType(bool)``, so the raw keyword must be
+    converted here: ``bool("NO")`` is ``True``, so passing the string through would
+    silently turn an *open* gate into a closed one.
+    """
+    s = get_string_or_none(row, idx)
+    if s is None:
+        return None
+    return s.strip().upper() in ("YES", "TRUE", "1")
+
+
+def get_interval_seconds_or_none(row: t.Sequence[str], idx: int) -> t.Optional[float]:
+    """Parse a SWMM time interval into seconds for a ``float`` (seconds) attribute.
+
+    Rain-gage intervals are written as ``"H:MM"`` / ``"HH:MM:SS"`` (or a decimal
+    number of hours). The attribute is ``DataType(float)`` in seconds, so the raw
+    ``"1:00"`` string must be converted rather than stored verbatim.
+    """
+    s = get_string_or_none(row, idx)
+    if s is None:
+        return None
+    s = s.strip()
+    if ":" in s:
+        parts = s.split(":")
+        try:
+            nums = [float(p) for p in parts]
+        except ValueError:
+            return None
+        seconds = 0.0
+        for value in nums:  # H[:MM[:SS]] -> seconds
+            seconds = seconds * 60 + value
+        return seconds * 60 if len(nums) == 2 else seconds
+    # bare number: SWMM interprets it as decimal hours
+    try:
+        return float(s) * 3600
+    except ValueError:
+        return None
+
+
 def _is_number(token: str) -> bool:
     try:
         float(token)
@@ -161,9 +202,9 @@ def _outfall_records(inp: SwmmInp) -> t.List[dict]:
         }
         if outfall_type and outfall_type.upper() in ("FIXED", "TIDAL", "TIMESERIES"):
             rec["fixed_stage"] = get_float_or_none(r, 3)
-            rec["flap_gate"] = get_string_or_none(r, 4)
+            rec["flap_gate"] = get_gate_or_none(r, 4)
         else:
-            rec["flap_gate"] = get_string_or_none(r, 3)
+            rec["flap_gate"] = get_gate_or_none(r, 3)
         out.append(rec)
     return out
 
@@ -177,15 +218,26 @@ def _storage_records(inp: SwmmInp) -> t.List[dict]:
             "max_depth": get_float_or_none(r, 2),
             "initial_depth": get_float_or_none(r, 3),
         }
-        # the .inp's shape token (col 4) is mandatory in SWMM but the Movici model
-        # infers TABULAR vs FUNCTIONAL from which attributes are present
+        # The .inp shape token (col 4) is mandatory in SWMM. We record it as the
+        # explicit storage_geometry and parse the shape-specific columns.
         shape = (get_string_or_none(r, 4) or "").upper()
+        if shape == "PARABOLOID":  # the engine's keyword is PARABOLIC
+            shape = "PARABOLIC"
+        if shape:
+            rec["storage_geometry"] = shape
         if shape == "FUNCTIONAL":
             rec["storage_coefficient"] = get_float_or_none(r, 5)
             rec["storage_exponent"] = get_float_or_none(r, 6)
             rec["storage_constant"] = get_float_or_none(r, 7)
         elif shape == "TABULAR":
             rec["storage_curve"] = _curve_points(inp, get_string_or_none(r, 5))
+        elif shape in ("CYLINDRICAL", "CONICAL", "PARABOLIC", "PYRAMIDAL"):
+            # geometric shapes carry their L, W, Z dimensions in cols 5-7
+            rec["storage_geometry_parameters"] = [
+                get_float_or_none(r, 5) or 0.0,
+                get_float_or_none(r, 6) or 0.0,
+                get_float_or_none(r, 7) or 0.0,
+            ]
         out.append(rec)
     return out
 
@@ -240,7 +292,7 @@ def _orifice_records(inp: SwmmInp) -> t.List[dict]:
             "orifice_type": get_string_or_none(r, 3),
             "crest_height": get_float_or_none(r, 4),
             "discharge_coefficient": get_float_or_none(r, 5),
-            "flap_gate": get_string_or_none(r, 6),
+            "flap_gate": get_gate_or_none(r, 6),
         }
         xs = _xsection_attrs(inp, r[0])
         rec["orifice_shape"] = xs.get("cross_section_shape")
@@ -259,7 +311,7 @@ def _weir_records(inp: SwmmInp) -> t.List[dict]:
             "weir_type": get_string_or_none(r, 3),
             "crest_height": get_float_or_none(r, 4),
             "discharge_coefficient": get_float_or_none(r, 5),
-            "flap_gate": get_string_or_none(r, 6),
+            "flap_gate": get_gate_or_none(r, 6),
         }
         rec["cross_section_geometry"] = _xsection_attrs(inp, r[0]).get("cross_section_geometry")
         out.append(rec)
@@ -279,11 +331,11 @@ def _outlet_records(inp: SwmmInp) -> t.List[dict]:
         }
         if rating_type and "TABULAR" in rating_type.upper():
             rec["rating_curve"] = _curve_points(inp, get_string_or_none(r, 5))
-            rec["flap_gate"] = get_string_or_none(r, 6)
+            rec["flap_gate"] = get_gate_or_none(r, 6)
         else:
             rec["rating_coefficient"] = get_float_or_none(r, 5)
             rec["rating_exponent"] = get_float_or_none(r, 6)
-            rec["flap_gate"] = get_string_or_none(r, 7)
+            rec["flap_gate"] = get_gate_or_none(r, 7)
         out.append(rec)
     return out
 
@@ -361,7 +413,7 @@ def _raingage_records(inp: SwmmInp) -> t.List[dict]:
             {
                 "name": r[0],
                 "rainfall_format": get_string_or_none(r, 1),
-                "rainfall_interval": get_string_or_none(r, 2),
+                "rainfall_interval": get_interval_seconds_or_none(r, 2),
             }
         )
     return out

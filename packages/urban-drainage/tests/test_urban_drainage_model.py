@@ -165,8 +165,10 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
         _, next_time = tester.update(0, None)
         elapsed_before = tester.model.network.elapsed_seconds()
 
-        # A late control input arrives at the already-simulated moment t=0: the
-        # model must push it but not step the simulation again.
+        # A late control input arriving at the already-simulated moment t=0 must NOT
+        # re-step the engine (SWMM cannot rewind): the model returns early without
+        # advancing. The control is not lost - it is consumed on the next forward
+        # step, where process_changes() re-reads it from the array.
         _, reentry_next_time = tester.update(
             0,
             {
@@ -180,6 +182,13 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
         )
         assert reentry_next_time == next_time
         assert tester.model.network.elapsed_seconds() == elapsed_before
+
+        # On the next forward step the late rainfall takes effect, proving it was
+        # retained on the array and applied rather than dropped on the re-entry.
+        tester.new_time(300)
+        result, _ = tester.update(300, None)
+        gages = result[DS]["drainage_raingage_entities"]
+        assert gages["urban_drainage.rainfall"][0] == pytest.approx(5.0, rel=1e-3)
 
     @pytest.mark.parametrize(
         "infiltration",
@@ -234,6 +243,111 @@ class TestNextTime(TestUrbanDrainageModelBase):
         tester.new_time(next_time)
         _, new_next_time = tester.update(next_time, None)
         assert new_next_time == next_time + report_timestep
+
+
+def _infiltration_row(inp_text, name):
+    """Return the [INFILTRATION] token row for *name* from synthesised .inp text."""
+    section = inp_text.split("[INFILTRATION]", 1)[1]
+    for line in section.splitlines():
+        toks = line.split()
+        if toks and toks[0] == name:
+            return toks
+        if line.startswith("["):  # next section
+            break
+    raise AssertionError(f"no INFILTRATION row for {name}")
+
+
+class TestInfiltrationColumns(TestUrbanDrainageModelBase):
+    """Guards the per-model [INFILTRATION] column ordering (not just that it runs)."""
+
+    @pytest.fixture
+    def model_config(self):
+        return {
+            "dataset": DS,
+            "options": {
+                "hydraulic_timestep": 30,
+                "report_timestep": 300,
+                "infiltration": "GREEN_AMPT",
+            },
+        }
+
+    @pytest.fixture
+    def network_data(self):
+        # Green-Ampt subcatchment with distinguishable per-column values so a
+        # transposition of suction_head / conductivity / initial_deficit is caught.
+        return {
+            "version": 4,
+            "name": DS,
+            "type": "urban_drainage_network",
+            "general": {"enum": ENUMS},
+            "data": {
+                "drainage_junction_entities": {
+                    "id": [1],
+                    "geometry.x": [0.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [10.0],
+                },
+                "drainage_outfall_entities": {
+                    "id": [2],
+                    "geometry.x": [100.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [8.0],
+                    "urban_drainage.outfall_type": [0],
+                },
+                "drainage_conduit_entities": {
+                    "id": [10],
+                    "topology.from_node_id": [1],
+                    "topology.to_node_id": [2],
+                    "shape.length": [100.0],
+                    "urban_drainage.roughness": [0.01],
+                    "urban_drainage.cross_section_shape": [0],
+                    "urban_drainage.cross_section_geometry": [[1.0, 0.0, 0.0, 0.0]],
+                },
+                "drainage_raingage_entities": {
+                    "id": [4],
+                    "geometry.x": [-100.0],
+                    "geometry.y": [100.0],
+                },
+                "drainage_subcatchment_entities": {
+                    "id": [5],
+                    "geometry.polygon": [[[0.0, 0.0], [0.0, 50.0], [50.0, 50.0], [0.0, 0.0]]],
+                    "urban_drainage.area": [4.0],
+                    "urban_drainage.width": [400.0],
+                    "urban_drainage.percent_impervious": [50.0],
+                    "urban_drainage.slope": [0.5],
+                    "urban_drainage.outlet_node_id": [1],
+                    "urban_drainage.raingage_id": [4],
+                    "urban_drainage.suction_head": [12.5],
+                    "urban_drainage.conductivity": [3.4],
+                    "urban_drainage.initial_deficit": [0.21],
+                },
+            },
+        }
+
+    def test_green_ampt_columns_in_order(self, tester):
+        tester.initialize()
+        with open(tester.model.network._inp_path) as fh:
+            row = _infiltration_row(fh.read(), "S5")
+        # [INFILTRATION] for GREEN_AMPT: Name  SuctionHead  Conductivity  InitialDeficit
+        assert row[0] == "S5"
+        assert [float(t) for t in row[1:4]] == pytest.approx([12.5, 3.4, 0.21])
+
+
+class TestNonIntegerTimeScale(TestUrbanDrainageModelBase):
+    """SWMM advances in whole seconds, so a fractional time_scale must warn."""
+
+    @pytest.fixture
+    def global_timeline_info(self):
+        from movici_simulation_core.core.moment import TimelineInfo
+
+        return TimelineInfo(0, 0.5, 0)  # fractional time_scale
+
+    def test_fractional_time_scale_warns(self, tester, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            tester.initialize()
+        assert "Non-integer time_scale" in caplog.text
 
 
 class TestPumpControl:

@@ -94,6 +94,8 @@ from .attributes import (
     UrbanDrainage_StorageConstant,
     UrbanDrainage_StorageCurve,
     UrbanDrainage_StorageExponent,
+    UrbanDrainage_StorageGeometry,
+    UrbanDrainage_StorageGeometryParameters,
     UrbanDrainage_StoredVolume,
     UrbanDrainage_SuctionHead,
     UrbanDrainage_SurchargeDepth,
@@ -182,11 +184,13 @@ class OutfallEntity(DrainageNodeEntity):
 
 
 class StorageEntity(DrainageNodeEntity):
-    """Drainage storage units: ponds / basins / tanks with a stage-area curve.
+    """Drainage storage units: ponds / basins / tanks.
 
-    The storage geometry is defined either functionally
-    (``area = constant + coefficient * depth ^ exponent``) or by a tabular
-    ``storage_curve`` of (depth, surface_area) points.
+    The storage geometry is selected by ``storage_geometry`` (FUNCTIONAL / TABULAR /
+    CYLINDRICAL / CONICAL / PARABOLIC / PYRAMIDAL). When it is unset the shape is
+    inferred for backward compatibility: a ``storage_curve`` means TABULAR, otherwise
+    FUNCTIONAL (``area = constant + coefficient * depth ^ exponent``). The geometric
+    shapes read their L/W/Z dimensions from ``storage_geometry_parameters``.
     """
 
     __entity_name__ = "drainage_storage_entities"
@@ -194,10 +198,12 @@ class StorageEntity(DrainageNodeEntity):
     invert_elevation = field(UrbanDrainage_InvertElevation, flags=INIT)
     max_depth = field(UrbanDrainage_MaxDepth, flags=INIT)
 
+    storage_geometry = field(UrbanDrainage_StorageGeometry, flags=OPT)
     storage_constant = field(UrbanDrainage_StorageConstant, flags=OPT)
     storage_coefficient = field(UrbanDrainage_StorageCoefficient, flags=OPT)
     storage_exponent = field(UrbanDrainage_StorageExponent, flags=OPT)
     storage_curve = field(UrbanDrainage_StorageCurve, flags=OPT)
+    storage_geometry_parameters = field(UrbanDrainage_StorageGeometryParameters, flags=OPT)
     initial_depth = field(UrbanDrainage_InitialDepth, flags=OPT)
     surcharge_depth = field(UrbanDrainage_SurchargeDepth, flags=OPT)
     ponded_area = field(UrbanDrainage_PondedArea, flags=OPT)

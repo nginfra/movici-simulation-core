@@ -143,9 +143,9 @@ class Model(TrackedModel, name="urban_drainage"):
         if self.dataset is None:
             raise RuntimeError("Model.setup() must be called before model.initialize()")
 
-        for f in dataclasses.fields(self.dataset):
-            getattr(self.dataset, f.name).is_ready()
-
+        # The framework only calls initialize() once the state is ready for all INIT
+        # attributes (see TrackedModelAdapter.try_initialize), so no extra readiness
+        # check is needed here.
         self._ensure_pub_attributes_initialized()
         # Resolve the cadence from the same merged options the engine uses, so the
         # Movici re-wake cadence matches the SWMM REPORT/WET/DRY steps.
@@ -193,5 +193,5 @@ class Model(TrackedModel, name="urban_drainage"):
 
     def shutdown(self, state: TrackedState):
         """Finalise and close the simulation."""
-        if self.network:
+        if self.network is not None:
             self.network.close()
