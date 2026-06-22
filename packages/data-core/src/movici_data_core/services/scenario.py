@@ -34,7 +34,7 @@ class ScenarioService:
             raise InvalidAction("Unsupported operation in this mode")
         return await self.repository.scenarios.create(scenario, validator)
 
-    async def update(self, scenario: Scenario, validator):
+    async def update(self, scenario: Scenario, validator: ModelConfigValidator):
         return await self.repository.scenarios.update(scenario, validator)
 
     async def delete(self):

@@ -25,6 +25,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     SimulationInfo,
     Update,
     UpdateModel,
@@ -192,15 +193,27 @@ class ScenarioModelOut(OutModel[ScenarioModel]):
         return ScenarioModelOut(name=obj.name, type=obj.type, **obj.config)
 
 
-class ScenarioOut(OutModel[Scenario]):
+class ShortScenarioOut(OutModel[Scenario]):
     id: UUID
     name: str
     display_name: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    status: ScenarioStatus
+    has_updates: bool
+
+
+class ScenarioOut(ShortScenarioOut):
     description: str
     epsg_code: int | None
     simulation_info: SimulationInfoInOut
     models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
     datasets: list[ScenarioDatasetOut]
+
+
+class ScenarioList(OutModel[t.Sequence[domain_model.Scenario]]):
+    __envelope__ = "scenarios"
+    scenarios: list[ShortScenarioOut]
 
 
 class DatasetWithDataIn(ShortDatasetIn):

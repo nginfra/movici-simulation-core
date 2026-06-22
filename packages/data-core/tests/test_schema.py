@@ -12,6 +12,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     SimulationInfo,
     Update,
     UpdateModel,
@@ -277,6 +278,7 @@ class TestScenarioInOut:
         scenario_id = uuid.uuid4()
         dataset_id = uuid.uuid4()
         dataset_type_id = uuid.uuid4()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
         scenario_config["id"] = scenario_id
         scenario_config["datasets"][0]["id"] = dataset_id
         scenario_config["datasets"][0]["type"] = {
@@ -285,6 +287,10 @@ class TestScenarioInOut:
             "format": DatasetFormat.ENTITY_BASED,
             "mimetype": None,
         }
+        scenario_config["created_at"] = now
+        scenario_config["updated_at"] = now
+        scenario_config["has_updates"] = False
+        scenario_config["status"] = ScenarioStatus.READY
         assert (
             ScenarioOut.from_domain(
                 Scenario(
@@ -300,6 +306,8 @@ class TestScenarioInOut:
                         reference=9000.1,
                         mode="time_oriented",
                     ),
+                    created_at=now,
+                    updated_at=now,
                     models=[
                         ScenarioModel(
                             "model1", type=ModelType("model_a"), config={"dataset": "a_dataset"}

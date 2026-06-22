@@ -15,6 +15,7 @@ from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import MoviciDataError
 
 from .datasets import dataset_router
+from .scenarios import scenario_router
 from .workspaces import workspace_router
 
 # TODO: make this part of MoviciWebApiBuilder (or similar builder/factory class)
@@ -26,6 +27,7 @@ DATABASE_MODE = DatabaseMode.SINGLE_SCENARIO
 DEFAULT_ROUTERS = (
     dataset_router,
     workspace_router,
+    scenario_router,
 )
 logger = logging.getLogger(__name__)
 logging.basicConfig()
