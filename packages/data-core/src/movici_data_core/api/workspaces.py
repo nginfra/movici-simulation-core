@@ -2,12 +2,16 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
+from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.schema import OperationSuccess, WorkspaceIn, WorkspaceListOut, WorkspaceOut
 
-from .dependencies import DepBackend
+from .dependencies import DepBackend, allow_in_modes
 
-workspace_router = APIRouter(prefix="/workspaces")
+workspace_router = APIRouter(
+    prefix="/workspaces",
+    dependencies=[allow_in_modes("workspace operation", [DatabaseMode.MULTIPLE_WORKSPACES])],
+)
 
 
 @workspace_router.get("/")

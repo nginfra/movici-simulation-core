@@ -326,10 +326,14 @@ async def create_update(
 async def a_workspace(db: SQLAlchemyServer):
     async with db.get_session() as session:
         repository = await SQLAlchemyRepository.for_session(session)
+        options = await get_options(session)
+        if options.default_workspace is not None:
+            return options.default_workspace.to_domain()
+
         workspace = Workspace(name="default", display_name="Default Workspace")
         workspace_id = await repository.workspaces.create(workspace)
         await session.commit()
-    return dataclasses.replace(workspace, id=workspace_id)
+        return dataclasses.replace(workspace, id=workspace_id)
 
 
 @pytest.fixture

@@ -5,11 +5,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.schema import OperationSuccess, ScenarioIn, ScenarioList, ScenarioOut
 from movici_data_core.validators import ModelConfigValidator
 
-from .dependencies import DepBackend, DepWorkspaceBackend
+from .dependencies import DepBackend, DepWorkspaceBackend, allow_in_modes
 
 scenario_router = APIRouter(prefix="/scenarios")
 
@@ -32,9 +33,18 @@ async def get_scenarios(backend: DepWorkspaceBackend) -> ScenarioList:
     return ScenarioList.from_domain(scenarios)
 
 
-@scenario_router.post("/")
+@scenario_router.post(
+    "/",
+    dependencies=[
+        allow_in_modes(
+            "create scenario", [DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES]
+        )
+    ],
+)
 async def create_scenario(
-    scenario: ScenarioIn, backend: DepWorkspaceBackend, validator: DepModelConfigValidator
+    scenario: ScenarioIn,
+    backend: DepWorkspaceBackend,
+    validator: DepModelConfigValidator,
 ) -> OperationSuccess:
     result = await backend.scenarios.create(scenario.to_domain(), validator)
     return OperationSuccess(resource="scenario", id=result, verb="created")

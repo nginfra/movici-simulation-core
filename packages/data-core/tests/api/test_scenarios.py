@@ -2,32 +2,6 @@ import pytest
 
 
 @pytest.fixture
-def create_scenario_through_api(get_json, a_workspace):
-    def _create_scenario(**kwargs):
-        defaults = {
-            "name": "new_scenario",
-            "display_name": "New Scenario",
-            "simulation_info": {
-                "mode": "time_oriented",
-                "reference": 1,
-                "start_time": 0,
-                "duration": 12,
-                "time_scale": 1.4,
-            },
-            "models": [],
-            "datasets": [],
-        }
-        return get_json(
-            "/scenarios",
-            params={"workspace": a_workspace.id},
-            method="post",
-            json={**defaults, **kwargs},
-        )
-
-    return _create_scenario
-
-
-@pytest.fixture
 def scenario_id(create_scenario_through_api):
     result = create_scenario_through_api()
     return result["id"]

@@ -6,6 +6,7 @@ from fastapi import Depends, Query, Request
 
 from movici_data_core import domain_model
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
+from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import InvalidAction
 
 SQLALCHEMY_SERVER_KEY = "__movici_sqlalchemy_server__"
@@ -39,6 +40,14 @@ async def get_workspace_backend(backend: DepBackend, workspace: DepWorkspaceOrNo
 
     assert workspace.id is not None
     yield backend.for_workspace(workspace.id)
+
+
+def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
+    def _disallow(backend: DepBackend):
+        if backend.options.mode not in modes:
+            raise InvalidAction(f"{operation} is not allowed in this mode")
+
+    return Depends(_disallow)
 
 
 DepServer = t.Annotated[SQLAlchemyServer, Depends(server)]
