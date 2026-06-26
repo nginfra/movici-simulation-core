@@ -297,7 +297,7 @@ class UpdateWithDataOut(ShortUpdateOut):
     def write_to_file(
         cls,
         update: Update,
-        path: pathlib.Path | t.BinaryIO,
+        file: pathlib.Path | t.BinaryIO,
         serializer: ExternalSerializationStrategy,
         filetype: FileType,
     ):
@@ -312,6 +312,8 @@ class UpdateWithDataOut(ShortUpdateOut):
         :param filetype: A :class:`FileType`. This must be a ``FileType`` that is supported by
             the serializer
         """
+        serializer.supported_file_type_or_raise(filetype)
+
         if not isinstance(update.data, dict):
             raise TypeError(
                 f"Update data must be of type dict, not type {type(update.data).__name__}"
@@ -329,10 +331,10 @@ class UpdateWithDataOut(ShortUpdateOut):
             filetype=filetype,
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("model", "dataset"),
         )
-        if isinstance(path, pathlib.Path):
-            path.write_bytes(raw_data)
+        if isinstance(file, pathlib.Path):
+            file.write_bytes(raw_data)
         else:
-            path.write(raw_data)
+            file.write(raw_data)
 
 
 class UpdateIn(BaseModel):

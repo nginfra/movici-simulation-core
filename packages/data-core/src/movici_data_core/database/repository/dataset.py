@@ -274,10 +274,21 @@ class DatasetRepository(SQLResourceRepository):
                         tp.name: tp for tp in await self.all_data.dataset_types.list()
                     }
 
-                if (
-                    scenario_dataset.dataset_type.name not in existing_types
-                    and self.options.STRICT_DATASET_TYPES
-                ):
+                dataset_type_name = scenario_dataset.dataset_type.name
+                if dataset_type_name in existing_types:
+                    if not existing_types[dataset_type_name].is_equivalent(
+                        scenario_dataset.dataset_type
+                    ):
+                        raise MoviciValidationError(
+                            {
+                                "type": [
+                                    f"incompatible dataset type '{dataset_type_name}'"
+                                    " already exists"
+                                ]
+                            },
+                            path=idx,
+                        )
+                elif self.options.STRICT_DATASET_TYPES:
                     raise MoviciValidationError(
                         {
                             "type": [

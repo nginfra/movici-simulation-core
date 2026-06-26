@@ -206,14 +206,16 @@ class TestDatasetTypeRepository:
         assert dataset_type.name == "transport_network"
         assert dataset_type.id is not None
 
+    @pytest.mark.parametrize("strict_dataset_types", [True, False])
     async def test_raises_on_incompatible_existing_dataset_type(
-        self, repository: SQLAlchemyRepository, a_dataset_type
+        self, repository: SQLAlchemyRepository, a_dataset_type, strict_dataset_types
     ):
-        repository.options.STRICT_DATASET_TYPES = False
+        repository.options.STRICT_DATASET_TYPES = strict_dataset_types
 
+        assert a_dataset_type.format == DatasetFormat.ENTITY_BASED
         with pytest.raises(InvalidResource):
             await repository.dataset_types.ensure_dataset_type(
-                DatasetType(name="transport_network", format=DatasetFormat.BINARY)
+                dataclasses.replace(a_dataset_type, format=DatasetFormat.BINARY)
             )
 
 
@@ -566,15 +568,53 @@ class TestDatasetRepository:
         assert created is not None
         assert created == DatasetType("new_type", format=DatasetFormat.ENTITY_BASED)
 
+    async def test_raises_on_new_scenario_dataset_with_incorrect_type(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        assert a_dataset_type.format != DatasetFormat.BINARY
+        with pytest.raises(MoviciValidationError, match="incompatible dataset type"):
+            await repository.datasets.ensure_scenario_datasets(
+                [
+                    ScenarioDataset(
+                        name="new_dataset",
+                        dataset_type=dataclasses.replace(
+                            a_dataset_type, format=DatasetFormat.BINARY
+                        ),
+                    )
+                ]
+            )
+
     async def test_raises_on_existing_scenario_dataset_with_incorrect_type(
         self, repository: SQLAlchemyRepository, a_dataset
     ):
 
         repository.options.STRICT_SCENARIO_DATASETS = False
 
-        with pytest.raises(MoviciValidationError):
+        with pytest.raises(MoviciValidationError, match="incompatible dataset already exists"):
             await repository.datasets.ensure_scenario_datasets(
                 [ScenarioDataset(name=a_dataset.name, dataset_type=DatasetType("tabular"))]
+            )
+
+    async def test_raises_on_conflicting_dataset_format(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        assert a_dataset.dataset_type.format != DatasetFormat.BINARY
+        with pytest.raises(MoviciValidationError, match="incompatible dataset already exists"):
+            await repository.datasets.ensure_scenario_datasets(
+                [
+                    ScenarioDataset(
+                        name=a_dataset.name,
+                        dataset_type=dataclasses.replace(
+                            a_dataset.dataset_type, format=DatasetFormat.BINARY
+                        ),
+                    )
+                ]
             )
 
     async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):

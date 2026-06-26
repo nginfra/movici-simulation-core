@@ -289,6 +289,13 @@ class ScenarioModel:
     config: dict = dataclasses.field(default_factory=dict)
     references: list[MoviciDataRefInfo] = dataclasses.field(default_factory=list, compare=False)
 
+    def __post_init__(self):
+        if invalid_fields := self.config.keys() & {"name", "type"}:
+            raise ValueError(
+                "Prohibited keys in found in ScenarioModel.config: "
+                + ", ".join(sorted(invalid_fields))
+            )
+
     def with_populated_config(self):
         return dataclasses.replace(self, config=self._populated_config())
 
