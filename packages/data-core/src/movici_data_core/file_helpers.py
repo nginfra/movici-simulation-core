@@ -55,6 +55,25 @@ MIMETYPES = {
     "text/csv": FileType.CSV,
 }
 
+MIMETYPES_BY_FILETYPE = {
+    FileType.JSON: "application/json",
+    FileType.MSGPACK: "application/x-msgpack",
+    FileType.NETCDF: "application/x-netcdf",
+    FileType.CSV: "text/csv",
+}
 
-def infer_filetype_from_mimetype_or_suffix(filename: str, mimetype: str | None = None):
+
+def base_mimetype(content_type: str | None):
+    return content_type.split(";")[0].strip() if content_type is not None else None
+
+
+def infer_filetype_from_filename_or_mimetype(
+    filename: str | None = None, mimetype: str | None = None
+) -> FileType:
+    filename = filename or ""
+    mimetype = base_mimetype(mimetype) or ""
     return MIMETYPES.get(mimetype or "", FileType.from_extension(pathlib.Path(filename).suffix))
+
+
+def get_mimetype(filetype: FileType) -> str | None:
+    return MIMETYPES_BY_FILETYPE.get(filetype)

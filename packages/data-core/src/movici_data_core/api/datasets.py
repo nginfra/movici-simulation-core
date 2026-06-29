@@ -5,7 +5,8 @@ from fastapi.responses import FileResponse
 
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.file_helpers import (
-    infer_filetype_from_mimetype_or_suffix,
+    base_mimetype,
+    infer_filetype_from_filename_or_mimetype,
     store_file_to_disk,
 )
 from movici_data_core.schema import DatasetList, OperationSuccess, ShortDatasetIn, ShortDatasetOut
@@ -65,8 +66,8 @@ async def create_dataset_data(dataset_id: UUID, data: fastapi.UploadFile, backen
         # work with handling the incoming file
         raise ResourceDoesNotExist("dataset", id=dataset_id)
 
-    mimetype = data.content_type.split(";")[0].strip() if data.content_type is not None else None
-    filetype = infer_filetype_from_mimetype_or_suffix(data.filename or "", mimetype)
+    mimetype = base_mimetype(data.content_type)
+    filetype = infer_filetype_from_filename_or_mimetype(data.filename, mimetype)
     filepath = await store_file_to_disk(data.file, backend.tmpfile_dir, filetype)
     await backend.datasets.update_from_file(dataset_id, filepath, mimetype)
     return OperationSuccess(resource="dataset", id=dataset_id, verb="data created")

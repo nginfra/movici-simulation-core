@@ -4,7 +4,8 @@ import tempfile
 import pytest
 
 from movici_data_core.file_helpers import (
-    infer_filetype_from_mimetype_or_suffix,
+    get_mimetype,
+    infer_filetype_from_filename_or_mimetype,
     store_file_to_disk,
     tempfile_delete_on_error,
 )
@@ -87,7 +88,24 @@ async def test_raises_on_file_instead_of_directory(tmp_path):
         ("somefile.bin", None, FileType.OTHER),
         ("somefile.asdf", None, FileType.OTHER),
         ("somefile", None, FileType.OTHER),
+        ("", None, FileType.OTHER),
+        ("", "application/json", FileType.JSON),
+        ("", "application/x-msgpack", FileType.MSGPACK),
     ],
 )
-async def test_infer_filetype_from_mimetype_or_suffix(filename, mimetype, expected):
-    assert infer_filetype_from_mimetype_or_suffix(filename, mimetype) == expected
+def test_infer_filetype_from_filename_or_mimetype(filename, mimetype, expected):
+    assert infer_filetype_from_filename_or_mimetype(filename, mimetype) == expected
+
+
+@pytest.mark.parametrize(
+    "filetype, mimetype",
+    [
+        (FileType.JSON, "application/json"),
+        (FileType.MSGPACK, "application/x-msgpack"),
+        (FileType.CSV, "text/csv"),
+        (FileType.NETCDF, "application/x-netcdf"),
+        (FileType.OTHER, None),
+    ],
+)
+def test_get_mimetype(filetype, mimetype):
+    assert get_mimetype(filetype) == mimetype
