@@ -12,6 +12,11 @@ from movici_simulation_core.types import FileType
 
 class TestUpdateService:
     @pytest.fixture
+    async def backend(self, backend: SQLAlchemyBackend, an_attribute_type):
+        await backend.update_schema()
+        return backend
+
+    @pytest.fixture
     def update_data(
         self, a_dataset: Dataset, a_scenario: Scenario, an_entity_type, an_attribute_type
     ):

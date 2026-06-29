@@ -155,7 +155,7 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
 
 class ScenarioDatasetIn(BaseModel):
     name: str
-    type: DatasetType | str | None
+    type: DatasetType | str | None = None
 
     def to_domain(self):
         dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
@@ -293,6 +293,11 @@ class UpdateModelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str
     type: t.Annotated[str, BeforeValidator(lambda v: v.name)]
+
+
+class UpdateList(OutModel[t.Sequence[domain_model.Update]]):
+    __envelope__ = "updates"
+    updates: list[ShortUpdateOut]
 
 
 class ShortUpdateOut(OutModel[Update]):

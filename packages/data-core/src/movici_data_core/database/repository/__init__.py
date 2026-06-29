@@ -110,8 +110,6 @@ class SQLAlchemyRepository:
 
     @property
     def updates(self):
-        if self.scenario_id is None:
-            raise ValueError("SQLAlchemyRepository.scenario_id must be set")
         return UpdateRepository(self.session, self.options, self, scenario_id=self.scenario_id)
 
 

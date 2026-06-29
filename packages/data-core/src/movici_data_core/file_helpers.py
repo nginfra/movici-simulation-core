@@ -1,11 +1,14 @@
 import asyncio
 import contextlib
+import functools
 import os
 import pathlib
 import shutil
 import tempfile
 import typing as t
 from concurrent.futures import ThreadPoolExecutor
+
+from fastapi import Request
 
 from movici_simulation_core.types import FileType
 
@@ -44,6 +47,27 @@ async def store_file_to_disk(
 
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(executor, _store_to_disk)
+
+
+async def store_request_stream_to_disk(
+    request: Request, path: pathlib.Path, filetype: FileType, prefix: str = ""
+):
+    """Asynchronously store a raw request body to disk."""
+    if not path.is_dir():
+        raise ValueError("path must be an existing directory")
+
+    # Since writing to files is a synchronous but IO-bound operation, we want to offload the work
+    # to a thread. However, the streaming the request body is asynchronous
+    async def _store_to_disk():
+        with tempfile_delete_on_error(
+            suffix=filetype.default_extension, prefix=prefix, dir=path
+        ) as destination_file:
+            async for chunk in request.stream():
+                destination_file.write(chunk)
+        return pathlib.Path(destination_file.name)
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, functools.partial(asyncio.run, _store_to_disk()))
 
 
 MIMETYPES = {

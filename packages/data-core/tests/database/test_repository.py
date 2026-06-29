@@ -1171,7 +1171,7 @@ class TestScenarioRepository:
 
 class TestUpdateRepository:
     @pytest.fixture
-    def repository_for_scenario(self, repository: SQLAlchemyRepository, a_scenario):
+    def repository(self, repository: SQLAlchemyRepository, a_scenario):
         return repository.for_scenario(a_scenario.id)
 
     async def test_update_round_trip(
@@ -1180,7 +1180,7 @@ class TestUpdateRepository:
         a_dataset,
         an_entity_type,
         an_attribute_type,
-        repository_for_scenario: SQLAlchemyRepository,
+        repository: SQLAlchemyRepository,
     ):
         update = Update(
             dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
@@ -1195,9 +1195,9 @@ class TestUpdateRepository:
             },
         )
 
-        update_id = await repository_for_scenario.updates.create(update)
+        update_id = await repository.updates.create(update)
 
-        result = await repository_for_scenario.updates.get_by_id(update_id, with_data=True)
+        result = await repository.updates.get_by_id(update_id, with_data=True)
         assert result is not None
         assert result.created_at is not None
         assert dataclasses.replace(update, data=None, id=update_id) == dataclasses.replace(
@@ -1205,29 +1205,45 @@ class TestUpdateRepository:
         )
         assert_dataset_dicts_equal(update.data, result.data)
 
-    async def test_updates_exist(
-        self, create_update, repository_for_scenario: SQLAlchemyRepository
-    ):
-        assert not await repository_for_scenario.updates.exists()
+    async def test_updates_exist(self, create_update, repository: SQLAlchemyRepository):
+        assert not await repository.updates.exists()
         await create_update(timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0])
 
-        assert await repository_for_scenario.updates.exists()
+        assert await repository.updates.exists()
 
     async def test_gets_all_updates_in_order(
-        self, create_update, repository_for_scenario: SQLAlchemyRepository
+        self, create_update, repository: SQLAlchemyRepository
     ):
         update1 = await create_update(timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0])
         update4 = await create_update(timestamp=6, iteration=1, ids=[0, 1], array=[2.0, 3.0])
         update2 = await create_update(timestamp=2, iteration=1, ids=[0, 1], array=[2.0, 3.0])
         update3 = await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
-        all_updates = await repository_for_scenario.updates.list()
+        all_updates = await repository.updates.list()
         assert [upd.id for upd in all_updates] == [update1, update2, update3, update4]
+
+    async def test_doesnt_return_updates_for_different_scenario(
+        self,
+        a_scenario,
+        create_scenario,
+        repository: SQLAlchemyRepository,
+        create_update,
+    ):
+
+        another_scenario_id = await create_scenario(
+            dataclasses.replace(a_scenario, name="another_scenario")
+        )
+        await create_update(timestamp=6, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        updates = await repository.updates.list()
+        assert len(updates) == 1
+
+        other_updates = await repository.for_scenario(another_scenario_id).updates.list()
+        assert len(other_updates) == 0
 
     async def test_deletes_all_updates_for_scenario_but_not_others(
         self,
         a_scenario,
         create_update,
-        repository_for_scenario: SQLAlchemyRepository,
+        repository: SQLAlchemyRepository,
         create_scenario,
     ):
         another_scenario_id = await create_scenario(
@@ -1240,25 +1256,19 @@ class TestUpdateRepository:
             scenario_id=another_scenario_id, timestamp=1, iteration=0, ids=[0, 1], array=[1.0, 2.0]
         )
 
-        assert len(await repository_for_scenario.updates.list()) == 3
-        assert (
-            len(await repository_for_scenario.for_scenario(another_scenario_id).updates.list())
-            == 1
-        )
+        assert len(await repository.updates.list()) == 3
+        assert len(await repository.for_scenario(another_scenario_id).updates.list()) == 1
 
-        await repository_for_scenario.updates.delete_all()
+        await repository.updates.delete_all()
 
-        assert len(await repository_for_scenario.updates.list()) == 0
-        assert (
-            len(await repository_for_scenario.for_scenario(another_scenario_id).updates.list())
-            == 1
-        )
+        assert len(await repository.updates.list()) == 0
+        assert len(await repository.for_scenario(another_scenario_id).updates.list()) == 1
 
     async def test_deletes_all_underlying_data(
         self,
         a_scenario,
         create_update,
-        repository_for_scenario: SQLAlchemyRepository,
+        repository: SQLAlchemyRepository,
         create_scenario,
         session,
     ):
@@ -1275,6 +1285,6 @@ class TestUpdateRepository:
 
         assert (await session.scalar(select(func.count(db.DataArray.id)))) == 8
 
-        await repository_for_scenario.updates.delete_all()
+        await repository.updates.delete_all()
 
         assert (await session.scalar(select(func.count(db.DataArray.id)))) == 2
