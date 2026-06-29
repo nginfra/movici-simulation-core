@@ -393,6 +393,9 @@ async def a_dataset(get_repository, a_dataset_type):
 @pytest.fixture
 async def a_scenario(default_model_types, a_dataset, get_repository, create_scenario):
     async with get_repository() as repository:
+        if repository.scenario_id is not None:
+            return await repository.scenarios.get()
+
         scenario = Scenario(
             name="a_scenario",
             display_name="A Scenario",

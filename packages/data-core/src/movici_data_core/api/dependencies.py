@@ -4,10 +4,10 @@ import typing as t
 
 from fastapi import Depends, Query, Request
 
-from movici_data_core import domain_model
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import InvalidAction
+from movici_data_core.services.common import ensure_valid_scenario, ensure_valid_workspace
 
 SQLALCHEMY_SERVER_KEY = "__movici_sqlalchemy_server__"
 
@@ -21,25 +21,34 @@ async def get_backend(server: DepServer):
         yield backend
 
 
-async def valid_workspace_or_none(
+async def get_workspace_backend(
     backend: DepBackend, workspace_q: t.Annotated[str | None, Query(alias="workspace")] = None
 ):
-    if workspace_q is None:
-        return None
-
-    return await backend.workspaces.ensure_valid_workspace(workspace_q)
-
-
-async def get_workspace_backend(backend: DepBackend, workspace: DepWorkspaceOrNone):
     if backend.single_workspace_mode:
-        yield backend
-        return
+        return backend
 
-    if workspace is None:
-        raise InvalidAction("supply a workspace name or id")
+    # TODO: Validate authorization
+    workspace = await ensure_valid_workspace(workspace_q, repository=backend.repository)
 
     assert workspace.id is not None
-    yield backend.for_workspace(workspace.id)
+    return backend.for_workspace(workspace.id)
+
+
+async def get_scenario_backend(
+    backend: DepBackend,
+    scenario_q: t.Annotated[str | None, Query(alias="scenario")] = None,
+    workspace_q: t.Annotated[str | None, Query(alias="workspace")] = None,
+):
+    if backend.single_scenario_mode:
+        return backend
+
+    if not scenario_q:
+        raise InvalidAction("supply a scenario name or id")
+
+    scenario = await ensure_valid_scenario(scenario_q, workspace_q, backend.repository)
+
+    assert scenario.id is not None
+    return backend.for_scenario(scenario.id)
 
 
 def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
@@ -52,5 +61,5 @@ def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
 
 DepServer = t.Annotated[SQLAlchemyServer, Depends(server)]
 DepBackend = t.Annotated[SQLAlchemyBackend, Depends(get_backend)]
-DepWorkspaceOrNone = t.Annotated[domain_model.Workspace | None, Depends(valid_workspace_or_none)]
 DepWorkspaceBackend = t.Annotated[SQLAlchemyBackend, Depends(get_workspace_backend)]
+DepScenarioBackend = t.Annotated[SQLAlchemyBackend, Depends(get_scenario_backend)]
