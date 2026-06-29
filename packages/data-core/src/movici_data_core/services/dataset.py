@@ -61,10 +61,12 @@ class DatasetService:
     async def delete(self, dataset_id: UUID):
         return await self.repository.datasets.delete(dataset_id)
 
-    async def get_dataset_as_file(self, dataset_id: UUID, filetype: FileType = FileType.JSON):
+    async def get_dataset_as_file(
+        self, dataset_id: UUID, filetype: FileType = FileType.JSON
+    ) -> pathlib.Path | None:
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
-            raise ResourceDoesNotExist("dataset", id=dataset_id)
+            return None
 
         with tempfile_delete_on_error(
             suffix=filetype.default_extension,

@@ -201,6 +201,7 @@ class TestDatasetService:
 
         await backend.datasets.update_from_file(a_dataset.id, dataset_path)
         file = await backend.datasets.get_dataset_as_file(a_dataset.id, filetype=filetype)
+        assert file is not None
 
         a_dataset = t.cast(Dataset, await backend.datasets.get(id=a_dataset.id))
 
@@ -259,6 +260,7 @@ class TestDatasetService:
         assert updated.updated_at is not None
 
         file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file is not None
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
 
@@ -304,6 +306,7 @@ class TestDatasetService:
         )
 
         file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file is not None
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
 

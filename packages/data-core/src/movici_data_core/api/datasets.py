@@ -56,6 +56,8 @@ async def delete_dataset(dataset_id: UUID, backend: DepBackend) -> OperationSucc
 async def get_dataset_data(dataset_id: UUID, backend: DepBackend):
     # TODO: use accept header to serve msgpack or json
     result = await backend.datasets.get_dataset_as_file(dataset_id)
+    if result is None:
+        raise ResourceDoesNotExist("dataset", id=dataset_id)
     return FileResponse(result)
 
 
