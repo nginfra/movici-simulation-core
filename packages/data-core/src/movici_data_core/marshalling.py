@@ -17,10 +17,13 @@ from pydantic import (
     model_serializer,
 )
 
-from movici_data_core import domain_model
 from movici_data_core.domain_model import (
+    AttributeType,
     BoundingBox,
+    Dataset,
+    DatasetFormat,
     DatasetType,
+    EntityType,
     ModelType,
     Scenario,
     ScenarioDataset,
@@ -29,6 +32,7 @@ from movici_data_core.domain_model import (
     SimulationInfo,
     Update,
     UpdateModel,
+    Workspace,
 )
 from movici_data_core.exceptions import (
     DeserializationError,
@@ -36,6 +40,7 @@ from movici_data_core.exceptions import (
     UnsupportedFileType,
 )
 from movici_data_core.serialization import load_dict
+from movici_simulation_core import DataType
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS, data_keys
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
@@ -57,6 +62,11 @@ BoundingBoxField = t.Annotated[
 ]
 
 
+class InModel(BaseModel, t.Generic[T_dom]):
+    def to_domain(self) -> T_dom:
+        raise NotImplementedError
+
+
 class OutModel(BaseModel, t.Generic[T_dom]):
     model_config = ConfigDict(from_attributes=True)
     __envelope__: t.ClassVar[str | None] = None
@@ -68,39 +78,41 @@ class OutModel(BaseModel, t.Generic[T_dom]):
         return cls.model_validate(obj)
 
 
-class WorkspaceIn(BaseModel):
+class WorkspaceIn(InModel):
     name: str
     display_name: str
 
     def to_domain(self):
-        return domain_model.Workspace(name=self.name, display_name=self.display_name)
+        return Workspace(name=self.name, display_name=self.display_name)
 
 
-class WorkspaceOut(WorkspaceIn, OutModel[domain_model.Workspace]):
+class WorkspaceOut(OutModel[Workspace]):
     id: UUID
+    name: str
+    display_name: str
     scenario_count: int
     dataset_count: int
 
 
-class WorkspaceListOut(OutModel[t.Sequence[domain_model.Workspace]]):
+class WorkspaceListOut(OutModel[t.Sequence[Workspace]]):
     __envelope__ = "workspaces"
     workspaces: list[WorkspaceOut]
 
 
-class ShortDatasetIn(BaseModel):
+class ShortDatasetIn(InModel[Dataset]):
     name: str
     display_name: str = ""
     type: DatasetType | str
 
     def to_domain(self):
-        return domain_model.Dataset(
+        return Dataset(
             name=self.name,
             display_name=self.display_name or self.name,
             dataset_type=DatasetType(self.type) if isinstance(self.type, str) else self.type,
         )
 
 
-class ShortDatasetOut(OutModel[domain_model.Dataset]):
+class ShortDatasetOut(OutModel[Dataset]):
     id: UUID
     name: str
     display_name: str
@@ -110,7 +122,7 @@ class ShortDatasetOut(OutModel[domain_model.Dataset]):
     updated_at: datetime.datetime
 
 
-class DatasetList(OutModel[t.Sequence[domain_model.Dataset]]):
+class DatasetListOut(OutModel[t.Sequence[Dataset]]):
     __envelope__ = "datasets"
     datasets: list[ShortDatasetOut]
 
@@ -125,7 +137,7 @@ class ScenarioIn(BaseModel):
     datasets: list[ScenarioDatasetIn]
 
     def to_domain(self):
-        return domain_model.Scenario(
+        return Scenario(
             name=self.name,
             display_name=self.display_name,
             description=self.description,
@@ -136,7 +148,7 @@ class ScenarioIn(BaseModel):
         )
 
 
-class SimulationInfoInOut(OutModel[SimulationInfo]):
+class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     duration: int
     reference: float
     time_scale: float
@@ -144,7 +156,7 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
     mode: t.Literal["time_oriented"] = "time_oriented"
 
     def to_domain(self):
-        return domain_model.SimulationInfo(
+        return SimulationInfo(
             duration=self.duration,
             reference=self.reference,
             time_scale=self.time_scale,
@@ -153,7 +165,7 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
         )
 
 
-class ScenarioDatasetIn(BaseModel):
+class ScenarioDatasetIn(InModel[ScenarioDataset]):
     name: str
     type: DatasetType | str | None = None
 
@@ -168,13 +180,13 @@ class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     id: UUID
 
 
-class ScenarioModelIn(BaseModel):
+class ScenarioModelIn(InModel[ScenarioModel]):
     model_config = ConfigDict(extra="allow")
     name: str
     type: str | ModelType
 
     def to_domain(self):
-        return domain_model.ScenarioModel(
+        return ScenarioModel(
             name=self.name,
             type=ModelType(self.type) if isinstance(self.type, str) else self.type,
             config=self.__pydantic_extra__ or {},
@@ -211,7 +223,7 @@ class ScenarioOut(ShortScenarioOut):
     datasets: list[ScenarioDatasetOut]
 
 
-class ScenarioList(OutModel[t.Sequence[domain_model.Scenario]]):
+class ScenarioListOut(OutModel[t.Sequence[Scenario]]):
     __envelope__ = "scenarios"
     scenarios: list[ShortScenarioOut]
 
@@ -279,7 +291,7 @@ class DatasetWithDataOut(ShortDatasetOut):
     data: dict
 
 
-class UpdateModelIn(BaseModel):
+class UpdateModelIn(InModel[UpdateModel]):
     name: str
     type: str | None = None
 
@@ -295,7 +307,7 @@ class UpdateModelOut(BaseModel):
     type: t.Annotated[str, BeforeValidator(lambda v: v.name)]
 
 
-class UpdateList(OutModel[t.Sequence[domain_model.Update]]):
+class UpdateListOut(OutModel[t.Sequence[Update]]):
     __envelope__ = "updates"
     updates: list[ShortUpdateOut]
 
@@ -356,7 +368,7 @@ class UpdateWithDataOut(ShortUpdateOut):
             file.write(raw_data)
 
 
-class UpdateIn(BaseModel):
+class UpdateIn(InModel[Update]):
     """Validator for incoming updates. The validator does not process the updates "data" key, this
     must be done separately. However, the ``read_from_file`` method, does process the "data" key
     as well
@@ -433,6 +445,144 @@ class UpdateIn(BaseModel):
             model=self.model.to_domain(),
             created_at=self.created_at,
         )
+
+
+class DatasetTypeListOut(OutModel[t.Sequence[DatasetType]]):
+    __envelope__ = "dataset_types"
+    dataset_types: list[DatasetTypeOut]
+
+
+class DatasetTypeOut(OutModel[DatasetType]):
+    id: UUID
+    name: str
+    format: DatasetFormat | None
+    mimetype: str | None
+
+
+class DatasetTypeIn(InModel):
+    name: str
+    format: DatasetFormat
+    mimetype: str | None = None
+
+    def to_domain(self):
+        return DatasetType(name=self.name, format=self.format, mimetype=self.mimetype)
+
+
+class EntityTypeListOut(OutModel[t.Sequence[EntityType]]):
+    __envelope__ = "entity_types"
+    entity_types: list[EntityTypeOut]
+
+
+class EntityTypeOut(OutModel[EntityType]):
+    id: UUID
+    name: str
+
+
+class EntityTypeIn(InModel[EntityType]):
+    name: str
+
+    def to_domain(self):
+        return EntityType(name=self.name)
+
+
+DataTypePrimitive = t.Literal["bool", "int", "float", "str"]
+
+
+class DataTypeIn(InModel[DataType]):
+    type: DataTypePrimitive
+    unit_shape: list[int] = Field(default_factory=list)
+    csr: bool = False
+
+    def to_domain(self):
+        primitives: dict[DataTypePrimitive, type] = {
+            "bool": bool,
+            "int": int,
+            "float": float,
+            "str": str,
+        }
+
+        return DataType(
+            py_type=primitives[self.type], unit_shape=tuple(self.unit_shape), csr=self.csr
+        )
+
+
+class DataTypeOut(OutModel[DataType]):
+    type: DataTypePrimitive
+    unit_shape: list[int]
+    csr: bool
+
+    @classmethod
+    def from_domain(cls, obj: DataType):
+        primitives: dict[type, DataTypePrimitive] = {
+            bool: "bool",
+            int: "int",
+            float: "float",
+            str: "str",
+        }
+        return DataTypeOut(
+            type=primitives[obj.py_type], unit_shape=list(obj.unit_shape), csr=obj.csr
+        )
+
+
+class AttributeTypeListOut(OutModel[t.Sequence[AttributeType]]):
+    __envelope__ = "attribute_types"
+    attribute_types: list[AttributeTypeOut]
+
+
+class AttributeTypeOut(OutModel[AttributeType]):
+    id: UUID
+    name: str
+    data_type: t.Annotated[DataTypeOut, BeforeValidator(DataTypeOut.from_domain)]
+    unit: str
+    description: str
+    enum_name: str | None
+
+    @classmethod
+    def from_domain(cls, obj: AttributeType):
+        return AttributeTypeOut(
+            id=t.cast(UUID, obj.id),
+            name=obj.name,
+            data_type=obj.data_type,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+        )
+
+
+class AttributeTypeIn(InModel[AttributeType]):
+    name: str
+    data_type: DataTypeIn
+    unit: str = ""
+    description: str = ""
+    enum_name: str | None = None
+
+    def to_domain(self):
+        return AttributeType(
+            name=self.name,
+            data_type=self.data_type.to_domain(),
+            unit=self.unit,
+            description=self.description,
+            enum_name=self.enum_name,
+        )
+
+
+class ModelTypeListOut(OutModel[t.Sequence[ModelType]]):
+    __envelope__ = "model_types"
+    model_types: list[ModelTypeOut]
+
+
+class ModelTypeIn(InModel[ModelType]):
+    name: str
+    jsonschema: dict
+
+    def to_domain(self):
+        return ModelType(name=self.name, jsonschema=self.jsonschema)
+
+
+class ModelTypeOut(OutModel[ModelType]):
+    id: UUID
+    name: str
+    jsonschema: dict
 
 
 class OperationSuccess(BaseModel):

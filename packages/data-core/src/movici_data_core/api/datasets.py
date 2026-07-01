@@ -9,7 +9,12 @@ from movici_data_core.file_helpers import (
     infer_filetype_from_filename_or_mimetype,
     store_file_to_disk,
 )
-from movici_data_core.schema import DatasetList, OperationSuccess, ShortDatasetIn, ShortDatasetOut
+from movici_data_core.marshalling import (
+    DatasetListOut,
+    OperationSuccess,
+    ShortDatasetIn,
+    ShortDatasetOut,
+)
 
 from .dependencies import DepBackend, DepWorkspaceBackend
 
@@ -17,9 +22,9 @@ dataset_router = fastapi.APIRouter(prefix="/datasets")
 
 
 @dataset_router.get("/")
-async def get_datasets(backend: DepWorkspaceBackend) -> DatasetList:
+async def get_datasets(backend: DepWorkspaceBackend) -> DatasetListOut:
     datasets = await backend.datasets.list()
-    return DatasetList.from_domain(datasets)
+    return DatasetListOut.from_domain(datasets)
 
 
 @dataset_router.post("/")

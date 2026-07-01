@@ -4,7 +4,12 @@ from fastapi import APIRouter
 
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
-from movici_data_core.schema import OperationSuccess, WorkspaceIn, WorkspaceListOut, WorkspaceOut
+from movici_data_core.marshalling import (
+    OperationSuccess,
+    WorkspaceIn,
+    WorkspaceListOut,
+    WorkspaceOut,
+)
 
 from .dependencies import DepBackend, allow_in_modes
 

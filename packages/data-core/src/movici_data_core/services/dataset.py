@@ -17,7 +17,7 @@ from movici_data_core.exceptions import (
     UnsupportedFileType,
 )
 from movici_data_core.file_helpers import tempfile_delete_on_error
-from movici_data_core.schema import DatasetWithDataIn, DatasetWithDataOut
+from movici_data_core.marshalling import DatasetWithDataIn, DatasetWithDataOut
 from movici_data_core.serialization import dump_dict
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType

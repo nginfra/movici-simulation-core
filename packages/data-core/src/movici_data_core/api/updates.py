@@ -10,9 +10,9 @@ from movici_data_core.file_helpers import (
     infer_filetype_from_filename_or_mimetype,
     store_request_stream_to_disk,
 )
-from movici_data_core.schema import (
+from movici_data_core.marshalling import (
     OperationSuccess,
-    UpdateList,
+    UpdateListOut,
     UpdateWithDataOut,
 )
 from movici_simulation_core.types import FileType
@@ -32,9 +32,9 @@ DepAcceptFileType = t.Annotated[FileType, Depends(request_filetype)]
 
 
 @update_router.get("/")
-async def get_updates(backend: DepScenarioBackend) -> UpdateList:
+async def get_updates(backend: DepScenarioBackend) -> UpdateListOut:
     scenarios = await backend.updates.list()
-    return UpdateList.from_domain(scenarios)
+    return UpdateListOut.from_domain(scenarios)
 
 
 @update_router.post("/")

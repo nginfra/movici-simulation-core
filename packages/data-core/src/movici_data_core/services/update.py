@@ -7,7 +7,7 @@ from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.exceptions import UnsupportedFileType
 from movici_data_core.file_helpers import tempfile_delete_on_error
-from movici_data_core.schema import UpdateIn, UpdateWithDataOut
+from movici_data_core.marshalling import UpdateIn, UpdateWithDataOut
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 

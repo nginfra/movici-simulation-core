@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
-from movici_data_core.schema import OperationSuccess, ScenarioIn, ScenarioList, ScenarioOut
+from movici_data_core.marshalling import OperationSuccess, ScenarioIn, ScenarioListOut, ScenarioOut
 from movici_data_core.validators import ModelConfigValidator
 
 from .dependencies import DepBackend, DepWorkspaceBackend, allow_in_modes
@@ -28,9 +28,9 @@ DepModelConfigValidator = t.Annotated[ModelConfigValidator, Depends(model_config
 
 
 @scenario_router.get("/")
-async def get_scenarios(backend: DepWorkspaceBackend) -> ScenarioList:
+async def get_scenarios(backend: DepWorkspaceBackend) -> ScenarioListOut:
     scenarios = await backend.scenarios.list()
-    return ScenarioList.from_domain(scenarios)
+    return ScenarioListOut.from_domain(scenarios)
 
 
 @scenario_router.post(
