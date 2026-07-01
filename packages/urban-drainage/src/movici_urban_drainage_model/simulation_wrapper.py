@@ -90,6 +90,16 @@ _SUBAREA_INFIL_DEFAULTS: t.Dict[str, t.Dict[str, float]] = {
     },
 }
 
+# Maps each SWMM infiltration model keyword to the [INFILTRATION] column family that
+# determines its row layout (Horton, Green-Ampt or Curve Number).
+_INFILTRATION_FAMILY: t.Dict[str, str] = {
+    "HORTON": "HORTON",
+    "MODIFIED_HORTON": "HORTON",
+    "GREEN_AMPT": "GREEN_AMPT",
+    "MODIFIED_GREEN_AMPT": "GREEN_AMPT",
+    "CURVE_NUMBER": "CURVE_NUMBER",
+}
+
 
 def _extract_csr_curve(csr_attribute, idx: int) -> t.Optional[np.ndarray]:
     """Extract a single ``(n, 2)`` curve from a CSR attribute, or ``None``."""
@@ -209,7 +219,7 @@ class NodeProcessor(SwmmProcessor[N]):
             node = self.wrapper.nodes[self.swmm_name(entity_id)]
             eg.water_depth.array[idx] = node.depth
             eg.hydraulic_head.array[idx] = node.head
-            eg.flooding.array[idx] = node.flooding
+            eg.flooding_rate.array[idx] = node.flooding
             eg.total_inflow.array[idx] = node.total_inflow
             eg.total_outflow.array[idx] = node.total_outflow
             eg.lateral_inflow.array[idx] = node.lateral_inflow
@@ -273,7 +283,7 @@ class JunctionProcessor(NodeProcessor[JunctionEntity]):
         if not len(eg):
             return
         max_depth_mask = _defined_mask(eg.max_depth)
-        init_depth_mask = _defined_mask(eg.initial_depth)
+        init_depth_mask = _defined_mask(eg.water_depth)
         sur_mask = _defined_mask(eg.surcharge_depth)
         pond_mask = _defined_mask(eg.ponded_area)
         for idx, entity_id in enumerate(eg.index.ids):
@@ -282,7 +292,7 @@ class JunctionProcessor(NodeProcessor[JunctionEntity]):
                 self.swmm_name(entity_id),
                 fmt_num(eg.invert_elevation.array[idx]),
                 fmt_num(_opt_val(eg.max_depth, idx, max_depth_mask, 0.0)),
-                fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0)),
+                fmt_num(_opt_val(eg.water_depth, idx, init_depth_mask, 0.0)),
                 fmt_num(_opt_val(eg.surcharge_depth, idx, sur_mask, 0.0)),
                 fmt_num(_opt_val(eg.ponded_area, idx, pond_mask, 0.0)),
             )
@@ -335,8 +345,9 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
     PREFIX = "ST"
 
     # Functional geometric shapes: [STORAGE] row is "... SHAPE L W Z". SWMM's
-    # keyword is PARABOLIC (it rejects PARABOLOID, which some docs use).
+    # keyword is PARABOLIC (PARABOLOID is rejected by the engine and is NOT accepted).
     GEOMETRIC_SHAPES = ("CYLINDRICAL", "CONICAL", "PARABOLIC", "PYRAMIDAL")
+    KNOWN_SHAPES = ("FUNCTIONAL", "TABULAR") + GEOMETRIC_SHAPES
 
     def build_inp(self, builder: InpBuilder) -> None:
         eg = self.entity_group
@@ -345,14 +356,14 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
         const_mask = _defined_mask(eg.storage_constant)
         coeff_mask = _defined_mask(eg.storage_coefficient)
         exp_mask = _defined_mask(eg.storage_exponent)
-        init_depth_mask = _defined_mask(eg.initial_depth)
+        init_depth_mask = _defined_mask(eg.water_depth)
         geom_mask = _defined_mask(eg.storage_geometry)
         has_curve = eg.storage_curve.has_data()
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
             elev = fmt_num(eg.invert_elevation.array[idx])
             ymax = fmt_num(eg.max_depth.array[idx])
-            y0 = fmt_num(_opt_val(eg.initial_depth, idx, init_depth_mask, 0.0))
+            y0 = fmt_num(_opt_val(eg.water_depth, idx, init_depth_mask, 0.0))
 
             # An explicit storage_geometry is authoritative; otherwise infer the
             # shape from which attributes are set (storage_curve -> TABULAR, else
@@ -360,8 +371,11 @@ class StorageProcessor(NodeProcessor[StorageEntity]):
             shape = None
             if geom_mask is not None and geom_mask[idx]:
                 shape = _enum_kw(eg.storage_geometry, idx)
-                if shape == "PARABOLOID":  # accept the common misspelling
-                    shape = "PARABOLIC"
+                if shape not in self.KNOWN_SHAPES:
+                    raise ValueError(
+                        f"Storage '{name}' has unsupported storage_geometry '{shape}'; "
+                        f"expected one of {', '.join(self.KNOWN_SHAPES)}"
+                    )
             curve = _extract_csr_curve(eg.storage_curve, idx) if has_curve else None
 
             if shape in self.GEOMETRIC_SHAPES:
@@ -437,9 +451,9 @@ class ConduitProcessor(LinkProcessor[ConduitEntity]):
         eg = self.entity_group
         if not len(eg):
             return
-        in_off_mask = _defined_mask(eg.inlet_offset)
-        out_off_mask = _defined_mask(eg.outlet_offset)
-        init_flow_mask = _defined_mask(eg.initial_flow)
+        in_off_mask = _defined_mask(eg.from_offset)
+        out_off_mask = _defined_mask(eg.to_offset)
+        init_flow_mask = _defined_mask(eg.flow)
         barrels_mask = _defined_mask(eg.barrels)
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
@@ -457,9 +471,9 @@ class ConduitProcessor(LinkProcessor[ConduitEntity]):
                 to_name,
                 fmt_num(eg.length.array[idx]),
                 fmt_num(eg.roughness.array[idx]),
-                fmt_num(_opt_val(eg.inlet_offset, idx, in_off_mask, 0.0)),
-                fmt_num(_opt_val(eg.outlet_offset, idx, out_off_mask, 0.0)),
-                fmt_num(_opt_val(eg.initial_flow, idx, init_flow_mask, 0.0)),
+                fmt_num(_opt_val(eg.from_offset, idx, in_off_mask, 0.0)),
+                fmt_num(_opt_val(eg.to_offset, idx, out_off_mask, 0.0)),
+                fmt_num(_opt_val(eg.flow, idx, init_flow_mask, 0.0)),
                 0,
             )
             geom = eg.cross_section_geometry.array[idx]
@@ -658,7 +672,6 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
         ksat_mask = _defined_mask(eg.conductivity)
         imd_mask = _defined_mask(eg.initial_deficit)
         cn_mask = _defined_mask(eg.curve_number)
-        model = self.wrapper.infiltration_model
         # SWMM's unit system (and so the magnitude of these defaults) follows
         # flow_units: US (inches) for CFS/GPM/MGD, SI (mm) for CMS/LPS/MLD.
         defaults = self.wrapper.subarea_defaults
@@ -710,8 +723,15 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                 fmt_num(_opt_val(eg.pct_zero, idx, pct_zero_mask, 25.0)),
                 "OUTLET",
             )
-            # The [INFILTRATION] row format depends on the configured model.
-            if model in ("HORTON", "MODIFIED_HORTON"):
+            # Resolve this subcatchment's infiltration model (override -> inferred
+            # from which attribute family is set -> dataset default -> HORTON) and
+            # emit the matching [INFILTRATION] columns, tagged with a trailing method
+            # keyword so each subcatchment may use its own model.
+            model = self._resolve_infiltration_model(
+                idx, max_inf_mask, min_inf_mask, decay_mask, suction_mask, imd_mask, cn_mask
+            )
+            family = _INFILTRATION_FAMILY.get(model)
+            if family == "HORTON":
                 builder.add(
                     "INFILTRATION",
                     name,
@@ -728,8 +748,9 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                     fmt_num(_opt_val(eg.decay_constant, idx, decay_mask, 4.0)),
                     fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
                     0,
+                    model,
                 )
-            elif model in ("GREEN_AMPT", "MODIFIED_GREEN_AMPT"):
+            elif family == "GREEN_AMPT":
                 builder.add(
                     "INFILTRATION",
                     name,
@@ -738,20 +759,45 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
                     ),
                     fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, defaults["conductivity"])),
                     fmt_num(_opt_val(eg.initial_deficit, idx, imd_mask, 0.3)),
+                    model,
                 )
-            elif model == "CURVE_NUMBER":
+            elif family == "CURVE_NUMBER":
                 builder.add(
                     "INFILTRATION",
                     name,
                     fmt_num(_opt_val(eg.curve_number, idx, cn_mask, 80.0)),
                     fmt_num(_opt_val(eg.conductivity, idx, ksat_mask, defaults["conductivity"])),
                     fmt_num(_opt_val(eg.dry_time, idx, dry_mask, 7.0)),
+                    model,
                 )
             else:
                 raise ValueError(
                     f"Unsupported infiltration model '{model}'; expected one of "
-                    "HORTON, MODIFIED_HORTON, GREEN_AMPT, MODIFIED_GREEN_AMPT, CURVE_NUMBER"
+                    + ", ".join(_INFILTRATION_FAMILY)
                 )
+
+    def _resolve_infiltration_model(
+        self, idx, max_inf_mask, min_inf_mask, decay_mask, suction_mask, imd_mask, cn_mask
+    ) -> str:
+        """Pick the infiltration model for one subcatchment.
+
+        Priority: a model-config override forces one model for all subcatchments;
+        otherwise infer from which attribute family is present (exactly one ->
+        that family); otherwise fall back to the dataset default (then HORTON).
+        The MODIFIED_* variants cannot be inferred and must be set via override/default.
+        """
+        if self.wrapper.infiltration_override:
+            return self.wrapper.infiltration_override
+        families = []
+        if any(m is not None and m[idx] for m in (max_inf_mask, min_inf_mask, decay_mask)):
+            families.append("HORTON")
+        if any(m is not None and m[idx] for m in (suction_mask, imd_mask)):
+            families.append("GREEN_AMPT")
+        if cn_mask is not None and cn_mask[idx]:
+            families.append("CURVE_NUMBER")
+        if len(families) == 1:
+            return families[0]
+        return self.wrapper.infiltration_default
 
     def write_results(self) -> None:
         eg = self.entity_group
@@ -761,10 +807,8 @@ class SubcatchmentProcessor(SwmmProcessor[SubcatchmentEntity]):
             sub = self.wrapper.subcatchments[self.swmm_name(entity_id)]
             eg.rainfall.array[idx] = sub.rainfall
             eg.runoff.array[idx] = sub.runoff
-            eg.runon.array[idx] = sub.runon
             eg.infiltration_loss.array[idx] = sub.infiltration_loss
             eg.evaporation_loss.array[idx] = sub.evaporation_loss
-            eg.snow_depth.array[idx] = sub.snow_depth
 
 
 class RainGageProcessor(SwmmProcessor[RainGageEntity]):
@@ -774,23 +818,14 @@ class RainGageProcessor(SwmmProcessor[RainGageEntity]):
         eg = self.entity_group
         if not len(eg):
             return
-        fmt_mask = _defined_mask(eg.rainfall_format)
-        interval_mask = _defined_mask(eg.rainfall_interval)
         has_xy = eg.x.has_data() and eg.y.has_data()
         for idx, entity_id in enumerate(eg.index.ids):
             name = self.swmm_name(entity_id)
-            rain_format = "INTENSITY"
-            if fmt_mask is not None and fmt_mask[idx]:
-                rain_format = _enum_kw(eg.rainfall_format, idx)
-            # Rain gage interval is an "H:MM" value at minute resolution; clamp to
-            # at least one minute so sub-minute intervals don't round to "0:00".
-            interval_seconds = _opt_val(eg.rainfall_interval, idx, interval_mask, 3600.0)
-            interval_minutes = max(1, int(round(interval_seconds / 60)))
-            interval = f"{interval_minutes // 60:d}:{interval_minutes % 60:02d}"
             ts_name = f"{name}_ts"
-            builder.add("RAINGAGES", name, rain_format, interval, 1.0, "TIMESERIES", ts_name)
-            # Placeholder timeseries (single zero sample); rainfall is driven at
-            # runtime via RainGage.total_precip (see process_changes).
+            # Rainfall is driven at runtime via RainGage.total_precip (see
+            # process_changes), so the gage uses a fixed INTENSITY format and a
+            # nominal interval with a placeholder (single zero-sample) series.
+            builder.add("RAINGAGES", name, "INTENSITY", "1:00", 1.0, "TIMESERIES", ts_name)
             builder.add(
                 "TIMESERIES", ts_name, self.wrapper.start_date, self.wrapper.start_time[:5], 0
             )
@@ -856,6 +891,11 @@ class SimulationWrapper:
         self._inp_path: t.Optional[str] = None
         self._curve_counter = 0
         self._curve_lines: t.List[str] = []
+        # Options split by origin: solver options come from the model config, data
+        # options (flow_units, infiltration default) from the dataset general section.
+        # ``_options`` is the merged view used for the solver timesteps / routing.
+        self._config: t.Dict[str, t.Any] = {}
+        self._general: t.Dict[str, t.Any] = {}
         self._options: t.Dict[str, t.Any] = {}
         # Offset (seconds) added to the raw SWMM clock so a simulation rolled back
         # to a hotstart keeps reporting the same Movici time. Temp hotstart files
@@ -882,10 +922,21 @@ class SimulationWrapper:
         return name
 
     def configure_options(
-        self, options: dict, start_datetime: t.Optional[_datetime.datetime] = None
+        self,
+        config_options: dict,
+        general_options: t.Optional[dict] = None,
+        start_datetime: t.Optional[_datetime.datetime] = None,
     ) -> None:
-        """Store options (and optional calendar start) for synthesising ``[OPTIONS]``."""
-        self._options = dict(options or {})
+        """Store the model-config and dataset-general options for synthesising ``[OPTIONS]``.
+
+        Solver options (timesteps, routing) come from the model config; data options
+        (``flow_units``, ``infiltration_model_default``) come from the dataset general
+        section; ``infiltration_model_override`` comes from the model config. ``_options``
+        is the merged view (general wins) used for the solver timesteps and routing.
+        """
+        self._config = dict(config_options or {})
+        self._general = dict(general_options or {})
+        self._options = {**self._config, **self._general}
         self._start_datetime = start_datetime
 
     @property
@@ -903,14 +954,29 @@ class SimulationWrapper:
         return START_TIME
 
     @property
-    def infiltration_model(self) -> str:
-        """The configured SWMM infiltration model keyword (upper-cased)."""
-        return str(self._options.get("infiltration", "HORTON")).upper()
+    def infiltration_override(self) -> t.Optional[str]:
+        """Model-config infiltration model that forces all subcatchments, if any."""
+        value = self._config.get("infiltration_model_override")
+        return str(value).upper() if value else None
+
+    @property
+    def infiltration_default(self) -> str:
+        """Dataset-default infiltration model (general section), else HORTON."""
+        return str(self._general.get("infiltration_model_default", "HORTON")).upper()
+
+    @property
+    def global_infiltration_model(self) -> str:
+        """The ``[OPTIONS] INFILTRATION`` keyword (per-row methods may override it)."""
+        return self.infiltration_override or self.infiltration_default
 
     @property
     def is_us_units(self) -> bool:
-        """True when flow_units selects SWMM's US (inch) unit system."""
-        return str(self._options.get("flow_units", "CMS")).upper() in _US_FLOW_UNITS
+        """True when flow_units selects SWMM's US (inch) unit system.
+
+        ``flow_units`` describes the data, so it is read from the dataset general
+        section only (not overridable from the model config).
+        """
+        return str(self._general.get("flow_units", "CMS")).upper() in _US_FLOW_UNITS
 
     @property
     def subarea_defaults(self) -> t.Dict[str, float]:
@@ -1032,8 +1098,8 @@ class SimulationWrapper:
         hydraulic_timestep = float(opt.get("hydraulic_timestep", 60))
         report_timestep = float(opt.get("report_timestep", 300))
         builder.add("TITLE", "Movici urban drainage model")
-        builder.add("OPTIONS", "FLOW_UNITS", opt.get("flow_units", "CMS"))
-        builder.add("OPTIONS", "INFILTRATION", self.infiltration_model)
+        builder.add("OPTIONS", "FLOW_UNITS", self._general.get("flow_units", "CMS"))
+        builder.add("OPTIONS", "INFILTRATION", self.global_infiltration_model)
         builder.add("OPTIONS", "FLOW_ROUTING", opt.get("flow_routing", "DYNWAVE"))
         builder.add("OPTIONS", "LINK_OFFSETS", "DEPTH")
         builder.add("OPTIONS", "MIN_SLOPE", 0)

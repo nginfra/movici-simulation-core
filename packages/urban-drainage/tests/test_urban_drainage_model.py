@@ -16,7 +16,6 @@ ENUMS = {
     "orifice_shape": ["CIRCULAR", "RECT_CLOSED"],
     "weir_type": ["TRANSVERSE", "SIDEFLOW", "V-NOTCH", "TRAPEZOIDAL", "ROADWAY"],
     "outlet_rating_type": ["FUNCTIONAL/DEPTH", "FUNCTIONAL/HEAD", "TABULAR/DEPTH", "TABULAR/HEAD"],
-    "rainfall_format": ["INTENSITY", "VOLUME", "CUMULATIVE"],
 }
 
 
@@ -200,7 +199,7 @@ class TestSimpleNetwork(TestUrbanDrainageModelBase):
             "options": {
                 "hydraulic_timestep": 30,
                 "report_timestep": 300,
-                "infiltration": infiltration,
+                "infiltration_model_override": infiltration,
             },
         }
         tester = create_model_tester(Model, config)
@@ -267,7 +266,7 @@ class TestInfiltrationColumns(TestUrbanDrainageModelBase):
             "options": {
                 "hydraulic_timestep": 30,
                 "report_timestep": 300,
-                "infiltration": "GREEN_AMPT",
+                "infiltration_model_override": "GREEN_AMPT",
             },
         }
 

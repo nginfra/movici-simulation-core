@@ -10,7 +10,8 @@ Entity groups map the SWMM object model onto Movici geometry entities:
 
 Static SWMM parameters (needed to build the model) are ``INIT``; optional
 parameters and runtime control inputs are ``OPT``; per-step simulation results
-are ``PUB``.
+are ``PUB``. A few attributes are ``PUB | OPT``: they are published every step and,
+when supplied, also seed the corresponding initial condition.
 
 .. note::
    Dividers are not modelled: SWMM treats them as ordinary junctions under
@@ -43,18 +44,16 @@ from .attributes import (
     UrbanDrainage_EvaporationLoss,
     UrbanDrainage_FixedStage,
     UrbanDrainage_FlapGate,
-    UrbanDrainage_Flooding,
+    UrbanDrainage_FloodingRate,
     UrbanDrainage_Flow,
     UrbanDrainage_FlowDepth,
     UrbanDrainage_FlowVolume,
+    UrbanDrainage_FromOffset,
     UrbanDrainage_FroudeNumber,
     UrbanDrainage_GeneratedInflow,
     UrbanDrainage_HydraulicHead,
     UrbanDrainage_InfiltrationLoss,
     UrbanDrainage_InitialDeficit,
-    UrbanDrainage_InitialDepth,
-    UrbanDrainage_InitialFlow,
-    UrbanDrainage_InletOffset,
     UrbanDrainage_InvertElevation,
     UrbanDrainage_LateralInflow,
     UrbanDrainage_MaxDepth,
@@ -66,7 +65,6 @@ from .attributes import (
     UrbanDrainage_OrificeType,
     UrbanDrainage_OutfallType,
     UrbanDrainage_OutletNodeId,
-    UrbanDrainage_OutletOffset,
     UrbanDrainage_OutletRatingType,
     UrbanDrainage_PctZero,
     UrbanDrainage_PercentImpervious,
@@ -74,20 +72,16 @@ from .attributes import (
     UrbanDrainage_PumpCurve,
     UrbanDrainage_PumpCurveType,
     UrbanDrainage_Rainfall,
-    UrbanDrainage_RainfallFormat,
     UrbanDrainage_RainfallIntensity,
-    UrbanDrainage_RainfallInterval,
     UrbanDrainage_RainGageId,
     UrbanDrainage_RatingCoefficient,
     UrbanDrainage_RatingCurve,
     UrbanDrainage_RatingExponent,
     UrbanDrainage_Roughness,
     UrbanDrainage_Runoff,
-    UrbanDrainage_Runon,
     UrbanDrainage_ShutoffDepth,
     UrbanDrainage_SImperv,
     UrbanDrainage_Slope,
-    UrbanDrainage_SnowDepth,
     UrbanDrainage_SPerv,
     UrbanDrainage_StartupDepth,
     UrbanDrainage_StorageCoefficient,
@@ -100,6 +94,7 @@ from .attributes import (
     UrbanDrainage_SuctionHead,
     UrbanDrainage_SurchargeDepth,
     UrbanDrainage_TargetSetting,
+    UrbanDrainage_ToOffset,
     UrbanDrainage_TotalInflow,
     UrbanDrainage_TotalOutflow,
     UrbanDrainage_WaterDepth,
@@ -117,10 +112,11 @@ class DrainageNodeEntity(PointEntity):
 
     __exclude__ = ["z", "reference"]
 
-    # PUBLISH outputs shared by all node types
-    water_depth = field(UrbanDrainage_WaterDepth, flags=PUB)
+    # PUBLISH outputs shared by all node types. water_depth is PUB|OPT: published
+    # each step, and (when given) also seeds the initial water depth at t=0.
+    water_depth = field(UrbanDrainage_WaterDepth, flags=PUB | OPT)
     hydraulic_head = field(UrbanDrainage_HydraulicHead, flags=PUB)
-    flooding = field(UrbanDrainage_Flooding, flags=PUB)
+    flooding_rate = field(UrbanDrainage_FloodingRate, flags=PUB)
     total_inflow = field(UrbanDrainage_TotalInflow, flags=PUB)
     total_outflow = field(UrbanDrainage_TotalOutflow, flags=PUB)
     lateral_inflow = field(UrbanDrainage_LateralInflow, flags=PUB)
@@ -139,8 +135,9 @@ class DrainageLinkEntity(LinkEntity):
 
     __exclude__ = ["reference", "_linestring2d", "_linestring3d"]
 
-    # PUBLISH outputs shared by all link types
-    flow = field(UrbanDrainage_Flow, flags=PUB)
+    # PUBLISH outputs shared by all link types. flow is PUB|OPT: published each
+    # step, and (when given on a conduit) also seeds the initial flow at t=0.
+    flow = field(UrbanDrainage_Flow, flags=PUB | OPT)
     flow_depth = field(UrbanDrainage_FlowDepth, flags=PUB)
     flow_volume = field(UrbanDrainage_FlowVolume, flags=PUB)
     froude_number = field(UrbanDrainage_FroudeNumber, flags=PUB)
@@ -166,7 +163,6 @@ class JunctionEntity(DrainageNodeEntity):
     invert_elevation = field(UrbanDrainage_InvertElevation, flags=INIT)
 
     max_depth = field(UrbanDrainage_MaxDepth, flags=OPT)
-    initial_depth = field(UrbanDrainage_InitialDepth, flags=OPT)
     surcharge_depth = field(UrbanDrainage_SurchargeDepth, flags=OPT)
     ponded_area = field(UrbanDrainage_PondedArea, flags=OPT)
 
@@ -204,7 +200,6 @@ class StorageEntity(DrainageNodeEntity):
     storage_exponent = field(UrbanDrainage_StorageExponent, flags=OPT)
     storage_curve = field(UrbanDrainage_StorageCurve, flags=OPT)
     storage_geometry_parameters = field(UrbanDrainage_StorageGeometryParameters, flags=OPT)
-    initial_depth = field(UrbanDrainage_InitialDepth, flags=OPT)
     surcharge_depth = field(UrbanDrainage_SurchargeDepth, flags=OPT)
     ponded_area = field(UrbanDrainage_PondedArea, flags=OPT)
 
@@ -225,9 +220,8 @@ class ConduitEntity(DrainageLinkEntity):
     cross_section_geometry = field(UrbanDrainage_CrossSectionGeometry, flags=INIT)
 
     barrels = field(UrbanDrainage_Barrels, flags=OPT)
-    inlet_offset = field(UrbanDrainage_InletOffset, flags=OPT)
-    outlet_offset = field(UrbanDrainage_OutletOffset, flags=OPT)
-    initial_flow = field(UrbanDrainage_InitialFlow, flags=OPT)
+    from_offset = field(UrbanDrainage_FromOffset, flags=OPT)
+    to_offset = field(UrbanDrainage_ToOffset, flags=OPT)
 
 
 class PumpEntity(DrainageLinkEntity):
@@ -310,6 +304,8 @@ class SubcatchmentEntity(PolygonEntity):
     Runoff is routed to ``outlet_node_id`` and driven by the rain gage
     referenced through ``raingage_id``. The polygon geometry is optional and
     used for display only, so readiness does not depend on it.
+
+    Only a single subarea per subcatchment is modelled (SWMM supports more).
     """
 
     __entity_name__ = "drainage_subcatchment_entities"
@@ -330,8 +326,8 @@ class SubcatchmentEntity(PolygonEntity):
     s_perv = field(UrbanDrainage_SPerv, flags=OPT)
     pct_zero = field(UrbanDrainage_PctZero, flags=OPT)
 
-    # OPT infiltration parameters; the active subset depends on the configured
-    # infiltration model (Horton / Green-Ampt / Curve Number).
+    # OPT infiltration parameters; the model resolved per subcatchment picks which
+    # subset applies (Horton / Green-Ampt / Curve Number).
     max_infiltration_rate = field(UrbanDrainage_MaxInfiltrationRate, flags=OPT)
     min_infiltration_rate = field(UrbanDrainage_MinInfiltrationRate, flags=OPT)
     decay_constant = field(UrbanDrainage_DecayConstant, flags=OPT)
@@ -344,10 +340,8 @@ class SubcatchmentEntity(PolygonEntity):
     # PUBLISH outputs
     rainfall = field(UrbanDrainage_Rainfall, flags=PUB)
     runoff = field(UrbanDrainage_Runoff, flags=PUB)
-    runon = field(UrbanDrainage_Runon, flags=PUB)
     infiltration_loss = field(UrbanDrainage_InfiltrationLoss, flags=PUB)
     evaporation_loss = field(UrbanDrainage_EvaporationLoss, flags=PUB)
-    snow_depth = field(UrbanDrainage_SnowDepth, flags=PUB)
 
     def is_ready(self):
         return (
@@ -361,15 +355,12 @@ class SubcatchmentEntity(PolygonEntity):
 class RainGageEntity(PointEntity):
     """Drainage rain gages: rainfall sources for subcatchments.
 
-    Rainfall may be driven at runtime by another model publishing
-    ``rainfall_intensity`` (applied via SWMM ``RainGage.total_precip``).
+    Rainfall is driven at runtime by another model publishing ``rainfall_intensity``
+    (applied via SWMM ``RainGage.total_precip``); there is no configured time series.
     """
 
     __entity_name__ = "drainage_raingage_entities"
     __exclude__ = ["z", "reference"]
-
-    rainfall_format = field(UrbanDrainage_RainfallFormat, flags=OPT)
-    rainfall_interval = field(UrbanDrainage_RainfallInterval, flags=OPT)
 
     # Optional runtime rainfall override
     rainfall_intensity = field(UrbanDrainage_RainfallIntensity, flags=OPT)

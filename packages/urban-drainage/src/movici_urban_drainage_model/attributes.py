@@ -19,11 +19,15 @@ from movici_simulation_core.core.schema import AttributeSpec, attribute_plugin_f
 # =============================================================================
 # Node outputs (PUBLISH) - shared by every node type
 # =============================================================================
+# water_depth is PUB|OPT: it is published every step and, when supplied as input,
+# also seeds the initial water depth at t=0 (there is no separate initial_depth).
 UrbanDrainage_WaterDepth = AttributeSpec("urban_drainage.water_depth", data_type=DataType(float))
 UrbanDrainage_HydraulicHead = AttributeSpec(
     "urban_drainage.hydraulic_head", data_type=DataType(float)
 )
-UrbanDrainage_Flooding = AttributeSpec("urban_drainage.flooding", data_type=DataType(float))
+UrbanDrainage_FloodingRate = AttributeSpec(
+    "urban_drainage.flooding_rate", data_type=DataType(float)
+)
 UrbanDrainage_TotalInflow = AttributeSpec("urban_drainage.total_inflow", data_type=DataType(float))
 UrbanDrainage_TotalOutflow = AttributeSpec(
     "urban_drainage.total_outflow", data_type=DataType(float)
@@ -45,9 +49,6 @@ UrbanDrainage_InvertElevation = AttributeSpec(
     "urban_drainage.invert_elevation", data_type=DataType(float)
 )
 UrbanDrainage_MaxDepth = AttributeSpec("urban_drainage.max_depth", data_type=DataType(float))
-UrbanDrainage_InitialDepth = AttributeSpec(
-    "urban_drainage.initial_depth", data_type=DataType(float)
-)
 UrbanDrainage_SurchargeDepth = AttributeSpec(
     "urban_drainage.surcharge_depth", data_type=DataType(float)
 )
@@ -110,6 +111,8 @@ UrbanDrainage_StorageGeometryParameters = AttributeSpec(
 # flow:        volumetric flow RATE through the link (e.g. m3/s for CMS units)
 # flow_depth:  water depth inside the conduit/regulator (m)
 # flow_volume: VOLUME of water currently stored in the link (m3)
+# flow is PUB|OPT: it is published every step and, when supplied as input, seeds the
+# conduit's initial flow at t=0 (there is no separate initial_flow).
 UrbanDrainage_Flow = AttributeSpec("urban_drainage.flow", data_type=DataType(float))
 UrbanDrainage_FlowDepth = AttributeSpec("urban_drainage.flow_depth", data_type=DataType(float))
 UrbanDrainage_FlowVolume = AttributeSpec("urban_drainage.flow_volume", data_type=DataType(float))
@@ -148,11 +151,9 @@ UrbanDrainage_CrossSectionGeometry = AttributeSpec(
     "urban_drainage.cross_section_geometry", data_type=DataType(float, (4,))
 )
 UrbanDrainage_Barrels = AttributeSpec("urban_drainage.barrels", data_type=DataType(int))
-UrbanDrainage_InletOffset = AttributeSpec("urban_drainage.inlet_offset", data_type=DataType(float))
-UrbanDrainage_OutletOffset = AttributeSpec(
-    "urban_drainage.outlet_offset", data_type=DataType(float)
-)
-UrbanDrainage_InitialFlow = AttributeSpec("urban_drainage.initial_flow", data_type=DataType(float))
+# Height of the conduit ends above their node inverts (named for the from/to nodes).
+UrbanDrainage_FromOffset = AttributeSpec("urban_drainage.from_offset", data_type=DataType(float))
+UrbanDrainage_ToOffset = AttributeSpec("urban_drainage.to_offset", data_type=DataType(float))
 
 # =============================================================================
 # Regulator (orifice / weir / outlet) shared geometry
@@ -244,8 +245,12 @@ UrbanDrainage_NPerv = AttributeSpec("urban_drainage.n_perv", data_type=DataType(
 UrbanDrainage_SImperv = AttributeSpec("urban_drainage.s_imperv", data_type=DataType(float))
 UrbanDrainage_SPerv = AttributeSpec("urban_drainage.s_perv", data_type=DataType(float))
 UrbanDrainage_PctZero = AttributeSpec("urban_drainage.pct_zero", data_type=DataType(float))
-# Infiltration parameters. The active model is set by the model config's
-# ``options.infiltration``; each model reads a different subset:
+# Infiltration parameters. Each subcatchment's infiltration model is resolved from
+# these (see the wrapper): an ``infiltration_model_override`` in the model config
+# forces one model for all subcatchments; otherwise the model is inferred from which
+# family of attributes is set, falling back to the dataset's
+# ``infiltration_model_default`` (general section) and finally HORTON. Each family
+# reads a different subset:
 #  - HORTON / MODIFIED_HORTON: max/min_infiltration_rate, decay_constant, dry_time
 #  - GREEN_AMPT / MODIFIED_GREEN_AMPT: suction_head, conductivity, initial_deficit
 #  - CURVE_NUMBER: curve_number, conductivity, dry_time
@@ -271,28 +276,19 @@ UrbanDrainage_CurveNumber = AttributeSpec("urban_drainage.curve_number", data_ty
 # Subcatchment outputs (PUBLISH)
 UrbanDrainage_Rainfall = AttributeSpec("urban_drainage.rainfall", data_type=DataType(float))
 UrbanDrainage_Runoff = AttributeSpec("urban_drainage.runoff", data_type=DataType(float))
-UrbanDrainage_Runon = AttributeSpec("urban_drainage.runon", data_type=DataType(float))
 UrbanDrainage_InfiltrationLoss = AttributeSpec(
     "urban_drainage.infiltration_loss", data_type=DataType(float)
 )
 UrbanDrainage_EvaporationLoss = AttributeSpec(
     "urban_drainage.evaporation_loss", data_type=DataType(float)
 )
-UrbanDrainage_SnowDepth = AttributeSpec("urban_drainage.snow_depth", data_type=DataType(float))
 
 # =============================================================================
 # Rain gage attributes
 # =============================================================================
-# Rainfall format: index into enum "rainfall_format" -> INTENSITY / VOLUME / CUMULATIVE
-UrbanDrainage_RainfallFormat = AttributeSpec(
-    "urban_drainage.rainfall_format", data_type=DataType(int), enum_name="rainfall_format"
-)
-# Rainfall recording interval in seconds.
-UrbanDrainage_RainfallInterval = AttributeSpec(
-    "urban_drainage.rainfall_interval", data_type=DataType(float)
-)
 # Externally imposed rainfall intensity, applied each step via
-# pyswmm ``RainGage.total_precip``.
+# pyswmm ``RainGage.total_precip``. Rainfall is driven at runtime (by other models),
+# so there is no time-series format/interval to configure.
 UrbanDrainage_RainfallIntensity = AttributeSpec(
     "urban_drainage.rainfall_intensity", data_type=DataType(float)
 )

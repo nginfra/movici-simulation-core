@@ -132,12 +132,6 @@ class Model(TrackedModel, name="urban_drainage"):
                 if attr.flags & PUBLISH and not attr.has_data():
                     attr.initialize(size)
 
-    def _get_options(self, state: TrackedState) -> dict:
-        """Merge model-config options with the dataset general section options."""
-        config_options = dict(self.config.get("options", {}))
-        dataset_options = dict(state.general.get(self.dataset_name, {}))
-        return _deep_merge(config_options, dataset_options)
-
     def initialize(self, state: TrackedState):
         """Validate the network, synthesise the ``.inp`` and open the simulation."""
         if self.dataset is None:
@@ -147,10 +141,15 @@ class Model(TrackedModel, name="urban_drainage"):
         # attributes (see TrackedModelAdapter.try_initialize), so no extra readiness
         # check is needed here.
         self._ensure_pub_attributes_initialized()
-        # Resolve the cadence from the same merged options the engine uses, so the
-        # Movici re-wake cadence matches the SWMM REPORT/WET/DRY steps.
-        options = self._get_options(state)
-        self.report_timestep = int(options.get("report_timestep", self.report_timestep))
+
+        # Solver options come from the model config; data options (flow_units,
+        # infiltration_model_default) come from the dataset general section. The
+        # cadence is resolved from the merged view so the Movici re-wake cadence
+        # matches the SWMM REPORT/WET/DRY steps.
+        config_options = dict(self.config.get("options", {}))
+        general_options = dict(state.general.get(self.dataset_name, {}))
+        merged = _deep_merge(config_options, general_options)
+        self.report_timestep = int(merged.get("report_timestep", self.report_timestep))
         self.next_time = Moment(self.report_timestep)
 
         # Anchor the SWMM calendar to the Movici timeline so its timestamps line up
@@ -165,7 +164,9 @@ class Model(TrackedModel, name="urban_drainage"):
                     "fractional Movici moments are rounded down when stepping.",
                     timeline.time_scale,
                 )
-        self.network.configure_options(options, start_datetime=start_datetime)
+        self.network.configure_options(
+            config_options, general_options, start_datetime=start_datetime
+        )
         self.network.initialize(self.dataset)
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:

@@ -33,25 +33,12 @@ Goals
 
 * The data model is described, as much as possible, in terms of entities and
   attributes
-* Simulation options (routing method, flow units, infiltration model, time steps)
-  are stored in the model config under ``"options"``; they may also be supplied in
-  the dataset's ``"general"`` section, which takes precedence
+* Solver options (routing method, time steps) live in the model config under
+  ``"options"``; data-determined options (unit system, default infiltration model)
+  live in the dataset's ``"general"`` section
 * Existing SWMM ``.inp`` files can be imported into Movici datasets through the
   ``"swmm"`` dataset-creator source (the runtime model itself reads Movici data,
   not ``.inp`` files)
-
-Limitations
------------
-
-* **Dividers** are not modelled; under dynamic-wave routing SWMM treats them as
-  ordinary junctions
-* Link **velocity** is not published (the live engine exposes no usable per-link
-  velocity); the Froude number is published instead
-* Outfalls support ``FREE`` / ``NORMAL`` / ``FIXED`` boundaries only; ``TIDAL``
-  and ``TIMESERIES`` (which need referenced boundary data) are not supported and
-  raise a clear error
-* Water quality / pollutants, LID controls and groundwater are out of scope
-* Only one SWMM simulation may be open per process (see *Model Characteristics*)
 
 Model Characteristics
 ---------------------
@@ -138,10 +125,13 @@ Data Model
 
 Each SWMM object type maps to a Movici entity group, listed below with its full
 attribute set. The ``Flags`` column uses ``INIT`` (required static input), ``OPT``
-(optional input or runtime control) and ``PUB`` (published result). Geometry and
-topology come from the underlying Movici entity type. Units assume the default
-metric ``flow_units = CMS`` (metres, m³/s, mm/hr, hectares); selecting US
-``flow_units`` switches depths and rates to inches.
+(optional input or runtime control) and ``PUB`` (published result); ``PUB|OPT``
+marks a published result that, when supplied as input, also seeds the matching
+initial condition. Geometry and topology come from the underlying Movici entity
+type. Curves (``storage_curve``, ``pump_curve``, ``rating_curve``) are inlined per
+entity as ``(2,)``-csr point arrays - there is no shared curve table. Units assume
+the default metric ``flow_units = CMS`` (metres, m³/s, mm/hr, hectares); selecting
+US ``flow_units`` switches depths and rates to inches.
 
 Junctions
 ^^^^^^^^^
@@ -150,131 +140,129 @@ Junctions
 
 Junctions are the manholes and pipe-connection nodes of the drainage network. They receive piped flow from connecting links and the runoff of any subcatchment that drains to them; the model does not separately represent street inlets or grates. Junctions derive from ``PointEntity``.
 
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| Attribute                           | Flags | Description                                                     |
-+=====================================+=======+=================================================================+
-| ``geometry.x``                      | OPT   | Map x location ([COORDINATES]); display only (from PointEntity) |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``geometry.y``                      | OPT   | Map y location ([COORDINATES]); display only (from PointEntity) |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.invert_elevation`` | INIT  | Node invert (bottom) elevation (m)                              |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.max_depth``        | OPT   | Depth from invert to ground; 0 = unlimited (m)                  |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.initial_depth``    | OPT   | Water depth at the start of the run (m)                         |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.surcharge_depth``  | OPT   | Head allowed above max_depth before flooding (m)                |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.ponded_area``      | OPT   | Ponded surface area when flooded (m²)                           |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.generated_inflow`` | OPT   | Externally imposed point inflow (m³/s)                          |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.water_depth``      | PUB   | Water depth above the invert (m)                                |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.hydraulic_head``   | PUB   | Hydraulic head = invert + depth (m)                             |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.flooding``         | PUB   | Surface flooding / overflow rate (m³/s)                         |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.total_inflow``     | PUB   | Total inflow to the node (m³/s)                                 |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.total_outflow``    | PUB   | Total outflow from the node (m³/s)                              |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.lateral_inflow``   | PUB   | External + runoff inflow to the node (m³/s)                     |
-+-------------------------------------+-------+-----------------------------------------------------------------+
-| ``urban_drainage.stored_volume``    | PUB   | Water volume held at the node (m³)                              |
-+-------------------------------------+-------+-----------------------------------------------------------------+
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Attribute                           | Flags   | Description                                                                                                                                                   |
++=====================================+=========+===============================================================================================================================================================+
+| ``geometry.x``                      | OPT     | Map x location ([COORDINATES]); display only (from PointEntity)                                                                                               |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``geometry.y``                      | OPT     | Map y location ([COORDINATES]); display only (from PointEntity)                                                                                               |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.invert_elevation`` | INIT    | Node invert (bottom) elevation (m)                                                                                                                            |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.max_depth``        | OPT     | Depth from invert to ground/rim (m); 0 tells SWMM to derive it from the crown of the highest connecting conduit (water is not lost - it floods at that depth) |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.surcharge_depth``  | OPT     | Head allowed above max_depth before flooding (m)                                                                                                              |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.ponded_area``      | OPT     | Ponded surface area when flooded (m²)                                                                                                                         |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.generated_inflow`` | OPT     | Externally imposed point inflow (m³/s)                                                                                                                        |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.water_depth``      | PUB|OPT | Water depth above the invert (m); if given as input it also seeds the initial depth at t=0                                                                    |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.hydraulic_head``   | PUB     | Hydraulic head = invert + depth (m)                                                                                                                           |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flooding_rate``    | PUB     | Surface flooding / overflow rate (m³/s)                                                                                                                       |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_inflow``     | PUB     | Total inflow to the node (m³/s)                                                                                                                               |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_outflow``    | PUB     | Total outflow from the node (m³/s)                                                                                                                            |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.lateral_inflow``   | PUB     | External + runoff inflow to the node (m³/s)                                                                                                                   |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.stored_volume``    | PUB     | Water volume held at the node (m³)                                                                                                                            |
++-------------------------------------+---------+---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 Outfalls
 ^^^^^^^^
 
 ``drainage_outfall_entities``
 
-Outfalls are terminal nodes that impose a downstream boundary condition on the network. Outfalls derive from ``PointEntity``.
+Outfalls are terminal nodes that impose a downstream boundary condition on the network. The supported ``outfall_type`` values set that boundary: **FREE** uses the minimum of critical and normal depth (no tailwater), **NORMAL** uses normal flow depth, and **FIXED** holds a constant water-surface stage (``fixed_stage``). TIDAL and TIMESERIES boundaries need external data and are not supported. Outfalls derive from ``PointEntity``.
 
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| Attribute                           | Flags | Description                                                           |
-+=====================================+=======+=======================================================================+
-| ``geometry.x``                      | OPT   | Map x location ([COORDINATES]); display only (from PointEntity)       |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``geometry.y``                      | OPT   | Map y location ([COORDINATES]); display only (from PointEntity)       |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.invert_elevation`` | INIT  | Node invert (bottom) elevation (m)                                    |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.outfall_type``     | INIT  | Boundary type: FREE / NORMAL / FIXED (TIDAL / TIMESERIES unsupported) |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.fixed_stage``      | OPT   | Fixed boundary water-surface elevation, used by FIXED (m)             |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.flap_gate``        | OPT   | Flap gate preventing reverse (tidal) flow (bool)                      |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.generated_inflow`` | OPT   | Externally imposed point inflow (m³/s)                                |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.water_depth``      | PUB   | Water depth above the invert (m)                                      |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.hydraulic_head``   | PUB   | Hydraulic head = invert + depth (m)                                   |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.flooding``         | PUB   | Surface flooding / overflow rate (m³/s)                               |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.total_inflow``     | PUB   | Total inflow to the node (m³/s)                                       |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.total_outflow``    | PUB   | Total outflow from the node (m³/s)                                    |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.lateral_inflow``   | PUB   | External + runoff inflow to the node (m³/s)                           |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
-| ``urban_drainage.stored_volume``    | PUB   | Water volume held at the node (m³)                                    |
-+-------------------------------------+-------+-----------------------------------------------------------------------+
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| Attribute                           | Flags   | Description                                                                                |
++=====================================+=========+============================================================================================+
+| ``geometry.x``                      | OPT     | Map x location ([COORDINATES]); display only (from PointEntity)                            |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``geometry.y``                      | OPT     | Map y location ([COORDINATES]); display only (from PointEntity)                            |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.invert_elevation`` | INIT    | Node invert (bottom) elevation (m)                                                         |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.outfall_type``     | INIT    | Boundary type: FREE / NORMAL / FIXED                                                       |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.fixed_stage``      | OPT     | Fixed boundary water-surface elevation, used by FIXED (m)                                  |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.flap_gate``        | OPT     | Flap gate preventing reverse (back) flow at the boundary (bool)                            |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.generated_inflow`` | OPT     | Externally imposed point inflow (m³/s)                                                     |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.water_depth``      | PUB|OPT | Water depth above the invert (m); if given as input it also seeds the initial depth at t=0 |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.hydraulic_head``   | PUB     | Hydraulic head = invert + depth (m)                                                        |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.flooding_rate``    | PUB     | Surface flooding / overflow rate (m³/s)                                                    |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_inflow``     | PUB     | Total inflow to the node (m³/s)                                                            |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_outflow``    | PUB     | Total outflow from the node (m³/s)                                                         |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.lateral_inflow``   | PUB     | External + runoff inflow to the node (m³/s)                                                |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+| ``urban_drainage.stored_volume``    | PUB     | Water volume held at the node (m³)                                                         |
++-------------------------------------+---------+--------------------------------------------------------------------------------------------+
+
+``generated_inflow`` is supported on outfalls (verified against pyswmm) - it adds an external inflow at the boundary node, e.g. a modelled discharge.
 
 Storage units
 ^^^^^^^^^^^^^
 
 ``drainage_storage_entities``
 
-Storage units are ponds, basins and tanks with a stage-storage relationship. The shape is selected by ``storage_geometry``; when it is omitted the shape is inferred (a ``storage_curve`` means TABULAR, otherwise FUNCTIONAL). Each shape reads a different subset of the parameters below. Storage units derive from ``PointEntity``.
+Storage units are ponds, basins and tanks with a stage-storage relationship. The shape is selected by ``storage_geometry`` (or inferred when omitted: a ``storage_curve`` means TABULAR, otherwise FUNCTIONAL). Each shape reads a different subset of the parameters below. Storage units derive from ``PointEntity``.
 
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| Attribute                                      | Flags | Description                                                                                    |
-+================================================+=======+================================================================================================+
-| ``geometry.x``                                 | OPT   | Map x location ([COORDINATES]); display only (from PointEntity)                                |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``geometry.y``                                 | OPT   | Map y location ([COORDINATES]); display only (from PointEntity)                                |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.invert_elevation``            | INIT  | Node invert (bottom) elevation (m)                                                             |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.max_depth``                   | INIT  | Maximum water depth (m)                                                                        |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_geometry``            | OPT   | Shape: FUNCTIONAL / TABULAR / CYLINDRICAL / CONICAL / PARABOLIC / PYRAMIDAL                    |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_constant``            | OPT   | FUNCTIONAL constant surface area A0 (m²)                                                       |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_coefficient``         | OPT   | FUNCTIONAL area coefficient A1                                                                 |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_exponent``            | OPT   | FUNCTIONAL area exponent A2 (area = A0 + A1·depth^A2)                                          |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_curve``               | OPT   | TABULAR (depth m, area m²) curve; (2,)-csr                                                     |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.storage_geometry_parameters`` | OPT   | Geometric (L, W, Z); (3,) (m; Z = side slope for CONICAL/PYRAMIDAL, full height for PARABOLIC) |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.initial_depth``               | OPT   | Water depth at the start of the run (m)                                                        |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.surcharge_depth``             | OPT   | Head allowed above max_depth before flooding (m)                                               |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.ponded_area``                 | OPT   | Ponded surface area when flooded (m²)                                                          |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.generated_inflow``            | OPT   | Externally imposed point inflow (m³/s)                                                         |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.water_depth``                 | PUB   | Water depth above the invert (m)                                                               |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.hydraulic_head``              | PUB   | Hydraulic head = invert + depth (m)                                                            |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.flooding``                    | PUB   | Surface flooding / overflow rate (m³/s)                                                        |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.total_inflow``                | PUB   | Total inflow to the node (m³/s)                                                                |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.total_outflow``               | PUB   | Total outflow from the node (m³/s)                                                             |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.lateral_inflow``              | PUB   | External + runoff inflow to the node (m³/s)                                                    |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
-| ``urban_drainage.stored_volume``               | PUB   | Water volume held at the node (m³)                                                             |
-+------------------------------------------------+-------+------------------------------------------------------------------------------------------------+
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| Attribute                                      | Flags   | Description                                                                                       |
++================================================+=========+===================================================================================================+
+| ``geometry.x``                                 | OPT     | Map x location ([COORDINATES]); display only (from PointEntity)                                   |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``geometry.y``                                 | OPT     | Map y location ([COORDINATES]); display only (from PointEntity)                                   |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.invert_elevation``            | INIT    | Node invert (bottom) elevation (m)                                                                |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.max_depth``                   | INIT    | Maximum water depth (m)                                                                           |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_geometry``            | OPT     | Shape enum: FUNCTIONAL / TABULAR / CYLINDRICAL / CONICAL / PARABOLIC / PYRAMIDAL                  |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_constant``            | OPT     | FUNCTIONAL A0: constant surface area (m²)                                                         |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_coefficient``         | OPT     | FUNCTIONAL A1: area coefficient                                                                   |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_exponent``            | OPT     | FUNCTIONAL A2: area exponent (area = A0 + A1·depth^A2)                                            |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_curve``               | OPT     | TABULAR: inline (depth m, area m²) curve; (2,)-csr                                                |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.storage_geometry_parameters`` | OPT     | Geometric shapes: (L, W, Z) (m; Z is side slope for CONICAL/PYRAMIDAL, full height for PARABOLIC) |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.surcharge_depth``             | OPT     | Head allowed above max_depth before flooding (m)                                                  |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.ponded_area``                 | OPT     | Ponded surface area when flooded (m²)                                                             |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.generated_inflow``            | OPT     | Externally imposed point inflow (m³/s)                                                            |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.water_depth``                 | PUB|OPT | Water depth above the invert (m); if given as input it also seeds the initial depth at t=0        |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.hydraulic_head``              | PUB     | Hydraulic head = invert + depth (m)                                                               |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flooding_rate``               | PUB     | Surface flooding / overflow rate (m³/s)                                                           |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_inflow``                | PUB     | Total inflow to the node (m³/s)                                                                   |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.total_outflow``               | PUB     | Total outflow from the node (m³/s)                                                                |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.lateral_inflow``              | PUB     | External + runoff inflow to the node (m³/s)                                                       |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
+| ``urban_drainage.stored_volume``               | PUB     | Water volume held at the node (m³)                                                                |
++------------------------------------------------+---------+---------------------------------------------------------------------------------------------------+
 
 Conduits
 ^^^^^^^^
@@ -283,198 +271,196 @@ Conduits
 
 Conduits are the pipes and channels that carry gravity flow between two nodes. Conduits derive from ``LinkEntity``.
 
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| Attribute                                 | Flags | Description                                                   |
-+===========================================+=======+===============================================================+
-| ``topology.from_node_id``                 | INIT  | Upstream node id (from LinkEntity)                            |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``topology.to_node_id``                   | INIT  | Downstream node id (from LinkEntity)                          |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``shape.length``                          | INIT  | Conduit length (m, > 0)                                       |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.roughness``              | INIT  | Manning's roughness coefficient n                             |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.cross_section_shape``    | INIT  | Cross-section shape (CIRCULAR, RECT_CLOSED, ...)              |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.cross_section_geometry`` | INIT  | Geom1-Geom4 (m), (4,); per shape (CIRCULAR: Geom1 = diameter) |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.barrels``                | OPT   | Number of parallel identical barrels (default 1)              |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.inlet_offset``           | OPT   | Inlet height above the upstream node invert (m)               |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.outlet_offset``          | OPT   | Outlet height above the downstream node invert (m)            |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.initial_flow``           | OPT   | Flow at the start of the run (m³/s)                           |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.target_setting``         | OPT   | Control setting 0-1 (1 = fully open)                          |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.flow``                   | PUB   | Flow rate through the link (m³/s)                             |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.flow_depth``             | PUB   | Water depth inside the link (m)                               |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.flow_volume``            | PUB   | Water volume stored in the link (m³)                          |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.froude_number``          | PUB   | Froude number (-)                                             |
-+-------------------------------------------+-------+---------------------------------------------------------------+
-| ``urban_drainage.current_setting``        | PUB   | Applied control setting 0-1 (-)                               |
-+-------------------------------------------+-------+---------------------------------------------------------------+
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Attribute                                 | Flags   | Description                                                                                                                                                                                            |
++===========================================+=========+========================================================================================================================================================================================================+
+| ``topology.from_node_id``                 | INIT    | Upstream node id (from LinkEntity)                                                                                                                                                                     |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``topology.to_node_id``                   | INIT    | Downstream node id (from LinkEntity)                                                                                                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``shape.length``                          | INIT    | Conduit length (m, > 0)                                                                                                                                                                                |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.roughness``              | INIT    | Manning's roughness coefficient n                                                                                                                                                                      |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.cross_section_shape``    | INIT    | Cross-section shape enum (CIRCULAR, RECT_CLOSED, RECT_OPEN, TRAPEZOIDAL, ...)                                                                                                                          |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.cross_section_geometry`` | INIT    | Geom1-Geom4 (m); meaning per shape - e.g. CIRCULAR: Geom1=diameter; RECT_CLOSED: Geom1=height, Geom2=width; TRAPEZOIDAL: Geom1=height, Geom2=base, Geom3/4=side slopes. Unused slots may be left unset |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.barrels``                | OPT     | Number of parallel identical barrels                                                                                                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.from_offset``            | OPT     | Height of the conduit's upstream end above its from-node invert (m)                                                                                                                                    |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.to_offset``              | OPT     | Height of the conduit's downstream end above its to-node invert (m)                                                                                                                                    |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.target_setting``         | OPT     | Control setting 0-1 (1 = fully open)                                                                                                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow``                   | PUB|OPT | Flow rate through the link (m³/s); on a conduit, if given as input, also seeds the initial flow at t=0                                                                                                 |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_depth``             | PUB     | Water depth inside the link (m)                                                                                                                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_volume``            | PUB     | Water volume stored in the link (m³)                                                                                                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.froude_number``          | PUB     | Froude number (-)                                                                                                                                                                                      |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.current_setting``        | PUB     | Applied control setting 0-1 (-)                                                                                                                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 Pumps
 ^^^^^
 
 ``drainage_pump_entities``
 
-Pumps lift water from the inlet node to the outlet node. With no ``pump_curve`` (or an ``IDEAL`` type) the pump passes its inlet inflow. Pumps derive from ``LinkEntity``.
+Pumps lift water from the inlet node to the outlet node. The ``pump_curve_type`` selects how the (inline) ``pump_curve`` is interpreted: PUMP1 relates flow to inlet wet-well volume, PUMP2 to inlet depth (step), PUMP3 to the inlet-outlet head difference, PUMP4 to a variable-speed inlet depth; IDEAL (or no curve) simply passes the inlet inflow. Pumps derive from ``LinkEntity``.
 
-+------------------------------------+-------+--------------------------------------------------------+
-| Attribute                          | Flags | Description                                            |
-+====================================+=======+========================================================+
-| ``topology.from_node_id``          | INIT  | Upstream node id (from LinkEntity)                     |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``topology.to_node_id``            | INIT  | Downstream node id (from LinkEntity)                   |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.pump_curve_type`` | OPT   | Pump curve type: IDEAL / PUMP1 / PUMP2 / PUMP3 / PUMP4 |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.pump_curve``      | OPT   | (2,)-csr pump curve points; axes depend on the type    |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.startup_depth``   | OPT   | Inlet depth that switches the pump on (m)              |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.shutoff_depth``   | OPT   | Inlet depth that switches the pump off (m)             |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.target_setting``  | OPT   | Pump relative speed 0-1                                |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.flow``            | PUB   | Flow rate through the link (m³/s)                      |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.flow_depth``      | PUB   | Water depth inside the link (m)                        |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.flow_volume``     | PUB   | Water volume stored in the link (m³)                   |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.froude_number``   | PUB   | Froude number (-)                                      |
-+------------------------------------+-------+--------------------------------------------------------+
-| ``urban_drainage.current_setting`` | PUB   | Applied control setting 0-1 (-)                        |
-+------------------------------------+-------+--------------------------------------------------------+
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| Attribute                          | Flags   | Description                                                                                            |
++====================================+=========+========================================================================================================+
+| ``topology.from_node_id``          | INIT    | Upstream node id (from LinkEntity)                                                                     |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``topology.to_node_id``            | INIT    | Downstream node id (from LinkEntity)                                                                   |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.pump_curve_type`` | OPT     | Pump curve type enum: IDEAL / PUMP1 / PUMP2 / PUMP3 / PUMP4                                            |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.pump_curve``      | OPT     | Inline (x, y) curve points; axes depend on the type; (2,)-csr                                          |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.startup_depth``   | OPT     | Inlet depth at which the pump switches on (m)                                                          |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.shutoff_depth``   | OPT     | Inlet depth at which the pump switches off (m)                                                         |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.target_setting``  | OPT     | Pump relative speed 0-1                                                                                |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow``            | PUB|OPT | Flow rate through the link (m³/s); on a conduit, if given as input, also seeds the initial flow at t=0 |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_depth``      | PUB     | Water depth inside the link (m)                                                                        |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_volume``     | PUB     | Water volume stored in the link (m³)                                                                   |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.froude_number``   | PUB     | Froude number (-)                                                                                      |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.current_setting`` | PUB     | Applied control setting 0-1 (-)                                                                        |
++------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
 
 Orifices
 ^^^^^^^^
 
 ``drainage_orifice_entities``
 
-Orifices are submerged openings (side or bottom) that regulate flow. Orifices derive from ``LinkEntity``.
+Orifices are submerged openings regulating flow. ``orifice_type`` is **SIDE** (an opening in a side wall) or **BOTTOM** (an opening in the invert); ``orifice_shape`` is CIRCULAR or RECT_CLOSED. Orifices derive from ``LinkEntity``.
 
-+-------------------------------------------+-------+------------------------------------------------+
-| Attribute                                 | Flags | Description                                    |
-+===========================================+=======+================================================+
-| ``topology.from_node_id``                 | INIT  | Upstream node id (from LinkEntity)             |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``topology.to_node_id``                   | INIT  | Downstream node id (from LinkEntity)           |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.orifice_type``           | INIT  | Orientation: SIDE / BOTTOM                     |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.orifice_shape``          | INIT  | Opening shape: CIRCULAR / RECT_CLOSED          |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.cross_section_geometry`` | INIT  | Opening dimensions Geom1-Geom4 (m), (4,)       |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.discharge_coefficient``  | INIT  | Discharge coefficient (-)                      |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.crest_height``           | OPT   | Opening height above the inlet node invert (m) |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.flap_gate``              | OPT   | Flap gate preventing reverse flow (bool)       |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.target_setting``         | OPT   | Opening fraction 0-1                           |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.flow``                   | PUB   | Flow rate through the link (m³/s)              |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.flow_depth``             | PUB   | Water depth inside the link (m)                |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.flow_volume``            | PUB   | Water volume stored in the link (m³)           |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.froude_number``          | PUB   | Froude number (-)                              |
-+-------------------------------------------+-------+------------------------------------------------+
-| ``urban_drainage.current_setting``        | PUB   | Applied control setting 0-1 (-)                |
-+-------------------------------------------+-------+------------------------------------------------+
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| Attribute                                 | Flags   | Description                                                                                            |
++===========================================+=========+========================================================================================================+
+| ``topology.from_node_id``                 | INIT    | Upstream node id (from LinkEntity)                                                                     |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``topology.to_node_id``                   | INIT    | Downstream node id (from LinkEntity)                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.orifice_type``           | INIT    | Orientation enum: SIDE / BOTTOM                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.orifice_shape``          | INIT    | Opening shape enum: CIRCULAR / RECT_CLOSED                                                             |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.cross_section_geometry`` | INIT    | Opening dimensions Geom1-Geom4 (m); CIRCULAR: Geom1=diameter; RECT_CLOSED: Geom1=height, Geom2=width   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.discharge_coefficient``  | INIT    | Discharge coefficient (-)                                                                              |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.crest_height``           | OPT     | Opening height above the inlet node invert (m)                                                         |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flap_gate``              | OPT     | Flap gate preventing reverse flow (bool)                                                               |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.target_setting``         | OPT     | Opening fraction 0-1                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow``                   | PUB|OPT | Flow rate through the link (m³/s); on a conduit, if given as input, also seeds the initial flow at t=0 |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_depth``             | PUB     | Water depth inside the link (m)                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_volume``            | PUB     | Water volume stored in the link (m³)                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.froude_number``          | PUB     | Froude number (-)                                                                                      |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.current_setting``        | PUB     | Applied control setting 0-1 (-)                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
 
 Weirs
 ^^^^^
 
 ``drainage_weir_entities``
 
-Weirs are crested structures that regulate overflow. Weirs derive from ``LinkEntity``.
+Weirs are crested structures regulating overflow. ``weir_type`` chooses the crest form: **TRANSVERSE** and **SIDEFLOW** are rectangular crests (across / along the flow), **V-NOTCH** is triangular, **TRAPEZOIDAL** combines both, and **ROADWAY** models flow over a road embankment. Weirs derive from ``LinkEntity``.
 
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| Attribute                                 | Flags | Description                                                        |
-+===========================================+=======+====================================================================+
-| ``topology.from_node_id``                 | INIT  | Upstream node id (from LinkEntity)                                 |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``topology.to_node_id``                   | INIT  | Downstream node id (from LinkEntity)                               |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.weir_type``              | INIT  | Weir type: TRANSVERSE / SIDEFLOW / V-NOTCH / TRAPEZOIDAL / ROADWAY |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.cross_section_geometry`` | INIT  | Opening Geom1-Geom4 (m), (4,): height, length, side slope          |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.discharge_coefficient``  | INIT  | Weir discharge coefficient (-)                                     |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.crest_height``           | OPT   | Crest height above the inlet node invert (m)                       |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.flap_gate``              | OPT   | Flap gate preventing reverse flow (bool)                           |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.target_setting``         | OPT   | Opening fraction 0-1                                               |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.flow``                   | PUB   | Flow rate through the link (m³/s)                                  |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.flow_depth``             | PUB   | Water depth inside the link (m)                                    |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.flow_volume``            | PUB   | Water volume stored in the link (m³)                               |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.froude_number``          | PUB   | Froude number (-)                                                  |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
-| ``urban_drainage.current_setting``        | PUB   | Applied control setting 0-1 (-)                                    |
-+-------------------------------------------+-------+--------------------------------------------------------------------+
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| Attribute                                 | Flags   | Description                                                                                            |
++===========================================+=========+========================================================================================================+
+| ``topology.from_node_id``                 | INIT    | Upstream node id (from LinkEntity)                                                                     |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``topology.to_node_id``                   | INIT    | Downstream node id (from LinkEntity)                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.weir_type``              | INIT    | Weir type enum: TRANSVERSE / SIDEFLOW / V-NOTCH / TRAPEZOIDAL / ROADWAY                                |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.cross_section_geometry`` | INIT    | Opening Geom1-Geom4 (m): Geom1=height, Geom2=length, Geom3=side slope                                  |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.discharge_coefficient``  | INIT    | Weir discharge coefficient (-)                                                                         |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.crest_height``           | OPT     | Crest height above the inlet node invert (m)                                                           |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flap_gate``              | OPT     | Flap gate preventing reverse flow (bool)                                                               |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.target_setting``         | OPT     | Opening fraction 0-1                                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow``                   | PUB|OPT | Flow rate through the link (m³/s); on a conduit, if given as input, also seeds the initial flow at t=0 |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_depth``             | PUB     | Water depth inside the link (m)                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_volume``            | PUB     | Water volume stored in the link (m³)                                                                   |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.froude_number``          | PUB     | Froude number (-)                                                                                      |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.current_setting``        | PUB     | Applied control setting 0-1 (-)                                                                        |
++-------------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
 
 Outlets
 ^^^^^^^
 
 ``drainage_outlet_entities``
 
-Outlets are flow-control links with a head/depth-discharge rating. Outlets derive from ``LinkEntity``.
+Outlets are flow-control links with a user-defined head/depth-discharge rating. ``outlet_rating_type`` picks whether discharge is a **FUNCTIONAL** power law or a **TABULAR** curve, and whether it is driven by **HEAD** (across the outlet) or **DEPTH** (at the inlet). Outlets derive from ``LinkEntity``.
 
-+---------------------------------------+-------+------------------------------------------------------+
-| Attribute                             | Flags | Description                                          |
-+=======================================+=======+======================================================+
-| ``topology.from_node_id``             | INIT  | Upstream node id (from LinkEntity)                   |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``topology.to_node_id``               | INIT  | Downstream node id (from LinkEntity)                 |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.outlet_rating_type`` | INIT  | FUNCTIONAL or TABULAR, rated by DEPTH or HEAD        |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.crest_height``       | OPT   | Outlet height above the inlet node invert (m)        |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.rating_coefficient`` | OPT   | FUNCTIONAL coefficient (flow = coeff·x^expon)        |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.rating_exponent``    | OPT   | FUNCTIONAL exponent                                  |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.rating_curve``       | OPT   | TABULAR (head-or-depth m, flow m³/s) curve; (2,)-csr |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.flap_gate``          | OPT   | Flap gate preventing reverse flow (bool)             |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.target_setting``     | OPT   | Opening fraction 0-1                                 |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.flow``               | PUB   | Flow rate through the link (m³/s)                    |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.flow_depth``         | PUB   | Water depth inside the link (m)                      |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.flow_volume``        | PUB   | Water volume stored in the link (m³)                 |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.froude_number``      | PUB   | Froude number (-)                                    |
-+---------------------------------------+-------+------------------------------------------------------+
-| ``urban_drainage.current_setting``    | PUB   | Applied control setting 0-1 (-)                      |
-+---------------------------------------+-------+------------------------------------------------------+
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| Attribute                             | Flags   | Description                                                                                            |
++=======================================+=========+========================================================================================================+
+| ``topology.from_node_id``             | INIT    | Upstream node id (from LinkEntity)                                                                     |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``topology.to_node_id``               | INIT    | Downstream node id (from LinkEntity)                                                                   |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.outlet_rating_type`` | INIT    | FUNCTIONAL or TABULAR, rated by DEPTH or HEAD                                                          |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.crest_height``       | OPT     | Outlet height above the inlet node invert (m)                                                          |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.rating_coefficient`` | OPT     | FUNCTIONAL coefficient (flow = coeff·x^expon)                                                          |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.rating_exponent``    | OPT     | FUNCTIONAL exponent                                                                                    |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.rating_curve``       | OPT     | TABULAR: inline (head or depth m, flow m³/s) curve; (2,)-csr                                           |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flap_gate``          | OPT     | Flap gate preventing reverse flow (bool)                                                               |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.target_setting``     | OPT     | Opening fraction 0-1                                                                                   |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow``               | PUB|OPT | Flow rate through the link (m³/s); on a conduit, if given as input, also seeds the initial flow at t=0 |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_depth``         | PUB     | Water depth inside the link (m)                                                                        |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.flow_volume``        | PUB     | Water volume stored in the link (m³)                                                                   |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.froude_number``      | PUB     | Froude number (-)                                                                                      |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
+| ``urban_drainage.current_setting``    | PUB     | Applied control setting 0-1 (-)                                                                        |
++---------------------------------------+---------+--------------------------------------------------------------------------------------------------------+
 
 Subcatchments
 ^^^^^^^^^^^^^
 
 ``drainage_subcatchment_entities``
 
-Subcatchments are surfaces that turn rainfall into runoff. They are not part of the pipe network: each routes its runoff to one node (``outlet_node_id``) and is driven by the gage referenced through ``raingage_id``. Subcatchments derive from ``PolygonEntity``.
+Subcatchments are surfaces that turn rainfall into runoff. Runoff is routed to one node (``outlet_node_id``) and driven by the gage referenced through ``raingage_id``. Only a single subarea per subcatchment is modelled (SWMM allows more). Subcatchments derive from ``PolygonEntity``.
 
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | Attribute                                | Flags | Description                                                          |
@@ -489,17 +475,17 @@ Subcatchments are surfaces that turn rainfall into runoff. They are not part of 
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.slope``                 | INIT  | Average surface slope (%)                                            |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.outlet_node_id``        | INIT  | Id of the node the runoff drains to                                  |
+| ``urban_drainage.outlet_node_id``        | INIT  | Node id the runoff drains to                                         |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.raingage_id``           | INIT  | Id of the rain gage driving the rainfall                             |
+| ``urban_drainage.raingage_id``           | INIT  | Rain gage id driving the rainfall                                    |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.n_imperv``              | OPT   | Manning's n for the impervious sub-area                              |
+| ``urban_drainage.n_imperv``              | OPT   | Manning's n, impervious area                                         |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.n_perv``                | OPT   | Manning's n for the pervious sub-area                                |
+| ``urban_drainage.n_perv``                | OPT   | Manning's n, pervious area                                           |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.s_imperv``              | OPT   | Depression storage depth, impervious (mm)                            |
+| ``urban_drainage.s_imperv``              | OPT   | Depression storage, impervious area (mm)                             |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.s_perv``                | OPT   | Depression storage depth, pervious (mm)                              |
+| ``urban_drainage.s_perv``                | OPT   | Depression storage, pervious area (mm)                               |
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.pct_zero``              | OPT   | Impervious area with no depression storage (%)                       |
 +------------------------------------------+-------+----------------------------------------------------------------------+
@@ -511,7 +497,7 @@ Subcatchments are surfaces that turn rainfall into runoff. They are not part of 
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.dry_time``              | OPT   | Time for fully saturated soil to dry (days)                          |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.suction_head``          | OPT   | Green-Ampt soil capillary suction head (mm)                          |
+| ``urban_drainage.suction_head``          | OPT   | Green-Ampt soil capillary suction (mm)                               |
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.conductivity``          | OPT   | Saturated hydraulic conductivity (mm/hr)                             |
 +------------------------------------------+-------+----------------------------------------------------------------------+
@@ -523,23 +509,19 @@ Subcatchments are surfaces that turn rainfall into runoff. They are not part of 
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.runoff``                | PUB   | Surface runoff flow (m³/s)                                           |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.runon``                 | PUB   | Run-on received from other subcatchments (m³/s)                      |
-+------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.infiltration_loss``     | PUB   | Infiltration loss rate (mm/hr)                                       |
 +------------------------------------------+-------+----------------------------------------------------------------------+
 | ``urban_drainage.evaporation_loss``      | PUB   | Evaporation loss rate (mm/hr)                                        |
 +------------------------------------------+-------+----------------------------------------------------------------------+
-| ``urban_drainage.snow_depth``            | PUB   | Snow depth, water equivalent (mm)                                    |
-+------------------------------------------+-------+----------------------------------------------------------------------+
 
-Which infiltration parameters are read depends on the configured ``infiltration`` model: **Horton** uses ``max_infiltration_rate`` / ``min_infiltration_rate`` / ``decay_constant`` / ``dry_time``; **Green-Ampt** uses ``suction_head`` / ``conductivity`` / ``initial_deficit``; **Curve Number** uses ``curve_number`` / ``conductivity`` / ``dry_time``. Unspecified parameters fall back to sensible defaults for the active unit system.
+**Infiltration model selection.** Each subcatchment's infiltration model is resolved in this order: an ``infiltration_model_override`` in the model config forces one model for every subcatchment; otherwise the model is inferred from which family of attributes is set (Horton: ``max_infiltration_rate`` / ``min_infiltration_rate`` / ``decay_constant``; Green-Ampt: ``suction_head`` / ``initial_deficit``; Curve Number: ``curve_number``); if that is ambiguous (zero or several families set) it falls back to the dataset's ``infiltration_model_default`` (general section), and finally to HORTON. The MODIFIED_* variants cannot be inferred and must be chosen via override/default. Unset parameters use sensible defaults for the active unit system.
 
 Rain gages
 ^^^^^^^^^^
 
 ``drainage_raingage_entities``
 
-Rain gages are the rainfall sources for subcatchments. Rainfall is normally driven at runtime by another model publishing ``rainfall_intensity``. Rain gages derive from ``PointEntity``.
+Rain gages are the rainfall sources for subcatchments. Rainfall is driven at runtime by another model publishing ``rainfall_intensity`` - there is no configured time series, so no format or interval is needed. Rain gages derive from ``PointEntity``.
 
 +---------------------------------------+-------+-------------------------------------------------------------+
 | Attribute                             | Flags | Description                                                 |
@@ -547,10 +529,6 @@ Rain gages are the rainfall sources for subcatchments. Rainfall is normally driv
 | ``geometry.x``                        | OPT   | Map x location ([SYMBOLS]); display only (from PointEntity) |
 +---------------------------------------+-------+-------------------------------------------------------------+
 | ``geometry.y``                        | OPT   | Map y location ([SYMBOLS]); display only (from PointEntity) |
-+---------------------------------------+-------+-------------------------------------------------------------+
-| ``urban_drainage.rainfall_format``    | OPT   | Series format: INTENSITY / VOLUME / CUMULATIVE              |
-+---------------------------------------+-------+-------------------------------------------------------------+
-| ``urban_drainage.rainfall_interval``  | OPT   | Rainfall recording interval (s)                             |
 +---------------------------------------+-------+-------------------------------------------------------------+
 | ``urban_drainage.rainfall_intensity`` | OPT   | Runtime rainfall override (mm/hr)                           |
 +---------------------------------------+-------+-------------------------------------------------------------+
@@ -575,27 +553,55 @@ These take effect on the forward step following the update in which they change
 Configuration Options
 ---------------------
 
-Simulation options are given in the model config under the ``"options"`` key. The
-same keys may also be supplied in the dataset's ``"general"`` section; the two are
-merged at initialization, with the dataset's ``"general"`` section taking
-precedence (so the Movici wake cadence and the SWMM report step stay consistent).
+Options fall into three groups, by whether they describe the *solver*, the *data*,
+or the *infiltration model* (which is data-decided but may be overridden). This
+keeps a clean separation of concerns: solver options live in the model config under
+``"options"`` and data options live in the dataset's ``"general"`` section, so a
+model config cannot silently misrepresent the data (e.g. changing the unit system
+in the config would not convert the underlying values).
 
-+------------------------+---------+---------------------------------------------------------------------------------------------+
-| Option                 | Type    | Description                                                                                 |
-+========================+=========+=============================================================================================+
-| ``hydraulic_timestep`` | integer | SWMM routing (hydraulic) step in seconds. Default: 60                                       |
-+------------------------+---------+---------------------------------------------------------------------------------------------+
-| ``report_timestep``    | integer | Movici wake cadence and SWMM report step in seconds. Default: 300                           |
-+------------------------+---------+---------------------------------------------------------------------------------------------+
-| ``flow_units``         | string  | CMS / LPS / MLD (metric) or CFS / GPM / MGD (US). Default: CMS                              |
-+------------------------+---------+---------------------------------------------------------------------------------------------+
-| ``flow_routing``       | string  | Routing method: STEADY / KINWAVE / DYNWAVE. Default: DYNWAVE                                |
-+------------------------+---------+---------------------------------------------------------------------------------------------+
-| ``infiltration``       | string  | HORTON / MODIFIED_HORTON / GREEN_AMPT / MODIFIED_GREEN_AMPT / CURVE_NUMBER. Default: HORTON |
-+------------------------+---------+---------------------------------------------------------------------------------------------+
+Solver options (model config ``"options"`` only)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++------------------------+--------+-------------------------------------------------------------------+
+| Option                 | Type   | Description                                                       |
++========================+========+===================================================================+
+| ``hydraulic_timestep`` | number | SWMM routing (hydraulic) step in seconds. Default: 60             |
++------------------------+--------+-------------------------------------------------------------------+
+| ``report_timestep``    | number | Movici wake cadence and SWMM report step in seconds. Default: 300 |
++------------------------+--------+-------------------------------------------------------------------+
+| ``flow_routing``       | string | Routing method: STEADY / KINWAVE / DYNWAVE. Default: DYNWAVE      |
++------------------------+--------+-------------------------------------------------------------------+
+
+Data options (dataset ``"general"`` section only)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
++----------------+--------+----------------------------------------------------------------------------------+
+| Option         | Type   | Description                                                                      |
++================+========+==================================================================================+
+| ``flow_units`` | string | SWMM unit system: CMS / LPS / MLD (metric) or CFS / GPM / MGD (US). Default: CMS |
++----------------+--------+----------------------------------------------------------------------------------+
+
+Infiltration model (data-decided, config-overridable)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The infiltration model is decided by the data by default but may be overridden at
+runtime. Per subcatchment it is resolved as: ``infiltration_model_override`` (model
+config, forces all subcatchments) -> inference from which attribute family is set
+-> ``infiltration_model_default`` (dataset general) -> HORTON.
+
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------+
+| Option                          | Set in          | Description                                                                                        |
++=================================+=================+====================================================================================================+
+| ``infiltration_model_default``  | dataset general | Default infiltration model for subcatchments whose model cannot be inferred. Default: HORTON       |
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------+
+| ``infiltration_model_override`` | model config    | Force one infiltration model for ALL subcatchments (overrides inference and the default). Optional |
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------+
 
 Example Configuration
 ^^^^^^^^^^^^^^^^^^^^^
+
+Model config with solver options:
 
 .. code-block:: json
 
@@ -606,11 +612,36 @@ Example Configuration
         "options": {
             "hydraulic_timestep": 60,
             "report_timestep": 300,
-            "flow_units": "CMS",
-            "flow_routing": "DYNWAVE",
-            "infiltration": "HORTON"
+            "flow_routing": "DYNWAVE"
         }
     }
+
+Dataset general section with data options:
+
+.. code-block:: json
+
+    {
+        "general": {
+            "flow_units": "CMS",
+            "infiltration_model_default": "HORTON"
+        }
+    }
+
+Limitations
+-----------
+
+* **Dividers** are not modelled; under dynamic-wave routing SWMM treats them as
+  ordinary junctions
+* Link **velocity** is not published (the live engine exposes no usable per-link
+  velocity); the Froude number is published instead
+* Outfalls support ``FREE`` / ``NORMAL`` / ``FIXED`` boundaries only; ``TIDAL``
+  and ``TIMESERIES`` (which need referenced boundary data) raise a clear error
+* Only a **single subarea** per subcatchment is modelled
+* A subcatchment drains to a single node; **run-on between subcatchments is not
+  modelled**, so no run-on output is published
+* **Snow**, water quality / pollutants, LID controls and groundwater are out of
+  scope
+* Only **one SWMM simulation per process** (see *Model Characteristics*)
 
 Other Considerations
 --------------------
@@ -652,7 +683,7 @@ UrbanDrainageConfig
 
 ``properties``:
   | ``dataset``: ``string`` Name of the urban_drainage_network dataset |required|
-  | ``options``: :ref:`UrbanDrainageOptions` SWMM simulation options
+  | ``options``: :ref:`UrbanDrainageOptions` SWMM solver options
 
 .. _UrbanDrainageOptions:
 
@@ -664,6 +695,5 @@ UrbanDrainageOptions
 ``properties``:
   | ``hydraulic_timestep``: ``number`` SWMM routing step in seconds (default: 60)
   | ``report_timestep``: ``number`` Report / wake cadence in seconds (default: 300)
-  | ``flow_units``: ``string`` Flow units: CMS / LPS / MLD / CFS / GPM / MGD (default: CMS)
   | ``flow_routing``: ``string`` Routing method: STEADY / KINWAVE / DYNWAVE (default: DYNWAVE)
-  | ``infiltration``: ``string`` Infiltration model (default: HORTON)
+  | ``infiltration_model_override``: ``string`` Force one infiltration model for all subcatchments (optional)

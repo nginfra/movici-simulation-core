@@ -24,23 +24,16 @@
           "default": 300,
           "description": "Reporting / control cadence in seconds (default: 300)"
         },
-        "flow_units": {
-          "type": "string",
-          "enum": ["CMS", "LPS", "MLD", "CFS", "GPM", "MGD"],
-          "default": "CMS",
-          "description": "SWMM flow units (default: CMS, cubic meters per second)"
-        },
         "flow_routing": {
           "type": "string",
           "enum": ["STEADY", "KINWAVE", "DYNWAVE"],
           "default": "DYNWAVE",
           "description": "SWMM flow routing method (default: DYNWAVE)"
         },
-        "infiltration": {
+        "infiltration_model_override": {
           "type": "string",
           "enum": ["HORTON", "MODIFIED_HORTON", "GREEN_AMPT", "MODIFIED_GREEN_AMPT", "CURVE_NUMBER"],
-          "default": "HORTON",
-          "description": "SWMM infiltration model (default: HORTON)"
+          "description": "Force this infiltration model for all subcatchments (overrides per-subcatchment inference and the dataset default). flow_units and infiltration_model_default are data-determined and belong in the dataset general section."
         }
       },
       "additionalProperties": true

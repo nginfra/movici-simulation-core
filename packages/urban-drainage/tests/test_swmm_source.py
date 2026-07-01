@@ -310,13 +310,6 @@ def test_outfall_flap_gate_parsed_as_bool(inp_file):
     assert outfalls.get_attribute("flap_gate")[0] is False
 
 
-def test_raingage_interval_parsed_as_seconds(inp_file):
-    # "RG1 INTENSITY 1:00 ...": rainfall_interval is DataType(float) seconds, so the
-    # "H:MM" string must convert to 3600.0, not be stored verbatim.
-    gages = SWMMSource(inp_file)["raingages"]
-    assert gages.get_attribute("rainfall_interval") == [3600.0]
-
-
 GEOMETRIC_STORAGE_INP = textwrap.dedent("""\
     [STORAGE]
     ;Name Elev Ymax Y0 Shape L W Z
