@@ -16,6 +16,12 @@ from movici_data_core.exceptions import MoviciDataError
 
 from .datasets import dataset_router
 from .scenarios import scenario_router
+from .schema import (
+    attribute_type_router,
+    dataset_type_router,
+    entity_type_router,
+    model_type_router,
+)
 from .updates import update_router
 from .workspaces import workspace_router
 
@@ -26,7 +32,11 @@ TMPFILE_DIR = "tmp"
 
 DATABASE_MODE = DatabaseMode.SINGLE_SCENARIO
 DEFAULT_ROUTERS = (
+    attribute_type_router,
     dataset_router,
+    dataset_type_router,
+    entity_type_router,
+    model_type_router,
     workspace_router,
     update_router,
     scenario_router,
