@@ -100,7 +100,7 @@ class DeserializationError(MoviciDataError):
 
 
 class MoviciValidationError(MoviciDataError):
-    __status_code__ = HTTPStatus.UNPROCESSABLE_CONTENT
+    __status_code__ = HTTPStatus.UNPROCESSABLE_ENTITY
     __error_id__ = "validation_error"
     __error_message__ = "Valdation error"
 
