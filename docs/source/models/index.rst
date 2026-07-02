@@ -11,3 +11,4 @@ Model Library
    netcdf_player
    rules_model
    traffic_assignment
+   urban_drainage_model
