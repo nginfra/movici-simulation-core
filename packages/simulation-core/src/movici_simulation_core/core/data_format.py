@@ -87,11 +87,12 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
             spec = self.schema.get_spec(name, default_data_type=infer_datatype, cache=True)
             data_type = spec.data_type
-
-            return t.cast(dict, parse_list(attr_data, data_type))
-
+            try:
+                return t.cast(dict, parse_list(attr_data, data_type))
+            except ValueError as e:
+                raise ValueError(f"Error when parsing data for '{name}': {e}") from e
         else:
-            raise TypeError("attribute data must be list")
+            raise TypeError(f"Attribute data for '{name}' must be list")
 
     def dumps(self, data: dict, filetype: FileType = FileType.JSON, **kwargs) -> bytes:
         self.supported_file_type_or_raise(filetype)
@@ -177,7 +178,10 @@ def create_array(uniform_data: list, data_type: DataType):
 
     # Otherwise we need to handle None values properly
     uniform_data = _substitute_undefined(uniform_data, undefined)
-    result = np.array(uniform_data, dtype=dtype)
+    try:
+        result = np.array(uniform_data, dtype=dtype)
+    except ValueError as e:
+        raise ValueError("invalid input data") from e
 
     if result.shape[1:] != data_type.unit_shape:
         # If we still do not have the correct shape, this means that the input data was incorrectly
