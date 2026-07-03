@@ -87,11 +87,12 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
             spec = self.schema.get_spec(name, default_data_type=infer_datatype, cache=True)
             data_type = spec.data_type
-
-            return t.cast(dict, parse_list(attr_data, data_type))
-
+            try:
+                return t.cast(dict, parse_list(attr_data, data_type))
+            except ValueError as e:
+                raise ValueError(f"Error when parsing data for '{name}': {e}") from e
         else:
-            raise TypeError("attribute data must be list")
+            raise TypeError(f"Attribute data for '{name}' must be list")
 
     def dumps(self, data: dict, filetype: FileType = FileType.JSON, **kwargs) -> bytes:
         self.supported_file_type_or_raise(filetype)
@@ -148,21 +149,46 @@ def parse_csr_list(data: t.List[list], data_type: DataType) -> NumpyAttributeDat
 
 
 def create_array(uniform_data: list, data_type: DataType):
+    dtype = data_type.np_type
+    if not uniform_data:
+        return np.array([], dtype=dtype)
+
     if data_type.unit_shape == ():
         undefined = data_type.undefined
     else:
         undefined = np.full(data_type.unit_shape, data_type.undefined)
 
-    dtype = data_type.np_type
     if np.issubdtype(dtype, str):
         uniform_data = _substitute_undefined(uniform_data, undefined)
         dtype = get_unicode_dtype(_max_str_length(uniform_data))
 
+    result = None
     try:
-        return np.array(uniform_data, dtype=dtype)
+        # Try optimistically, this may produce an array with an incorrect shape in case of
+        # floating point arrays (`[None, None]` for multidimensional arrays is converted to
+        # `[nan, nan]`, which is wrong). For other data types, `None` in inputs always raises an
+        # error, as well as mismatched shapes.
+        result = np.array(uniform_data, dtype=dtype)
     except (ValueError, TypeError):
-        uniform_data = _substitute_undefined(uniform_data, undefined)
-        return np.array(uniform_data, dtype=dtype)
+        pass
+
+    if result is not None and result.shape[1:] == data_type.unit_shape:
+        # If all went well and we have the correct shape, we can return the array
+        return result
+
+    # Otherwise we need to handle None values properly
+    uniform_data = _substitute_undefined(uniform_data, undefined)
+    try:
+        result = np.array(uniform_data, dtype=dtype)
+    except ValueError as e:
+        raise ValueError("invalid input data") from e
+
+    if result.shape[1:] != data_type.unit_shape:
+        # If we still do not have the correct shape, this means that the input data was incorrectly
+        # shaped
+        raise ValueError("input data is not of the correct shape")
+
+    return result
 
 
 def _substitute_undefined(uniform_data, undefined):
