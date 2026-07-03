@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/urban_drainage/1.0.0",
+  "type": "object",
+  "required": ["dataset"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "movici.type": "dataset",
+      "movici.datasetType": "urban_drainage_network",
+      "description": "Urban drainage network dataset name"
+    },
+    "options": {
+      "type": "object",
+      "description": "SWMM simulation options",
+      "properties": {
+        "hydraulic_timestep": {
+          "type": "number",
+          "default": 60,
+          "description": "SWMM routing (hydraulic) step in seconds (default: 60)"
+        },
+        "report_timestep": {
+          "type": "number",
+          "default": 300,
+          "description": "Reporting / control cadence in seconds (default: 300)"
+        },
+        "flow_routing": {
+          "type": "string",
+          "enum": ["STEADY", "KINWAVE", "DYNWAVE"],
+          "default": "DYNWAVE",
+          "description": "SWMM flow routing method (default: DYNWAVE)"
+        },
+        "infiltration_model_override": {
+          "type": "string",
+          "enum": ["HORTON", "MODIFIED_HORTON", "GREEN_AMPT", "MODIFIED_GREEN_AMPT", "CURVE_NUMBER"],
+          "description": "Force this infiltration model for all subcatchments (overrides per-subcatchment inference and the dataset default). flow_units and infiltration_model_default are data-determined and belong in the dataset general section."
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

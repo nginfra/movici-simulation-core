@@ -142,7 +142,7 @@ def test_create_array(data_type, py_data, expected):
     ],
 )
 def test_create_array_raises_on_shape_mismatch(data_type, py_data):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="input data is not of the correct shape"):
         create_array(py_data, data_type)
 
 
