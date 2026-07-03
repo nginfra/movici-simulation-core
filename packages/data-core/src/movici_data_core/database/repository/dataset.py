@@ -31,6 +31,7 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    MoviciValidationError,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
     map_errors,
@@ -193,30 +194,10 @@ class DatasetRepository(SQLResourceRepository):
             ),
         )
 
-    async def update(self, id: UUID, obj: Dataset):
-        """Update a :class:`Dataset` in the database when not providing a full dataset with data
-
-        Valid fields to update are: ``name``, ``display_name``
-
-        :param id: the UUID of the stored ``Dataset``
-        :param obj: the ``Dataset`` object with the changes
-        """
-        current = await self.get_by_id(id)
-        if current is None:
-            raise ResourceDoesNotExist("dataset", id=id)
-        # TODO: accept changes to dataset type if the dataset does not have data and is not used
-        #  anywhere?
-        await self.session.execute(
-            update(db.Dataset)
-            .where(db.Dataset.id == id)
-            .values(name=obj.name, display_name=obj.display_name)
-        )
-
-    # TODO: merge update_with_data with regular update and switch on whether data is provided
-    async def update_with_data(self, id: UUID, obj: Dataset, chunk_size=0):
-        """Update a dataset when providing a full dataset with data, processes all fields, except
-        the data section, which must be processed separately using the
-        :class:`DatasetDataRepository`.
+    async def update(self, id: UUID, obj: Dataset, chunk_size=0):
+        """Update a dataset. When not given ``obj.data``, only the ``name`` and ``display_name``
+        are updated. Otherwise this method als processes the data and updates the ``general``,
+        ``epsg_code`` and ``bounding_box`` field.
 
         :param id: the UUID of the stored ``Dataset``
         :param obj: the ``Dataset`` object with the changes
@@ -227,28 +208,30 @@ class DatasetRepository(SQLResourceRepository):
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
-        if obj.data is None:
-            raise InvalidAction("Must provide dataset data")
-        if not (
-            obj.dataset_type.format == DatasetFormat.UNKNOWN
-            or obj.dataset_type == current.dataset_type
-        ):
-            raise InvalidAction("Cannot change dataset type when updating data")
-        await self.all_data.dataset_data.delete(id)
-        await self.session.execute(
-            update(db.Dataset)
-            .where(db.Dataset.id == id)
-            .values(
-                name=obj.name,
-                display_name=obj.display_name,
-                general=obj.general,
-                epsg_code=obj.epsg_code,
-                bounding_box=obj.bounding_box.as_tuple_or_none(),
+
+        # TODO: accept changes to dataset type if the dataset does not have data and is not used
+        #  anywhere?
+        payload: dict[str, t.Any] = dict(name=obj.name, display_name=obj.display_name)
+        if obj.data is not None:
+            if not current.dataset_type.is_equivalent(obj.dataset_type):
+                raise InvalidAction("Cannot change dataset type when updating data")
+            payload.update(
+                dict(
+                    general=obj.general,
+                    epsg_code=obj.epsg_code,
+                    bounding_box=obj.bounding_box.as_tuple_or_none(),
+                )
             )
-        )
-        await self.all_data.dataset_data.create(
-            id, data=obj.data, format=current.dataset_type.format, chunk_size=chunk_size
-        )
+
+            await self.all_data.dataset_data.delete(id, prune_dataset=False)
+            await self.all_data.dataset_data.create(
+                id,
+                data=obj.data,
+                format=t.cast(DatasetFormat, current.dataset_type.format),
+                chunk_size=chunk_size,
+            )
+
+        await self.session.execute(update(db.Dataset).where(db.Dataset.id == id).values(**payload))
 
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
@@ -256,8 +239,10 @@ class DatasetRepository(SQLResourceRepository):
         r"""Ensure that the :class:`Dataset`s of a sequences of :class:`ScenarioDataset`\s exist in
         the database or raise an error. If one or more of the ``Dataset``s do not exist and the
         database option ``STRICT_SCENARIO_DATASETS`` is unset, the non-existing datasets will be
-        created. If the ``STRICT_MODEL_TYPES`` options is set, an error is raised instead. An
-        error is also raised if a ``Dataset`` already exists but with a different dataset type
+        created as a stub. If any of the newly created datasets has a dataset type that does not
+        yet exist, then the ``STRICT_DATASET_TYPES`` database option must also be unset. Otherwise
+        an error will be raise.  An error is also raised if a ``Dataset`` already exists but with a
+        different dataset type.
 
         :param datasets: The ``ScenarioDataset``s to ensure
         :return: The datasets as they exist in the database, as ``ScenarioDataset`` objects, in
@@ -265,55 +250,114 @@ class DatasetRepository(SQLResourceRepository):
         """
         workspace_id = self._ensure_workspace_id()
         existing_datasets = {
-            ds.name: t.cast(db.Dataset, ds)
+            ds.name: ScenarioDataset(ds.name, dataset_type=ds.dataset_type.to_domain(), id=ds.id)
             for ds in await self.session.scalars(
                 self.selector.where(
                     db.Dataset.name.in_(ds.name for ds in datasets),
                 )
             )
         }
-        to_create = []
-        for scenario_dataset in datasets:
+        existing_types = None  # delay retrieving existing dataset types, we might not need them
+        to_create: list[ScenarioDataset] = []
+        for idx, scenario_dataset in enumerate(datasets):
             name = scenario_dataset.name
             if name not in existing_datasets:
                 if self.options.STRICT_SCENARIO_DATASETS:
-                    raise ResourceDoesNotExist("dataset", name=name)
+                    raise MoviciValidationError(f"dataset '{name}' does not exist", path=idx)
+                if scenario_dataset.dataset_type is None:
+                    raise MoviciValidationError(
+                        "cannot create new dataset when dataset type is unknown", path=idx
+                    )
+
+                if existing_types is None:
+                    existing_types = {
+                        tp.name: tp for tp in await self.all_data.dataset_types.list()
+                    }
+
+                dataset_type_name = scenario_dataset.dataset_type.name
+                if dataset_type_name in existing_types:
+                    if not existing_types[dataset_type_name].is_equivalent(
+                        scenario_dataset.dataset_type
+                    ):
+                        raise MoviciValidationError(
+                            {
+                                "type": [
+                                    f"incompatible dataset type '{dataset_type_name}'"
+                                    " already exists"
+                                ]
+                            },
+                            path=idx,
+                        )
+                elif self.options.STRICT_DATASET_TYPES:
+                    raise MoviciValidationError(
+                        {
+                            "type": [
+                                f"dataset type '{scenario_dataset.dataset_type.name}'"
+                                " does not exist"
+                            ]
+                        },
+                        path=idx,
+                    )
                 to_create.append(scenario_dataset)
                 continue
-            if scenario_dataset.type != existing_datasets[name].dataset_type.name:
-                raise InvalidResource(
-                    "dataset",
-                    name=name,
-                    message="incompatible dataset already exists",
+
+            existing = existing_datasets[name]
+            if not (
+                scenario_dataset.dataset_type is None
+                or t.cast(DatasetType, existing.dataset_type).is_equivalent(
+                    scenario_dataset.dataset_type
                 )
+            ):
+                raise MoviciValidationError("incompatible dataset already exists", path=idx)
+
+            if scenario_dataset.dataset_type is None:
+                scenario_dataset.dataset_type = existing.dataset_type
+
         if to_create:
-            existing_types = {tp.name: tp for tp in await self.all_data.dataset_types.list()}
+            # to_create will only have entries after we have checked a dataset's dataset type and
+            # have retrieved ``existing_types`` so we can make the following assertion
+            assert existing_types is not None
             for scenario_dataset in to_create:
-                if scenario_dataset.type not in existing_types:
+                # A ScenarioDataset can only be added to to_create if it has a dataset_type
+                assert scenario_dataset.dataset_type is not None
+                if scenario_dataset.dataset_type.name not in existing_types:
+                    ds_type = scenario_dataset.dataset_type
                     new_type = await self.all_data.dataset_types.ensure_dataset_type(
-                        DatasetType(scenario_dataset.type, format=DatasetFormat.ENTITY_BASED)
+                        dataclasses.replace(
+                            ds_type, format=ds_type.format or DatasetFormat.ENTITY_BASED
+                        )
                     )
                     existing_types[new_type.name] = new_type
 
-            created = await self.session.scalars(
-                insert(db.Dataset).returning(db.Dataset),
+            created_ids_and_names = await self.session.execute(
+                insert(db.Dataset).returning(db.Dataset.id, db.Dataset.name),
                 [
                     {
                         "name": ds.name,
                         "display_name": ds.name,
-                        "dataset_type_id": existing_types[ds.type].id,
+                        "dataset_type_id": existing_types[
+                            t.cast(DatasetType, ds.dataset_type).name
+                        ].id,
                         "workspace_id": workspace_id,
                     }
                     for ds in to_create
                 ],
             )
+            ids_by_name = {name: id for id, name in created_ids_and_names}
 
-            existing_datasets.update((ds.name, ds) for ds in created)
+            existing_datasets.update(
+                (
+                    ds.name,
+                    ScenarioDataset(
+                        ds.name,
+                        dataset_type=existing_types[t.cast(DatasetType, ds.dataset_type).name],
+                        id=ids_by_name[ds.name],
+                    ),
+                )
+                for ds in to_create
+            )
 
-        return [
-            ScenarioDataset(name=ds.name, type=ds.type, id=existing_datasets[ds.name].id)
-            for ds in datasets
-        ]
+        return [existing_datasets[ds.name] for ds in datasets]
 
 
 class DatasetDataRepository(SQLResourceRepository):
@@ -384,7 +428,7 @@ class DatasetDataRepository(SQLResourceRepository):
         if format == DatasetFormat.BINARY:
             await RawDataProcessor(self.session).store(id, data, chunk_size=chunk_size)
 
-    async def delete(self, id: UUID):
+    async def delete(self, id: UUID, prune_dataset=True):
         await self.session.execute(
             delete(db.Attribute).where(
                 db.Attribute.id.in_(
@@ -395,11 +439,12 @@ class DatasetDataRepository(SQLResourceRepository):
             )
         )
         await self.session.execute(delete(db.RawData).where(db.RawData.dataset_id == id))
-        await self.session.execute(
-            update(db.Dataset)
-            .where(db.Dataset.id == id)
-            .values(general=None, epsg_code=None, bounding_box=None)
-        )
+        if prune_dataset:
+            await self.session.execute(
+                update(db.Dataset)
+                .where(db.Dataset.id == id)
+                .values(general=None, epsg_code=None, bounding_box=None)
+            )
 
 
 class DatasetDataSelector(EntityDataSelector):

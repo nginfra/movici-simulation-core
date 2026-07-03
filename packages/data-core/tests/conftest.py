@@ -21,8 +21,10 @@ from movici_data_core.domain_model import (
     ModelType,
     Scenario,
     ScenarioDataset,
+    ScenarioModel,
     SimulationInfo,
     Update,
+    UpdateModel,
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
@@ -193,11 +195,10 @@ async def create_update(
     async def _create_update(timestamp, iteration, ids, array, scenario_id=None):
         scenario_id = scenario_id or a_scenario.id
         update = Update(
-            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
             timestamp=timestamp,
             iteration=iteration,
-            model_name=a_scenario.models[0]["name"],
-            model_type=a_scenario.models[0]["type"],
+            model=UpdateModel(name=a_scenario.models[0].name, type=a_scenario.models[0].type),
             data={
                 an_entity_type.name: {
                     "id": {"data": np.asarray(ids)},
@@ -278,25 +279,24 @@ async def a_scenario(
         description="Scenario for testing",
         epsg_code=28992,
         simulation_info=SimulationInfo.default(),
-        datasets=[
-            {
-                "name": a_dataset.name,
-                "type": a_dataset.dataset_type.name,
-            }
-        ],
+        datasets=[ScenarioDataset.from_dataset(a_dataset)],
         models=[
-            {
-                "name": "model1",
-                "type": default_model_types[0].name,
-                "dataset": a_dataset.name,
-                "entity_group": "transport_nodes",
-                "attribute": "id",
-            },
-            {
-                "name": "model2",
-                "type": default_model_types[1].name,
-                "field": "value",
-            },
+            ScenarioModel(
+                name="model1",
+                type=default_model_types[0],
+                config={
+                    "dataset": a_dataset.name,
+                    "entity_group": "transport_nodes",
+                    "attribute": "id",
+                },
+            ),
+            ScenarioModel(
+                name="model2",
+                type=default_model_types[1],
+                config={
+                    "field": "value",
+                },
+            ),
         ],
     )
     scenario_id = await create_scenario(scenario)

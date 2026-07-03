@@ -7,32 +7,30 @@ from uuid import UUID
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
+from movici_data_core import bounding_box
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
+    BoundingBox,
     Scenario,
-    ScenarioDataset,
     ScenarioModel,
     ScenarioStatus,
 )
 from movici_data_core.exceptions import InvalidAction, MoviciValidationError, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
-from movici_simulation_core.validate import MoviciDataRefInfo
 
 from .common import SQLResourceRepository
 
 
-# TODO: implement a `get_bounding_box` function that looks up the bounding boxes for all scnenario
-# datasets and updates and combines it into one. Question: what if the datasets have different CRS?
 @dataclasses.dataclass
 class ScenarioRepository(SQLResourceRepository):
-    """A"""
-
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
 
     def for_id(self, scenario_id: UUID):
         """Bind the ScenarioRepository to a specific scenario"""
-        self._ensure_no_scenario_id()
+        if scenario_id == self.scenario_id:
+            return self
+        self._ensure_not_single_scenario_mode()
         return dataclasses.replace(self, scenario_id=scenario_id)
 
     def _ensure_workspace_id(self) -> UUID:
@@ -45,8 +43,8 @@ class ScenarioRepository(SQLResourceRepository):
             raise ValueError("ScenarioRepository.scenario_id is required")
         return self.scenario_id
 
-    def _ensure_no_scenario_id(self):
-        if self.scenario_id is not None:
+    def _ensure_not_single_scenario_mode(self):
+        if self.options.mode == db.DatabaseMode.SINGLE_SCENARIO:
             raise InvalidAction("Unsupported operation for this mode")
 
     async def list(self) -> list[Scenario]:
@@ -85,6 +83,10 @@ class ScenarioRepository(SQLResourceRepository):
             db.Scenario.workspace_id == workspace_id, db.Scenario.name == name
         )
 
+    async def exists(self):
+        id = self._ensure_scenario_id()
+        return await self._exists(db.Scenario.id == id)
+
     async def get_by_name(self, name: str) -> Scenario | None:
         """Get a scenario by name, in the active workspace"""
         workspace_id = self._ensure_workspace_id()
@@ -93,7 +95,8 @@ class ScenarioRepository(SQLResourceRepository):
         )
         if record is None:
             return None
-        return self._load_full_scenario(record)
+        bounding_box = await self._get_bounding_box(record.id)
+        return self._load_full_scenario(record, bounding_box=bounding_box)
 
     async def get(self) -> Scenario | None:
         """Get the active scenario from the database
@@ -104,7 +107,24 @@ class ScenarioRepository(SQLResourceRepository):
         record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
         if record is None:
             return None
-        return self._load_full_scenario(record)
+        bounding_box = await self._get_bounding_box(record.id)
+        return self._load_full_scenario(record, bounding_box=bounding_box)
+
+    async def _get_bounding_box(self, scenario_id: UUID):
+        bboxs_from_datasets = await self.session.scalars(
+            select(db.Dataset.bounding_box)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == scenario_id)
+        )
+        bboxs_from_updates = await self.session.scalars(
+            select(db.Update.bounding_box)
+            .where(db.Update.scenario_id == scenario_id)
+            .where(db.Update.bounding_box.isnot(None))
+        )
+        return bounding_box.calculate_new_bounding_box(
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_datasets),
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
+        )
 
     async def delete(self):
         """Delete de active scenario, if it exists"""
@@ -121,7 +141,7 @@ class ScenarioRepository(SQLResourceRepository):
         :return: the newly created Scenario UUID
         """
 
-        self._ensure_no_scenario_id()
+        self._ensure_not_single_scenario_mode()
         workspace_id = self._ensure_workspace_id()
         scenario_id = await self.session.scalar(
             insert(db.Scenario)
@@ -193,9 +213,12 @@ class ScenarioRepository(SQLResourceRepository):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []
         if obj.datasets:
-            scenario_datasets = await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset(ds["name"], ds["type"]) for ds in obj.datasets]
-            )
+            try:
+                scenario_datasets = await repository.datasets.ensure_scenario_datasets(
+                    obj.datasets
+                )
+            except MoviciValidationError as e:
+                raise MoviciValidationError.from_errors(e, path="datasets") from e
             await self.session.execute(
                 insert(db.ScenarioDataset),
                 [
@@ -207,7 +230,7 @@ class ScenarioRepository(SQLResourceRepository):
             return
 
         model_types = await self.all_data.model_types.ensure_model_types(
-            [model["type"] for model in obj.models if "type" in model]
+            [model.type for model in obj.models]
         )
 
         validator = validator.for_scenario(scenario_datasets, model_types)
@@ -216,12 +239,9 @@ class ScenarioRepository(SQLResourceRepository):
         except MoviciValidationError as e:
             raise MoviciValidationError.from_errors(e, path="models") from e
 
-        # In the previous step where we create the model_type list, there is the possibility of
-        # a model config that does not specify a type, and we potentially end up with a list of
-        # model_types that is shorter that the number of scenario_models. However, validation must
-        # have caught this and raise an error if a model does not have a "type" field. So we
-        # can assert that we always have the correct length of lists here
-        assert len(scenario_models) == len(model_types)
+        # both self.all_data.model_types.ensure_model_types and validator.process_model_configs
+        # return a list the length of obj.models. Let's assert that to be absolutely sure
+        assert len(scenario_models) == len(model_types) == len(obj.models)
         scenario_model_records = await self.session.scalars(
             insert(db.ScenarioModel).returning(db.ScenarioModel),
             [
@@ -249,43 +269,18 @@ class ScenarioRepository(SQLResourceRepository):
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
     @classmethod
-    def _load_full_scenario(cls, scenario: db.Scenario) -> Scenario:
+    def _load_full_scenario(cls, scenario: db.Scenario, bounding_box: BoundingBox) -> Scenario:
         return dataclasses.replace(
             scenario.to_domain(),
+            bounding_box=bounding_box,
             datasets=[
-                cls._load_scenario_dataset(ds)
-                for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
+                ds.to_domain() for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
             ],
             models=[
-                cls._load_scenario_model(model)
+                model.to_domain()
                 for model in sorted(scenario.models, key=lambda model: model.sequence)
             ],
         )
-
-    @staticmethod
-    def _load_scenario_dataset(scenario_dataset: db.ScenarioDataset):
-        return {
-            "id": scenario_dataset.dataset_id,
-            "name": scenario_dataset.dataset.name,
-            "type": scenario_dataset.dataset.dataset_type.name,
-        }
-
-    @classmethod
-    def _load_scenario_model(cls, scenario_model: db.ScenarioModel):
-        result = copy.deepcopy(scenario_model.config)
-        for data_ref in scenario_model.references:
-            value = None
-            if data_ref.dataset is not None:
-                value = data_ref.dataset.name
-            elif data_ref.entity_type is not None:
-                value = data_ref.entity_type.name
-            elif data_ref.attribute_type is not None:
-                value = data_ref.attribute_type.name
-            MoviciDataRefInfo.from_path_string(data_ref.path, value).set_value(result)
-
-        result["name"] = scenario_model.name
-        result["type"] = scenario_model.model_type.name
-        return result
 
     @staticmethod
     def _stripped_config(scenario_model: ScenarioModel):
