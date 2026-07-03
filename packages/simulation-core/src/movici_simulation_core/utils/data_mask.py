@@ -22,7 +22,6 @@ def validate_mask(data_mask: t.Optional[dict]):
         if df is None:
             return True
 
-        # noinspection PyTypeHints
         if not len(df) or not isinstance(df, shape[depth]):
             return False
         if isinstance(df, dict):
@@ -56,7 +55,7 @@ def ensure_id(mask: t.List[str]):
 
 def masks_overlap(pub: t.Optional[dict], sub: t.Optional[dict]):
     """calculates whether there is overlap between the pub and sub filters of two models. This
-    function assumes that the two filters have been validated using `validate_filter`
+    function assumes that the two filters have been validated using `validate_mask`
     """
     if pub == {} or sub == {}:
         return False
