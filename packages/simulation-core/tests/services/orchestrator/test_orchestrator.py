@@ -11,6 +11,7 @@ from movici_simulation_core.messages import (
     NewTimeMessage,
     QuitMessage,
     RegistrationMessage,
+    RemapMessage,
     ResultMessage,
     UpdateMessage,
     UpdateSeriesMessage,
@@ -28,6 +29,7 @@ from movici_simulation_core.services.orchestrator.context import (
 from movici_simulation_core.services.orchestrator.fsm import FSM
 from movici_simulation_core.services.orchestrator.states import StartInitializingPhase
 from movici_simulation_core.settings import Settings
+from movici_simulation_core.types import Priority
 
 
 @pytest.fixture
@@ -732,4 +734,126 @@ def test_acknowledge_message_doesnt_trigger_pending_model_when_dependency_should
         ("a", QuitMessage()),
         ("b", QuitMessage()),
         ("c", QuitMessage()),
+    ]
+
+
+def test_sends_correct_remap_messages(run_orchestrator):
+    results = run_orchestrator(
+        ["pub_a", "pub_b", "combiner", "sub"],
+        [
+            (
+                "pub_a",
+                RegistrationMessage(
+                    pub={"ds": {"eg": ["attr"]}}, sub={}, priority=Priority.REGULAR
+                ),
+            ),
+            (
+                "pub_b",
+                RegistrationMessage(
+                    pub={"ds": {"eg": ["attr"]}}, sub={}, priority=Priority.REGULAR
+                ),
+            ),
+            (
+                "combiner",
+                RegistrationMessage(
+                    pub={"ds": {"eg": ["attr"]}}, sub={}, priority=Priority.SOLVER_HELPER
+                ),
+            ),
+            ("sub", RegistrationMessage(pub={}, sub={"ds": {"eg": ["attr"]}})),
+            # Models respond to remap
+            ("pub_a", AcknowledgeMessage()),
+            ("pub_b", AcknowledgeMessage()),
+            ("combiner", AcknowledgeMessage()),
+            # t=0
+            # models respond to new time
+            ("pub_a", AcknowledgeMessage()),
+            ("pub_b", AcknowledgeMessage()),
+            ("combiner", AcknowledgeMessage()),
+            ("sub", AcknowledgeMessage()),
+            # models send results
+            ("pub_a", ResultMessage("key1", "addr")),
+            ("pub_b", ResultMessage("key2", "addr")),
+            ("sub", ResultMessage()),
+            ("combiner", ResultMessage("key3", "addr")),
+            # combiner responds to update from pub_a and pub_b
+            # sub responds to update from combiner
+            ("sub", ResultMessage()),
+            # all models done, we terminate the simulation and models repond to quit
+            ("pub_a", AcknowledgeMessage()),
+            ("pub_b", AcknowledgeMessage()),
+            ("combiner", AcknowledgeMessage()),
+            ("sub", AcknowledgeMessage()),
+        ],
+    )
+    assert results == [
+        # REMAP
+        (
+            "combiner",
+            RemapMessage(
+                sub={
+                    "ds": {
+                        "eg": {
+                            "attr:pub_a:i": "attr",
+                            "attr:pub_b:i": "attr",
+                        }
+                    }
+                }
+            ),
+        ),
+        ("pub_a", RemapMessage(pub={"ds": {"eg": {"attr": "attr:pub_a:i"}}})),
+        ("pub_b", RemapMessage(pub={"ds": {"eg": {"attr": "attr:pub_b:i"}}})),
+        # t=0 new time
+        ("pub_a", NewTimeMessage(0)),
+        ("pub_b", NewTimeMessage(0)),
+        ("combiner", NewTimeMessage(0)),
+        ("sub", NewTimeMessage(0)),
+        # t=0 update
+        ("pub_a", UpdateMessage(0)),
+        ("pub_b", UpdateMessage(0)),
+        ("sub", UpdateMessage(0)),
+        # forward updates to combiner and sub
+        (
+            "combiner",
+            UpdateSeriesMessage(
+                [
+                    UpdateMessage(0),
+                    UpdateMessage(0, "key1", "addr"),
+                    UpdateMessage(0, "key2", "addr"),
+                ]
+            ),
+        ),
+        ("sub", UpdateMessage(0, "key3", "addr")),
+        # all models done, quit
+        ("pub_a", QuitMessage()),
+        ("pub_b", QuitMessage()),
+        ("combiner", QuitMessage()),
+        ("sub", QuitMessage()),
+    ]
+
+
+def test_gracefully_exists_on_ownership_collision(run_orchestrator):
+    results = run_orchestrator(
+        ["pub_a", "pub_b"],
+        [
+            (
+                "pub_a",
+                RegistrationMessage(
+                    pub={"ds": {"eg": ["attr"]}}, sub={}, priority=Priority.REGULAR
+                ),
+            ),
+            (
+                "pub_b",
+                RegistrationMessage(
+                    pub={"ds": {"eg": ["attr"]}}, sub={}, priority=Priority.REGULAR
+                ),
+            ),
+            # Models respond to quit
+            ("pub_a", AcknowledgeMessage()),
+            ("pub_b", AcknowledgeMessage()),
+        ],
+    )
+    assert results == [
+        # ERROR: two models publish the same attribute at the same highest priority
+        ("pub_a", QuitMessage(due_to_failure=True)),
+        ("pub_b", QuitMessage(due_to_failure=True)),
     ]

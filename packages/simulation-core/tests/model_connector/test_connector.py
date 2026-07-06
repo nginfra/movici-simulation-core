@@ -4,7 +4,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.core.types import ModelAdapterBase, RemapDecision
+from movici_simulation_core.core.types import ModelAdapterBase
 from movici_simulation_core.exceptions import InvalidMessage, StreamDone
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
@@ -32,7 +32,7 @@ from movici_simulation_core.model_connector.init_data import (
     InitDataHandler,
 )
 from movici_simulation_core.networking.client import Sockets
-from movici_simulation_core.types import InternalSerializationStrategy
+from movici_simulation_core.types import AutoRemap, InternalSerializationStrategy
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ class TestConnectorStreamHandler:
     @pytest.fixture
     def connector(self):
         mock = Mock(ModelConnector)
-        mock.initialize.return_value = RegistrationMessage({}, {})
+        mock.initialize.return_value = RegistrationMessage({}, {}, 1)
         return mock
 
     @pytest.fixture
@@ -69,7 +69,7 @@ class TestConnectorStreamHandler:
 
     def test_sends_registration_on_initialize(self, stream_handler, connector, stream):
         stream_handler.initialize()
-        assert stream.send.call_args == call(RegistrationMessage({}, {}))
+        assert stream.send.call_args == call(RegistrationMessage({}, {}, 1))
 
     @pytest.mark.parametrize(
         "msg, method",
@@ -162,7 +162,7 @@ class TestModelConnector:
 
     def test_initialize_returns_registration_message(self, connector, model, data_mask):
         msg = connector.initialize()
-        assert msg == RegistrationMessage(**data_mask)
+        assert msg == RegistrationMessage(**data_mask, priority=10)
 
     def test_new_time_calls_model_with_new_time(self, connector, model):
         connector.new_time(NewTimeMessage(42))
@@ -240,7 +240,7 @@ class TestModelConnectorRemap:
         mock = Mock(ModelAdapterBase)
         mock.initialize.return_value = data_mask
         mock.update.return_value = ({"ds": {"eg": {"speed": [1, 2, 3], "id": [10, 20, 30]}}}, None)
-        mock.remap.return_value = RemapDecision()
+        mock.remap.return_value = AutoRemap.default()
         mock.priority = 10
         return mock
 
@@ -330,7 +330,7 @@ class TestModelConnectorRemap:
 
         # The default Model.remap on a Mock returns a Mock — set it to actual None.
         model.model = Mock()
-        model.model.remap = Mock(return_value=None)
+        model.model.remap.return_value = AutoRemap.default()
         model.remap.side_effect = real_decide
         with pytest.raises(RemapError) as exc_info:
             initialized_connector.remap(
@@ -338,7 +338,7 @@ class TestModelConnectorRemap:
             )
         assert "many-to-one" in str(exc_info.value)
 
-    def test_many_to_one_sub_with_model_returning_true_installs_no_middleware(
+    def test_many_to_one_sub_with_model_returning_autoremap_none_installs_no_middleware(
         self, initialized_connector, model, update_handler
     ):
         # Model takes full responsibility — connector does not rename, but the data_mask
@@ -347,20 +347,20 @@ class TestModelConnectorRemap:
             return ModelAdapterBase.remap(model, msg)
 
         model.model = Mock()
-        model.model.remap = Mock(return_value=True)
+        model.model.remap = Mock(return_value=AutoRemap.none())
         model.remap.side_effect = real_decide
         update_handler.get.return_value = json.dumps(
             {"ds": {"eg": {"a:m1:i": [1], "a:m2:i": [2]}}}
         ).encode()
         initialized_connector.remap(
-            RemapMessage(sub={"ds": {"eg": {"a:m1:i": "a", "a:m2:i": "a"}}})
+            RemapMessage(sub={"ds": {"eg": {"a:m1:i": "traffic", "a:m2:i": "traffic"}}})
         )
         initialized_connector.update(UpdateMessage(1, "key", "addr"))
         # data_mask was updated to subscribe to the variants alongside the existing
         # ``traffic`` subscription, since the REMAP did not list ``traffic`` as an original
         # to drop.
         mask = update_handler.get.call_args.kwargs["mask"]
-        assert set(mask["ds"]["eg"]) == {"a:m1:i", "a:m2:i", "traffic"}
+        assert set(mask["ds"]["eg"]) == {"a:m1:i", "a:m2:i"}
         # but the model received raw :i keys (no rename middleware installed)
         received = model.update.call_args.kwargs["data"]
         assert received == {"ds": {"eg": {"a:m1:i": [1], "a:m2:i": [2]}}}
@@ -380,7 +380,7 @@ class TestModelConnectorRemap:
     ):
         # A connector initialised with a wildcard sub (``sub=None``) must keep that
         # wildcard after REMAP, otherwise it silently loses every attribute that wasn't
-        # named in the REMAP. Adversarial-review critical finding.
+        # named in the REMAP.
         model.initialize.return_value = {"pub": {}, "sub": None}
         connector = ModelConnector(
             model,
@@ -392,27 +392,6 @@ class TestModelConnectorRemap:
         connector.remap(RemapMessage(sub={"ds": {"eg": {"a:m1:i": "a"}}}))
         assert connector.data_mask["sub"] is None
 
-    def test_pub_rename_rejects_non_dict_model_output(
-        self, initialized_connector, model, update_handler
-    ):
-        # If a model returns a non-dict at the entity-group level the connector must fail
-        # closed instead of serialising the corruption downstream. Adversarial-review
-        # major finding.
-        model.update.return_value = ({"ds": {"eg": ["bad", "data"]}}, None)
-        initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
-        with pytest.raises(ValueError, match="malformed update at"):
-            initialized_connector.update(UpdateMessage(1))
-
-    def test_sub_rename_rejects_non_dict_incoming_data(
-        self, initialized_connector, model, update_handler
-    ):
-        update_handler.get.return_value = json.dumps({"ds": {"eg": [1, 2, 3]}}).encode()
-        initialized_connector.remap(
-            RemapMessage(sub={"ds": {"eg": {"traffic:other:i": "traffic"}}})
-        )
-        with pytest.raises(ValueError, match="malformed update at"):
-            initialized_connector.update(UpdateMessage(1, "key", "addr"))
-
     def test_remap_failure_propagates(self, initialized_connector, model):
         # A failure while handling a REMAP must propagate out of the connector so the
         # runner can turn it into an ErrorMessage and terminate the simulation, rather than
@@ -420,38 +399,6 @@ class TestModelConnectorRemap:
         model.remap.side_effect = RuntimeError("boom in remap")
         with pytest.raises(RuntimeError, match="boom in remap"):
             initialized_connector.remap(RemapMessage(pub={"ds": {"eg": {"speed": "speed:m:i"}}}))
-
-
-class TestModelAdapterBasePriority:
-    """The ``ModelAdapterBase.priority`` property is the single boundary where the
-    user-supplied priority is validated before it reaches the orchestrator. See issue #127.
-    """
-
-    def test_returns_inner_model_priority(self):
-        class _M:
-            priority = 20
-
-        adapter = Mock(ModelAdapterBase)
-        adapter.model = _M()
-        assert ModelAdapterBase.priority.fget(adapter) == 20
-
-    def test_rejects_non_int_priority(self):
-        class _M:
-            priority = "high"
-
-        adapter = Mock(ModelAdapterBase)
-        adapter.model = _M()
-        with pytest.raises(TypeError, match="priority must be int"):
-            ModelAdapterBase.priority.fget(adapter)
-
-    def test_rejects_bool_priority(self):
-        class _M:
-            priority = True
-
-        adapter = Mock(ModelAdapterBase)
-        adapter.model = _M()
-        with pytest.raises(TypeError, match="priority must be int"):
-            ModelAdapterBase.priority.fget(adapter)
 
 
 class TestUpdateHandler:

@@ -1,7 +1,9 @@
-import copy
+import functools
 import typing as t
 
 from movici_simulation_core.core.internal_attribute import is_internal_attribute
+from movici_simulation_core.messages import RemapMessage
+from movici_simulation_core.types import DataMask
 
 
 def validate_mask(data_mask: t.Optional[dict]):
@@ -78,91 +80,6 @@ def ensure_id(mask: t.List[str]):
         mask.append("id")
 
 
-def apply_remap_to_pub_mask(
-    pub_mask: t.Optional[dict],
-    remap_pub: t.Optional[t.Mapping[str, t.Mapping[str, t.Mapping[str, str]]]],
-) -> t.Optional[dict]:
-    """Return the new pub mask after applying a REMAP pub section
-    (``{dataset: {entity_group: {original: variant}}}``). Each entry replaces ``original``
-    with ``variant`` in the corresponding ``[dataset][entity_group]`` attribute list. The
-    orchestrator uses this to keep its in-memory view of each model's publish mask in sync
-    after sending a REMAP — so ``determine_interdependency`` sees the post-REMAP graph.
-    See issue #127.
-
-    A wildcard ``pub_mask`` (``None``) is preserved unchanged — REMAPs cannot reach a model
-    whose pub mask is fully open, since the planner only operates on explicit publishers.
-    Malformed entries (a non-list, non-None value where an attribute list is expected) raise
-    ``ValueError`` rather than silently corrupting the mask.
-    """
-    if not remap_pub:
-        return pub_mask
-    if pub_mask is None:
-        return None
-    new_mask: dict = copy.deepcopy(pub_mask) if isinstance(pub_mask, dict) else {}
-    for ds, entity_groups in remap_pub.items():
-        ds_section = new_mask.setdefault(ds, {})
-        for eg, mapping in entity_groups.items():
-            current = _coerce_attribute_list(ds_section.get(eg), ds, eg)
-            originals_to_drop = {
-                original for original, variant in mapping.items() if variant != original
-            }
-            new_attrs = [a for a in current if a not in originals_to_drop]
-            for variant in mapping.values():
-                if variant not in new_attrs:
-                    new_attrs.append(variant)
-            ds_section[eg] = new_attrs
-    return new_mask
-
-
-def apply_remap_to_sub_mask(
-    sub_mask: t.Optional[dict],
-    remap_sub: t.Optional[t.Mapping[str, t.Mapping[str, t.Mapping[str, str]]]],
-) -> t.Optional[dict]:
-    """Return the new sub mask after applying a REMAP sub section
-    (``{dataset: {entity_group: {variant: original}}}``). Each entry adds ``variant`` and
-    drops ``original``; back-propagation entries (``variant == original``) keep the name.
-    Used by both the orchestrator and the connector. See issue #127.
-
-    A wildcard ``sub_mask`` (``None``) is preserved unchanged — the connector keeps its
-    "subscribe to everything" reach, and the inbound rename middleware will translate the
-    variant keys it cares about transparently. Without this short-circuit a REMAP would
-    silently narrow a wildcard subscription to only the named variants.
-    """
-    if not remap_sub:
-        return sub_mask
-    if sub_mask is None:
-        return None
-    new_mask: dict = copy.deepcopy(sub_mask) if isinstance(sub_mask, dict) else {}
-    for ds, entity_groups in remap_sub.items():
-        ds_section = new_mask.setdefault(ds, {})
-        for eg, mapping in entity_groups.items():
-            current = _coerce_attribute_list(ds_section.get(eg), ds, eg)
-            originals_to_drop = {
-                original for variant, original in mapping.items() if variant != original
-            }
-            new_attrs = [a for a in current if a not in originals_to_drop]
-            for variant in mapping.keys():
-                if variant not in new_attrs:
-                    new_attrs.append(variant)
-            ds_section[eg] = new_attrs
-    return new_mask
-
-
-def _coerce_attribute_list(existing, dataset: str, entity_group: str) -> t.List[str]:
-    """Return ``existing`` as a list, or an empty list if it is ``None``. Anything else is
-    a malformed mask entry and raises ``ValueError`` — silently dropping data here would
-    let mistakes in pub/sub mask construction propagate as confusing routing errors much
-    later."""
-    if existing is None:
-        return []
-    if isinstance(existing, list):
-        return list(existing)
-    raise ValueError(
-        f"Malformed mask at '{dataset}/{entity_group}': expected list or None, got "
-        f"{type(existing).__name__}"
-    )
-
-
 def masks_overlap(pub: t.Optional[dict], sub: t.Optional[dict]):
     """calculates whether there is overlap between the pub and sub filters of two models. This
     function assumes that the two filters have been validated using `validate_filter`
@@ -182,3 +99,92 @@ def masks_overlap(pub: t.Optional[dict], sub: t.Optional[dict]):
         return False
 
     return helper(pub, sub)
+
+
+def apply_remap_to_data_mask(data_mask: DataMask, remap: RemapMessage) -> DataMask:
+    r"""Return the new datamask mask after applying a RemapMessage. For a 'pub' datamask the remap
+    has the shape ``{dataset: {entity_group: {original: variant}}}``).For a 'sub' datamask the
+    remap has the shape ``{dataset: {entity_group: {variant: original}}}``). Each entry replaces
+    ``original`` with one or more ``variant``\s in the corresponding ``[dataset][entity_group]``
+    attribute list. For pub data_masks there is a one-to-one mapping between orignal and variants
+    while for sub data_masks an ``original`` may be replaced by multiple ``variant``\s
+
+    A wildcard pub or sub datamask (``None``) is preserved
+    """
+
+    return {
+        "pub": t.cast(dict | None, apply_remap_to_pub_mask(data_mask["pub"], remap.pub)),
+        "sub": t.cast(dict | None, apply_remap_to_sub_mask(data_mask["sub"], remap.sub)),
+    }
+
+
+def _apply_remap(
+    data_mask: dict | None,
+    remap: dict[str, dict[str, dict[str, str]]] | None,
+    kind: t.Literal["pub", "sub"],
+) -> dict | None:
+    """Return the new pub or sub mask after applying its associated REMAP section. PUB masks
+    are only remapped for existing attributes. No additional attributes are added to the data mask.
+
+    For sub masks, every attribute that exists in the remap is added to the data mask, even if the
+    original attribute was not already present in the data mask.
+
+    Wildcard masks (``None``) are preserved at every level in the data mask so that the implicit
+    publications/subscription are not quietly dropped.
+
+    Malformed entries (a non-list, non-None value where an attribute list is expected) raise
+    ``ValueError`` rather than silently corrupting the mask.
+    """
+    is_sub = kind == "sub"
+
+    if not remap or data_mask is None:
+        return data_mask
+    new_mask = {}
+    ds_keys = data_mask.keys() | remap.keys() if is_sub else data_mask.keys()
+    for ds in ds_keys:
+        ds_mask = data_mask.get(ds, {})
+        ds_remap = remap.get(ds, {})
+        if ds_mask is None:
+            new_mask[ds] = None
+            continue
+        ds_mask_new = new_mask[ds] = {}
+
+        eg_keys = ds_mask.keys() | ds_remap.keys() if is_sub else ds_mask.keys()
+        for eg in eg_keys:
+            eg_mask = ds_mask.get(eg, [])
+            eg_remap = ds_remap.get(eg, {})
+            if eg_mask is None:
+                ds_mask_new[eg] = None
+                continue
+
+            if not isinstance(eg_mask, list):
+                raise ValueError(
+                    f"Malformed mask at '{ds}/{eg}': expected list or None, got "
+                    f"{type(eg_mask).__name__}"
+                )
+            eg_mask_new = ds_mask_new[eg] = []
+
+            if not is_sub:
+                eg_mask_new.extend(eg_remap.get(i, i) for i in eg_mask)
+                continue
+
+            # for a sub mask, we need to subscribe to all renamed internal attributes in the mask.
+            # this may be many to one
+            reversed_remap = {}
+            for k, v in eg_remap.items():
+                reversed_remap.setdefault(v, []).append(k)
+
+            # the new sub maks consists of:
+            #  all attributes in the original mask that are not affected by the remap
+            #  the attributes in the original mask that are affected by the remap are completely
+            #    replaced
+            #  any new attributes in the remap are added
+
+            for attr in set(eg_mask) | reversed_remap.keys():
+                eg_mask_new.extend(reversed_remap.get(attr, [attr]))
+
+    return new_mask
+
+
+apply_remap_to_pub_mask = functools.partial(_apply_remap, kind="pub")
+apply_remap_to_sub_mask = functools.partial(_apply_remap, kind="sub")

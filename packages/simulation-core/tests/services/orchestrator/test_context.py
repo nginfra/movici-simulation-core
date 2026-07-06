@@ -2,7 +2,6 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import NewTimeMessage, RemapMessage, UpdateMessage
 from movici_simulation_core.services.orchestrator.context import (
     ConnectedModel,
@@ -10,6 +9,7 @@ from movici_simulation_core.services.orchestrator.context import (
     TimelineController,
 )
 from movici_simulation_core.services.orchestrator.remap import RemapConflictError
+from movici_simulation_core.types import Priority
 from tests.services.orchestrator.test_connected_model import get_model
 
 

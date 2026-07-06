@@ -26,8 +26,8 @@ import typing as t
 from collections import defaultdict
 
 from movici_simulation_core.core.internal_attribute import encode_internal_attribute
-from movici_simulation_core.core.priority import priority_label
 from movici_simulation_core.messages import RemapMessage
+from movici_simulation_core.types import Priority
 
 
 @dataclasses.dataclass(frozen=True)
@@ -55,7 +55,7 @@ class RemapConflictError(RuntimeError):
         self.attribute = attribute
         self.models = tuple(models)
         self.priority = priority
-        label = priority_label(priority)
+        label = Priority.label_for(priority)
         verb = "both" if len(self.models) == 2 else "all"
         super().__init__(
             f"Conflict: models {self._format_models(models)} {verb} publish "

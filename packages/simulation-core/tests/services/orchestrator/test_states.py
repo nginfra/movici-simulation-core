@@ -115,7 +115,20 @@ class TestComputeAndSendRemap(BaseTestState):
         models.compute_remap_plan = compute_mock
         state.run()
         assert all(m.failed for m in models.values())
-        assert context.logger.error.call_count == 1
+
+    def test_conflict_calls_logger(self, state, context):
+        models = ModelCollection(
+            a=ConnectedModel("a", Mock(), Mock()),
+            b=ConnectedModel("b", Mock(), Mock()),
+        )
+        context.models = models
+        context.logger = Mock()
+        compute_mock = Mock(
+            side_effect=RemapConflictError(AttributeRef("ds", "eg", "x"), ["a", "b"], priority=10)
+        )
+        models.compute_remap_plan = compute_mock
+        state.run()
+        assert context.logger.exception.call_count == 1
 
 
 class TestStartRunningPhase(BaseTestState):

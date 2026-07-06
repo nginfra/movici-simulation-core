@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 from itertools import product
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ErrorMessage,
@@ -20,6 +19,7 @@ from movici_simulation_core.messages import (
     UpdateMessage,
     UpdateSeriesMessage,
 )
+from movici_simulation_core.types import Priority
 from movici_simulation_core.utils.data_mask import (
     apply_remap_to_pub_mask,
     apply_remap_to_sub_mask,
@@ -504,7 +504,7 @@ class Done(BaseModelState):
         yield
 
 
-class ModelCollection(dict, t.Dict[bytes, ConnectedModel]):
+class ModelCollection(dict[str, ConnectedModel]):
     @property
     def busy(self):
         return any(model.busy for model in self.values())

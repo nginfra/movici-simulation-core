@@ -74,7 +74,7 @@ class TestWaitingForMessage:
             NewTimeMessage(1),
             UpdateMessage(1),
             QuitMessage(),
-            RegistrationMessage(pub=None, sub=None),
+            RegistrationMessage(pub=None, sub=None, priority=10),
             AcknowledgeMessage(),
             ResultMessage(),
             ErrorMessage(),
@@ -192,7 +192,7 @@ class TestBusyTransitions:
 @pytest.mark.parametrize(
     "state_cls, msg",
     [
-        (Registration, RegistrationMessage(None, None)),
+        (Registration, RegistrationMessage(None, None, priority=10)),
         (NewTime, AcknowledgeMessage()),
         (Updating, ResultMessage()),
     ],
@@ -210,12 +210,12 @@ class TestRegistration:
 
     def test_sets_pub_sub(self, send_message, context):
         pub, sub = {"some": "pub"}, {"some": "sub"}
-        send_message(RegistrationMessage(pub=pub, sub=sub))
+        send_message(RegistrationMessage(pub=pub, sub=sub, priority=10))
         assert context.pub == pub
         assert context.sub == sub
 
     def test_sets_model_to_start(self, send_message, context):
-        send_message(RegistrationMessage(None, None))
+        send_message(RegistrationMessage(None, None, priority=10))
         assert context.timeline.set_model_to_start.call_args == call(context)
 
 

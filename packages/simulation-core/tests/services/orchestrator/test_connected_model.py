@@ -2,7 +2,6 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     NewTimeMessage,
@@ -18,6 +17,7 @@ from movici_simulation_core.services.orchestrator.context import (
     Remapping,
     TimelineController,
 )
+from movici_simulation_core.types import Priority
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def get_model(name="dummy", timeline=None, send=None, **kwargs):
 class TestConnectedModel:
     @pytest.fixture
     def message(self):
-        return RegistrationMessage(None, None)
+        return RegistrationMessage(None, None, 10)
 
     @pytest.fixture
     def subscriber(self, timeline):
@@ -42,7 +42,7 @@ class TestConnectedModel:
             timeline=timeline,
             send=Mock(),
         )
-        model.recv_event(RegistrationMessage(None, None))
+        model.recv_event(RegistrationMessage(None, None, 10))
         model.recv_event(UpdateMessage(0))
         return model
 
@@ -92,7 +92,7 @@ class TestConnectedModel:
             timeline=timeline,
         )
         assert model.next_time is None
-        model.recv_event(RegistrationMessage(None, None))
+        model.recv_event(RegistrationMessage(None, None, 10))
         assert model.next_time == 0
 
     def test_result_message_sets_next_time(self, running_model):
@@ -133,7 +133,7 @@ class TestConnectedModelRemap:
     @pytest.fixture
     def model(self, timeline):
         model = get_model(timeline=timeline)
-        model.recv_event(RegistrationMessage(None, None))
+        model.recv_event(RegistrationMessage(None, None, 10))
         return model
 
     def test_registration_captures_priority(self, timeline):

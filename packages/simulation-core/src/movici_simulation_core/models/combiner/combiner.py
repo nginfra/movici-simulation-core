@@ -28,9 +28,10 @@ from movici_simulation_core.core.attribute import (
     CSRAttribute,
     UniformAttribute,
 )
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.core.schema import AttributeSchema, DataType
 from movici_simulation_core.core.state import TrackedState
+from movici_simulation_core.messages import RemapMessage
+from movici_simulation_core.types import AutoRemap, Priority
 
 _METHODS: t.Dict[str, t.Callable[[np.ndarray], np.ndarray]] = {
     "sum": lambda stacked: np.sum(stacked, axis=0),
@@ -117,12 +118,14 @@ class Combiner(TrackedModel, name="combiner"):
         self.output.array[:] = combined
         return None
 
-    def remap(self, payload: dict) -> t.Optional[bool]:
+    def remap(self, payload: RemapMessage) -> AutoRemap:
         """Register the internal-variant attribute fields the orchestrator instructs us to
         subscribe to. We return ``False`` so the adapter still installs the rest of the
         REMAP plumbing (pub-side, sub-side if it were one-to-one), but the connector will
         skip the sub-rename middleware on its own because the sub remap is many-to-one."""
-        sub = payload.get("sub") or {}
+        sub = payload.sub
+        if sub is None:
+            return AutoRemap.default()
         for ds, entity_groups in sub.items():
             for eg, mapping in entity_groups.items():
                 for variant in mapping.keys():
@@ -134,4 +137,4 @@ class Combiner(TrackedModel, name="combiner"):
                             f"Found CSR variant at '{ds}/{eg}/{variant}'."
                         )
                     self.inputs.append(attr)
-        return False
+        return AutoRemap(pub=True, sub=False)

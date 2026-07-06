@@ -1,8 +1,8 @@
+import json
 from pathlib import Path
 
 import pytest
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import (
     AcknowledgeMessage,
     ClearDataMessage,
@@ -21,12 +21,13 @@ from movici_simulation_core.messages import (
     dump_message,
     load_message,
 )
+from movici_simulation_core.types import Priority
 
 
 @pytest.mark.parametrize(
     "message",
     [
-        RegistrationMessage(pub={"a": None}, sub={"b": None}),
+        RegistrationMessage(pub={"a": None}, sub={"b": None}, priority=10),
         RegistrationMessage(
             pub={"a": None}, sub={"b": None}, priority=int(Priority.SOLVER_HELPER)
         ),
@@ -110,15 +111,9 @@ def test_error_on_invalid_message_content():
         ResultMessage(key=None, address="something")
 
 
-def test_registration_message_rejects_non_int_priority():
-    with pytest.raises(TypeError, match="priority must be int"):
-        RegistrationMessage(pub=None, sub=None, priority="high")
-    with pytest.raises(TypeError, match="priority must be int"):
-        RegistrationMessage(pub=None, sub=None, priority=10.5)
-    with pytest.raises(TypeError, match="priority must be int"):
-        # ``bool`` is a subclass of ``int`` — accepting it would silently let
-        # ``priority=True`` register as priority 1.
-        RegistrationMessage(pub=None, sub=None, priority=True)
+def test_registration_message_casts_priority_to_int():
+    serialized = RegistrationMessage(pub=None, sub=None, priority=Priority.REGULAR).to_bytes()
+    assert json.loads(serialized[0])["priority"] == int(Priority.REGULAR)
 
 
 def test_registration_message_rejects_negative_priority():

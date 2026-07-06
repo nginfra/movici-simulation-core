@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import abc
-import dataclasses
 import logging
 import typing as t
 from pathlib import Path
@@ -18,10 +17,9 @@ from ..messages import (
 )
 from ..networking.stream import BaseStream, MessageRouterSocket
 from ..settings import Settings
-from ..types import DataMask, FileType, Result, UpdateData
+from ..types import AutoRemap, DataMask, FileType, Priority, Result, UpdateData
 from ..utils.path import DatasetPath
 from .attribute_spec import AttributeSpec
-from .priority import Priority
 
 T = t.TypeVar("T")
 
@@ -66,7 +64,7 @@ class Model(Plugin):
     ) = None
     # Publishing priority for ownership resolution; solver helpers override this. See
     # issue #127.
-    priority: t.ClassVar[int] = int(Priority.REGULAR)
+    priority: t.ClassVar[int] = Priority.REGULAR
 
     def __init__(self, model_config: dict, validate_config=True):
         if validate_config:
@@ -88,7 +86,7 @@ class Model(Plugin):
     def get_adapter(self) -> t.Type[ModelAdapterBase]:
         raise NotImplementedError
 
-    def remap(self, payload: dict) -> t.Optional[bool]:
+    def remap(self, payload: RemapMessage) -> AutoRemap:
         """Optional hook for handling a ``REMAP`` command. The default returns ``None`` to
         indicate the model has not implemented this; the adapter then either installs
         transparent rename middleware or raises :class:`RemapError` if the REMAP requires
@@ -96,10 +94,9 @@ class Model(Plugin):
         REMAP (the adapter installs no middleware), or ``False`` to let the adapter install
         its default middleware. See issue #127.
 
-        :param payload: the deserialised REMAP payload — a ``dict`` with optional ``pub``
-            and ``sub`` keys.
+        :param payload: the RemapMessage.
         """
-        return None
+        return AutoRemap.default()
 
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
@@ -131,31 +128,6 @@ class Extensible:
         pass
 
 
-@dataclasses.dataclass
-class RemapDecision:
-    """Decision returned by :meth:`ModelAdapterBase.remap` telling the connector which
-    rename middleware to install. See issue #127.
-
-    Reachable combinations from the default :meth:`ModelAdapterBase.remap` flow:
-
-    * ``Model.remap`` returns ``True`` → ``(install_pub_rename=False, install_sub_rename=False)``
-      (the model handles everything itself).
-    * ``Model.remap`` returns ``None`` and the sub remap is one-to-one →
-      ``(install_pub_rename=True, install_sub_rename=True)`` (the connector handles
-      both sides transparently).
-    * ``Model.remap`` returns ``False``, or ``None`` with a many-to-one sub remap →
-      ``(install_pub_rename=True, install_sub_rename=False)`` (the connector handles
-      the pub side, the model is responsible for the sub-side data wrangling).
-
-    The fourth combination — ``(install_pub_rename=False, install_sub_rename=True)`` —
-    is intentionally not reachable through ``Model.remap``; subclassing
-    :class:`ModelAdapterBase` is the way to produce it for unusual cases.
-    """
-
-    install_pub_rename: bool = True
-    install_sub_rename: bool = True
-
-
 class ModelAdapterBase(abc.ABC):
     model: Model
     settings: Settings
@@ -170,17 +142,8 @@ class ModelAdapterBase(abc.ABC):
     def priority(self) -> int:
         """The model's publishing priority, exposed to the connector so it can be written
         into the ``RegistrationMessage`` sent to the orchestrator. See issue #127.
-
-        Validated here rather than at every consumer so a misconfigured model fails fast
-        at registration time with a clear error instead of crashing the orchestrator's
-        priority comparison much later.
         """
-        value = getattr(self.model, "priority", int(Priority.REGULAR))
-        if isinstance(value, bool) or not isinstance(value, int):
-            raise TypeError(
-                f"{type(self.model).__name__}.priority must be int, got {type(value).__name__}"
-            )
-        return value
+        return self.model.priority
 
     @abc.abstractmethod
     def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
@@ -202,45 +165,30 @@ class ModelAdapterBase(abc.ABC):
     def close(self, message: QuitMessage):
         raise NotImplementedError
 
-    def remap(self, message: RemapMessage) -> RemapDecision:
+    def remap(self, message: RemapMessage) -> AutoRemap:
         """Handle a ``REMAP`` command by consulting the inner model and deciding what
         rename middleware the connector should install. See issue #127.
 
         The default implementation:
 
         * delegates to ``self.model.remap(payload)`` first;
-        * if the model returns ``True`` (it took full responsibility) — installs no rename
+        * if the model returns ``True`` (it took full responsibility) - installs no rename
           middleware;
-        * if the model returns ``False`` — installs the full set of renames implied by the
-          payload;
-        * if the model returns ``None`` (no override) — installs full middleware for a
+        * if the model returns ``False`` - installs full middleware for a
           one-to-one sub remap, and raises :class:`RemapError` if any sub entry is
           many-to-one (multiple variants resolving to the same original) since that case
           fundamentally requires a model-level decision the adapter cannot make.
         """
-        payload = {"pub": message.pub, "sub": message.sub}
-        result = self.model.remap(payload)
-        if result is True:
-            return RemapDecision(install_pub_rename=False, install_sub_rename=False)
-        many_to_one = _sub_has_many_to_one(message.sub)
-        if result is None and many_to_one:
+        result = self.model.remap(message)
+        if result.sub and _sub_has_many_to_one(message.sub):
             raise RemapError(
                 f"Model '{type(self.model).__name__}' received a many-to-one sub-remap "
-                "but its remap() returned None (the default). Override "
-                f"`{type(self.model).__name__}.remap` to return True (the model handles "
-                "the many-to-one mapping itself, e.g. by registering the variant attribute "
-                "fields in its state) or False (the connector still installs the pub-side "
-                "rename middleware but you take responsibility for the sub side)."
+                "but its remap() returned AutoRemap(sub=True). Override "
+                f"`{type(self.model).__name__}.remap` to return AutoRemap(sub=True) (the model "
+                "handles the many-to-one mapping itself, e.g. by registering the variant "
+                " attribute fields in its state)"
             )
-        # result is False or None (with one-to-one sub): install middleware. For a
-        # many-to-one sub the model returned False — it has accepted responsibility on the
-        # data side but still wants the connector to manage pub renames. The connector
-        # never installs sub-rename middleware for many-to-one (the rename would collide),
-        # so toggle that off explicitly.
-        return RemapDecision(
-            install_pub_rename=True,
-            install_sub_rename=not many_to_one,
-        )
+        return result
 
     def set_schema(self, schema):
         pass
@@ -249,18 +197,13 @@ class ModelAdapterBase(abc.ABC):
 def _sub_has_many_to_one(sub_section: t.Optional[dict]) -> bool:
     """Return True if any entity group in the sub section has more than one variant
     resolving to the same original attribute name."""
-    if not sub_section:
+    if sub_section is None:
         return False
-    for entity_groups in sub_section.values():
-        if not entity_groups:
-            continue
-        for mapping in entity_groups.values():
-            if not mapping:
-                continue
-            originals = list(mapping.values())
-            if len(originals) != len(set(originals)):
-                return True
-    return False
+    return any(
+        len(attrs) != len(set(attrs.values()))
+        for eg in sub_section.values()
+        for attrs in eg.values()
+    )
 
 
 class InitDataHandler(t.Protocol):

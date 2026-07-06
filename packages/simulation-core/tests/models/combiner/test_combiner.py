@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import RemapMessage
 from movici_simulation_core.models.combiner import Combiner
 from movici_simulation_core.testing.model_tester import ModelTester
+from movici_simulation_core.types import Priority
 
 
 @pytest.fixture

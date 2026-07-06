@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from movici_simulation_core.core.priority import Priority
 from movici_simulation_core.messages import RemapMessage
 from movici_simulation_core.services.orchestrator.remap import (
     ModelRegistration,
     RemapConflictError,
     compute_remap_plan,
 )
+from movici_simulation_core.types import Priority
 
 
 def _reg(name, pub=None, sub=None, priority=int(Priority.REGULAR)):

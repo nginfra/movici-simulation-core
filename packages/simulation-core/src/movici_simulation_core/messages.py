@@ -5,7 +5,7 @@ import json
 import typing as t
 from pathlib import Path
 
-from movici_simulation_core.core.priority import Priority
+from movici_simulation_core.types import Priority
 
 
 @dataclasses.dataclass
@@ -27,16 +27,10 @@ class Message:
 class RegistrationMessage(Message):
     pub: t.Optional[dict]
     sub: t.Optional[dict]
-    priority: int = int(Priority.REGULAR)
+    priority: int = Priority.REGULAR
 
     def __post_init__(self):
-        # ``priority`` is used as a dict key when the orchestrator groups publishers; a float
-        # or string sneaking through JSON deserialisation would silently split priority
-        # levels (and the conflict check would never fire). Reject at the boundary.
-        if isinstance(self.priority, bool) or not isinstance(self.priority, int):
-            raise TypeError(
-                f"RegistrationMessage.priority must be int, got {type(self.priority).__name__}"
-            )
+        self.priority = int(self.priority)
         if self.priority < 0:
             raise ValueError(
                 f"RegistrationMessage.priority must be non-negative, got {self.priority}"

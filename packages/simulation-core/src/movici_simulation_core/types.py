@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import enum
 import typing as t
 
@@ -36,6 +37,47 @@ ValueType = t.Union[int, float, bool, str]
 class DataMask(t.TypedDict):
     pub: t.Optional[dict]
     sub: t.Optional[dict]
+
+
+class Priority(enum.IntEnum):
+    """Publishing priority for a model. Higher values take ownership when multiple models
+    publish the same attribute. Values are conventions, not a closed set; a model developer
+    may send an arbitrary integer on a ``RegistrationMessage`` when a use case warrants it.
+    """
+
+    REGULAR = 10
+    SOLVER_HELPER = 20
+
+    @classmethod
+    def label_for(cls, value: int) -> str:
+        """Return a human-readable label for a priority value. Falls back to ``UNKNOWN`` for
+        values that are not in the named enum so error messages stay informative even when a
+        model uses a non-standard priority (see issue #127, comment thread)."""
+        try:
+            return Priority(value).name
+        except ValueError:
+            return "UNKNOWN"
+
+
+@dataclasses.dataclass
+class AutoRemap:
+    """Return value for Model.remap(). Instructs the ModelConnector to install middleware to
+    automatically rename incoming or outgoing updates
+
+    :param pub: rename attribute names in outgoing updates
+    :param sub: rename attribute names in incoming updates
+    """
+
+    pub: bool
+    sub: bool
+
+    @classmethod
+    def none(cls):
+        return AutoRemap(False, False)
+
+    @classmethod
+    def default(cls):
+        return AutoRemap(True, True)
 
 
 class FileType(enum.Enum):
