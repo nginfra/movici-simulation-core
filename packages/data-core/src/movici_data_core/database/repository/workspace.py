@@ -4,10 +4,12 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
+import sqlalchemy.exc
 from sqlalchemy import func, insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import Workspace
+from movici_data_core.exceptions import ResourceAlreadyExists, map_errors
 
 from .common import GenericResourceRepository, ensure_valid_id
 
@@ -65,6 +67,13 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "workspace", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: Workspace) -> UUID:
         """Store a :class:``Workspace`` in the database
 
@@ -80,6 +89,13 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
+                "workspace", name=obj.name
+            )
+        }
+    )
     @ensure_valid_id
     async def update(self, id: UUID, obj: Workspace):
         """Update a :class:``Workspace`` in the database

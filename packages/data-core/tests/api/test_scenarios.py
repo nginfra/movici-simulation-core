@@ -97,3 +97,41 @@ def test_delete_scenario(get_json, scenario_id):
         "id": scenario_id,
         "name": None,
     }
+
+
+def test_conflict_on_create_existing_scenario(create_scenario_through_api):
+    create_scenario_through_api()
+    result = create_scenario_through_api()
+    assert result["type"] == "duplicate_error"
+
+
+def test_conflict_on_update_exisiting_scenario(
+    create_scenario_through_api, create_scenario_json, get_json
+):
+    create_scenario_through_api(name="new_scenario")
+    scenario_id = create_scenario_through_api(name="another_scenario")["id"]
+
+    result = get_json(
+        f"/scenarios/{scenario_id}",
+        method="put",
+        json=create_scenario_json(name="new_scenario"),
+        expected_status=409,
+    )
+    assert result["type"] == "duplicate_error"
+
+
+def test_conflict_on_duplicate_scenario_model(create_scenario_through_api, default_model_types):
+    result = create_scenario_through_api(
+        models=[
+            {"name": "model", "type": default_model_types[0].name},
+            {"name": "model", "type": default_model_types[0].name},
+        ]
+    )
+    assert result == {
+        "result": "error",
+        "message": "duplicate model name",
+        "type": "duplicate_error",
+        "resource": "scenario_model",
+        "id": None,
+        "name": "model",
+    }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing as t
 from uuid import UUID
 
+import sqlalchemy.exc
 from sqlalchemy import insert, select, update
 
 from movici_data_core.database import model as db
@@ -17,7 +18,9 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    ResourceAlreadyExists,
     ResourceDoesNotExist,
+    map_errors,
 )
 
 from .common import GenericResourceRepository, ensure_valid_id
@@ -27,6 +30,13 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource__ = db.DatasetType
     __resource_type_name__ = "dataset_type"
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "dataset_type", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: DatasetType) -> UUID:
         """Store a :class:``DatasetType`` in the database. When storing a ``DatasetType``, its
         ``format`` field may not be set to ``None``.
@@ -45,6 +55,13 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
+                "dataset_type", name=obj.name
+            )
+        }
+    )
     async def update(self, id: UUID, obj: DatasetType):
         """Update a :class:``DatasetType`` in the database
 
@@ -98,6 +115,13 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
     __resource__ = db.EntityType
     __resource_type_name__ = "entity_type"
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "entity_type", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: EntityType) -> UUID:
         """Store a :class:``EntityType`` in the database
 
@@ -111,6 +135,13 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
+                "entity_type", name=obj.name
+            )
+        }
+    )
     @ensure_valid_id
     async def update(self, id: UUID, obj: EntityType):
         """Update a :class:``EntityType`` in the database
@@ -140,6 +171,13 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource__ = db.AttributeType
     __resource_type_name__ = "attribute_type"
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "attribute_type", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: AttributeType) -> UUID:
         """Store a :class:``AttributeType`` in the database
 
@@ -171,6 +209,13 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             str: db.AttributeDataType.STR,
         }[py_type]
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
+                "attribute_type", name=obj.name
+            )
+        }
+    )
     async def update(self, id: UUID, obj: AttributeType):
         """Update a :class:``AttributeType`` in the database
 
@@ -234,6 +279,13 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
     __resource__ = db.ModelType
     __resource_type_name__ = "model_type"
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
+                "model_type", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: ModelType) -> UUID:
         """Store a :class:``ModelType`` in the database
 
@@ -251,6 +303,13 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
+                "model_type", name=obj.name
+            )
+        }
+    )
     @ensure_valid_id
     async def update(self, id: UUID, obj: ModelType):
         """Update a :class:``ModelType`` in the database

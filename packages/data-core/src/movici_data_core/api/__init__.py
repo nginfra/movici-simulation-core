@@ -39,7 +39,11 @@ DEFAULT_ROUTERS = (
 logger = logging.getLogger(__name__)
 
 
-def make_app(server: SQLAlchemyServer, routers: t.Iterable[APIRouter] | None = None):
+def make_app(
+    server: SQLAlchemyServer,
+    routers: t.Iterable[APIRouter] | None = None,
+    log_movici_data_errors=False,
+):
     routers = routers if routers is not None else DEFAULT_ROUTERS
 
     @contextlib.asynccontextmanager
@@ -51,7 +55,8 @@ def make_app(server: SQLAlchemyServer, routers: t.Iterable[APIRouter] | None = N
 
     @app.exception_handler(MoviciDataError)
     async def movici_data_error_handler(request: Request, exc: MoviciDataError):
-        logger.exception("An error occured")
+        if log_movici_data_errors:
+            logger.exception("An error occured")
         return fastapi.responses.JSONResponse(
             {
                 "result": "error",

@@ -74,3 +74,22 @@ def test_delete_workspace(get_json, workspace_id):
         "id": workspace_id,
         "name": None,
     }
+
+
+def test_conflict_on_create_existing_workspace(get_json):
+    payload = {"name": "new_project", "display_name": "New Project"}
+    get_json("/workspaces", method="post", json=payload)
+    result = get_json("/workspaces", method="post", json=payload, expected_status=409)
+    assert result["type"] == "duplicate_error"
+
+
+def test_conflict_on_update_exisiting_workspace(get_json):
+    payload = {"name": "new_project", "display_name": "New Project"}
+    get_json("/workspaces", method="post", json=payload)
+    workspace_id = get_json(
+        "/workspaces", method="post", json={"name": "another", "display_name": "Another"}
+    )["id"]
+    result = get_json(
+        f"/workspaces/{workspace_id}", method="PUT", json=payload, expected_status=409
+    )
+    assert result["type"] == "duplicate_error"

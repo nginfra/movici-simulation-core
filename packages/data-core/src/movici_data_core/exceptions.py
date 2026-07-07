@@ -66,7 +66,7 @@ class InvalidResource(MoviciDataError):
         return {
             "resource": self.resource_type,
             "name": self.name,
-            "id": str(self.id),
+            "id": str(self.id) if self.id is not None else None,
             "message": self.message or self.__error_message__,
         }
 

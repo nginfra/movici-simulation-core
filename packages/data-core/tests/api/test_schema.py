@@ -51,6 +51,25 @@ class TestDatasetTypes:
         result = get_json(f"/dataset_types/{created['id']}", expected_status=404)
         assert result["type"] == "not_found"
 
+    def test_return_conflict_on_create_duplicate_dataset_type(self, get_json):
+        payload = {"name": "type1", "format": "entity_based"}
+
+        get_json("/dataset_types", method="post", json=payload)
+        result = get_json("/dataset_types", method="post", json=payload, expected_status=409)
+        assert result["type"] == "duplicate_error"
+
+    def test_return_conflict_on_update_duplicate_dataset_type(self, get_json):
+        payload = {"name": "type1", "format": "entity_based"}
+
+        get_json("/dataset_types", method="post", json=payload)
+        dataset_type_id = get_json(
+            "/dataset_types", method="post", json={**payload, "name": "type2"}
+        )["id"]
+        result = get_json(
+            f"/dataset_types/{dataset_type_id}", method="put", json=payload, expected_status=409
+        )
+        assert result["type"] == "duplicate_error"
+
 
 class TestEntityTypes:
     def test_list_entity_types(self, get_json):
@@ -89,6 +108,23 @@ class TestEntityTypes:
         result = get_json(f"/entity_types/{created['id']}", expected_status=404)
         assert result["type"] == "not_found"
 
+    def test_return_conflict_on_create_duplicate_entity_type(self, get_json):
+        payload = {"name": "type1"}
+
+        get_json("/entity_types", method="post", json=payload)
+        result = get_json("/entity_types", method="post", json=payload, expected_status=409)
+        assert result["type"] == "duplicate_error"
+
+    def test_return_conflict_on_update_duplicate_entity_type(self, get_json):
+        payload = {"name": "type1"}
+
+        get_json("/entity_types", method="post", json=payload)
+        entity_type_id = get_json("/entity_types", method="post", json={"name": "type2"})["id"]
+        result = get_json(
+            f"/entity_types/{entity_type_id}", method="put", json=payload, expected_status=409
+        )
+        assert result["type"] == "duplicate_error"
+
 
 class TestAttributeTypes:
     def test_list_attribute_types(self, get_json):
@@ -125,7 +161,7 @@ class TestAttributeTypes:
             },
         ],
     )
-    def test_create_and_get_attribute_type(self, payload, get_json):
+    def test_create_and_get_attribute_type(self, get_json, payload):
         created = get_json("/attribute_types", method="post", json=payload)
         assert created["message"] == "attribute_type created"
         created_id = created["id"]
@@ -166,6 +202,28 @@ class TestAttributeTypes:
         assert deleted["message"] == "attribute_type deleted"
         result = get_json(f"/attribute_types/{created['id']}", expected_status=404)
         assert result["type"] == "not_found"
+
+    def test_return_conflict_on_create_duplicate_attribute_type(self, get_json):
+        payload = {"name": "type1", "data_type": {"type": "int"}}
+
+        get_json("/attribute_types", method="post", json=payload)
+        result = get_json("/attribute_types", method="post", json=payload, expected_status=409)
+        assert result["type"] == "duplicate_error"
+
+    def test_return_conflict_on_update_duplicate_attribute_type(self, get_json):
+        payload = {"name": "type1", "data_type": {"type": "int"}}
+
+        get_json("/attribute_types", method="post", json=payload)
+        attribute_type_id = get_json(
+            "/attribute_types", method="post", json={**payload, "name": "type2"}
+        )["id"]
+        result = get_json(
+            f"/attribute_types/{attribute_type_id}",
+            method="put",
+            json=payload,
+            expected_status=409,
+        )
+        assert result["type"] == "duplicate_error"
 
 
 class TestModelTypes:
@@ -208,3 +266,25 @@ class TestModelTypes:
         assert deleted["message"] == "model_type deleted"
         result = get_json(f"/model_types/{created['id']}", expected_status=404)
         assert result["type"] == "not_found"
+
+    def test_return_conflict_on_create_duplicate_model_type(self, get_json):
+        payload = {"name": "type1", "jsonschema": {}}
+
+        get_json("/model_types", method="post", json=payload)
+        result = get_json("/model_types", method="post", json=payload, expected_status=409)
+        assert result["type"] == "duplicate_error"
+
+    def test_return_conflict_on_update_duplicate_model_type(self, get_json):
+        payload = {"name": "type1", "jsonschema": {}}
+
+        get_json("/model_types", method="post", json=payload)
+        model_type_id = get_json("/model_types", method="post", json={**payload, "name": "type2"})[
+            "id"
+        ]
+        result = get_json(
+            f"/model_types/{model_type_id}",
+            method="put",
+            json=payload,
+            expected_status=409,
+        )
+        assert result["type"] == "duplicate_error"

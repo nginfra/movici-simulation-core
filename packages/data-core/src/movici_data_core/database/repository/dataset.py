@@ -194,6 +194,13 @@ class DatasetRepository(SQLResourceRepository):
             ),
         )
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda id, obj, chunk_size=0: ResourceAlreadyExists(
+                "dataset", name=obj.name
+            )
+        }
+    )
     async def update(self, id: UUID, obj: Dataset, chunk_size=0):
         """Update a dataset. When not given ``obj.data``, only the ``name`` and ``display_name``
         are updated. Otherwise this method als processes the data and updates the ``general``,
@@ -417,7 +424,7 @@ class DatasetDataRepository(SQLResourceRepository):
 
         if format == DatasetFormat.ENTITY_BASED:
             if not isinstance(data, dict):
-                raise ValueError("Entity based data must be provided as a dictionary")
+                raise InvalidResource("Entity based data must be provided as a dictionary")
             await EntityDataProcessor(
                 self.session, self.all_data, selector=DatasetDataSelector()
             ).store(id, data)

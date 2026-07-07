@@ -4,6 +4,7 @@ import copy
 import dataclasses
 from uuid import UUID
 
+import sqlalchemy.exc
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -15,7 +16,13 @@ from movici_data_core.domain_model import (
     ScenarioModel,
     ScenarioStatus,
 )
-from movici_data_core.exceptions import InvalidAction, MoviciValidationError, ResourceDoesNotExist
+from movici_data_core.exceptions import (
+    InvalidAction,
+    MoviciValidationError,
+    ResourceAlreadyExists,
+    ResourceDoesNotExist,
+    map_errors,
+)
 from movici_data_core.validators import ModelConfigValidator
 
 from .common import SQLResourceRepository
@@ -131,6 +138,13 @@ class ScenarioRepository(SQLResourceRepository):
         id = self._ensure_scenario_id()
         await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj, validator: ResourceAlreadyExists(
+                "scenario", name=obj.name
+            )
+        }
+    )
     async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
         """Store a new Scenario in the database. This method can only be invoked if there is no
         currently active Scenario, to prevent creating scenarios when in a ``SINGLE_SCENARIO`` mode
@@ -160,10 +174,17 @@ class ScenarioRepository(SQLResourceRepository):
         await self._store_scenario_details(workspace_id, scenario_id, obj, validator)
         return scenario_id
 
+    @map_errors(
+        {
+            sqlalchemy.exc.IntegrityError: lambda obj, validator: ResourceAlreadyExists(
+                "scenario", name=obj.name
+            )
+        }
+    )
     async def update(self, obj: Scenario, validator: ModelConfigValidator):
         """Update a scenario in the database. The scenario to update must be the active scenario
 
-        :param obj: The sc
+        :param obj: The scenario payload
         :param validator: A ModelConfigValidator that is instantiated with all available models in
             the dataset
         """
@@ -213,9 +234,11 @@ class ScenarioRepository(SQLResourceRepository):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []
         if obj.datasets:
+            # deduplicate datasets by name
+            datasets_by_name = {ds.name: ds for ds in obj.datasets}
             try:
                 scenario_datasets = await repository.datasets.ensure_scenario_datasets(
-                    obj.datasets
+                    list(datasets_by_name.values())
                 )
             except MoviciValidationError as e:
                 raise MoviciValidationError.from_errors(e, path="datasets") from e
@@ -242,19 +265,26 @@ class ScenarioRepository(SQLResourceRepository):
         # both self.all_data.model_types.ensure_model_types and validator.process_model_configs
         # return a list the length of obj.models. Let's assert that to be absolutely sure
         assert len(scenario_models) == len(model_types) == len(obj.models)
-        scenario_model_records = await self.session.scalars(
-            insert(db.ScenarioModel).returning(db.ScenarioModel),
-            [
-                {
-                    "name": model.name,
-                    "scenario_id": scenario_id,
-                    "model_type_id": model_type.id,
-                    "sequence": idx,
-                    "config": self._stripped_config(model),
-                }
-                for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
-            ],
-        )
+        try:
+            scenario_model_records = await self.session.scalars(
+                insert(db.ScenarioModel).returning(db.ScenarioModel),
+                [
+                    {
+                        "name": model.name,
+                        "scenario_id": scenario_id,
+                        "model_type_id": model_type.id,
+                        "sequence": idx,
+                        "config": self._stripped_config(model),
+                    }
+                    for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
+                ],
+            )
+        except sqlalchemy.exc.IntegrityError as exc:
+            model_name: str = exc.params[1]  # type: ignore
+            raise ResourceAlreadyExists(
+                "scenario_model", name=model_name, message="duplicate model name"
+            ) from exc
+
         refs_to_add: list[dict] = []
         for scenario_model, record in zip(
             scenario_models, sorted(scenario_model_records, key=lambda r: r.sequence)

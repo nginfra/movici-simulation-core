@@ -1063,6 +1063,26 @@ class TestScenarioRepository:
         )
         assert scenario_id is not None
 
+    async def test_deduplicates_datasets_on_create(
+        self, repository: SQLAlchemyRepository, get_model_config_validator, a_dataset
+    ):
+        scenario_id = await repository.scenarios.create(
+            Scenario(
+                name="a_scenario",
+                display_name="a scenario",
+                description="",
+                epsg_code=0,
+                datasets=[
+                    ScenarioDataset.from_dataset(a_dataset),
+                    ScenarioDataset.from_dataset(a_dataset),
+                ],
+            ),
+            validator=await get_model_config_validator(),
+        )
+        scenario = await repository.scenarios.for_id(scenario_id).get()
+        assert scenario is not None
+        assert len(scenario.datasets) == 1
+
     async def test_get_scenario_by_name(self, repository: SQLAlchemyRepository, a_scenario):
         result = await repository.scenarios.get_by_name(a_scenario.name)
         assert result is not None

@@ -218,3 +218,38 @@ def test_delete_dataset_data_doesnt_delete_dataset(dataset_with_data, get_json, 
     dataset = get_json(f"/datasets/{dataset_id}")
     assert dataset["id"] == dataset_id
     assert not dataset["has_data"]
+
+
+def test_conflict_on_create_existing_dataset(create_dataset):
+    create_dataset()
+    result = create_dataset()
+    assert result["type"] == "duplicate_error"
+
+
+def test_conflict_on_update_exisiting_dataset(create_dataset, get_json, a_dataset_type):
+    create_dataset(name="new_dataset")
+    dataset_id = create_dataset(name="another_dataset")["id"]
+
+    result = get_json(
+        f"/datasets/{dataset_id}",
+        method="put",
+        json={
+            "name": "new_dataset",
+            "display_name": "Another Dataset",
+            "type": a_dataset_type.name,
+        },
+        expected_status=409,
+    )
+    assert result["type"] == "duplicate_error"
+
+
+def test_conflict_on_update_dataset_data(create_dataset, upload_dataset_data, dataset_data):
+    create_dataset(name="new_dataset")
+    dataset_id = create_dataset(name="another_dataset")["id"]
+    dataset_data["name"] = "new_dataset"
+
+    result = upload_dataset_data(
+        dataset_id, orjson.dumps(dataset_data), mimetype="application/json"
+    )
+    assert result.status_code == 409
+    assert result.json()["type"] == "duplicate_error"
