@@ -8,6 +8,7 @@ import re
 import typing as t
 from uuid import UUID
 
+from jsonschema import SchemaError
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -15,6 +16,7 @@ from pydantic import (
     Field,
     PlainSerializer,
     WithJsonSchema,
+    field_validator,
     model_serializer,
 )
 
@@ -55,6 +57,7 @@ from movici_data_core.serialization import load_dict
 from movici_simulation_core import DataType
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS, data_keys
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
+from movici_simulation_core.validate import movici_validator
 
 T_dom = t.TypeVar("T_dom")
 
@@ -600,6 +603,15 @@ class ModelTypeListOut(OutModel[t.Sequence[ModelType]]):
 class ModelTypeIn(InModel[ModelType]):
     name: NameStr
     jsonschema: dict
+
+    @field_validator("jsonschema", mode="after")
+    @classmethod
+    def _validate_jsonschema(cls, schema):
+        try:
+            movici_validator(schema).check_schema(schema)
+        except SchemaError:
+            raise ValueError("invalid schema") from None
+        return schema
 
     def to_domain(self):
         return ModelType(name=self.name, jsonschema=self.jsonschema)

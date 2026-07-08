@@ -5,6 +5,7 @@ import uuid
 import pytest
 from pydantic import ValidationError
 
+from movici_data_core.database.repository.general import ModelTypeRepository
 from movici_data_core.domain_model import (
     Dataset,
     DatasetFormat,
@@ -419,3 +420,13 @@ def test_snake_case(cls, base_payload, error_payload):
     assert isinstance(cls(**base_payload), cls)
     with pytest.raises(ValidationError):
         cls(**{**base_payload, **error_payload})
+
+
+def test_validates_model_type_jsonschema():
+    schema = ModelTypeRepository._default_jsonschema("a_model")
+    assert isinstance(ModelTypeIn(name="a_model", jsonschema=schema).to_domain(), ModelType)
+
+
+def test_model_type_raises_on_invalid_jsonschema():
+    with pytest.raises(ValidationError):
+        ModelTypeIn(name="a_model", jsonschema={"type": "invalid"})

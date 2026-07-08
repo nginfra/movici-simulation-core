@@ -30,6 +30,7 @@ classifiers = [
 
 dependencies = [
   "fastapi",
+  "jsonschema",
   "movici-simulation-core",
   "numpy",
   "orjson>=3.11.7",
