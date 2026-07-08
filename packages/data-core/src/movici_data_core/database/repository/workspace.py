@@ -80,12 +80,11 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         :param obj: the ``Workspace`` object
         :return: the UUID of the stored ``ModelType``
         """
+        payload = self._validated_payload(obj, ("name", "display_name"))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.Workspace)
-                .values(name=obj.name, display_name=obj.display_name)
-                .returning(db.Workspace.id)
+                insert(db.Workspace).values(**payload).returning(db.Workspace.id)
             ),
         )
 
@@ -105,8 +104,7 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         :param id: the UUID of the stored ``Workspace``
         :param obj: the ``Workspace`` object with the changes
         """
+        payload = self._validated_payload(obj, ("name", "display_name"))
         await self.session.execute(
-            update(db.Workspace)
-            .where(db.Workspace.id == id)
-            .values(name=obj.name, display_name=obj.display_name)
+            update(db.Workspace).where(db.Workspace.id == id).values(**payload)
         )

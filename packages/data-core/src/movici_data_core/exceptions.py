@@ -160,7 +160,7 @@ class MoviciValidationError(MoviciDataError):
     def __str__(self):
         return "\n".join(f"{p}: {msg}" for p, msg in self.iter_messages())
 
-    def as_http_payload(self):
+    def payload(self):
         return {
             "messages": self.as_dict(),
         }

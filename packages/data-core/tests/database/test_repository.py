@@ -121,6 +121,19 @@ class TestWorkspaceRepository:
         assert updated.name == "new_name"
         assert updated.display_name == "New Name"
 
+    async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.workspaces.create(Workspace(name="a" * 51, display_name="d" * 51))
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+
+    async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        id = await repository.workspaces.create(Workspace(name="a", display_name="d"))
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.workspaces.update(id, Workspace(name="a" * 51, display_name="d" * 51))
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+
 
 class TestDatasetTypeRepository:
     async def test_create_and_delete_a_dataset_type(self, repository: SQLAlchemyRepository):
@@ -135,6 +148,48 @@ class TestDatasetTypeRepository:
         await repository.dataset_types.delete(dataset_type_id)
 
         assert len(await repository.dataset_types.list()) == existing
+
+    @pytest.mark.parametrize(
+        "dataset_type, stores_mimetype",
+        [
+            (DatasetType("a_type", DatasetFormat.ENTITY_BASED, mimetype="asdf"), False),
+            (DatasetType("a_type", DatasetFormat.UNSTRUCTURED, mimetype="asdf"), False),
+            (DatasetType("a_type", DatasetFormat.BINARY, mimetype="asdf"), True),
+        ],
+    )
+    async def test_stores_or_ignores_mimetype_on_create(
+        self, repository: SQLAlchemyRepository, dataset_type, stores_mimetype
+    ):
+        id = await repository.dataset_types.create(dataset_type)
+        result = await repository.dataset_types.get_by_id(id)
+        assert result is not None
+        if stores_mimetype:
+            assert result.mimetype == dataset_type.mimetype
+        else:
+            assert result.mimetype is None
+
+    @pytest.mark.parametrize(
+        "dataset_type, stores_mimetype",
+        [
+            (DatasetType("transport_network", DatasetFormat.ENTITY_BASED, mimetype="asdf"), False),
+            (DatasetType("tabular", DatasetFormat.UNSTRUCTURED, mimetype="asdf"), False),
+            (DatasetType("flooding_tape", DatasetFormat.BINARY, mimetype="asdf"), True),
+        ],
+    )
+    async def test_stores_or_ignores_mimetype_on_update(
+        self, repository: SQLAlchemyRepository, dataset_type, stores_mimetype
+    ):
+        current = await repository.dataset_types.get_by_name(dataset_type.name)
+        assert current is not None
+        assert current.id is not None
+        await repository.dataset_types.update(current.id, dataset_type)
+
+        result = await repository.dataset_types.get_by_id(current.id)
+        assert result is not None
+        if stores_mimetype:
+            assert result.mimetype == dataset_type.mimetype
+        else:
+            assert result.mimetype != dataset_type.mimetype
 
     async def test_cannot_create_dataset_type_with_unknown_format(
         self, repository: SQLAlchemyRepository
@@ -218,6 +273,25 @@ class TestDatasetTypeRepository:
                 dataclasses.replace(a_dataset_type, format=DatasetFormat.BINARY)
             )
 
+    async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.dataset_types.create(
+                DatasetType(name="a" * 51, format=DatasetFormat.ENTITY_BASED)
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        id = await repository.dataset_types.create(
+            DatasetType(name="a", format=DatasetFormat.ENTITY_BASED)
+        )
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.dataset_types.update(
+                id, DatasetType(name="a" * 51, format=DatasetFormat.ENTITY_BASED)
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
 
 class TestEntityTypeRepository:
     async def test_create_and_delete_an_entity_type(self, repository: SQLAlchemyRepository):
@@ -267,6 +341,19 @@ class TestEntityTypeRepository:
         assert entity_type is not None
         assert entity_type.name == "new_type"
         assert entity_type.id is not None
+
+    async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.entity_types.create(EntityType(name="a" * 51))
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        id = await repository.entity_types.create(EntityType(name="a"))
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.entity_types.update(id, EntityType(name="a" * 51))
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
 
 
 class TestAttributeTypeRepository:
@@ -380,6 +467,48 @@ class TestAttributeTypeRepository:
                 AttributeType("some.attribute", data_type=DataType(int))
             )
 
+    async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.attribute_types.create(
+                AttributeType(
+                    name="a" * 101,
+                    unit="a" * 21,
+                    description="a" * 256,
+                    enum_name="a" * 21,
+                    data_type=DataType(int),
+                )
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {
+            "name",
+            "unit",
+            "description",
+            "enum_name",
+        }
+
+    async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        id = await repository.attribute_types.create(
+            AttributeType(name="a", data_type=DataType(int))
+        )
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.attribute_types.update(
+                id,
+                AttributeType(
+                    name="a" * 101,
+                    unit="a" * 21,
+                    description="a" * 256,
+                    enum_name="a" * 21,
+                    data_type=DataType(int),
+                ),
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {
+            "name",
+            "unit",
+            "description",
+            "enum_name",
+        }
+
 
 class TestModelTypeRepository:
     @pytest.fixture
@@ -452,6 +581,33 @@ class TestModelTypeRepository:
             "type": "object",
             "additionalProperties": True,
         }
+
+    async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.model_types.create(
+                ModelType(
+                    name="a" * 51,
+                    jsonschema={},
+                )
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
+        id = await repository.model_types.create(ModelType(name="a", jsonschema={}))
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.model_types.update(id, ModelType(name="a" * 51, jsonschema={}))
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_validates_max_length_in_ensure_model_types(
+        self, repository: SQLAlchemyRepository
+    ):
+        repository.options.STRICT_MODEL_TYPES = False
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.model_types.ensure_model_types([ModelType(name="a" * 51)])
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
 
 
 class TestDatasetRepository:
@@ -617,6 +773,17 @@ class TestDatasetRepository:
                 ]
             )
 
+    async def test_validates_max_length_in_ensure_scenario_datasets(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        repository.options.STRICT_SCENARIO_DATASETS = False
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.datasets.ensure_scenario_datasets(
+                [ScenarioDataset(name="a" * 51, dataset_type=a_dataset_type)]
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+
     async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):
         await repository.datasets.update(
             a_dataset.id,
@@ -653,6 +820,29 @@ class TestDatasetRepository:
                 }
             },
         )
+
+    async def test_create_validates_max_lengths(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.datasets.create(
+                Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+
+    async def test_update_validates_max_lengths(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+        id = await repository.datasets.create(
+            Dataset(name="a", display_name="a", dataset_type=a_dataset_type)
+        )
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.datasets.update(
+                id, Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
 
 class TestDatasetDataRepository:
@@ -1187,6 +1377,45 @@ class TestScenarioRepository:
         scenario_by_name = await repository.scenarios.get_by_name(a_scenario.name)
         assert scenario_by_name is not None
         assert scenario_by_name.bounding_box == BoundingBox(-1, 1, 3, 4)
+
+    async def test_create_validates_max_lengths(
+        self, repository: SQLAlchemyRepository, new_scenario, get_model_config_validator
+    ):
+        validator = await get_model_config_validator()
+
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.scenarios.create(
+                dataclasses.replace(
+                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                ),
+                validator,
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {
+            "name",
+            "display_name",
+            "description",
+        }
+
+    async def test_update_validates_max_lengths(
+        self, repository: SQLAlchemyRepository, new_scenario, get_model_config_validator
+    ):
+        validator = await get_model_config_validator()
+        scenario_id = await repository.scenarios.create(new_scenario, validator)
+
+        with pytest.raises(MoviciValidationError) as e:
+            await repository.scenarios.for_id(scenario_id).update(
+                dataclasses.replace(
+                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                ),
+                validator,
+            )
+
+        assert set(m[0] for m in e.value.iter_messages()) == {
+            "name",
+            "display_name",
+            "description",
+        }
 
 
 class TestUpdateRepository:

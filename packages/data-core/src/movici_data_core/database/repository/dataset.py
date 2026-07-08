@@ -42,6 +42,8 @@ from .common import (
     EntityDataSelector,
     RawDataProcessor,
     SQLResourceRepository,
+    validated_payload,
+    validated_payload_dict,
 )
 
 
@@ -180,16 +182,17 @@ class DatasetRepository(SQLResourceRepository):
     async def create(self, obj: Dataset) -> UUID:
         workspace_id = self._ensure_workspace_id()
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
+        payload = validated_payload_dict(
+            db.Dataset,
+            name=obj.name,
+            display_name=obj.display_name,
+            dataset_type_id=t.cast(UUID, dataset_type.id),
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
                 insert(db.Dataset)
-                .values(
-                    workspace_id=workspace_id,
-                    name=obj.name,
-                    display_name=obj.display_name,
-                    dataset_type_id=t.cast(UUID, dataset_type.id),
-                )
+                .values(workspace_id=workspace_id, **payload)
                 .returning(db.Dataset.id)
             ),
         )
@@ -216,10 +219,11 @@ class DatasetRepository(SQLResourceRepository):
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
 
-        # TODO: accept changes to dataset type if the dataset does not have data and is not used
-        #  anywhere?
-        payload: dict[str, t.Any] = dict(name=obj.name, display_name=obj.display_name)
+        payload = validated_payload(db.Dataset, obj, ("name", "display_name"))
+
         if obj.data is not None:
+            # TODO: accept changes to dataset type if the dataset does not have data and is not
+            # used anywhere?
             if not current.dataset_type.is_equivalent(obj.dataset_type):
                 raise InvalidAction("Cannot change dataset type when updating data")
             payload.update(
@@ -339,14 +343,20 @@ class DatasetRepository(SQLResourceRepository):
             created_ids_and_names = await self.session.execute(
                 insert(db.Dataset).returning(db.Dataset.id, db.Dataset.name),
                 [
-                    {
-                        "name": ds.name,
-                        "display_name": ds.name,
-                        "dataset_type_id": existing_types[
+                    # validated_payload_dict may raise MoviciValidationError. However, since it
+                    # is called inside a list comprehension, it is not possible to upgrade the
+                    # error with its (relative) path in the scenario object. Instead, we rely
+                    # on validation in the api layer to provide users with a rich validation error
+                    # The checks here are mainly a second line of defense
+                    validated_payload_dict(
+                        db.Dataset,
+                        name=ds.name,
+                        display_name=ds.name,
+                        dataset_type_id=existing_types[
                             t.cast(DatasetType, ds.dataset_type).name
                         ].id,
-                        "workspace_id": workspace_id,
-                    }
+                        workspace_id=workspace_id,
+                    )
                     for ds in to_create
                 ],
             )

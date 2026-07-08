@@ -46,12 +46,15 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         """
         if obj.format is None:
             raise InvalidAction("Must specify DatasetFormat when creating a DatasetType")
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            format=obj.format,
+            mimetype=obj.mimetype if obj.format == DatasetFormat.BINARY else None,
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.DatasetType)
-                .values(name=obj.name, format=obj.format, mimetype=obj.mimetype)
-                .returning(db.DatasetType.id)
+                insert(db.DatasetType).values(**payload).returning(db.DatasetType.id)
             ),
         )
 
@@ -76,12 +79,12 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         if current.format != obj.format:
             raise InvalidAction("Cannot update dataset type format")
 
-        mimetype = obj.mimetype if obj.format == DatasetFormat.BINARY else None
-
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            mimetype=obj.mimetype if obj.format == DatasetFormat.BINARY else None,
+        )
         await self.session.execute(
-            update(db.DatasetType)
-            .where(db.DatasetType.id == id)
-            .values(name=obj.name, mimetype=mimetype)
+            update(db.DatasetType).where(db.DatasetType.id == id).values(**payload)
         )
 
     async def ensure_dataset_type(self, dataset_type: DatasetType) -> DatasetType:
@@ -128,10 +131,11 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
         :param obj: the ``EntityType`` object
         :return: the UUID of the stored ``EntityType``
         """
+        payload = self._validated_payload(obj, ("name",))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.EntityType).values(name=obj.name).returning(db.EntityType.id)
+                insert(db.EntityType).values(**payload).returning(db.EntityType.id)
             ),
         )
 
@@ -151,8 +155,9 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
         :param id: the UUID of the stored ``EntityType``
         :param obj: the ``EntityType`` object with the changes
         """
+        payload = self._validated_payload(obj, ("name",))
         await self.session.execute(
-            update(db.EntityType).where(db.EntityType.id == id).values(name=obj.name)
+            update(db.EntityType).where(db.EntityType.id == id).values(**payload)
         )
 
     async def ensure_entity_type(self, entity_type: EntityType) -> EntityType:
@@ -184,20 +189,19 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         :param obj: the ``AttributeType`` object
         :return: the UUID of the stored ``AttributeType``
         """
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            has_rowptr=obj.data_type.csr,
+            unit_type=self._db_unit_type(obj.data_type.py_type),
+            unit_shape=obj.data_type.unit_shape,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.AttributeType)
-                .values(
-                    name=obj.name,
-                    has_rowptr=obj.data_type.csr,
-                    unit_type=self._db_unit_type(obj.data_type.py_type),
-                    unit_shape=obj.data_type.unit_shape,
-                    unit=obj.unit,
-                    description=obj.description,
-                    enum_name=obj.enum_name,
-                )
-                .returning(db.AttributeType.id)
+                insert(db.AttributeType).values(**payload).returning(db.AttributeType.id)
             ),
         )
 
@@ -235,18 +239,17 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         if in_use and not current.data_type == obj.data_type:
             raise InvalidAction("cannot change attribute data type when it is in use")
 
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            has_rowptr=obj.data_type.csr,
+            unit_type=self._db_unit_type(obj.data_type.py_type),
+            unit_shape=obj.data_type.unit_shape,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+        )
         await self.session.execute(
-            update(db.AttributeType)
-            .where(db.AttributeType.id == id)
-            .values(
-                name=obj.name,
-                has_rowptr=obj.data_type.csr,
-                unit_type=self._db_unit_type(obj.data_type.py_type),
-                unit_shape=obj.data_type.unit_shape,
-                unit=obj.unit,
-                description=obj.description,
-                enum_name=obj.enum_name,
-            )
+            update(db.AttributeType).where(db.AttributeType.id == id).values(**payload)
         )
 
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
@@ -294,12 +297,11 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         """
         if obj.jsonschema is None:
             raise InvalidAction("Cannot create ModelType without a jsonschema")
+        payload = self._validated_payload(obj, ("name", "jsonschema"))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.ModelType)
-                .values(name=obj.name, jsonschema=obj.jsonschema)
-                .returning(db.ModelType.id)
+                insert(db.ModelType).values(**payload).returning(db.ModelType.id)
             ),
         )
 
@@ -321,10 +323,10 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         """
         if obj.jsonschema is None:
             raise InvalidAction("Cannot set ModelType.jsonschema to None")
+
+        payload = self._validated_payload(obj, ("name", "jsonschema"))
         await self.session.execute(
-            update(db.ModelType)
-            .where(db.ModelType.id == id)
-            .values(name=obj.name, jsonschema=obj.jsonschema)
+            update(db.ModelType).where(db.ModelType.id == id).values(**payload)
         )
 
     async def ensure_model_types(self, model_types: t.Sequence[ModelType]) -> list[ModelType]:
@@ -356,14 +358,18 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             created = await self.session.scalars(
                 insert(db.ModelType).returning(db.ModelType),
                 [
-                    {
-                        "name": tp.name,
-                        "jsonschema": tp.jsonschema or self._default_jsonschema(tp.name),
-                    }
+                    # self._validated_payload_dict may raise MoviciValidationError. However, since
+                    # it is called inside a list comprehension, it is not possible to upgrade the
+                    # error with its (relative) path in the scenario object. Instead, we rely
+                    # on validation in the api layer to provide users with a rich validation error
+                    # The checks here are mainly a second line of defense
+                    self._validated_payload_dict(
+                        name=tp.name,
+                        jsonschema=tp.jsonschema or self._default_jsonschema(tp.name),
+                    )
                     for tp in to_create
                 ],
             )
-
             existing_model_types.update((tp.name, tp) for tp in created)
 
         return [existing_model_types[tp.name].to_domain() for tp in model_types]

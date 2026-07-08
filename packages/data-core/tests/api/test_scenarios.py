@@ -1,10 +1,17 @@
 import pytest
 
+from movici_data_core.database.model import DatabaseMode
+
 
 @pytest.fixture
 def scenario_id(create_scenario_through_api):
     result = create_scenario_through_api()
     return result["id"]
+
+
+@pytest.fixture
+def database_mode():
+    return DatabaseMode.SINGLE_WORKSPACE
 
 
 def test_create_scenario(create_scenario_through_api):
@@ -135,3 +142,20 @@ def test_conflict_on_duplicate_scenario_model(create_scenario_through_api, defau
         "id": None,
         "name": "model",
     }
+
+
+def test_validation_error_on_too_long_new_models_and_datasets(create_scenario_through_api):
+    result = create_scenario_through_api(
+        models=[
+            {"name": "model", "type": "a" * 51},
+        ],
+        datasets=[
+            {"name": "b" * 51, "type": "b" * 51},
+        ],
+    )
+    locs = [".".join(str(f) for f in e["loc"]) for e in result["detail"]]
+    assert "models.0.type" in locs[0]
+    assert "models.0.type" in locs[1]  # a second message at this paht for the union type
+    assert "datasets.0.name" in locs[2]
+    assert "datasets.0.type" in locs[3]
+    assert "datasets.0.type" in locs[4]  # a second message at this paht for the union type

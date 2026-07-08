@@ -4,6 +4,7 @@ import dataclasses
 import datetime
 import functools
 import pathlib
+import re
 import typing as t
 from uuid import UUID
 
@@ -17,6 +18,17 @@ from pydantic import (
     model_serializer,
 )
 
+from movici_data_core.database.model import (
+    ATTRIBUTE_DESCRIPTION_MAX_LENGTH,
+    ATTRIBUTE_ENUM_NAME_MAX_LENGTH,
+    ATTRIBUTE_NAME_MAX_LENGTH,
+    ATTRIBUTE_UNIT_MAX_LENGTH,
+    DATASET_TYPE_MIMETYPE_MAX_LENGTH,
+    DEFAULT_DISPLAY_NAME_MAX_LENGTH,
+    DEFAULT_NAME_MAX_LENGTH,
+    SCENARIO_DESCRIPTION_MAX_LENGTH,
+    snake_case_pattern,
+)
 from movici_data_core.domain_model import (
     AttributeType,
     BoundingBox,
@@ -46,6 +58,10 @@ from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 T_dom = t.TypeVar("T_dom")
 
+NameStr = t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH, pattern=snake_case_pattern)]
+AttributeNameStr = t.Annotated[
+    str, Field(max_length=ATTRIBUTE_NAME_MAX_LENGTH, pattern=snake_case_pattern)
+]
 
 BoundingBoxField = t.Annotated[
     BoundingBox,
@@ -79,8 +95,8 @@ class OutModel(BaseModel, t.Generic[T_dom]):
 
 
 class WorkspaceIn(InModel):
-    name: str
-    display_name: str
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)]
 
     def to_domain(self):
         return Workspace(name=self.name, display_name=self.display_name)
@@ -100,9 +116,9 @@ class WorkspaceListOut(OutModel[t.Sequence[Workspace]]):
 
 
 class ShortDatasetIn(InModel[Dataset]):
-    name: str
-    display_name: str = ""
-    type: DatasetType | str
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)] = ""
+    type: DatasetType | NameStr
 
     def to_domain(self):
         return Dataset(
@@ -128,9 +144,9 @@ class DatasetListOut(OutModel[t.Sequence[Dataset]]):
 
 
 class ScenarioIn(BaseModel):
-    name: str
-    display_name: str
-    description: str = ""
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)]
+    description: t.Annotated[str, Field(max_length=SCENARIO_DESCRIPTION_MAX_LENGTH)] = ""
     epsg_code: int | None = None
     simulation_info: SimulationInfoInOut
     models: list[ScenarioModelIn]
@@ -166,8 +182,8 @@ class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
 
 
 class ScenarioDatasetIn(InModel[ScenarioDataset]):
-    name: str
-    type: DatasetType | str | None = None
+    name: NameStr
+    type: DatasetType | NameStr | None = None
 
     def to_domain(self):
         dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
@@ -176,14 +192,14 @@ class ScenarioDatasetIn(InModel[ScenarioDataset]):
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     name: str
-    type: DatasetType = Field(validation_alias="dataset_type")
+    type: DatasetTypeOut = Field(validation_alias="dataset_type")
     id: UUID
 
 
 class ScenarioModelIn(InModel[ScenarioModel]):
     model_config = ConfigDict(extra="allow")
-    name: str
-    type: str | ModelType
+    name: NameStr
+    type: NameStr | ModelType
 
     def to_domain(self):
         return ScenarioModel(
@@ -292,8 +308,8 @@ class DatasetWithDataOut(ShortDatasetOut):
 
 
 class UpdateModelIn(InModel[UpdateModel]):
-    name: str
-    type: str | None = None
+    name: NameStr
+    type: NameStr | None = None
 
     def to_domain(self):
         return UpdateModel(
@@ -459,13 +475,17 @@ class DatasetTypeOut(OutModel[DatasetType]):
     mimetype: str | None
 
 
-class DatasetTypeIn(InModel):
-    name: str
-    format: DatasetFormat
-    mimetype: str | None = None
+class DatasetTypeInPartial(InModel):
+    name: NameStr
+    format: DatasetFormat | None
+    mimetype: t.Annotated[str, Field(max_length=DATASET_TYPE_MIMETYPE_MAX_LENGTH)] | None = None
 
     def to_domain(self):
         return DatasetType(name=self.name, format=self.format, mimetype=self.mimetype)
+
+
+class DatasetTypeIn(DatasetTypeInPartial):
+    format: DatasetFormat  # type:ignore
 
 
 class EntityTypeListOut(OutModel[t.Sequence[EntityType]]):
@@ -479,7 +499,7 @@ class EntityTypeOut(OutModel[EntityType]):
 
 
 class EntityTypeIn(InModel[EntityType]):
-    name: str
+    name: NameStr
 
     def to_domain(self):
         return EntityType(name=self.name)
@@ -542,7 +562,7 @@ class AttributeTypeOut(OutModel[AttributeType]):
         return AttributeTypeOut(
             id=t.cast(UUID, obj.id),
             name=obj.name,
-            data_type=obj.data_type,
+            data_type=obj.data_type,  # type: ignore
             unit=obj.unit,
             description=obj.description,
             enum_name=obj.enum_name,
@@ -550,11 +570,17 @@ class AttributeTypeOut(OutModel[AttributeType]):
 
 
 class AttributeTypeIn(InModel[AttributeType]):
-    name: str
+    name: AttributeNameStr
     data_type: DataTypeIn
-    unit: str = ""
-    description: str = ""
-    enum_name: str | None = None
+    unit: t.Annotated[str, Field(max_length=ATTRIBUTE_UNIT_MAX_LENGTH)] = ""
+    description: t.Annotated[str, Field(max_length=ATTRIBUTE_DESCRIPTION_MAX_LENGTH)] = ""
+    enum_name: (
+        t.Annotated[
+            str,
+            Field(max_length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH, pattern=re.compile(r"[a-z][a-z_]*")),
+        ]
+        | None
+    ) = None
 
     def to_domain(self):
         return AttributeType(
@@ -572,7 +598,7 @@ class ModelTypeListOut(OutModel[t.Sequence[ModelType]]):
 
 
 class ModelTypeIn(InModel[ModelType]):
-    name: str
+    name: NameStr
     jsonschema: dict
 
     def to_domain(self):

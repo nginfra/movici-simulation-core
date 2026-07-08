@@ -25,7 +25,7 @@ from movici_data_core.exceptions import (
 )
 from movici_data_core.validators import ModelConfigValidator
 
-from .common import SQLResourceRepository
+from .common import SQLResourceRepository, validated_payload_dict
 
 
 @dataclasses.dataclass
@@ -157,17 +157,18 @@ class ScenarioRepository(SQLResourceRepository):
 
         self._ensure_not_single_scenario_mode()
         workspace_id = self._ensure_workspace_id()
+        payload = validated_payload_dict(
+            db.Scenario,
+            name=obj.name,
+            display_name=obj.display_name,
+            description=obj.description,
+            status=obj.status,
+            simulation_info=dataclasses.asdict(obj.simulation_info),
+            epsg_code=obj.epsg_code,
+        )
         scenario_id = await self.session.scalar(
             insert(db.Scenario)
-            .values(
-                workspace_id=workspace_id,
-                name=obj.name,
-                display_name=obj.display_name,
-                description=obj.description,
-                status=obj.status,
-                simulation_info=dataclasses.asdict(obj.simulation_info),
-                epsg_code=obj.epsg_code,
-            )
+            .values(workspace_id=workspace_id, **payload)
             .returning(db.Scenario.id)
         )
         assert scenario_id is not None
@@ -195,16 +196,16 @@ class ScenarioRepository(SQLResourceRepository):
         assert current.workspace is not None
         assert current.workspace.id is not None
 
+        payload = validated_payload_dict(
+            db.Scenario,
+            name=obj.name,
+            display_name=obj.display_name,
+            description=obj.description,
+            simulation_info=dataclasses.asdict(obj.simulation_info),
+            epsg_code=obj.epsg_code,
+        )
         await self.session.execute(
-            update(db.Scenario)
-            .where(db.Scenario.id == id)
-            .values(
-                name=obj.name,
-                display_name=obj.display_name,
-                description=obj.description,
-                simulation_info=dataclasses.asdict(obj.simulation_info),
-                epsg_code=obj.epsg_code,
-            )
+            update(db.Scenario).where(db.Scenario.id == id).values(**payload)
         )
         await self.session.execute(
             delete(db.ScenarioDataset).where(db.ScenarioDataset.scenario_id == id)

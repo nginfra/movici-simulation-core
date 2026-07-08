@@ -3,6 +3,7 @@ import pathlib
 import uuid
 
 import pytest
+from pydantic import ValidationError
 
 from movici_data_core.domain_model import (
     Dataset,
@@ -23,7 +24,21 @@ from movici_data_core.exceptions import (
     UnsupportedFileType,
 )
 from movici_data_core.file_helpers import tempfile_delete_on_error
-from movici_data_core.marshalling import DatasetWithDataIn, ScenarioIn, ScenarioOut, UpdateIn
+from movici_data_core.marshalling import (
+    AttributeTypeIn,
+    DatasetTypeIn,
+    DatasetWithDataIn,
+    EntityTypeIn,
+    ModelTypeIn,
+    ScenarioDatasetIn,
+    ScenarioIn,
+    ScenarioModelIn,
+    ScenarioOut,
+    ShortDatasetIn,
+    UpdateIn,
+    UpdateModelIn,
+    WorkspaceIn,
+)
 from movici_data_core.serialization import dump_dict
 from movici_simulation_core import AttributeSchema, AttributeSpec, EntityInitDataFormat
 from movici_simulation_core.testing import dataset_data_to_numpy
@@ -327,3 +342,80 @@ class TestScenarioInOut:
             ).model_dump()
             == scenario_config
         )
+
+    @pytest.mark.parametrize(
+        "payload, expected",
+        [
+            (
+                {"name": "a_dataset", "type": "a_type"},
+                ScenarioDataset("a_dataset", DatasetType("a_type")),
+            ),
+            (
+                {"name": "a_dataset", "type": {"name": "a_type"}},
+                ScenarioDataset("a_dataset", DatasetType("a_type")),
+            ),
+            (
+                {"name": "a_dataset", "type": None},
+                ScenarioDataset("a_dataset", None),
+            ),
+        ],
+    )
+    def test_scenario_dataset_in(self, payload, expected):
+        assert ScenarioDatasetIn.model_validate(payload).to_domain() == expected
+
+
+@pytest.mark.parametrize(
+    "cls, base_payload, error_payload",
+    [
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "A"}),
+        (ShortDatasetIn, {"name": "a", "display_name": "a", "type": {"name": "a"}}, {"name": "A"}),
+        (DatasetTypeIn, {"name": "a", "format": "binary"}, {"name": "A"}),
+        (
+            ScenarioIn,
+            {
+                "name": "a",
+                "display_name": "a",
+                "simulation_info": {
+                    "mode": "time_oriented",
+                    "duration": 1,
+                    "reference": 0,
+                    "time_scale": 1,
+                    "start_time": 1,
+                },
+                "models": [],
+                "datasets": [],
+            },
+            {"name": "A"},
+        ),
+        (ScenarioDatasetIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (ScenarioDatasetIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (ScenarioModelIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (ScenarioModelIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (UpdateModelIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (UpdateModelIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (EntityTypeIn, {"name": "a"}, {"name": "A"}),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"name": "A"},
+        ),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"enum_name": "A"},
+        ),
+        (ModelTypeIn, {"name": "a", "jsonschema": {}}, {"name": "A"}),
+    ],
+)
+def test_snake_case(cls, base_payload, error_payload):
+    assert isinstance(cls(**base_payload), cls)
+    with pytest.raises(ValidationError):
+        cls(**{**base_payload, **error_payload})
