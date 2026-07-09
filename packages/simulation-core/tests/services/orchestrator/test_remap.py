@@ -8,12 +8,18 @@ from movici_simulation_core.messages import RemapMessage
 from movici_simulation_core.services.orchestrator.remap import (
     ModelRegistration,
     RemapConflictError,
+    WildcardSubscriberError,
     compute_remap_plan,
 )
 from movici_simulation_core.types import Priority
 
+# A model without subscriptions registers an empty sub mask (this is what e.g. the
+# TrackedModelAdapter sends); ``sub=None`` means "subscribe to everything" (wildcard) and
+# must be passed explicitly.
+_NO_SUBSCRIPTIONS: dict = {}
 
-def _reg(name, pub=None, sub=None, priority=int(Priority.REGULAR)):
+
+def _reg(name, pub=None, sub=_NO_SUBSCRIPTIONS, priority=int(Priority.REGULAR)):
     return ModelRegistration(name=name, pub=pub, sub=sub, priority=priority)
 
 
@@ -117,7 +123,6 @@ class TestTwoLevelChain:
                 _reg(
                     "relaxer_b",
                     pub=_attr("b"),
-                    sub=None,
                     priority=int(Priority.SOLVER_HELPER),
                 ),
             ]
@@ -139,12 +144,11 @@ class TestTwoLevelChain:
         # canonical value via its original subscription.
         plan = compute_remap_plan(
             [
-                _reg("model_a", pub=_attr("a"), sub=None),
+                _reg("model_a", pub=_attr("a")),
                 _reg("model_a2", pub=_attr("a"), sub=_attr("a")),
                 _reg(
                     "combiner_a",
                     pub=_attr("a"),
-                    sub=None,
                     priority=int(Priority.SOLVER_HELPER),
                 ),
             ]
@@ -359,3 +363,67 @@ class TestBackPropagationPartial:
                 }
             }
         }
+
+
+class TestWildcardSubscriberGuard:
+    """A model that must receive internal variants cannot subscribe with a wildcard:
+    wildcard delivery filters out ``:i`` attributes, so the plan could never work. The
+    planner fails loudly instead."""
+
+    @pytest.mark.parametrize(
+        "sub_mask",
+        [
+            None,  # root-level wildcard
+            {"the_dataset": None},  # dataset-level wildcard
+            {"the_dataset": {"the_entities": None}},  # entity-group-level wildcard
+        ],
+    )
+    def test_wildcard_covered_sub_target_raises(self, sub_mask):
+        with pytest.raises(WildcardSubscriberError, match="wildcard"):
+            compute_remap_plan(
+                [
+                    _reg("model_a", pub=_attr("a")),
+                    _reg("model_b", pub=_attr("a")),
+                    _reg(
+                        "combiner",
+                        pub=_attr("a"),
+                        sub=sub_mask,
+                        priority=int(Priority.SOLVER_HELPER),
+                    ),
+                ]
+            )
+
+    def test_wildcard_elsewhere_is_allowed(self):
+        # A wildcard on an unrelated dataset does not interfere with the plan.
+        plan = compute_remap_plan(
+            [
+                _reg("model_a", pub=_attr("a")),
+                _reg("model_b", pub=_attr("a")),
+                _reg(
+                    "combiner",
+                    pub=_attr("a"),
+                    sub={"other_dataset": None},
+                    priority=int(Priority.SOLVER_HELPER),
+                ),
+            ]
+        )
+        assert plan["combiner"].sub == {
+            "the_dataset": {
+                "the_entities": {
+                    "a:model_a:i": "a",
+                    "a:model_b:i": "a",
+                }
+            }
+        }
+
+    def test_pub_only_remap_target_may_use_wildcard_sub(self):
+        # Only models that need to RECEIVE variants are constrained; a non-owner publisher
+        # (pub remap only) may subscribe however it likes.
+        plan = compute_remap_plan(
+            [
+                _reg("model_a", pub=_attr("a"), sub=None),
+                _reg("combiner", pub=_attr("a"), priority=int(Priority.SOLVER_HELPER)),
+            ]
+        )
+        assert plan["model_a"].pub == {"the_dataset": {"the_entities": {"a": "a:model_a:i"}}}
+        assert plan["model_a"].sub is None

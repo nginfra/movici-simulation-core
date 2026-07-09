@@ -197,7 +197,7 @@ class RemapMiddleware:
     def _rename_data(self, data: dict, mapping: dict):
         def _helper(data: dict, mapping: dict, level: int):
             # updates are nested dictionaries, level 0 is the dataset level, level 1 the entity
-            # group level and level 3 the attribute level. At the attribute level we want to do
+            # group level and level 2 the attribute level. At the attribute level we want to do
             # the rename
             if level == 2:
                 return {mapping.get(k, k): v for k, v in data.items()}

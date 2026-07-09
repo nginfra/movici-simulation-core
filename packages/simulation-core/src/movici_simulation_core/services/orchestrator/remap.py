@@ -17,6 +17,13 @@ The output is a dict of ``RemapMessage`` payloads keyed by model name; only mode
 mask changes appear. The orchestrator then sends each payload as a ``REMAP`` command and
 also updates its in-memory pub/sub views (using :func:`apply_remap_to_pub_mask` and
 :func:`apply_remap_to_sub_mask`) before computing the dependency matrix.
+
+A model that must receive internal variants (i.e. it gets a ``sub`` remap) must subscribe
+to the affected entity groups explicitly: wildcard subscriptions (``None`` at any level of
+the sub mask) deliberately filter out internal (``:i``) variants, so such a model would
+silently never receive its inputs. :func:`compute_remap_plan` raises
+:class:`WildcardSubscriberError` for this configuration rather than producing a plan that
+cannot work.
 """
 
 from __future__ import annotations
@@ -47,7 +54,30 @@ class AttributeRef:
     name: str
 
 
-class RemapConflictError(RuntimeError):
+class RemapPlanningError(RuntimeError):
+    """Base class for errors that make it impossible to compute a valid REMAP plan."""
+
+
+class WildcardSubscriberError(RemapPlanningError):
+    """Raised when a model that must receive internal (``:i``) attribute variants
+    subscribes to the affected entity group with a wildcard. Wildcard subscriptions never
+    receive internal variants (they are filtered out on delivery), so the model would
+    silently miss its inputs."""
+
+    def __init__(self, model: str, dataset: str, entity_group: str):
+        self.model = model
+        self.dataset = dataset
+        self.entity_group = entity_group
+        super().__init__(
+            f"Model '{model}' must subscribe to internal attribute variants of "
+            f"'{dataset}/{entity_group}' but subscribes to it with a wildcard. Wildcard "
+            "subscriptions never receive internal (':i') variants, so this model would "
+            f"silently miss its inputs. Give '{model}' an explicit subscription mask for "
+            f"'{dataset}/{entity_group}'."
+        )
+
+
+class RemapConflictError(RemapPlanningError):
     """Raised when more than one model publishes the same attribute at the highest priority
     among that attribute's publishers — i.e. there is no unique owner."""
 
@@ -105,9 +135,32 @@ def compute_remap_plan(registrations: t.Iterable[ModelRegistration]) -> t.Dict[s
             by_name[name].sub if name in by_name else None,
             _sub_affected_attributes(name, sub_remaps),
         )
+        if sub_section:
+            _ensure_no_wildcard_subscriber(
+                name, by_name[name].sub if name in by_name else None, sub_section
+            )
         plan[name] = RemapMessage(pub=pub_section, sub=sub_section)
 
     return plan
+
+
+def _ensure_no_wildcard_subscriber(
+    name: str,
+    original_sub_mask: t.Optional[dict],
+    sub_section: t.Dict[str, t.Dict[str, t.Dict[str, str]]],
+) -> None:
+    """Raise :class:`WildcardSubscriberError` if ``name`` needs to subscribe to internal
+    variants (per ``sub_section``) in an entity group its original sub mask covers with a
+    wildcard (``None`` at the root, dataset or entity-group level) — wildcard delivery
+    filters out ``:i`` variants, so the plan could never work."""
+    for ds, entity_groups in sub_section.items():
+        for eg in entity_groups:
+            if original_sub_mask is None:
+                raise WildcardSubscriberError(name, ds, eg)
+            if ds in original_sub_mask:
+                ds_mask = original_sub_mask[ds]
+                if ds_mask is None or (eg in ds_mask and ds_mask[eg] is None):
+                    raise WildcardSubscriberError(name, ds, eg)
 
 
 def _publishers_per_attribute(

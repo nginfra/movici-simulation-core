@@ -12,7 +12,7 @@ from movici_simulation_core.services.orchestrator.fsm import (
     State,
     TransitionsT,
 )
-from movici_simulation_core.services.orchestrator.remap import RemapConflictError
+from movici_simulation_core.services.orchestrator.remap import RemapPlanningError
 
 
 class OrchestratorCondition(Condition[Context], ABC):
@@ -80,11 +80,11 @@ class ComputeAndSendRemap(OrchestratorState):
     def run(self):
         try:
             plan = self.context.models.compute_remap_plan()
-        except RemapConflictError:
-            # Conflict — log a user-actionable message and tear the simulation down via
-            # the standard finalize path so any partially-registered models still get a
-            # clean QUIT.
-            self.context.logger.exception("An error occured while planning attribute remaps")
+        except RemapPlanningError:
+            # No valid plan (ownership conflict, wildcard subscriber, ...) — log a
+            # user-actionable message and tear the simulation down via the standard
+            # finalize path so any partially-registered models still get a clean QUIT.
+            self.context.logger.exception("An error occurred while planning attribute remaps")
             for model in self.context.models.values():
                 model.failed = True
             return

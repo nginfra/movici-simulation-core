@@ -87,12 +87,20 @@ class Model(Plugin):
         raise NotImplementedError
 
     def remap(self, payload: RemapMessage) -> AutoRemap:
-        """Optional hook for handling a ``REMAP`` command. The default returns ``None`` to
-        indicate the model has not implemented this; the adapter then either installs
-        transparent rename middleware or raises :class:`RemapError` if the REMAP requires
-        many-to-one sub handling. Return ``True`` to take full responsibility for the
-        REMAP (the adapter installs no middleware), or ``False`` to let the adapter install
-        its default middleware. See issue #127.
+        """Optional hook for handling a ``REMAP`` command. The returned :class:`AutoRemap`
+        tells the connector which rename middleware to install: ``AutoRemap(pub=True)``
+        transparently renames outgoing (published) attributes, ``AutoRemap(sub=True)``
+        renames incoming (subscribed) attributes back to their original names. The default
+        (``AutoRemap.default()``, both ``True``) makes the REMAP fully transparent to the
+        model.
+
+        A model that wants to handle (part of) the REMAP itself — such as a solver helper
+        that must see the individual ``:i`` variants — overrides this method, prepares its
+        own state for the incoming variants, and returns ``False`` for the corresponding
+        side (e.g. ``AutoRemap(pub=True, sub=False)``). A many-to-one sub remap (multiple
+        variants resolving to the same original name) *requires* this: the adapter raises
+        :class:`RemapError` if the model leaves ``sub=True`` for such a remap. See issue
+        #127.
 
         :param payload: the RemapMessage.
         """
@@ -169,24 +177,20 @@ class ModelAdapterBase(abc.ABC):
         """Handle a ``REMAP`` command by consulting the inner model and deciding what
         rename middleware the connector should install. See issue #127.
 
-        The default implementation:
-
-        * delegates to ``self.model.remap(payload)`` first;
-        * if the model returns ``True`` (it took full responsibility) - installs no rename
-          middleware;
-        * if the model returns ``False`` - installs full middleware for a
-          one-to-one sub remap, and raises :class:`RemapError` if any sub entry is
-          many-to-one (multiple variants resolving to the same original) since that case
-          fundamentally requires a model-level decision the adapter cannot make.
+        The default implementation delegates to ``self.model.remap(message)`` and validates
+        the result: a many-to-one sub remap (multiple variants resolving to the same
+        original) cannot be handled by rename middleware — the renamed keys would collide —
+        so the model must handle it itself and return ``AutoRemap(sub=False)``. If it
+        doesn't, :class:`RemapError` is raised.
         """
         result = self.model.remap(message)
         if result.sub and _sub_has_many_to_one(message.sub):
             raise RemapError(
                 f"Model '{type(self.model).__name__}' received a many-to-one sub-remap "
                 "but its remap() returned AutoRemap(sub=True). Override "
-                f"`{type(self.model).__name__}.remap` to return AutoRemap(sub=True) (the model "
-                "handles the many-to-one mapping itself, e.g. by registering the variant "
-                " attribute fields in its state)"
+                f"`{type(self.model).__name__}.remap` to handle the many-to-one mapping "
+                "itself (e.g. by registering the variant attribute fields in its state) "
+                "and return AutoRemap(sub=False)"
             )
         return result
 
