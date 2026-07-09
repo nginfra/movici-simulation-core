@@ -1,7 +1,7 @@
 
 
 movici\_transport\_assignment\_model
-=====================================
+====================================
 
 Subpackages
 -----------
@@ -17,7 +17,7 @@ Subpackages
 
 
 ae\_util
----------
+--------
 
 .. automodule:: movici_transport_assignment_model.ae_util
    :members:

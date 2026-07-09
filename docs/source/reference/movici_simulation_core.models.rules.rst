@@ -1,13 +1,13 @@
 
 
 rules
-======
+=====
 
 
 
 
 expression
------------
+----------
 
 .. automodule:: movici_simulation_core.models.rules.expression
    :members:
@@ -17,7 +17,7 @@ expression
 
 
 model
-------
+-----
 
 .. automodule:: movici_simulation_core.models.rules.model
    :members:

@@ -1,13 +1,13 @@
 
 
 movici\_drinking\_water\_model
-===============================
+==============================
 
 
 
 
 attributes
------------
+----------
 
 .. automodule:: movici_drinking_water_model.attributes
    :members:
@@ -17,7 +17,7 @@ attributes
 
 
 dataset
---------
+-------
 
 .. automodule:: movici_drinking_water_model.dataset
    :members:
@@ -27,7 +27,7 @@ dataset
 
 
 model
-------
+-----
 
 .. automodule:: movici_drinking_water_model.model
    :members:
@@ -37,7 +37,7 @@ model
 
 
 network\_wrapper
------------------
+----------------
 
 .. automodule:: movici_drinking_water_model.network_wrapper
    :members:

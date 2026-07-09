@@ -1,13 +1,13 @@
 
 
 integrations
-=============
+============
 
 
 
 
 collections
-------------
+-----------
 
 .. automodule:: movici_transport_assignment_model.integrations.collections
    :members:
@@ -17,7 +17,7 @@ collections
 
 
 id\_generator
---------------
+-------------
 
 .. automodule:: movici_transport_assignment_model.integrations.id_generator
    :members:
@@ -27,7 +27,7 @@ id\_generator
 
 
 patches
---------
+-------
 
 .. automodule:: movici_transport_assignment_model.integrations.patches
    :members:
@@ -37,7 +37,7 @@ patches
 
 
 point\_generator
------------------
+----------------
 
 .. automodule:: movici_transport_assignment_model.integrations.point_generator
    :members:
@@ -47,7 +47,7 @@ point\_generator
 
 
 project
---------
+-------
 
 .. automodule:: movici_transport_assignment_model.integrations.project
    :members:

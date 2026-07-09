@@ -1,13 +1,13 @@
 
 
 opportunities
-==============
+=============
 
 
 
 
 dataset
---------
+-------
 
 .. automodule:: movici_simulation_core.models.opportunities.dataset
    :members:
@@ -17,7 +17,7 @@ dataset
 
 
 model
-------
+-----
 
 .. automodule:: movici_simulation_core.models.opportunities.model
    :members:
