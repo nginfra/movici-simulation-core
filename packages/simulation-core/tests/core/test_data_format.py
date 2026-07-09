@@ -77,10 +77,23 @@ def test_init_data_format(list_init_data, array_init_data, schema):
 @pytest.mark.parametrize(
     "data_type, py_data, expected",
     [
+        (DataType(float, (), False), [], np.array([], dtype=float)),
+        (DataType(int, (), False), [], np.array([], dtype=int)),
+        (DataType(float, (2,), False), [], np.array([], dtype=float)),
         (DataType(int, (), False), [1, None], np.array([1, UNDEFINED[int]])),
         (DataType(float, (), False), [1, None], np.array([1, UNDEFINED[float]])),
         (DataType(str, (), False), ["1", None], np.array(["1", UNDEFINED[str]])),
         (DataType(bool, (), False), [True, None], np.array([True, UNDEFINED[bool]])),
+        (
+            DataType(int, (2,), csr=True),
+            [None, None],
+            np.array([[UNDEFINED[int], UNDEFINED[int]], [UNDEFINED[int], UNDEFINED[int]]]),
+        ),
+        (
+            DataType(float, (2,), csr=True),
+            [None, None],
+            np.array([[UNDEFINED[float], UNDEFINED[float]], [UNDEFINED[float], UNDEFINED[float]]]),
+        ),
         (
             DataType(int, (2,), False),
             [[1, 1], None],
@@ -113,10 +126,24 @@ def test_init_data_format(list_init_data, array_init_data, schema):
 )
 def test_create_array(data_type, py_data, expected):
     result = create_array(py_data, data_type)
+    assert result.shape == expected.shape
     if data_type.py_type is float:
         assert np.allclose(result, expected, equal_nan=True)
     else:
         assert np.array_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data_type, py_data",
+    [
+        (DataType(float), [[1.0, 2.0]]),
+        (DataType(float, (2,), csr=True), [1.0, 2.0]),
+        (DataType(float, (2,)), [[1.0, 2.0, 3.0]]),
+    ],
+)
+def test_create_array_raises_on_shape_mismatch(data_type, py_data):
+    with pytest.raises(ValueError, match="input data is not of the correct shape"):
+        create_array(py_data, data_type)
 
 
 @pytest.mark.parametrize(
@@ -270,3 +297,30 @@ def test_data_keys(data, ignored, expected):
 def test_csr_undefined(data, row_ptr, data_type, expected):
     array = TrackedCSRArray(data, row_ptr)
     np.testing.assert_array_equal(is_undefined_csr(array, data_type), expected)
+
+
+@pytest.mark.parametrize(
+    "data, data_type, exp_min, exp_max",
+    [
+        ([], DataType(float), None, None),
+        ([], DataType(int), None, None),
+        ([], DataType(bool), None, None),
+        ([], DataType(str), None, None),
+        ([UNDEFINED[float]], DataType(float), None, None),
+        ([UNDEFINED[int]], DataType(int), None, None),
+        ([UNDEFINED[bool]], DataType(bool), None, None),
+        ([UNDEFINED[str]], DataType(str), None, None),
+        (["asdf"], DataType(str), None, None),
+        ([1, 2], DataType(int), 1, 2),
+        ([True, False], DataType(bool), False, True),
+        ([False], DataType(bool), False, False),
+        ([True], DataType(bool), True, True),
+        ([True, UNDEFINED[bool], False], DataType(bool), False, True),
+        ([True, UNDEFINED[bool]], DataType(bool), True, True),
+        ([1.1, 2], DataType(float), 1.1, 2.0),
+        ([1.1, UNDEFINED[float], 2], DataType(float), 1.1, 2.0),
+        ([1, UNDEFINED[int], 2], DataType(int), 1, 2),
+    ],
+)
+def test_min_max(data, data_type, exp_min, exp_max):
+    assert data_type.get_min_max(data) == (exp_min, exp_max)

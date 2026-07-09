@@ -10,7 +10,6 @@ from movici_simulation_core.core.attribute import INIT, PUB, SUB, field
 from movici_simulation_core.core.entity_group import EntityGroup
 from movici_simulation_core.core.moment import Moment
 from movici_simulation_core.core.schema import AttributeSchema, AttributeSpec, DataType
-from movici_simulation_core.core.serialization import dump_update, load_update
 from movici_simulation_core.core.state import TrackedState
 from movici_simulation_core.exceptions import NotReady
 from movici_simulation_core.messages import (
@@ -92,9 +91,7 @@ def adapter(model, get_adapter) -> TrackedModelAdapter:
 @pytest.fixture
 def create_update(entity_group):
     def _create(payload):
-        return dump_update(
-            dataset_data_to_numpy({"dataset": {entity_group.__entity_name__: payload}})
-        )
+        return dataset_data_to_numpy({"dataset": {entity_group.__entity_name__: payload}})
 
     return _create
 
@@ -280,9 +277,9 @@ def test_full_run(model, get_adapter, update, init_data_handler, entity_group):
     adapter.initialize(init_data_handler)
 
     def compare_update_result(timestamp, raw_update, expected):
-        raw_result = adapter.update(UpdateMessage(timestamp), raw_update)[0]
+        result = adapter.update(UpdateMessage(timestamp), raw_update)[0]
         assert dataset_dicts_equal(
-            load_update(raw_result) if raw_result is not None else {},
+            result or {},
             dataset_data_to_numpy(expected),
         )
 
@@ -309,7 +306,7 @@ def test_handles_not_ready(adapter, model, init_data_handler):
 class TestUpdate:
     @pytest.fixture
     def filtered_update(self):
-        return dump_update({})
+        return {}
 
     def test_skips_calculation_on_empty_cascading_update(self, adapter, model, filtered_update):
         adapter.update(UpdateMessage(1, "bla", "bla"), filtered_update)

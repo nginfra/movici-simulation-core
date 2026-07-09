@@ -1,15 +1,60 @@
 import logging
 
 from movici_simulation_core.core.types import Service
+from movici_simulation_core.exceptions import FSMError
 from movici_simulation_core.messages import Message, ModelMessage
-from movici_simulation_core.networking.stream import Stream
+from movici_simulation_core.networking.stream import BaseStream
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
 
-from .context import Context, TimelineController
-from .fsm import FSM, FSMDone
-from .states import StartInitializingPhase
+from .context import MODEL_FSM_CONFIG, Context, TimelineController
+from .fsm import FSM, Always, FSMConfig, FSMDone
+from .states import (
+    AllModelsDone,
+    AllModelsReady,
+    EndFinalizingPhase,
+    Failed,
+    FinalizingWaitForModels,
+    ModelsRegistration,
+    NewTime,
+    StartFinalizingPhase,
+    StartInitializingPhase,
+    StartRunningPhase,
+    WaitForResults,
+)
+
+FSM_CONFIG = FSMConfig(
+    initial_state=StartInitializingPhase,
+    states={
+        StartInitializingPhase: [
+            (Always, ModelsRegistration),
+        ],
+        ModelsRegistration: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+        ],
+        StartRunningPhase: [
+            (Always, NewTime),
+        ],
+        NewTime: [
+            (Always, WaitForResults),
+        ],
+        WaitForResults: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsDone, StartFinalizingPhase),
+            (AllModelsReady, NewTime),
+        ],
+        StartFinalizingPhase: [
+            (AllModelsReady, EndFinalizingPhase),
+            (Always, FinalizingWaitForModels),
+        ],
+        FinalizingWaitForModels: [
+            (AllModelsReady, EndFinalizingPhase),
+        ],
+        EndFinalizingPhase: [],
+    },
+)
 
 
 class Orchestrator(Service):
@@ -20,9 +65,9 @@ class Orchestrator(Service):
     timeline: TimelineController
     logger: logging.Logger
     context: Context
-    stream: Stream
+    stream: BaseStream
 
-    def setup(self, *, settings: Settings, stream: Stream, logger: logging.Logger, **_):
+    def setup(self, *, settings: Settings, stream: BaseStream, logger: logging.Logger, **_):
         self.settings = settings
         self.logger = logger
         self.stream = stream
@@ -47,16 +92,19 @@ class Orchestrator(Service):
         )
 
     def _setup_fsm(self):
-        self.fsm = FSM(StartInitializingPhase, context=self.context)
-        self.stream.set_handler(self.fsm.send)
+        self.fsm = FSM(FSM_CONFIG, context=self.context)
+        self.stream.set_handler(self.fsm.handle_event)
 
     def _get_connected_model(self, identifier: str):
-        return ConnectedModel(
+        model = ConnectedModel(
             name=identifier,
             timeline=self.timeline,
             send=self.make_send(identifier),
             logger=self.logger,
+            fsm_config=MODEL_FSM_CONFIG,
         )
+        model.start()
+        return model
 
     def make_send(self, identifier: str):
         """create a send function that a can be used to send a message to a specific client
@@ -70,12 +118,23 @@ class Orchestrator(Service):
 
     def run(self):
         try:
-            self.fsm.start()
+            self.start()
             self.stream.run()
-        except FSMDone:
+        except (FSMDone, FSMError):
             if self.context.failed:
                 return 1
             return 0
+
+    def start(self):
+        """Start the orchestrator FSM but do not run the stream (yet)"""
+        self.fsm.start()
+
+    def restart_model_timer(self, model: str):
+        """Allow resetting a specific model timer. This is used when running using the
+        InProcessSimulationRunner. Orchestrator starts the timer by default when it sends out the
+        message, but we need to actually start the timer when we start processing the message
+        """
+        self.context.models[model].timer.restart_current()
 
     @classmethod
     def install(cls, sim: Simulation):

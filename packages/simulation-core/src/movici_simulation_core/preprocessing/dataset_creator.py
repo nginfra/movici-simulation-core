@@ -4,6 +4,7 @@ import functools
 import itertools
 import typing as t
 import warnings
+from importlib.metadata import entry_points
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +15,15 @@ from jsonschema.validators import validator_for
 from movici_simulation_core.attributes import Grid_GridPoints
 from movici_simulation_core.json_schemas import PATH
 
-from .data_sources import GeometryType, GeopandasSource, NetCDFGridSource, SourcesDict
+from .data_sources import (
+    DataSource,
+    GeometryType,
+    MultipleEntityTypeSource,
+    SourcesDict,
+    resolve_source,
+)
+
+SOURCE_TYPE_ENTRY_POINT_GROUP = "movici.dataset_creator.source"
 
 _dataset_creator_schema = None
 
@@ -113,8 +122,32 @@ class DatasetOperation:
 
 class SourcesSetup(DatasetOperation):
     r"""The ``SourcesSetup`` operation is responsible for reading the ``__sources__`` field of the
-    config and create ``DatasetSource``\s from it
+    config and create ``DatasetSource``\s from it.
+
+    Source-type names are resolved against a class-level registry. Built-in types
+    (``"file"``, ``"netcdf"``) and any third-party types declared under the
+    ``movici.dataset_creator.source`` entry-point group are imported on demand the first
+    time a config references them. Imperative registration is also supported via
+    :meth:`register`.
     """
+
+    _source_types: t.ClassVar[
+        t.Dict[str, t.Type[t.Union[DataSource, MultipleEntityTypeSource]]]
+    ] = {}
+
+    @classmethod
+    def register(
+        cls, name: str, source_cls: t.Type[t.Union[DataSource, MultipleEntityTypeSource]]
+    ) -> None:
+        """Register a ``DataSource`` class under ``name``.
+
+        The class must expose a ``from_source_info(source_info)`` classmethod. Source types
+        can also be registered declaratively through the
+        ``movici.dataset_creator.source`` entry-point group in a package's
+        ``pyproject.toml``. Registering imperatively under a name that is also exposed
+        via that entry-point group will override the declarative registration.
+        """
+        cls._source_types[name] = source_cls
 
     def __call__(self, dataset: dict, sources: SourcesDict) -> dict:
         read_sources = self.config.get("__sources__", {})
@@ -132,13 +165,22 @@ class SourcesSetup(DatasetOperation):
             source_info = {"source_type": "file", "path": source_info}
 
         source_type = source_info["source_type"]
-        if source_type == "file":
-            cls = GeopandasSource
-        elif source_type == "netcdf":
-            cls = NetCDFGridSource
-        else:
-            raise ValueError(f"Unknown source type '{source_type}'")
+        cls = self._resolve_source_type(source_type)
         return cls.from_source_info(source_info)
+
+    @classmethod
+    def _resolve_source_type(
+        cls, name: str
+    ) -> t.Type[t.Union[DataSource, MultipleEntityTypeSource]]:
+        if name in cls._source_types:
+            return cls._source_types[name]
+        try:
+            (entry_point,) = entry_points(group=SOURCE_TYPE_ENTRY_POINT_GROUP, name=name)
+        except ValueError:
+            raise ValueError(f"Unknown source type '{name}'") from None
+        source_cls = entry_point.load()
+        cls._source_types[name] = source_cls
+        return source_cls
 
     @staticmethod
     def get_file_path(path_str):
@@ -146,6 +188,16 @@ class SourcesSetup(DatasetOperation):
         if not path.is_file():
             raise ValueError(f"{path_str} is not a valid file")
         return path
+
+
+def register_source_type(
+    name: str, cls: t.Type[t.Union[DataSource, MultipleEntityTypeSource]]
+) -> None:
+    """Register a ``DataSource`` class under ``name`` with :class:`SourcesSetup`.
+
+    Convenience module-level shim that delegates to :meth:`SourcesSetup.register`.
+    """
+    SourcesSetup.register(name, cls)
 
 
 class CRSTransformation(DatasetOperation):
@@ -335,10 +387,7 @@ class AttributeDataLoading(DatasetOperation):
         return [pipe(loaders, attr) for attr in source.get_attribute(attr_config["property"])]
 
     def get_source(self, source_name):
-        try:
-            return self.sources[source_name]
-        except KeyError:
-            raise ValueError(f"Source '{source_name}' not available") from None
+        return resolve_source(source_name, self.sources)
 
     def get_loaders(self, attr_config):
         def skip_none(loader):
@@ -460,7 +509,7 @@ class BoundingBoxCalculation(DatasetOperation):
         active_sources_keys = {
             eg["__meta__"].get("source") for eg in self.config["data"].values()
         } - {None}
-        return (sources[key] for key in active_sources_keys)
+        return (resolve_source(key, sources) for key in active_sources_keys)
 
 
 class IDGeneration(DatasetOperation):
@@ -481,11 +530,9 @@ class IDGeneration(DatasetOperation):
             entity_data["id"] = [next(ctr) for _ in range(size)]
         return dataset
 
-    def get_entity_count_from_meta(
-        self, entity_meta: dict, sources: t.MutableMapping[str, t.Sized]
-    ) -> int:
-        if source := entity_meta.get("source"):
-            return len(sources[source])
+    def get_entity_count_from_meta(self, entity_meta: dict, sources: SourcesDict) -> int:
+        if source_ref := entity_meta.get("source"):
+            return len(resolve_source(source_ref, sources))
         if count := entity_meta.get("count"):
             return count
         return 0
@@ -584,10 +631,10 @@ class IDLinking(DatasetOperation):
         except KeyError:
             raise ValueError(f"Target entity group '{entity_type}' not defined") from None
 
-        try:
-            source = sources[target_entity_group["__meta__"]["source"]]
-        except KeyError:
-            raise ValueError(f"Source not defined for '{entity_type}'") from None
+        source_ref = target_entity_group["__meta__"].get("source")
+        if source_ref is None:
+            raise ValueError(f"Source not defined for '{entity_type}'")
+        source = resolve_source(source_ref, sources)
 
         try:
             ids = dataset["data"][entity_type]["id"]
@@ -613,6 +660,8 @@ class IDLinking(DatasetOperation):
     def get_indexed_values_or_raise(cls, values, indexers):
         if isinstance(values, t.Sequence) and not isinstance(values, (bytes, str)):
             return [cls.get_indexed_values_or_raise(item, indexers) for item in values]
+        if values is None:
+            return None
         return cls.get_single_indexed_value_or_raise(values, indexers)
 
     @staticmethod

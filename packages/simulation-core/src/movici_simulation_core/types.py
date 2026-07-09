@@ -1,7 +1,12 @@
+from __future__ import annotations
+
 import enum
 import typing as t
 
 import numpy as np
+
+if t.TYPE_CHECKING:
+    from movici_simulation_core import AttributeSchema
 
 Timestamp = int
 NextTime = t.Optional[int]
@@ -15,11 +20,10 @@ class UniformAttributeData(t.TypedDict):
     data: np.ndarray
 
 
-class CSRAttributeData(t.TypedDict, total=False):
-    data: np.ndarray
-    ind_ptr: t.Optional[np.ndarray]
-    indptr: t.Optional[np.ndarray]
-    row_ptr: t.Optional[np.ndarray]
+class CSRAttributeData(UniformAttributeData, total=False):
+    ind_ptr: np.ndarray
+    indptr: np.ndarray
+    row_ptr: np.ndarray
 
 
 NumpyAttributeData = t.Union[UniformAttributeData, CSRAttributeData]
@@ -39,7 +43,11 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
-    OTHER = ()
+    OTHER = (".dat",)
+
+    @property
+    def default_extension(self):
+        return self.value[0]
 
     @classmethod
     def from_extension(cls, ext):
@@ -50,20 +58,17 @@ class FileType(enum.Enum):
 
 
 class ExternalSerializationStrategy:
-    def __init__(
-        self,
-        schema,
-        non_data_dict_keys: t.Container[str] = ("general",),
-        cache_inferred_attributes: bool = False,
-    ) -> None:
-        self.schema = schema
-        self.non_data_dict_keys = non_data_dict_keys
-        self.cache_inferred_attributes = cache_inferred_attributes
-
-    def dumps(self, data, type: FileType):
+    def with_schema(self, schema: AttributeSchema) -> ExternalSerializationStrategy:
         raise NotImplementedError
 
-    def loads(self, raw_data, type: FileType):
+    def dumps(
+        self, data: dict, filetype: FileType, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> bytes:
+        raise NotImplementedError
+
+    def loads(
+        self, raw_data: bytes, type: FileType, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> dict:
         raise NotImplementedError
 
     def supported_file_types(self) -> t.Sequence[FileType]:
@@ -74,9 +79,12 @@ class ExternalSerializationStrategy:
             raise TypeError(f"Unsupported file type '{type}'")
 
 
-class InternalSerializationStrategy:
-    def dumps(self, data):
+T = t.TypeVar("T", bytes, dict)
+
+
+class InternalSerializationStrategy(t.Protocol[T]):
+    def dumps(self, data: dict) -> T:
         raise NotImplementedError
 
-    def loads(self, raw_data):
+    def loads(self, raw_data: T) -> dict:
         raise NotImplementedError

@@ -16,13 +16,10 @@ from movici_simulation_core.postprocessing import merge_updates
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.types import (
     DataMask,
-    InternalSerializationStrategy,
-    RawResult,
-    RawUpdateData,
+    Result,
     Timestamp,
     UpdateData,
 )
-from movici_simulation_core.utils import strategies
 
 from .common import EntityAwareInitDataHandler
 
@@ -30,11 +27,9 @@ from .common import EntityAwareInitDataHandler
 class SimpleModelAdapter(ModelAdapterBase):
     model: SimpleModel
     schema: AttributeSchema = None
-    serialization: InternalSerializationStrategy
 
     def __init__(self, model: Model, settings: Settings, logger: logging.Logger):
         super().__init__(model, settings, logger)
-        self.serialization = strategies.get_instance(InternalSerializationStrategy)
 
     def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
         init_data_handler = EntityAwareInitDataHandler(init_data_handler)
@@ -49,31 +44,18 @@ class SimpleModelAdapter(ModelAdapterBase):
     def new_time(self, message: NewTimeMessage):
         self.model.new_time(new_time=Moment(message.timestamp), message=message)
 
-    def update(self, message: UpdateMessage, data: RawUpdateData) -> RawResult:
-        result = self.model.update(
-            moment=Moment(message.timestamp), data=self.process_input(data), message=message
-        )
+    def update(self, message: UpdateMessage, data: UpdateData) -> Result:
+        result = self.model.update(moment=Moment(message.timestamp), data=data, message=message)
         return self.process_result(result)
 
-    def update_series(
-        self, message: UpdateSeriesMessage, data: t.Iterable[t.Optional[bytes]]
-    ) -> RawResult:
-        result = self.model.update_series(
-            Moment(message.timestamp), map(self.process_input, data), message=message
-        )
+    def update_series(self, message: UpdateSeriesMessage, data: t.Iterable[UpdateData]) -> Result:
+        result = self.model.update_series(Moment(message.timestamp), data, message=message)
         return self.process_result(result)
-
-    def process_input(self, data: RawUpdateData) -> UpdateData:
-        if data is None:
-            return None
-        return self.serialization.loads(data)
 
     def process_result(
         self, result: t.Tuple[UpdateData, t.Union[Moment, Timestamp, None]]
-    ) -> RawResult:
+    ) -> Result:
         data, next_time = result
-        if data:
-            data = self.serialization.dumps(data)
         if isinstance(next_time, Moment):
             next_time = next_time.timestamp
         return data, next_time
@@ -101,7 +83,7 @@ class SimpleModel(Model):
         raise NotImplementedError
 
     def update_series(
-        self, moment: Moment, data: t.Iterable[t.Optional[dict]], message: UpdateSeriesMessage
+        self, moment: Moment, data: t.Iterable[UpdateData], message: UpdateSeriesMessage
     ) -> t.Tuple[UpdateData, t.Optional[Moment]]:
         output = (self.update(moment, upd, msg) for upd, msg in zip(data, message.updates))
 

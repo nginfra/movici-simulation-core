@@ -32,7 +32,7 @@ from .schema import (
 )
 from .serialization import UpdateDataFormat, dump_update, load_update
 from .state import TrackedState
-from .types import Extensible, InitDataHandlerBase, Model, ModelAdapterBase, Plugin, Service
+from .types import Extensible, InitDataHandler, Model, ModelAdapterBase, Plugin, Service
 from .utils import configure_global_plugins
 
 __all__ = [
@@ -55,7 +55,7 @@ __all__ = [
     "Service",
     "Extensible",
     "ModelAdapterBase",
-    "InitDataHandlerBase",
+    "InitDataHandler",
     "OPT",
     "PUB",
     "SUB",

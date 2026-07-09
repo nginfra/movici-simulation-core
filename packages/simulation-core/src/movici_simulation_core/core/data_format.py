@@ -1,16 +1,18 @@
+from __future__ import annotations
+
+import dataclasses
 import typing as t
 import warnings
 
 import msgpack
 import numpy as np
-import orjson as json
+import orjson
 
 from movici_simulation_core.types import (
     ExternalSerializationStrategy,
     FileType,
     NumpyAttributeData,
 )
-from movici_simulation_core.utils import lifecycle
 from movici_simulation_core.utils.unicode import get_unicode_dtype
 
 from .arrays import TrackedCSRArray
@@ -24,50 +26,47 @@ from .schema import (
     infer_data_type_from_list,
 )
 
+NON_DATA_DICT_KEYS = ("general",)
 
-@lifecycle.has_deprecations
+
+@dataclasses.dataclass
 class EntityInitDataFormat(ExternalSerializationStrategy):
-    schema: AttributeSchema
+    schema: AttributeSchema = dataclasses.field(default_factory=AttributeSchema)
+    non_data_dict_keys: t.Container[str] = NON_DATA_DICT_KEYS
+    cache_inferred_attributes: bool = False
 
-    def __init__(
-        self,
-        schema: t.Optional[AttributeSchema] = None,
-        non_data_dict_keys: t.Container[str] = ("general",),
-        cache_inferred_attributes: bool = False,
-    ) -> None:
-        if schema is None:
-            schema = AttributeSchema()
-        super().__init__(schema, non_data_dict_keys, cache_inferred_attributes)
+    def with_schema(self, schema: AttributeSchema) -> EntityInitDataFormat:
+        return dataclasses.replace(self, schema=schema)
 
     def supported_file_types(self) -> t.Sequence[FileType]:
         return (FileType.JSON, FileType.MSGPACK)
 
-    @lifecycle.deprecated(alternative="EntityInitDataFormat.loads")
-    def load_bytes(self, raw: t.Union[str, bytes], **kwargs):
-        return self.loads(raw, FileType.JSON)
-
-    def loads(self, raw_data, type: FileType):
+    def loads(self, raw_data, type: FileType, non_data_dict_keys: t.Sequence[str] | None = None):
         self.supported_file_type_or_raise(type)
         if type is FileType.JSON:
-            list_data = json.loads(raw_data)
+            list_data = orjson.loads(raw_data)
         elif type is FileType.MSGPACK:
             list_data = msgpack.unpackb(raw_data)
+        else:
+            raise ValueError("type parameter must be FileType.JSON or FileType.MSGPACK")
+        return self.load_json(list_data, non_data_dict_keys=non_data_dict_keys)
 
-        return self.load_json(list_data)
-
-    def load_json(self, obj: dict):
+    def load_json(self, obj: dict, non_data_dict_keys=None):
         if not isinstance(obj, dict):
             raise TypeError("Dataset must be dictionary")
+        non_data_dict_keys = (
+            non_data_dict_keys if non_data_dict_keys is not None else self.non_data_dict_keys
+        )
         return {
             key: (
                 self.load_data_section(val)
-                if isinstance(val, dict) and key not in self.non_data_dict_keys
+                if isinstance(val, dict) and key not in non_data_dict_keys
                 else val
             )
             for key, val in obj.items()
         }
 
-    def load_data_section(self, data: dict) -> dict:
+    def load_data_section(self, data: dict | None) -> dict:
         rv = {}
         if data is None:
             return rv
@@ -90,28 +89,38 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
                 except TypeError as e:
                     raise TypeError(f"Error when parsing data for '{name}'") from e
 
-            data_type = self.schema.get_spec(name, infer_datatype, cache=True).data_type
-
-            return parse_list(attr_data, data_type)
-
+            spec = self.schema.get_spec(name, default_data_type=infer_datatype, cache=True)
+            data_type = spec.data_type
+            try:
+                return t.cast(dict, parse_list(attr_data, data_type))
+            except ValueError as e:
+                raise ValueError(f"Error when parsing data for '{name}': {e}") from e
         else:
-            raise TypeError("attribute data must be list")
+            raise TypeError(f"Attribute data for '{name}' must be list")
 
     def dumps(
-        self, dataset: dict, filetype: t.Optional[FileType] = FileType.JSON, **kwargs
-    ) -> str:
+        self,
+        data: dict,
+        filetype: FileType = FileType.JSON,
+        non_data_dict_keys: t.Sequence[str] | None = None,
+        **kwargs,
+    ) -> bytes:
         self.supported_file_type_or_raise(filetype)
-        list_data = self.dump_dict(dataset)
+        list_data = self.dump_dict(data, non_data_dict_keys=non_data_dict_keys)
         if filetype is FileType.JSON:
-            return json.dumps(self.dump_dict(dataset), **kwargs)
+            return orjson.dumps(list_data, **kwargs)
         if filetype is FileType.MSGPACK:
-            return msgpack.packb(list_data, **kwargs)
+            return t.cast(bytes, msgpack.packb(list_data, **kwargs))
+        raise ValueError(f"Unsupported file type {filetype}")
 
-    def dump_dict(self, dataset: dict):
+    def dump_dict(self, dataset: dict, non_data_dict_keys=None):
+        non_data_dict_keys = (
+            non_data_dict_keys if non_data_dict_keys is not None else self.non_data_dict_keys
+        )
         return {
             key: (
                 dump_dataset_data(val)
-                if isinstance(val, dict) and key not in self.non_data_dict_keys
+                if isinstance(val, dict) and key not in non_data_dict_keys
                 else val
             )
             for key, val in dataset.items()
@@ -120,8 +129,8 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
 
 def load_from_json(
     data,
-    schema: t.Optional[AttributeSchema] = None,
-    non_data_dict_keys=("general",),
+    schema: AttributeSchema,
+    non_data_dict_keys=NON_DATA_DICT_KEYS,
     cache_inferred_attributes=False,
 ):
     reader = EntityInitDataFormat(schema, non_data_dict_keys, cache_inferred_attributes)
@@ -153,21 +162,46 @@ def parse_csr_list(data: t.List[list], data_type: DataType) -> NumpyAttributeDat
 
 
 def create_array(uniform_data: list, data_type: DataType):
+    dtype = data_type.np_type
+    if not uniform_data:
+        return np.array([], dtype=dtype)
+
     if data_type.unit_shape == ():
         undefined = data_type.undefined
     else:
         undefined = np.full(data_type.unit_shape, data_type.undefined)
 
-    dtype = data_type.np_type
     if np.issubdtype(dtype, str):
         uniform_data = _substitute_undefined(uniform_data, undefined)
         dtype = get_unicode_dtype(_max_str_length(uniform_data))
 
+    result = None
     try:
-        return np.array(uniform_data, dtype=dtype)
+        # Try optimistically, this may produce an array with an incorrect shape in case of
+        # floating point arrays (`[None, None]` for multidimensional arrays is converted to
+        # `[nan, nan]`, which is wrong). For other data types, `None` in inputs always raises an
+        # error, as well as mismatched shapes.
+        result = np.array(uniform_data, dtype=dtype)
     except (ValueError, TypeError):
-        uniform_data = _substitute_undefined(uniform_data, undefined)
-        return np.array(uniform_data, dtype=dtype)
+        pass
+
+    if result is not None and result.shape[1:] == data_type.unit_shape:
+        # If all went well and we have the correct shape, we can return the array
+        return result
+
+    # Otherwise we need to handle None values properly
+    uniform_data = _substitute_undefined(uniform_data, undefined)
+    try:
+        result = np.array(uniform_data, dtype=dtype)
+    except ValueError as e:
+        raise ValueError("invalid input data") from e
+
+    if result.shape[1:] != data_type.unit_shape:
+        # If we still do not have the correct shape, this means that the input data was incorrectly
+        # shaped
+        raise ValueError("input data is not of the correct shape")
+
+    return result
 
 
 def _substitute_undefined(uniform_data, undefined):
@@ -251,7 +285,7 @@ def is_undefined_csr(csr_array, data_type):
     return csr_array.rows_contain(np.array([data_type.undefined]), equal_nan=True)
 
 
-def data_keys(update_or_init_data, ignore_keys=("general",)):
+def data_keys(update_or_init_data, ignore_keys=NON_DATA_DICT_KEYS):
     return {
         key
         for key in data_key_candidates(update_or_init_data, ignore_keys)
@@ -259,7 +293,7 @@ def data_keys(update_or_init_data, ignore_keys=("general",)):
     }
 
 
-def data_key_candidates(update_or_init_data, ignore_keys=("general",)):
+def data_key_candidates(update_or_init_data, ignore_keys=NON_DATA_DICT_KEYS):
     if "data" in update_or_init_data:
         return {"data"}
     else:
@@ -268,7 +302,7 @@ def data_key_candidates(update_or_init_data, ignore_keys=("general",)):
         )
 
 
-def extract_dataset_data(update_or_init_data, ignore_keys=("general",)):
+def extract_dataset_data(update_or_init_data, ignore_keys=NON_DATA_DICT_KEYS):
     keys = data_keys(update_or_init_data, ignore_keys)
 
     if "data" in keys and isinstance(name := update_or_init_data.get("name"), str):
