@@ -134,7 +134,7 @@ class DatasetRepository(SQLResourceRepository):
             )
 
             if attribute.attribute_type.name == "id":
-                entity_group.count = max(entity_group.count, attribute.length)
+                entity_group.count = attribute.length
             entity_group.attributes.append(
                 AttributeSummary(
                     name=attribute_type.name,

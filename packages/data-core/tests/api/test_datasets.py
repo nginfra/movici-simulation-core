@@ -253,3 +253,39 @@ def test_conflict_on_update_dataset_data(create_dataset, upload_dataset_data, da
     )
     assert result.status_code == 409
     assert result.json()["type"] == "duplicate_error"
+
+
+def test_get_dataset_summary(get_json, a_dataset_with_data):
+    result = get_json(f"/datasets/{a_dataset_with_data.id}/summary")
+    assert result == {
+        "general": {},
+        "bounding_box": None,
+        "epsg_code": None,
+        "count": 3,
+        "entity_groups": [
+            {
+                "name": "roads",
+                "count": 3,
+                "attributes": [
+                    {
+                        "name": "id",
+                        "data_type": {"type": "int", "unit_shape": [], "csr": False},
+                        "description": "Entity ID",
+                        "unit": "",
+                        "enum_name": None,
+                        "min_val": 1,
+                        "max_val": 3,
+                    },
+                    {
+                        "name": "some.attribute",
+                        "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                        "description": "a description",
+                        "unit": "m/s",
+                        "enum_name": None,
+                        "min_val": 10,
+                        "max_val": 30,
+                    },
+                ],
+            }
+        ],
+    }

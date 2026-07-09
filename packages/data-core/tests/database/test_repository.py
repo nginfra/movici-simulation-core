@@ -1378,6 +1378,169 @@ class TestScenarioRepository:
         assert scenario_by_name is not None
         assert scenario_by_name.bounding_box == BoundingBox(-1, 1, 3, 4)
 
+    async def test_get_scenario_summary(
+        self, repository: SQLAlchemyRepository, a_dataset, a_scenario: Scenario, create_update
+    ):
+        assert a_scenario.id is not None
+        await repository.datasets.update(
+            a_dataset.id,
+            dataclasses.replace(
+                a_dataset,
+                general={"enum": {"label": ["a", "b"]}},
+                epsg_code=1234,
+                bounding_box=BoundingBox(1.0, 2.0, 3.0, 4.0),
+                data=dataset_data_to_numpy(
+                    {
+                        "transport_nodes": {
+                            "id": [1, 2, 3],
+                        },
+                        "roads": {
+                            "id": [4, 5, 6, 7],
+                            "transport.capacity": [12.0, 13.0, 14.0, 15.0],
+                        },
+                    }
+                ),
+            ),
+        )
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        await create_update(
+            timestamp=0,
+            iteration=1,
+            data={"roads": {"id": [4, 5], "transport.capacity": [10.0, 20.0]}},
+        )
+
+        assert (
+            await repository.scenarios.for_id(a_scenario.id).get_summary(a_dataset.id)
+        ) == DatasetSummary(
+            general={"enum": {"label": ["a", "b"]}},
+            epsg_code=1234,
+            bounding_box=BoundingBox(1.0, 2.0, 3.0, 4.0),
+            count=7,
+            entity_groups=[
+                EntityGroupSummary(
+                    name="roads",
+                    count=4,
+                    attributes=[
+                        AttributeSummary(
+                            name="id",
+                            data_type=DataType(int),
+                            description="Entity ID",
+                            enum_name=None,
+                            unit="",
+                            min_val=4,
+                            max_val=7,
+                        ),
+                        AttributeSummary(
+                            name="transport.capacity",
+                            data_type=DataType(float),
+                            description="",
+                            enum_name=None,
+                            unit="",
+                            min_val=10,
+                            max_val=20,
+                        ),
+                    ],
+                ),
+                EntityGroupSummary(
+                    name="transport_nodes",
+                    count=3,
+                    attributes=[
+                        AttributeSummary(
+                            name="id",
+                            data_type=DataType(int),
+                            description="Entity ID",
+                            enum_name=None,
+                            unit="",
+                            min_val=1,
+                            max_val=3,
+                        ),
+                        AttributeSummary(
+                            name="transport.capacity",
+                            data_type=DataType(float),
+                            description="",
+                            enum_name=None,
+                            unit="",
+                            min_val=13,
+                            max_val=14,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+    async def test_doesnt_return_summary_for_other_dataset(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        a_scenario,
+        a_dataset_type,
+        get_model_config_validator,
+    ):
+        another_dataset = Dataset(
+            name="another_dataset",
+            display_name="another dataset",
+            dataset_type=a_dataset_type,
+            data=dataset_data_to_numpy({"roads": {"id": [10, 11]}}),
+        )
+        another_dataset_id = await repository.datasets.create(another_dataset)
+        repository = repository.for_scenario(a_scenario.id)
+        await repository.datasets.update(another_dataset_id, another_dataset)
+        await repository.scenarios.update(
+            dataclasses.replace(
+                a_scenario,
+                datasets=[
+                    ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+                    ScenarioDataset(another_dataset.name, another_dataset.dataset_type),
+                ],
+            ),
+            validator=await get_model_config_validator(),
+        )
+
+        summary = await repository.scenarios.get_summary(a_dataset.id)
+        assert "roads" not in {eg.name for eg in summary.entity_groups}
+
+    async def test_doesnt_return_summary_for_other_scenario(
+        self,
+        repository: SQLAlchemyRepository,
+        a_dataset,
+        a_scenario,
+        get_model_config_validator,
+        an_entity_type,
+        create_update,
+    ):
+        another_scenario_id = await repository.scenarios.create(
+            dataclasses.replace(a_scenario, name="another_scenario"),
+            await get_model_config_validator(),
+        )
+        await repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy({an_entity_type.name: {"id": [10, 20]}}),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={an_entity_type.name: {"id": [10, 11], "topology.from_node_id": [2, 2]}},
+            dataset=a_dataset,
+            scenario_id=a_scenario.id,
+        )
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={an_entity_type.name: {"id": [10, 11], "transport.capacity": [1.0, 1.0]}},
+            dataset=a_dataset,
+            scenario_id=another_scenario_id,
+        )
+
+        summary = await repository.for_scenario(a_scenario.id).scenarios.get_summary(a_dataset.id)
+        eg_summary = summary.entity_groups[0]
+        assert eg_summary.name == an_entity_type.name
+        assert {attr.name for attr in eg_summary.attributes} == {"id", "topology.from_node_id"}
+
     async def test_create_validates_max_lengths(
         self, repository: SQLAlchemyRepository, new_scenario, get_model_config_validator
     ):

@@ -3,11 +3,17 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
-from movici_data_core.marshalling import OperationSuccess, ScenarioIn, ScenarioListOut, ScenarioOut
+from movici_data_core.marshalling import (
+    DatasetSummaryOut,
+    OperationSuccess,
+    ScenarioIn,
+    ScenarioListOut,
+    ScenarioOut,
+)
 from movici_data_core.validators import ModelConfigValidator
 
 from .dependencies import DepBackend, DepWorkspaceBackend, allow_in_modes
@@ -72,7 +78,23 @@ async def update_scenario(
     return OperationSuccess(resource="scenario", id=scenario_id, verb="updated")
 
 
-@scenario_router.delete("/{scenario_id}")
+@scenario_router.delete(
+    "/{scenario_id}",
+    dependencies=[
+        allow_in_modes(
+            "delete scenario", [DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES]
+        )
+    ],
+)
 async def delete_scenario(scenario_id: UUID, backend: DepBackend) -> OperationSuccess:
     await backend.for_scenario(scenario_id).scenarios.delete()
     return OperationSuccess(resource="scenario", id=scenario_id, verb="deleted")
+
+
+@scenario_router.get("/{scenario_id}/summary")
+async def get_scenario_summary(
+    scenario_id: UUID, dataset_q: t.Annotated[str, Query(alias="dataset")], backend: DepBackend
+) -> DatasetSummaryOut:
+
+    result = await backend.for_scenario(scenario_id).scenarios.get_summary(dataset_q)
+    return DatasetSummaryOut.from_domain(result)

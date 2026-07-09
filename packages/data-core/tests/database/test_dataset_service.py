@@ -4,7 +4,11 @@ import typing as t
 import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend
-from movici_data_core.domain_model import Dataset, DatasetFormat
+from movici_data_core.domain_model import (
+    Dataset,
+    DatasetFormat,
+    DatasetSummary,
+)
 from movici_data_core.exceptions import InvalidResource
 from movici_data_core.serialization import dump_dict, load_dict
 from movici_simulation_core.testing import dataset_data_to_numpy
@@ -332,3 +336,8 @@ class TestDatasetService:
         dataset = await backend.datasets.get(id=a_dataset.id)
         assert dataset is not None
         assert not dataset.has_data
+
+    async def test_get_summary(self, backend: SQLAlchemyBackend, a_dataset, dataset_path):
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        summary = await backend.datasets.get_summary(a_dataset.id)
+        assert isinstance(summary, DatasetSummary)

@@ -32,11 +32,14 @@ from movici_data_core.database.model import (
     snake_case_pattern,
 )
 from movici_data_core.domain_model import (
+    AttributeSummary,
     AttributeType,
     BoundingBox,
     Dataset,
     DatasetFormat,
+    DatasetSummary,
     DatasetType,
+    EntityGroupSummary,
     EntityType,
     ModelType,
     Scenario,
@@ -621,6 +624,36 @@ class ModelTypeOut(OutModel[ModelType]):
     id: UUID
     name: str
     jsonschema: dict
+
+
+class DatasetSummaryOut(OutModel[DatasetSummary]):
+    general: dict
+    epsg_code: int | None
+    bounding_box: BoundingBoxField
+    entity_groups: t.Annotated[
+        list[EntityGroupSummaryOut],
+        BeforeValidator(lambda items: [EntityGroupSummaryOut.from_domain(i) for i in items]),
+    ]
+    count: int
+
+
+class EntityGroupSummaryOut(OutModel[EntityGroupSummary]):
+    name: str
+    count: int
+    attributes: t.Annotated[
+        list[AttributeSummaryOut],
+        BeforeValidator(lambda items: [AttributeSummaryOut.from_domain(i) for i in items]),
+    ]
+
+
+class AttributeSummaryOut(OutModel[AttributeSummary]):
+    name: str
+    data_type: t.Annotated[DataTypeOut, BeforeValidator(DataTypeOut.from_domain)]
+    description: str
+    enum_name: str | None
+    unit: str
+    min_val: bool | int | float | None
+    max_val: bool | int | float | None
 
 
 class OperationSuccess(BaseModel):

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import itertools
+import typing as t
 from uuid import UUID
 
 import sqlalchemy.exc
@@ -11,8 +13,12 @@ from sqlalchemy.orm import joinedload, selectinload
 from movici_data_core import bounding_box
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
+    AttributeSummary,
     BoundingBox,
+    DatasetSummary,
+    EntityGroupSummary,
     Scenario,
+    ScenarioDataset,
     ScenarioModel,
     ScenarioStatus,
 )
@@ -215,6 +221,135 @@ class ScenarioRepository(SQLResourceRepository):
         )
 
         await self._store_scenario_details(current.workspace.id, id, obj, validator)
+
+    async def ensure_valid_scenario_dataset(self, dataset_name_or_id: str) -> ScenarioDataset:
+        """Verify that a dataset, by name or id, is a valid dataset in the active scenario and
+        return the ScenarioDataset. This method requires that the ScenarioRepository has a
+        ``scenario_id`` set
+        :param dataset_name_or_id: a ``str`` with either a dataset name or a uuid. The uuid is cast
+        to a ``UUID`` before comparing against the database
+        """
+        scenario_id = self._ensure_scenario_id()
+        try:
+            dataset_id = UUID(dataset_name_or_id)
+            where_clause = db.ScenarioDataset.dataset_id == dataset_id
+            not_found_payload = dict(id=dataset_id)
+        except ValueError:
+            # could not cast to UUID, dataset_name_or_id is a name instead
+            where_clause = db.Dataset.name == dataset_name_or_id
+            not_found_payload = dict(name=dataset_name_or_id)
+
+        result = await self.session.scalar(
+            select(db.ScenarioDataset)
+            .join(db.Dataset)
+            .where(where_clause)
+            .where(db.ScenarioDataset.scenario_id == scenario_id)
+            .options(
+                joinedload(db.ScenarioDataset.dataset).joinedload(db.Dataset.dataset_type),
+            )
+        )
+        if result is None:
+            raise ResourceDoesNotExist(
+                "scenario_dataset",
+                message="dataset does not exist for this scenario",
+                **t.cast(dict, not_found_payload),
+            )
+        return result.to_domain()
+
+    async def get_summary(self, dataset_id: UUID):
+        """Request a DatasetSummary for the dataset id in the active scenario. This method
+        requires that the ScenarioRepository has a ``scenario_id`` set
+
+        :param dataset_id: the dataset id
+        :return: A ``DatasetSummary``
+        """
+        scenario_id = self._ensure_scenario_id()
+        if not await self._exists(db.Scenario.id == scenario_id):
+            raise ResourceDoesNotExist("scenario", id=scenario_id)
+        dataset = await self.session.scalar(
+            select(db.Dataset)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.dataset_id == dataset_id)
+            .where(db.ScenarioDataset.scenario_id == scenario_id)
+        )
+        if dataset is None:
+            raise ResourceDoesNotExist(
+                "scenario_dataset",
+                id=dataset_id,
+                message="dataset does not exist for this scenario",
+            )
+
+        attributes_from_dataset = await self.session.execute(
+            select(db.Attribute, db.DataArray.min_val, db.DataArray.max_val)
+            .join(db.DataArray, db.DataArray.attribute_id == db.Attribute.id)
+            .join(db.DatasetAttribute)
+            .options(
+                joinedload(db.Attribute.attribute_type),
+                joinedload(db.Attribute.entity_type),
+            )
+            .where(db.DatasetAttribute.dataset_id == dataset_id)
+        )
+        attributes_from_updates = await self.session.execute(
+            select(db.Attribute, db.DataArray.min_val, db.DataArray.max_val)
+            .join(db.DataArray, db.DataArray.attribute_id == db.Attribute.id)
+            .join(db.UpdateAttribute)
+            .join(db.Update)
+            .options(
+                joinedload(db.Attribute.attribute_type),
+                joinedload(db.Attribute.entity_type),
+            )
+            .where(db.Update.scenario_id == scenario_id)
+            .where(db.Update.dataset_id == dataset_id)
+        )
+        attribute_summaries: dict[str, dict[str, AttributeSummary]] = {}
+        entity_counts: dict[str, int] = {}
+
+        for (attribute, min_val, max_val), is_dataset in itertools.chain(
+            zip(attributes_from_dataset, itertools.repeat(True)),
+            zip(attributes_from_updates, itertools.repeat(False)),
+        ):
+            attribute_type = attribute.attribute_type
+            attribute_name = attribute_type.name
+            entity_group_name = attribute.entity_type.name
+
+            if attribute.attribute_type.name == "id" and is_dataset:
+                entity_counts[entity_group_name] = attribute.length
+
+            entity_summary = attribute_summaries.setdefault(entity_group_name, {})
+            if (attribute_summary := entity_summary.get(attribute_name)) is not None:
+                attribute_summary.min_val = min(attribute_summary.min_val, min_val)
+                attribute_summary.max_val = max(attribute_summary.max_val, max_val)
+            else:
+                entity_summary[attribute_name] = AttributeSummary(
+                    name=attribute_type.name,
+                    data_type=attribute_type.data_type,
+                    description=attribute_type.description,
+                    unit=attribute_type.unit,
+                    enum_name=attribute_type.enum_name,
+                    min_val=min_val,
+                    max_val=max_val,
+                )
+
+        return DatasetSummary(
+            general=dataset.general or {},
+            epsg_code=dataset.epsg_code,
+            # taking only the bounding box from the dataset assumes that the entities do
+            # not move during a simulation. This is ok for now since we do not support moving
+            # entities in the visualization yet either
+            bounding_box=BoundingBox.from_tuple_or_none(dataset.bounding_box),
+            entity_groups=sorted(
+                (
+                    EntityGroupSummary(
+                        name=name,
+                        count=entity_counts.get(name, 0),
+                        attributes=sorted(attributes.values(), key=lambda attr: attr.name),
+                    )
+                    for name, attributes in attribute_summaries.items()
+                ),
+                key=lambda eg: eg.name,
+            ),
+            count=sum(count for count in entity_counts.values()),
+        )
 
     # TODO: test this, and perhaps rethink how to deal with scenariostatus (see TODO for
     # ScenarioStatus)

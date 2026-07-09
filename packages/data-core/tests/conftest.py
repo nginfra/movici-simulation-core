@@ -398,6 +398,19 @@ async def a_dataset(get_repository, a_dataset_type):
 
 
 @pytest.fixture
+async def a_dataset_with_data(get_repository, a_dataset, an_entity_type, an_attribute_type):
+    dataset_data = dataset_data_to_numpy(
+        {an_entity_type.name: {"id": [1, 2, 3], an_attribute_type.name: [10.0, 20.0, 30.0]}}
+    )
+    async with get_repository() as repository:
+        await repository.dataset_data.create(
+            a_dataset.id, dataset_data, format=DatasetFormat.ENTITY_BASED
+        )
+
+    return dataclasses.replace(a_dataset, has_data=True, data=dataset_data)
+
+
+@pytest.fixture
 async def a_scenario(default_model_types, a_dataset, get_repository, create_scenario):
     async with get_repository() as repository:
         if repository.scenario_id is not None:

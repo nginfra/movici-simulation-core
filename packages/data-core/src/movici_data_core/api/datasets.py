@@ -11,6 +11,7 @@ from movici_data_core.file_helpers import (
 )
 from movici_data_core.marshalling import (
     DatasetListOut,
+    DatasetSummaryOut,
     OperationSuccess,
     ShortDatasetIn,
     ShortDatasetOut,
@@ -84,3 +85,9 @@ async def create_dataset_data(dataset_id: UUID, data: fastapi.UploadFile, backen
 async def delete_dataset_data(dataset_id: UUID, backend: DepBackend):
     await backend.datasets.prune(dataset_id)
     return OperationSuccess(resource="dataset", id=dataset_id, verb="data deleted")
+
+
+@dataset_router.get("/{dataset_id}/summary")
+async def get_summary(dataset_id: UUID, backend: DepBackend) -> DatasetSummaryOut:
+    result = await backend.datasets.get_summary(dataset_id)
+    return DatasetSummaryOut.from_domain(result)

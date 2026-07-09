@@ -1,5 +1,9 @@
 import pytest
 
+from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.domain_model import DatasetFormat
+from movici_simulation_core.testing import dataset_data_to_numpy
+
 
 @pytest.fixture
 def scenario_id(create_scenario_through_api):
@@ -152,3 +156,104 @@ def test_validation_error_on_too_long_new_models_and_datasets(create_scenario_th
     assert "datasets.0.name" in locs[2]
     assert "datasets.0.type" in locs[3]
     assert "datasets.0.type" in locs[4]  # a second message at this paht for the union type
+
+
+async def _prepare_and_expected_summary(
+    repository: SQLAlchemyRepository, dataset_id, create_update
+):
+    await repository.dataset_data.create(
+        dataset_id,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3]}}),
+        DatasetFormat.ENTITY_BASED,
+    )
+    await create_update(
+        timestamp=0,
+        iteration=0,
+        data=dataset_data_to_numpy({"roads": {"id": [1, 2], "transport.capacity": [10.0, 20.0]}}),
+    )
+    await repository.session.commit()
+    return {
+        "general": {},
+        "bounding_box": None,
+        "epsg_code": None,
+        "count": 3,
+        "entity_groups": [
+            {
+                "name": "roads",
+                "count": 3,
+                "attributes": [
+                    {
+                        "name": "id",
+                        "data_type": {"type": "int", "unit_shape": [], "csr": False},
+                        "description": "Entity ID",
+                        "unit": "",
+                        "enum_name": None,
+                        "min_val": 1,
+                        "max_val": 3,
+                    },
+                    {
+                        "name": "transport.capacity",
+                        "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                        "description": "",
+                        "unit": "",
+                        "enum_name": None,
+                        "min_val": 10,
+                        "max_val": 20,
+                    },
+                ],
+            }
+        ],
+    }
+
+
+@pytest.mark.parametrize("name_or_id", ["name", "id"])
+async def test_get_summary_by_dataset_id(
+    get_json, a_scenario, repository: SQLAlchemyRepository, a_dataset, create_update, name_or_id
+):
+    await repository.dataset_data.create(
+        a_dataset.id,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3]}}),
+        DatasetFormat.ENTITY_BASED,
+    )
+    await create_update(
+        timestamp=0,
+        iteration=0,
+        data=dataset_data_to_numpy({"roads": {"id": [1, 2], "transport.capacity": [10.0, 20.0]}}),
+    )
+    await repository.session.commit()
+    expected = {
+        "general": {},
+        "bounding_box": None,
+        "epsg_code": None,
+        "count": 3,
+        "entity_groups": [
+            {
+                "name": "roads",
+                "count": 3,
+                "attributes": [
+                    {
+                        "name": "id",
+                        "data_type": {"type": "int", "unit_shape": [], "csr": False},
+                        "description": "Entity ID",
+                        "unit": "",
+                        "enum_name": None,
+                        "min_val": 1,
+                        "max_val": 3,
+                    },
+                    {
+                        "name": "transport.capacity",
+                        "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                        "description": "",
+                        "unit": "",
+                        "enum_name": None,
+                        "min_val": 10,
+                        "max_val": 20,
+                    },
+                ],
+            }
+        ],
+    }
+    result = get_json(
+        f"/scenarios/{a_scenario.id}/summary", params={"dataset": getattr(a_dataset, name_or_id)}
+    )
+    assert result == expected

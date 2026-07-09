@@ -155,6 +155,9 @@ class DatasetService:
     async def prune(self, dataset_id: UUID):
         return await self.repository.dataset_data.delete(dataset_id)
 
+    async def get_summary(self, dataset_id: UUID):
+        return await self.repository.datasets.get_summary(dataset_id)
+
     async def _update_entity_based_dataset_from_file(
         self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path
     ):
