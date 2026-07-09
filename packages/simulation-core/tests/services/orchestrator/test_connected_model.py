@@ -27,7 +27,9 @@ def timeline():
 
 def get_model(name="dummy", timeline=None, send=None, **kwargs):
     send = send or Mock()
-    return ConnectedModel(name, timeline, send, **kwargs)
+    model = ConnectedModel(name, timeline, send, **kwargs)
+    model.start()
+    return model
 
 
 class TestConnectedModel:
@@ -72,14 +74,6 @@ class TestConnectedModel:
         msg = UpdateMessage(1)
         model.recv_event(msg)
         assert model.send.call_args == call(msg)
-
-    def test_send_command_starts_timer(self, model):
-        model.send_command(UpdateMessage(1))
-        assert model.timer.running
-
-    def test_send_command_marks_model_as_waiting(self, model):
-        model.send_command(UpdateMessage(1))
-        assert model.busy
 
     def test_response_stops_timer_and_busy(self, running_model):
         running_model.recv_event(ResultMessage())
@@ -176,8 +170,9 @@ class TestConnectedModelRemap:
         # transition out via the standard quit path and never honour the REMAP.
         from movici_simulation_core.messages import QuitMessage
 
-        model.recv_event(QuitMessage())
-        assert model.quit is not None
+        quit_msg = QuitMessage()
+        model.recv_event(quit_msg)
+        assert model.send.call_args == call(quit_msg)
 
     def test_update_message_in_awaiting_remap_queues_pending(self, model):
         # AwaitingRemap inherits Idle's update handling: an UpdateMessage that arrives

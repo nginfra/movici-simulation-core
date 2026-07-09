@@ -22,9 +22,14 @@ class ModelConfigValidator:
     dataset_types_by_datasets: dict[str, str] | None = dataclasses.field(init=False)
 
     def __post_init__(self):
-        self.dataset_types_by_datasets = (
-            {ds.name: ds.type for ds in self.datasets.values()} if self.datasets else None
-        )
+        if self.datasets is None:
+            self.dataset_types_by_datasets = None
+        else:
+            self.dataset_types_by_datasets = {
+                ds.name: ds.dataset_type.name
+                for ds in self.datasets.values()
+                if ds.dataset_type is not None
+            }
 
     @classmethod
     def from_list_data(
@@ -39,8 +44,6 @@ class ModelConfigValidator:
             datasets={ds.name: ds for ds in datasets} if datasets is not None else None,
         )
 
-    # TODO: Once a Scenario contains ScenarioDatasets and ScenarioModels, this method can take
-    # the scenario as an input argument
     def for_scenario(
         self, datasets: t.Sequence[ScenarioDataset], model_types: t.Sequence[ModelType]
     ):
@@ -50,20 +53,13 @@ class ModelConfigValidator:
             model_types={mt.name: mt for mt in model_types},
         )
 
-    def validated_model_type(self, config: dict):
+    def _validated_model_type(self, model_type: ModelType):
         assert self.model_types is not None
 
-        if "type" not in config:
-            raise MoviciValidationError("type is a required field")
-
-        model_type = config["type"]
-        if not isinstance(model_type, str):
-            raise MoviciValidationError("must be string", path="type")
-
-        if model_type not in self.model_types:
+        if model_type.name not in self.model_types:
             raise MoviciValidationError(f"invalid model_type {model_type}", path="type")
 
-        return self.model_types[model_type]
+        return self.model_types[model_type.name]
 
     @property
     def lookup(self):
@@ -73,41 +69,37 @@ class ModelConfigValidator:
             datasets=self.dataset_types_by_datasets,
         )
 
-    def process_model_configs(self, configs: list[dict]) -> list[ScenarioModel]:
+    def process_model_configs(self, models: list[ScenarioModel]) -> list[ScenarioModel]:
         assert self.model_types is not None
         assert self.datasets is not None
 
         errors: list[MoviciValidationError] = []
         result: list[ScenarioModel] = []
 
-        for idx, config in enumerate(configs):
+        for idx, model in enumerate(models):
             try:
-                model_type = self.validated_model_type(config)
-                result.append(self.parse_and_validate_model_config(config, model_type))
+                model = dataclasses.replace(model, type=self._validated_model_type(model.type))
+                result.append(self.parse_and_validate_scenario_model(model))
             except MoviciValidationError as e:
                 errors.append(MoviciValidationError.from_errors(e, path=str(idx)))
         if errors:
             raise MoviciValidationError.from_errors(errors)
         return result
 
-    def parse_and_validate_model_config(
-        self, config: dict, model_type: ModelType
-    ) -> ScenarioModel:
-        if "name" not in config:
-            raise MoviciValidationError("name is a required field")
-
-        name = config["name"]
-        if not isinstance(name, str):
-            raise MoviciValidationError("must be string", path="name")
+    def parse_and_validate_scenario_model(self, model: ScenarioModel) -> ScenarioModel:
+        model_type = model.type
+        #
+        # any model_type given here must come from the database, so it will have a jsonschema
+        assert model_type.jsonschema is not None
 
         refs, errors = validate_and_process(
-            config,
-            schema=ensure_schema(model_type.jsonschema),
+            model.config,
+            schema=ensure_schema(model_type.jsonschema, add_name_and_type=False),
             lookup=self.lookup,
             return_errors=True,
         )
         if not errors:
-            return ScenarioModel(name, type=model_type, config=config, references=refs)
+            return dataclasses.replace(model, references=refs)
         raise MoviciValidationError.from_errors(errors)
 
     def iter_scenario_model_references(

@@ -2,10 +2,9 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.exceptions import SimulationExit
 from movici_simulation_core.messages import QuitMessage, RemapMessage
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
-from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError, send_silent
+from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError
 from movici_simulation_core.services.orchestrator.remap import (
     AttributeRef,
     RemapConflictError,
@@ -23,7 +22,7 @@ from movici_simulation_core.services.orchestrator.states import (
 
 
 class BaseTestState:
-    state_cls = OrchestratorState
+    state_cls: type[OrchestratorState]
 
     @pytest.fixture
     def state(self, context):
@@ -61,14 +60,11 @@ class TestWaitForModels(BaseTestState):
 
     @pytest.fixture
     def send_message(self, state, event):
-        runner = state.run()
-        send_silent(runner, None)
 
         def _send(name=None, msg=None):
             msg = msg or event
             name = name or "model_a"
-            send_silent(runner, (name, msg))
-            return runner
+            state.handle_event((name, msg))
 
         return _send
 
@@ -77,14 +73,17 @@ class TestWaitForModels(BaseTestState):
         send_message()
         assert model_mock.recv_event.call_args == call(event)
 
-    def test_quits_when_model_crashes(self, send_message, model_mock, state):
-        model_mock.handle_message.side_effect = SimulationExit
-        send_message(name="model_a")
-        assert state.context.failed == ["model_a"]
+    def test_ignores_unknown_models(self, send_message, context):
+        context.recv_message = Mock()
 
-    def test_ignores_unknown_models(self, send_message, model_mock):
+        # a known model is called
+        send_message(name="model_a")
+        assert context.recv_message.call_count == 1
+        context.recv_message.reset_mock()
+
+        # an unknown model is ignored
         send_message(name="unknown")
-        assert model_mock.handle_message.call_count == 0
+        assert context.recv_message.call_count == 0
 
 
 class TestComputeAndSendRemap(BaseTestState):
@@ -146,9 +145,13 @@ class TestStartRunningPhase(BaseTestState):
 class TestNewTime(BaseTestState):
     state_cls = NewTime
 
+    @pytest.fixture
+    def context(self):
+        return Mock()
+
     def test_queues_models(self, state, context):
         state.run()
-        assert context.timeline.queue_for_next_time.call_args == call(context.models)
+        assert context.queue_models_for_next_time.call_count == 1
 
 
 class TestStartFinalizingPhase(BaseTestState):
@@ -159,8 +162,9 @@ class TestStartFinalizingPhase(BaseTestState):
         assert context.phase_timer.restart.call_count == 1
 
     def test_replaces_queue_with_quit_message(self, state, context):
+        context.recv_for_all = Mock()
         state.run()
-        assert type(context.models.queue_all.call_args[0][0]) is QuitMessage
+        assert type(context.recv_for_all.call_args[0][0]) is QuitMessage
 
 
 class TestEndFinalizingPhase(BaseTestState):

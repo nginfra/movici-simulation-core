@@ -1,4 +1,5 @@
 import dataclasses
+import typing as t
 import uuid
 from io import BytesIO
 from unittest.mock import patch
@@ -23,8 +24,10 @@ from movici_data_core.domain_model import (
     ModelType,
     Scenario,
     ScenarioDataset,
+    ScenarioModel,
     SimulationInfo,
     Update,
+    UpdateModel,
     Workspace,
 )
 from movici_data_core.exceptions import (
@@ -133,6 +136,12 @@ class TestDatasetTypeRepository:
 
         assert len(await repository.dataset_types.list()) == existing
 
+    async def test_cannot_create_dataset_type_with_unknown_format(
+        self, repository: SQLAlchemyRepository
+    ):
+        with pytest.raises(InvalidAction):
+            await repository.dataset_types.create(DatasetType(name="a_dataset_type"))
+
     async def test_update_dataset_type(self, repository: SQLAlchemyRepository):
 
         dataset_type = DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
@@ -161,7 +170,7 @@ class TestDatasetTypeRepository:
     ):
         repository.options.STRICT_DATASET_TYPES = True
         found = await repository.dataset_types.ensure_dataset_type(
-            DatasetType(name="transport_network", format=DatasetFormat.UNKNOWN)
+            DatasetType(name="transport_network")
         )
         assert found == a_dataset_type
 
@@ -197,14 +206,16 @@ class TestDatasetTypeRepository:
         assert dataset_type.name == "transport_network"
         assert dataset_type.id is not None
 
+    @pytest.mark.parametrize("strict_dataset_types", [True, False])
     async def test_raises_on_incompatible_existing_dataset_type(
-        self, repository: SQLAlchemyRepository, a_dataset_type
+        self, repository: SQLAlchemyRepository, a_dataset_type, strict_dataset_types
     ):
-        repository.options.STRICT_DATASET_TYPES = False
+        repository.options.STRICT_DATASET_TYPES = strict_dataset_types
 
+        assert a_dataset_type.format == DatasetFormat.ENTITY_BASED
         with pytest.raises(InvalidResource):
             await repository.dataset_types.ensure_dataset_type(
-                DatasetType(name="transport_network", format=DatasetFormat.BINARY)
+                dataclasses.replace(a_dataset_type, format=DatasetFormat.BINARY)
             )
 
 
@@ -381,6 +392,12 @@ class TestModelTypeRepository:
     async def test_created_model_type_has_schema(self, a_model_type):
         assert a_model_type.jsonschema == {"some": "schema"}
 
+    async def test_cannot_create_model_type_without_jsonschema(
+        self, repository: SQLAlchemyRepository
+    ):
+        with pytest.raises(InvalidAction):
+            await repository.model_types.create(ModelType("no_schema_here", jsonschema=None))
+
     async def test_update_model_type(
         self, a_model_type: ModelType, repository: SQLAlchemyRepository
     ):
@@ -394,11 +411,20 @@ class TestModelTypeRepository:
         assert updated is not None
         assert updated.jsonschema == {"some": "othershema"}
 
+    async def test_cannot_update_model_type_without_jsonschema(
+        self, a_model_type: ModelType, repository: SQLAlchemyRepository
+    ):
+        assert a_model_type.id is not None
+        with pytest.raises(InvalidAction):
+            await repository.model_types.update(
+                a_model_type.id, ModelType("no_schema_here", jsonschema=None)
+            )
+
     async def test_returns_existing_model_type(
         self, repository: SQLAlchemyRepository, a_model_type
     ):
         repository.options.STRICT_MODEL_TYPES = True
-        found = await repository.model_types.ensure_model_types(["some_model"])
+        found = await repository.model_types.ensure_model_types([ModelType("some_model")])
         assert found == [a_model_type]
 
     async def test_raises_on_non_existing_model_type_when_strict(
@@ -407,7 +433,7 @@ class TestModelTypeRepository:
         repository.options.STRICT_MODEL_TYPES = True
 
         with pytest.raises(ResourceDoesNotExist):
-            await repository.model_types.ensure_model_types(["non-existing"])
+            await repository.model_types.ensure_model_types([ModelType("non-existing")])
 
     async def test_automatically_creates_model_type_with_passall_schema_when_not_strict(
         self, repository: SQLAlchemyRepository, a_model_type
@@ -415,7 +441,7 @@ class TestModelTypeRepository:
         repository.options.STRICT_MODEL_TYPES = False
 
         created, existing = await repository.model_types.ensure_model_types(
-            ["new", a_model_type.name]
+            [ModelType("new"), a_model_type]
         )
         assert existing == a_model_type
         assert created is not None
@@ -497,8 +523,8 @@ class TestDatasetRepository:
 
         found = await repository.datasets.ensure_scenario_datasets(
             [
-                ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
-                ScenarioDataset(another_dataset.name, another_dataset.dataset_type.name),
+                ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+                ScenarioDataset(another_dataset.name, another_dataset.dataset_type),
             ],
         )
         assert [ds.id for ds in found] == [a_dataset.id, another_dataset.id]
@@ -506,9 +532,9 @@ class TestDatasetRepository:
     async def test_raises_on_missing_dataset_when_strict(self, repository: SQLAlchemyRepository):
         repository.options.STRICT_SCENARIO_DATASETS = True
 
-        with pytest.raises(ResourceDoesNotExist):
+        with pytest.raises(MoviciValidationError):
             await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset("non-existing", type="transport_network")],
+                [ScenarioDataset("non-existing", dataset_type=DatasetType("transport_network"))],
             )
 
     async def test_automatically_creates_dataset_stubs_when_not_strict(
@@ -518,16 +544,16 @@ class TestDatasetRepository:
 
         scenario_datasets = await repository.datasets.ensure_scenario_datasets(
             [
-                ScenarioDataset("new", "transport_network"),
-                ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
-                ScenarioDataset("new_tapefile", "tabular"),
+                ScenarioDataset("new", DatasetType("transport_network")),
+                ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+                ScenarioDataset("new_tapefile", DatasetType("tabular")),
             ],
         )
         assert [ds.name for ds in scenario_datasets] == ["new", a_dataset.name, "new_tapefile"]
-        assert [ds.type for ds in scenario_datasets] == [
-            "transport_network",
-            a_dataset.dataset_type.name,
-            "tabular",
+        assert [ds.dataset_type for ds in scenario_datasets] == [
+            DatasetType("transport_network", format=DatasetFormat.ENTITY_BASED),
+            a_dataset.dataset_type,
+            DatasetType("tabular", format=DatasetFormat.UNSTRUCTURED),
         ]
         assert None not in [ds.id for ds in scenario_datasets]
 
@@ -535,10 +561,31 @@ class TestDatasetRepository:
         repository.options.STRICT_SCENARIO_DATASETS = False
         repository.options.STRICT_DATASET_TYPES = False
 
-        await repository.datasets.ensure_scenario_datasets([ScenarioDataset("new", "new_type")])
+        await repository.datasets.ensure_scenario_datasets(
+            [ScenarioDataset("new", DatasetType("new_type"))]
+        )
         created = await repository.dataset_types.get_by_name("new_type")
         assert created is not None
         assert created == DatasetType("new_type", format=DatasetFormat.ENTITY_BASED)
+
+    async def test_raises_on_new_scenario_dataset_with_incorrect_type(
+        self, repository: SQLAlchemyRepository, a_dataset_type
+    ):
+
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        assert a_dataset_type.format != DatasetFormat.BINARY
+        with pytest.raises(MoviciValidationError, match="incompatible dataset type"):
+            await repository.datasets.ensure_scenario_datasets(
+                [
+                    ScenarioDataset(
+                        name="new_dataset",
+                        dataset_type=dataclasses.replace(
+                            a_dataset_type, format=DatasetFormat.BINARY
+                        ),
+                    )
+                ]
+            )
 
     async def test_raises_on_existing_scenario_dataset_with_incorrect_type(
         self, repository: SQLAlchemyRepository, a_dataset
@@ -546,13 +593,32 @@ class TestDatasetRepository:
 
         repository.options.STRICT_SCENARIO_DATASETS = False
 
-        with pytest.raises(InvalidResource):
+        with pytest.raises(MoviciValidationError, match="incompatible dataset already exists"):
             await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset(name=a_dataset.name, type="tabular")]
+                [ScenarioDataset(name=a_dataset.name, dataset_type=DatasetType("tabular"))]
+            )
+
+    async def test_raises_on_conflicting_dataset_format(
+        self, repository: SQLAlchemyRepository, a_dataset
+    ):
+
+        repository.options.STRICT_SCENARIO_DATASETS = False
+
+        assert a_dataset.dataset_type.format != DatasetFormat.BINARY
+        with pytest.raises(MoviciValidationError, match="incompatible dataset already exists"):
+            await repository.datasets.ensure_scenario_datasets(
+                [
+                    ScenarioDataset(
+                        name=a_dataset.name,
+                        dataset_type=dataclasses.replace(
+                            a_dataset.dataset_type, format=DatasetFormat.BINARY
+                        ),
+                    )
+                ]
             )
 
     async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):
-        await repository.datasets.update_with_data(
+        await repository.datasets.update(
             a_dataset.id,
             dataclasses.replace(
                 a_dataset,
@@ -796,7 +862,7 @@ class TestDatasetDataRepository:
         assert data_count == 0
 
     async def test_get_dataset_summary(self, repository: SQLAlchemyRepository, a_dataset):
-        await repository.datasets.update_with_data(
+        await repository.datasets.update(
             a_dataset.id,
             dataclasses.replace(
                 a_dataset,
@@ -907,27 +973,49 @@ class TestScenarioRepository:
             description="Scenario for testing",
             epsg_code=28992,
             simulation_info=SimulationInfo.default(),
-            datasets=[
-                {
-                    "name": a_dataset.name,
-                    "type": a_dataset.dataset_type.name,
-                }
-            ],
+            datasets=[ScenarioDataset.from_dataset(a_dataset)],
             models=[
-                {
-                    "name": "model1",
-                    "type": default_model_types[0].name,
-                    "dataset": a_dataset.name,
-                    "entity_group": "transport_nodes",
-                    "attribute": "id",
-                },
-                {
-                    "name": "model2",
-                    "type": default_model_types[1].name,
-                    "field": "value",
-                },
+                ScenarioModel(
+                    name="model1",
+                    type=default_model_types[0],
+                    config={
+                        "dataset": a_dataset.name,
+                        "entity_group": "transport_nodes",
+                        "attribute": "id",
+                    },
+                ),
+                ScenarioModel(
+                    name="model2",
+                    type=default_model_types[1],
+                    config={"field": "value"},
+                ),
             ],
         )
+
+    async def test_for_id_changes_scenario_id(self, repository: SQLAlchemyRepository):
+        new_id = uuid.uuid4()
+        assert repository.scenarios.for_id(new_id).scenario_id == new_id
+
+    async def test_cannot_change_scenario_id_in_single_scenario_mode(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+
+        assert a_scenario.id is not None
+        repository = repository.for_scenario(a_scenario.id)
+        repository.options.mode = db.DatabaseMode.SINGLE_SCENARIO
+
+        new_id = uuid.uuid4()
+        with pytest.raises(InvalidAction):
+            assert repository.scenarios.for_id(new_id)
+
+    async def test_change_scenario_id_to_current_id_in_single_scenario_mode(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+        assert a_scenario.id is not None
+        repository = repository.for_scenario(a_scenario.id)
+        repository.options.mode = db.DatabaseMode.SINGLE_SCENARIO
+
+        assert repository.scenarios.for_id(a_scenario.id).scenario_id == a_scenario.id
 
     async def test_list_scenarios(self, repository: SQLAlchemyRepository, a_scenario):
         return len(await repository.scenarios.list()) == 1
@@ -948,10 +1036,18 @@ class TestScenarioRepository:
         assert result.id is not None
         assert result.created_at is not None
         assert result.updated_at is not None
-        assert result.datasets[0].pop("id") == a_dataset.id
-        assert (
-            dataclasses.replace(result, id=None, created_at=None, updated_at=None) == new_scenario
-        )
+        assert result.datasets[0].id == a_dataset.id
+        assert [model.as_dict() for model in result.models] == [
+            model.as_dict() for model in new_scenario.models
+        ]
+        assert dataclasses.replace(
+            result,
+            id=None,
+            created_at=None,
+            updated_at=None,
+            datasets=[dataclasses.replace(result.datasets[0], id=None)],
+            models=[],
+        ) == dataclasses.replace(new_scenario, models=[])
 
     async def test_create_scenario_with_no_models_and_datasets(
         self, repository: SQLAlchemyRepository, get_model_config_validator
@@ -1030,14 +1126,47 @@ class TestScenarioRepository:
     async def test_create_invalid_scenario(
         self, repository: SQLAlchemyRepository, new_scenario: Scenario, get_model_config_validator
     ):
-        del new_scenario.models[0]["type"]
+        new_scenario.models[1].config["field"] = 42
         validator = await get_model_config_validator()
 
         with pytest.raises(MoviciValidationError) as e:
             await repository.scenarios.create(new_scenario, validator)
 
         path, _ = next(iter(e.value.iter_messages()))
-        assert path == "models.0"
+        assert path == "models.1.field"
+
+    async def test_scenario_bounding_box_from_datasets_and_updates(
+        self, repository: SQLAlchemyRepository, a_scenario: Scenario, a_dataset
+    ):
+        repository = repository.for_scenario(t.cast(uuid.UUID, a_scenario.id))
+        await repository.datasets.update(
+            a_dataset.id,
+            dataclasses.replace(a_dataset, bounding_box=BoundingBox(1, 1, 2, 2), data={}),
+        )
+        update = Update(
+            dataset=a_scenario.datasets[0],
+            timestamp=0,
+            iteration=0,
+            model=UpdateModel.from_scenario_model(a_scenario.models[0]),
+            data={},
+        )
+        await repository.updates.create(
+            dataclasses.replace(update, iteration=1, bounding_box=BoundingBox(-1, 2, 2, 2))
+        )
+        await repository.updates.create(
+            # update without bounding box
+            dataclasses.replace(update, iteration=2)
+        )
+        await repository.updates.create(
+            dataclasses.replace(update, iteration=3, bounding_box=BoundingBox(0, 2, 3, 4))
+        )
+        scenario_by_id = await repository.scenarios.get()
+        assert scenario_by_id is not None
+        assert scenario_by_id.bounding_box == BoundingBox(-1, 1, 3, 4)
+
+        scenario_by_name = await repository.scenarios.get_by_name(a_scenario.name)
+        assert scenario_by_name is not None
+        assert scenario_by_name.bounding_box == BoundingBox(-1, 1, 3, 4)
 
 
 class TestUpdateRepository:
@@ -1045,7 +1174,6 @@ class TestUpdateRepository:
     def repository_for_scenario(self, repository: SQLAlchemyRepository, a_scenario):
         return repository.for_scenario(a_scenario.id)
 
-    @pytest.mark.xfail
     async def test_update_round_trip(
         self,
         a_scenario,
@@ -1055,11 +1183,10 @@ class TestUpdateRepository:
         repository_for_scenario: SQLAlchemyRepository,
     ):
         update = Update(
-            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type.name),
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
             timestamp=12,
             iteration=2,
-            model_name=a_scenario.models[0]["name"],
-            model_type=a_scenario.models[0]["type"],
+            model=UpdateModel.from_scenario_model(a_scenario.models[0]),
             data={
                 an_entity_type.name: {
                     "id": {"data": np.asarray([0, 1])},
@@ -1070,11 +1197,11 @@ class TestUpdateRepository:
 
         update_id = await repository_for_scenario.updates.create(update)
 
-        result = await repository_for_scenario.updates.get_by_id(update_id)
+        result = await repository_for_scenario.updates.get_by_id(update_id, with_data=True)
         assert result is not None
         assert result.created_at is not None
         assert dataclasses.replace(update, data=None, id=update_id) == dataclasses.replace(
-            result, data=None
+            result, data=None, created_at=None
         )
         assert_dataset_dicts_equal(update.data, result.data)
 

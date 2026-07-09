@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from abc import ABC
 
-from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.messages import ModelMessage, QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
-    Always,
     Condition,
     FSMDone,
     FSMError,
     State,
-    TransitionsT,
 )
 from movici_simulation_core.services.orchestrator.remap import RemapPlanningError
 
@@ -44,25 +42,20 @@ class StartInitializingPhase(OrchestratorState):
         self.context.phase_timer.start()
         self.context.log_new_phase("Initializing Phase")
 
-    def transitions(self):
-        return [(Always, ModelsRegistration)]
-
 
 class WaitForModels(OrchestratorState, ABC):
-    def run(self):
-        ident, msg = yield
+    requires_event = True
+
+    def handle_event(self, event: ModelMessage):
+        ident, msg = event
 
         if not (model := self.context.models.get(ident)):
             return
-        model.recv_event(msg)
+        self.context.recv_message(model, msg)
 
 
 class ModelsRegistration(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsReady, ComputeAndSendRemap),
-        ]
+    pass
 
 
 class ComputeAndSendRemap(OrchestratorState):
@@ -92,23 +85,12 @@ class ComputeAndSendRemap(OrchestratorState):
             return
         self.context.models.apply_remap_plan(plan)
 
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsReady, StartRunningPhase),
-            (Always, WaitForRemapAcks),
-        ]
-
 
 class WaitForRemapAcks(WaitForModels):
     """Wait until every model that received a REMAP has acknowledged before proceeding to
     the Running phase. See issue #127."""
 
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsReady, StartRunningPhase),
-        ]
+    pass
 
 
 class StartRunningPhase(OrchestratorState):
@@ -118,47 +100,29 @@ class StartRunningPhase(OrchestratorState):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Running Phase")
 
-    def transitions(self) -> TransitionsT:
-        return [(Always, NewTime)]
-
 
 class NewTime(OrchestratorState):
     def run(self):
         self.context.log_new_time()
-        self.context.timeline.queue_for_next_time(self.context.models)
-
-    def transitions(self) -> TransitionsT:
-        return [(Always, WaitForResults)]
+        self.context.queue_models_for_next_time()
 
 
 class WaitForResults(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsDone, StartFinalizingPhase),
-            (AllModelsReady, NewTime),
-        ]
+    pass
 
 
 class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Finalizing Phase")
-        self.context.models.queue_all(QuitMessage(due_to_failure=bool(self.context.failed)))
-
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]
+        self.context.recv_for_all(QuitMessage(due_to_failure=bool(self.context.failed)))
 
 
 class FinalizingWaitForModels(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase)]
+    pass
 
 
 class EndFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.finalize()
         raise FSMError if self.context.failed else FSMDone
-
-    def transitions(self) -> TransitionsT:
-        return []

@@ -8,9 +8,68 @@ from movici_simulation_core.services.orchestrator.context import ConnectedModel,
 from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import Simulation
 
-from .context import Context, TimelineController
-from .fsm import FSM, FSMDone
-from .states import StartInitializingPhase
+from .context import MODEL_FSM_CONFIG, Context, TimelineController
+from .fsm import FSM, Always, FSMConfig, FSMDone
+from .states import (
+    AllModelsDone,
+    AllModelsReady,
+    ComputeAndSendRemap,
+    EndFinalizingPhase,
+    Failed,
+    FinalizingWaitForModels,
+    ModelsRegistration,
+    NewTime,
+    StartFinalizingPhase,
+    StartInitializingPhase,
+    StartRunningPhase,
+    WaitForRemapAcks,
+    WaitForResults,
+)
+
+FSM_CONFIG = FSMConfig(
+    initial_state=StartInitializingPhase,
+    states={
+        StartInitializingPhase: [
+            (Always, ModelsRegistration),
+        ],
+        # Between registration and the Running phase the orchestrator computes the REMAP
+        # plan (issue #127) and waits for the affected models to acknowledge their REMAP
+        # commands. When no model needs a remap, AllModelsReady short-circuits straight
+        # to StartRunningPhase.
+        ModelsRegistration: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, ComputeAndSendRemap),
+        ],
+        ComputeAndSendRemap: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+            (Always, WaitForRemapAcks),
+        ],
+        WaitForRemapAcks: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+        ],
+        StartRunningPhase: [
+            (Always, NewTime),
+        ],
+        NewTime: [
+            (Always, WaitForResults),
+        ],
+        WaitForResults: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsDone, StartFinalizingPhase),
+            (AllModelsReady, NewTime),
+        ],
+        StartFinalizingPhase: [
+            (AllModelsReady, EndFinalizingPhase),
+            (Always, FinalizingWaitForModels),
+        ],
+        FinalizingWaitForModels: [
+            (AllModelsReady, EndFinalizingPhase),
+        ],
+        EndFinalizingPhase: [],
+    },
+)
 
 
 class Orchestrator(Service):
@@ -48,16 +107,19 @@ class Orchestrator(Service):
         )
 
     def _setup_fsm(self):
-        self.fsm = FSM(StartInitializingPhase, context=self.context)
-        self.stream.set_handler(self.fsm.send)
+        self.fsm = FSM(FSM_CONFIG, context=self.context)
+        self.stream.set_handler(self.fsm.handle_event)
 
     def _get_connected_model(self, identifier: str):
-        return ConnectedModel(
+        model = ConnectedModel(
             name=identifier,
             timeline=self.timeline,
             send=self.make_send(identifier),
             logger=self.logger,
+            fsm_config=MODEL_FSM_CONFIG,
         )
+        model.start()
+        return model
 
     def make_send(self, identifier: str):
         """create a send function that a can be used to send a message to a specific client

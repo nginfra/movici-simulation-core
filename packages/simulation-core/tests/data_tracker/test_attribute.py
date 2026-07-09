@@ -541,3 +541,38 @@ class TestEnum:
         enum = attribute.get_enumeration()
         assert enum.a == 0
         assert enum.b == 1
+
+    @pytest.mark.parametrize("enum_values", (["FREE", "FIXED", "TIDAL"],))
+    def test_get_enum_value(self, attribute: UniformAttribute):
+        assert attribute.get_enum_value("FREE") == 0
+        assert attribute.get_enum_value("TIDAL") == 2
+
+    @pytest.mark.parametrize("enum_values", (["FREE", "FIXED"],))
+    def test_get_enum_value_case_insensitive(self, attribute: UniformAttribute):
+        assert attribute.get_enum_value("fixed", case_sensitive=False) == 1
+        with pytest.raises(ValueError, match="not a member"):
+            attribute.get_enum_value("fixed")  # case-sensitive by default
+
+    @pytest.mark.parametrize("enum_values", (["FREE", "FIXED"],))
+    def test_get_enum_value_unknown_raises(self, attribute: UniformAttribute):
+        with pytest.raises(ValueError, match="not a member"):
+            attribute.get_enum_value("NOPE")
+
+    @pytest.mark.parametrize("enum_values", (["FREE", "FIXED", "TIDAL"],))
+    def test_get_enum_string(self, attribute: UniformAttribute):
+        assert attribute.get_enum_string(0) == "FREE"
+        assert attribute.get_enum_string(2) == "TIDAL"
+
+    @pytest.mark.parametrize("enum_values", (["FREE", "FIXED"],))
+    def test_get_enum_string_out_of_range_raises(self, attribute: UniformAttribute):
+        with pytest.raises(ValueError, match="out of range"):
+            attribute.get_enum_string(5)
+        with pytest.raises(ValueError, match="out of range"):
+            attribute.get_enum_string(-1)
+
+    def test_enum_helpers_raise_without_enumeration(self, attribute: UniformAttribute):
+        # enum_values defaults to None for this fixture
+        with pytest.raises(ValueError, match="No enumeration"):
+            attribute.get_enum_value("x")
+        with pytest.raises(ValueError, match="No enumeration"):
+            attribute.get_enum_string(0)

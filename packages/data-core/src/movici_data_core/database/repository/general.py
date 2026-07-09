@@ -27,13 +27,15 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource__ = db.DatasetType
     __resource_type_name__ = "dataset_type"
 
-    # TODO: prevent creating dataset type with UNKNOWN format
     async def create(self, obj: DatasetType) -> UUID:
-        """Store a :class:``DatasetType`` in the database
+        """Store a :class:``DatasetType`` in the database. When storing a ``DatasetType``, its
+        ``format`` field may not be set to ``None``.
 
         :param obj: the ``DatasetType`` object
         :return: the UUID of the stored ``DatasetType``
         """
+        if obj.format is None:
+            raise InvalidAction("Must specify DatasetFormat when creating a DatasetType")
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -43,7 +45,6 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
             ),
         )
 
-    # TODO: prevent updating dataset type with UNKNOWN format
     async def update(self, id: UUID, obj: DatasetType):
         """Update a :class:``DatasetType`` in the database
 
@@ -71,7 +72,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         does not exist and the database option ``STRICT_DATASET_TYPES`` is unset, the dataset
         type will be created. If the ``STRICT_DATASET_TYPES`` options is set, an error is raised
         instead. An error will also be raised if an attempt is made to create a DatasetType with
-        the ``DatasetType.UNKNOWN`` format.
+        its ``format`` field set to ``None``
 
         :param dataset_type: the ``DatasetType`` object to ensure.
         :return: the ``DatasetType`` object as it exists in the database
@@ -83,7 +84,8 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
             dataset_type_id = await self.create(dataset_type)
             existing = await self.get_by_id(dataset_type_id)
 
-        if dataset_type.format != DatasetFormat.UNKNOWN and existing != dataset_type:
+        assert existing is not None
+        if not existing.is_equivalent(dataset_type):
             raise InvalidResource(
                 "dataset_type",
                 name=dataset_type.name,
@@ -238,6 +240,8 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         :param obj: the ``ModelType`` object
         :return: the UUID of the stored ``ModelType``
         """
+        if obj.jsonschema is None:
+            raise InvalidAction("Cannot create ModelType without a jsonschema")
         return t.cast(
             UUID,
             await self.session.scalar(
@@ -256,13 +260,15 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         :param id: the UUID of the stored ``ModelType``
         :param obj: the ``ModelType`` object with the changes
         """
+        if obj.jsonschema is None:
+            raise InvalidAction("Cannot set ModelType.jsonschema to None")
         await self.session.execute(
             update(db.ModelType)
             .where(db.ModelType.id == id)
             .values(name=obj.name, jsonschema=obj.jsonschema)
         )
 
-    async def ensure_model_types(self, model_types: t.Sequence[str]) -> list[ModelType]:
+    async def ensure_model_types(self, model_types: t.Sequence[ModelType]) -> list[ModelType]:
         """Ensure that a sequence of model types exist in the database or raise an error. If one or
         more of the model types does not exist and the database option ``STRICT_MODEL_TYPES`` is
         unset, the non-existing model types will be created. If the ``STRICT_MODEL_TYPES`` options
@@ -275,27 +281,33 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             tp.name: t.cast(db.ModelType, tp)
             for tp in await self.session.scalars(
                 select(db.ModelType).where(
-                    db.ModelType.name.in_(model_types),
+                    db.ModelType.name.in_(tp.name for tp in model_types),
                 )
             )
         }
-        to_create = []
+        to_create: list[ModelType] = []
         for model_type in model_types:
-            if model_type not in existing_model_types:
+            if model_type.name not in existing_model_types:
                 if self.options.STRICT_MODEL_TYPES:
-                    raise ResourceDoesNotExist("model_type", name=model_type)
+                    raise ResourceDoesNotExist("model_type", name=model_type.name)
                 to_create.append(model_type)
                 continue
 
         if to_create:
             created = await self.session.scalars(
                 insert(db.ModelType).returning(db.ModelType),
-                [{"name": tp, "jsonschema": self._default_jsonschema(tp)} for tp in to_create],
+                [
+                    {
+                        "name": tp.name,
+                        "jsonschema": tp.jsonschema or self._default_jsonschema(tp.name),
+                    }
+                    for tp in to_create
+                ],
             )
 
             existing_model_types.update((tp.name, tp) for tp in created)
 
-        return [existing_model_types[tp].to_domain() for tp in model_types]
+        return [existing_model_types[tp.name].to_domain() for tp in model_types]
 
     @staticmethod
     def _default_jsonschema(name: str):

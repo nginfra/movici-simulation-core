@@ -85,7 +85,11 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
-    OTHER = ()
+    OTHER = (".dat",)
+
+    @property
+    def default_extension(self):
+        return self.value[0]
 
     @classmethod
     def from_extension(cls, ext):
@@ -96,23 +100,17 @@ class FileType(enum.Enum):
 
 
 class ExternalSerializationStrategy:
-    def __init__(
-        self,
-        schema: AttributeSchema | None = None,
-        non_data_dict_keys: t.Container[str] = ("general",),
-        cache_inferred_attributes: bool = False,
-    ) -> None:
-        self.schema = schema
-        self.non_data_dict_keys = non_data_dict_keys
-        self.cache_inferred_attributes = cache_inferred_attributes
-
-    def set_schema(self, schema: AttributeSchema):
-        self.schema = schema
-
-    def dumps(self, data: dict, filetype: FileType) -> bytes:
+    def with_schema(self, schema: AttributeSchema) -> ExternalSerializationStrategy:
         raise NotImplementedError
 
-    def loads(self, raw_data: bytes, type: FileType) -> dict:
+    def dumps(
+        self, data: dict, filetype: FileType, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> bytes:
+        raise NotImplementedError
+
+    def loads(
+        self, raw_data: bytes, type: FileType, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> dict:
         raise NotImplementedError
 
     def supported_file_types(self) -> t.Sequence[FileType]:

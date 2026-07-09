@@ -146,6 +146,13 @@ class AcknowledgeMessage(Message):
 
 @dataclasses.dataclass
 class QuitMessage(Message):
+    """A message to indicate that we should stop the simulation. Allows models to gracefully
+    terminate.
+
+    :param due_to_failure: flag to indicate that a component has failed and that it is not a
+        regular shutdown
+    """
+
     due_to_failure: bool = False
 
 
