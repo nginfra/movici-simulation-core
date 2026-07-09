@@ -60,8 +60,13 @@ def init_data(data_dir):
     data_dir.joinpath("the_dataset.json").write_text(json.dumps(payload))
 
 
-def test_combiner_resolves_conflict_and_produces_canonical(data_dir, storage_dir, init_data):
-    sim = Simulation(data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=False)
+@pytest.mark.parametrize("distributed", [False, True])
+def test_combiner_resolves_conflict_and_produces_canonical(
+    data_dir, storage_dir, init_data, distributed
+):
+    sim = Simulation(
+        data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=distributed
+    )
     sim.add_model(
         "demand_a",
         _Emitter(
@@ -137,7 +142,10 @@ class _BrokenCombiner(Combiner):
         raise RuntimeError("intentional failure in remap")
 
 
-def test_solver_helper_remap_failure_terminates_simulation(data_dir, storage_dir, init_data):
+@pytest.mark.parametrize("distributed", [False, True])
+def test_solver_helper_remap_failure_terminates_simulation(
+    data_dir, storage_dir, init_data, distributed
+):
     # If a solver helper raises while handling its REMAP, the simulation must terminate
     # (non-zero exit) rather than hang or silently proceed with an unresolved conflict.
     # Confirmed with the issue author: a remap() failure is fatal, like any model failure.
@@ -146,7 +154,9 @@ def test_solver_helper_remap_failure_terminates_simulation(data_dir, storage_dir
         "entity_group": "the_entities",
         "name": "cargo_demand",
     }
-    sim = Simulation(data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=False)
+    sim = Simulation(
+        data_dir=data_dir, storage_dir=storage_dir, debug=True, distributed=distributed
+    )
     sim.add_model(
         "demand_a",
         _Emitter({"name": "demand_a", "type": "_emitter", "attribute": attribute, "value": 10.0}),
