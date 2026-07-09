@@ -5,7 +5,6 @@ import typing as t
 from unittest.mock import patch
 from uuid import UUID
 
-import numpy as np
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +31,7 @@ from movici_data_core.domain_model import (
 )
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.core import DataType
+from movici_simulation_core.testing import dataset_data_to_numpy
 
 DBAPI_URL = "sqlite+aiosqlite://"
 
@@ -230,8 +230,8 @@ def default_attribute_types():
         AttributeType("geometry.x", DataType(float), unit="m"),
         AttributeType("geometry.y", DataType(float), unit="m"),
         AttributeType("geometry.linestring_2d", DataType(float, unit_shape=(2,), csr=True)),
-        AttributeType("topology.from_node_id", DataType(float)),
-        AttributeType("topology.to_node_id", DataType(float)),
+        AttributeType("topology.from_node_id", DataType(int)),
+        AttributeType("topology.to_node_id", DataType(int)),
         AttributeType("transport.capacity", DataType(float)),
         AttributeType("labels", DataType(int, (), True), enum_name="label"),
     ]
@@ -302,19 +302,26 @@ async def create_update(
     an_attribute_type,
     an_entity_type,
 ):
-    async def _create_update(timestamp, iteration, ids, array, scenario_id=None):
+    async def _create_update(
+        timestamp, iteration, ids=None, array=None, data=None, dataset=None, scenario_id=None
+    ):
         scenario_id = scenario_id or a_scenario.id
+        if data is None:
+            if ids is None or array is None:
+                raise ValueError("supply either ids and array or data")
+            data = {
+                an_entity_type.name: {
+                    "id": ids,
+                    an_attribute_type.name: array,
+                }
+            }
+        dataset = dataset or a_dataset
         update = Update(
-            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+            dataset=ScenarioDataset(dataset.name, dataset.dataset_type),
             timestamp=timestamp,
             iteration=iteration,
             model=UpdateModel(name=a_scenario.models[0].name, type=a_scenario.models[0].type),
-            data={
-                an_entity_type.name: {
-                    "id": {"data": np.asarray(ids)},
-                    an_attribute_type.name: {"data": np.asarray(array)},
-                }
-            },
+            data=dataset_data_to_numpy(data),
         )
 
         return await repository.for_scenario(scenario_id).updates.create(update)

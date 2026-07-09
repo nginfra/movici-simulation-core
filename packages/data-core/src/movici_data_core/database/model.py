@@ -432,7 +432,10 @@ class Scenario(Base):
 
 class ScenarioDataset(Base):
     __tablename__ = "scenario_dataset"
-    __table_args__ = (UniqueConstraint("scenario_id", "sequence"),)
+    __table_args__ = (
+        UniqueConstraint("scenario_id", "sequence"),
+        UniqueConstraint("scenario_id", "dataset_id"),
+    )
     scenario_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("scenario.id", ondelete="CASCADE"), primary_key=True
     )

@@ -58,15 +58,6 @@ class DatasetRepository(SQLResourceRepository):
 
     @property
     def selector(self):
-        workspace_id = self._ensure_workspace_id()
-        return (
-            select(db.Dataset)
-            .where(db.Dataset.workspace_id == workspace_id)
-            .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
-        )
-
-    @property
-    def selector_with_has_data(self):
         return select(
             db.Dataset,
             exists().where(db.RawData.dataset_id == db.Dataset.id),
@@ -86,7 +77,7 @@ class DatasetRepository(SQLResourceRepository):
     async def list(self) -> list[Dataset]:
         workspace_id = self._ensure_workspace_id()
         rows = await self.session.execute(
-            self.selector_with_has_data.where(db.Dataset.workspace_id == workspace_id)
+            self.selector.where(db.Dataset.workspace_id == workspace_id)
         )
 
         return [
@@ -95,17 +86,15 @@ class DatasetRepository(SQLResourceRepository):
 
     async def get_by_name(self, name: str) -> Dataset | None:
         workspace_id = self._ensure_workspace_id()
-        return await self._get_one_with_has_data(
+        return await self._get_one(
             (db.Dataset.workspace_id == workspace_id) & (db.Dataset.name == name)
         )
 
     async def get_by_id(self, id: UUID) -> Dataset | None:
-        return await self._get_one_with_has_data(db.Dataset.id == id)
+        return await self._get_one(db.Dataset.id == id)
 
-    async def _get_one_with_has_data(self, where_clause: ColumnElement[bool]):
-        result = (
-            await self.session.execute(self.selector_with_has_data.where(where_clause).limit(1))
-        ).first()
+    async def _get_one(self, where_clause: ColumnElement[bool]):
+        result = (await self.session.execute(self.selector.where(where_clause).limit(1))).first()
 
         if result is None:
             return None
@@ -263,9 +252,10 @@ class DatasetRepository(SQLResourceRepository):
         existing_datasets = {
             ds.name: ScenarioDataset(ds.name, dataset_type=ds.dataset_type.to_domain(), id=ds.id)
             for ds in await self.session.scalars(
-                self.selector.where(
-                    db.Dataset.name.in_(ds.name for ds in datasets),
-                )
+                select(db.Dataset)
+                .where(db.Dataset.workspace_id == workspace_id)
+                .where(db.Dataset.name.in_(ds.name for ds in datasets))
+                .options(joinedload(db.Dataset.dataset_type))
             )
         }
         existing_types = None  # delay retrieving existing dataset types, we might not need them

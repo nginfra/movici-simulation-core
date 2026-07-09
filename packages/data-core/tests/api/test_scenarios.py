@@ -1,17 +1,10 @@
 import pytest
 
-from movici_data_core.database.model import DatabaseMode
-
 
 @pytest.fixture
 def scenario_id(create_scenario_through_api):
     result = create_scenario_through_api()
     return result["id"]
-
-
-@pytest.fixture
-def database_mode():
-    return DatabaseMode.SINGLE_WORKSPACE
 
 
 def test_create_scenario(create_scenario_through_api):
