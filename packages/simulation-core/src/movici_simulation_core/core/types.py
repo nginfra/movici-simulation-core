@@ -7,10 +7,17 @@ from pathlib import Path
 
 from movici_simulation_core.validate import ModelConfigSchema, validate_and_migrate_config
 
-from ..messages import NewTimeMessage, QuitMessage, UpdateMessage, UpdateSeriesMessage
+from ..exceptions import RemapError
+from ..messages import (
+    NewTimeMessage,
+    QuitMessage,
+    RemapMessage,
+    UpdateMessage,
+    UpdateSeriesMessage,
+)
 from ..networking.stream import BaseStream, MessageRouterSocket
 from ..settings import Settings
-from ..types import DataMask, FileType, Result, UpdateData
+from ..types import AutoRemap, DataMask, FileType, Priority, Result, UpdateData
 from ..utils.path import DatasetPath
 from .attribute_spec import AttributeSpec
 
@@ -55,6 +62,9 @@ class Model(Plugin):
     __model_config_schema__: (
         t.ClassVar[Path | ModelConfigSchema] | list[ModelConfigSchema] | None
     ) = None
+    # Publishing priority for ownership resolution; solver helpers override this. See
+    # issue #127.
+    priority: t.ClassVar[int] = Priority.REGULAR
 
     def __init__(self, model_config: dict, validate_config=True):
         if validate_config:
@@ -75,6 +85,26 @@ class Model(Plugin):
 
     def get_adapter(self) -> t.Type[ModelAdapterBase]:
         raise NotImplementedError
+
+    def remap(self, payload: RemapMessage) -> AutoRemap:
+        """Optional hook for handling a ``REMAP`` command. The returned :class:`AutoRemap`
+        tells the connector which rename middleware to install: ``AutoRemap(pub=True)``
+        transparently renames outgoing (published) attributes, ``AutoRemap(sub=True)``
+        renames incoming (subscribed) attributes back to their original names. The default
+        (``AutoRemap.default()``, both ``True``) makes the REMAP fully transparent to the
+        model.
+
+        A model that wants to handle (part of) the REMAP itself — such as a solver helper
+        that must see the individual ``:i`` variants — overrides this method, prepares its
+        own state for the incoming variants, and returns ``False`` for the corresponding
+        side (e.g. ``AutoRemap(pub=True, sub=False)``). A many-to-one sub remap (multiple
+        variants resolving to the same original name) *requires* this: the adapter raises
+        :class:`RemapError` if the model leaves ``sub=True`` for such a remap. See issue
+        #127.
+
+        :param payload: the RemapMessage.
+        """
+        return AutoRemap.default()
 
     @classmethod
     def get_schema_attributes(cls) -> t.Iterable[AttributeSpec]:
@@ -116,6 +146,13 @@ class ModelAdapterBase(abc.ABC):
         self.settings = settings
         self.logger = logger
 
+    @property
+    def priority(self) -> int:
+        """The model's publishing priority, exposed to the connector so it can be written
+        into the ``RegistrationMessage`` sent to the orchestrator. See issue #127.
+        """
+        return self.model.priority
+
     @abc.abstractmethod
     def initialize(self, init_data_handler: InitDataHandler) -> DataMask:
         raise NotImplementedError
@@ -136,8 +173,41 @@ class ModelAdapterBase(abc.ABC):
     def close(self, message: QuitMessage):
         raise NotImplementedError
 
+    def remap(self, message: RemapMessage) -> AutoRemap:
+        """Handle a ``REMAP`` command by consulting the inner model and deciding what
+        rename middleware the connector should install. See issue #127.
+
+        The default implementation delegates to ``self.model.remap(message)`` and validates
+        the result: a many-to-one sub remap (multiple variants resolving to the same
+        original) cannot be handled by rename middleware — the renamed keys would collide —
+        so the model must handle it itself and return ``AutoRemap(sub=False)``. If it
+        doesn't, :class:`RemapError` is raised.
+        """
+        result = self.model.remap(message)
+        if result.sub and _sub_has_many_to_one(message.sub):
+            raise RemapError(
+                f"Model '{type(self.model).__name__}' received a many-to-one sub-remap "
+                "but its remap() returned AutoRemap(sub=True). Override "
+                f"`{type(self.model).__name__}.remap` to handle the many-to-one mapping "
+                "itself (e.g. by registering the variant attribute fields in its state) "
+                "and return AutoRemap(sub=False)"
+            )
+        return result
+
     def set_schema(self, schema):
         pass
+
+
+def _sub_has_many_to_one(sub_section: t.Optional[dict]) -> bool:
+    """Return True if any entity group in the sub section has more than one variant
+    resolving to the same original attribute name."""
+    if sub_section is None:
+        return False
+    return any(
+        len(attrs) != len(set(attrs.values()))
+        for eg in sub_section.values()
+        for attrs in eg.values()
+    )
 
 
 class InitDataHandler(t.Protocol):

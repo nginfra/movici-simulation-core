@@ -3,12 +3,15 @@ from unittest.mock import MagicMock, Mock, PropertyMock, call, patch
 import pytest
 
 from movici_simulation_core.exceptions import InvalidCommand
-from movici_simulation_core.messages import NewTimeMessage, UpdateMessage
+from movici_simulation_core.messages import NewTimeMessage, RemapMessage, UpdateMessage
 from movici_simulation_core.services.orchestrator.context import (
+    ConnectedModel,
     Context,
     ModelCollection,
     TimelineController,
 )
+from movici_simulation_core.services.orchestrator.remap import RemapConflictError
+from movici_simulation_core.types import Priority
 from tests.services.orchestrator.test_connected_model import get_model
 
 
@@ -152,3 +155,73 @@ class TestContext:
         context.recv_message(model_a, UpdateMessage(12))
         assert context.orchestrator_failed
         assert "orchestrator" in context.failed
+
+
+def _make_model(name, pub=None, sub=None, priority=int(Priority.REGULAR)):
+    model = ConnectedModel(name, Mock(), Mock())
+    model.pub = pub or {}
+    model.sub = sub or {}
+    model.priority = priority
+    return model
+
+
+class TestModelCollectionRemap:
+    """End-to-end behaviour for ``ModelCollection.compute_remap_plan`` and
+    ``apply_remap_plan``. See issue #127."""
+
+    def test_compute_remap_plan_combiner_case(self):
+        models = ModelCollection(
+            model_a=_make_model("model_a", pub={"ds": {"eg": ["a"]}}),
+            model_b=_make_model("model_b", pub={"ds": {"eg": ["a"]}}),
+            combiner=_make_model(
+                "combiner",
+                pub={"ds": {"eg": ["a"]}},
+                priority=int(Priority.SOLVER_HELPER),
+            ),
+        )
+        plan = models.compute_remap_plan()
+        assert set(plan) == {"model_a", "model_b", "combiner"}
+        assert plan["model_a"].pub == {"ds": {"eg": {"a": "a:model_a:i"}}}
+        assert plan["combiner"].sub == {"ds": {"eg": {"a:model_a:i": "a", "a:model_b:i": "a"}}}
+
+    def test_compute_remap_plan_raises_on_unresolved_conflict(self):
+        models = ModelCollection(
+            a=_make_model("a", pub={"ds": {"eg": ["x"]}}),
+            b=_make_model("b", pub={"ds": {"eg": ["x"]}}),
+        )
+        with pytest.raises(RemapConflictError):
+            models.compute_remap_plan()
+
+    def test_apply_remap_plan_updates_masks_and_sends_messages(self):
+        a = _make_model("a", pub={"ds": {"eg": ["x"]}})
+        b = _make_model("b", pub={"ds": {"eg": ["x"]}}, sub={"ds": {"eg": ["x"]}})
+        models = ModelCollection(a=a, b=b)
+
+        plan = {
+            "a": RemapMessage(pub={"ds": {"eg": {"x": "x:a:i"}}}),
+            "b": RemapMessage(sub={"ds": {"eg": {"x:a:i": "x"}}}),
+        }
+        # Patch recv_event so we can verify it was called without driving the FSM.
+        a.recv_event = Mock()
+        b.recv_event = Mock()
+        models.apply_remap_plan(plan)
+
+        # Pub mask updated for the non-owner publisher.
+        assert a.pub == {"ds": {"eg": ["x:a:i"]}}
+        # Sub mask updated for the higher-priority subscriber.
+        assert b.sub == {"ds": {"eg": ["x:a:i"]}}
+        # Messages were dispatched.
+        assert a.recv_event.call_args == call(plan["a"])
+        assert b.recv_event.call_args == call(plan["b"])
+
+    def test_apply_remap_plan_skips_unknown_model_names(self):
+        models = ModelCollection(a=_make_model("a"))
+        # Plan references a model that no longer exists — must not raise.
+        models.apply_remap_plan({"ghost": RemapMessage()})
+
+    def test_compute_remap_plan_no_conflict_returns_empty(self):
+        models = ModelCollection(
+            a=_make_model("a", pub={"ds": {"eg": ["x"]}}),
+            b=_make_model("b", pub={"ds": {"eg": ["y"]}}),
+        )
+        assert models.compute_remap_plan() == {}

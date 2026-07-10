@@ -3,10 +3,15 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.messages import QuitMessage, RemapMessage
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
 from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError
+from movici_simulation_core.services.orchestrator.remap import (
+    AttributeRef,
+    RemapConflictError,
+)
 from movici_simulation_core.services.orchestrator.states import (
+    ComputeAndSendRemap,
     EndFinalizingPhase,
     NewTime,
     OrchestratorState,
@@ -80,6 +85,50 @@ class TestWaitForModels(BaseTestState):
         # an unknown model is ignored
         send_message(name="unknown")
         assert context.recv_message.call_count == 0
+
+
+class TestComputeAndSendRemap(BaseTestState):
+    state_cls = ComputeAndSendRemap
+
+    def test_no_plan_no_messages_sent(self, state, context):
+        context.models.compute_remap_plan.return_value = {}
+        state.run()
+        assert context.models.apply_remap_plan.call_count == 0
+
+    def test_plan_is_applied(self, state, context):
+        plan = {"model_a": RemapMessage(pub={"ds": {"eg": {"x": "x:model_a:i"}}})}
+        context.models.compute_remap_plan.return_value = plan
+        state.run()
+        assert context.models.apply_remap_plan.call_args == call(plan)
+
+    def test_conflict_marks_all_models_failed(self, state, context):
+        # Use real ConnectedModels so we can assert .failed flips on them.
+        models = ModelCollection(
+            a=ConnectedModel("a", Mock(), Mock()),
+            b=ConnectedModel("b", Mock(), Mock()),
+        )
+        context.models = models
+        context.logger = Mock()
+        compute_mock = Mock(
+            side_effect=RemapConflictError(AttributeRef("ds", "eg", "x"), ["a", "b"], priority=10)
+        )
+        models.compute_remap_plan = compute_mock
+        state.run()
+        assert all(m.failed for m in models.values())
+
+    def test_conflict_calls_logger(self, state, context):
+        models = ModelCollection(
+            a=ConnectedModel("a", Mock(), Mock()),
+            b=ConnectedModel("b", Mock(), Mock()),
+        )
+        context.models = models
+        context.logger = Mock()
+        compute_mock = Mock(
+            side_effect=RemapConflictError(AttributeRef("ds", "eg", "x"), ["a", "b"], priority=10)
+        )
+        models.compute_remap_plan = compute_mock
+        state.run()
+        assert context.logger.exception.call_count == 1
 
 
 class TestStartRunningPhase(BaseTestState):

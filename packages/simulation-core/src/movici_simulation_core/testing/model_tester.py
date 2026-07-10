@@ -67,6 +67,9 @@ class PreProcessor:
     def new_time(self, message: NewTimeMessage):
         return self.model.new_time(message)
 
+    def remap(self, message):
+        return self.model.remap(message)
+
     def close(self, message: QuitMessage):
         return self.model.close(message)
 
@@ -198,6 +201,9 @@ class ModelTester:
     def new_time(self, timestamp: int):
         message = NewTimeMessage(timestamp)
         self._model.new_time(message)
+
+    def remap(self, message):
+        return self._model.remap(message)
 
     def close(self):
         try:
