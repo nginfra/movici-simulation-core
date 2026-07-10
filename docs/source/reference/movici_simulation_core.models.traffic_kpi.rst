@@ -1,13 +1,13 @@
 
 
 traffic\_kpi
-=============
+============
 
 
 
 
 coefficients\_tape
--------------------
+------------------
 
 .. automodule:: movici_simulation_core.models.traffic_kpi.coefficients_tape
    :members:
@@ -17,7 +17,7 @@ coefficients\_tape
 
 
 entities
----------
+--------
 
 .. automodule:: movici_simulation_core.models.traffic_kpi.entities
    :members:
@@ -27,7 +27,7 @@ entities
 
 
 model
-------
+-----
 
 .. automodule:: movici_simulation_core.models.traffic_kpi.model
    :members:

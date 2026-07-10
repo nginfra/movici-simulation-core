@@ -26,8 +26,8 @@ class FSMConfig(t.Generic[T]):
         and ``initial`` state must have an entry in the states  dictionary
     """
 
-    initial_state: type[State[T]]
-    states: dict[type[State[T]], TransitionsT] = dataclasses.field(default_factory=dict)
+    initial_state: t.Type[State[T]]
+    states: dict[t.Type[State[T]], TransitionsT] = dataclasses.field(default_factory=dict)
     strict: bool = True
 
     def __post_init__(self):
@@ -215,4 +215,4 @@ class Always(Condition):
         return True
 
 
-TransitionsT = t.Sequence[tuple[type[Condition], type[State]]]
+TransitionsT = t.Sequence[tuple[t.Type[Condition], t.Type[State]]]

@@ -55,14 +55,14 @@ class SQLAlchemyServer:
     session_factory: async_sessionmaker[AsyncSession]
     engine: AsyncEngine
 
-    workspace_service_cls: type[WorkspaceService] = WorkspaceService
-    dataset_type_service_cls: type[DatasetTypeService] = DatasetTypeService
-    entity_type_service_cls: type[EntityTypeService] = EntityTypeService
-    attribute_type_service_cls: type[AttributeTypeService] = AttributeTypeService
-    model_type_service_cls: type[ModelTypeService] = ModelTypeService
-    dataset_service_cls: type[DatasetService] = DatasetService
-    scenario_service_cls: type[ScenarioService] = ScenarioService
-    update_service_cls: type[UpdateService] = UpdateService
+    workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
+    dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
+    entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
+    attribute_type_service_cls: t.Type[AttributeTypeService] = AttributeTypeService
+    model_type_service_cls: t.Type[ModelTypeService] = ModelTypeService
+    dataset_service_cls: t.Type[DatasetService] = DatasetService
+    scenario_service_cls: t.Type[ScenarioService] = ScenarioService
+    update_service_cls: t.Type[UpdateService] = UpdateService
 
     def __init__(
         self,
@@ -163,14 +163,14 @@ class SQLAlchemyBackend:
     single_workspace_mode: bool = False
 
     tmpfile_dir: pathlib.Path | None = None
-    workspace_service_cls: type[WorkspaceService] = WorkspaceService
-    dataset_type_service_cls: type[DatasetTypeService] = DatasetTypeService
-    entity_type_service_cls: type[EntityTypeService] = EntityTypeService
-    attribute_type_service_cls: type[AttributeTypeService] = AttributeTypeService
-    model_type_service_cls: type[ModelTypeService] = ModelTypeService
-    dataset_service_cls: type[DatasetService] = DatasetService
-    scenario_service_cls: type[ScenarioService] = ScenarioService
-    update_service_cls: type[UpdateService] = UpdateService
+    workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
+    dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
+    entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
+    attribute_type_service_cls: t.Type[AttributeTypeService] = AttributeTypeService
+    model_type_service_cls: t.Type[ModelTypeService] = ModelTypeService
+    dataset_service_cls: t.Type[DatasetService] = DatasetService
+    scenario_service_cls: t.Type[ScenarioService] = ScenarioService
+    update_service_cls: t.Type[UpdateService] = UpdateService
 
     @property
     def repository(self):

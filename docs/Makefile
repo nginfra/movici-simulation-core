@@ -14,9 +14,14 @@ help:
 
 .PHONY: help Makefile
 
+PACKAGES = $(wildcard ../packages/*/src/*)
+
 apidoc:
-	rm source/reference/*
-	sphinx-apidoc -d 1 --remove-old -t source/_templates/ -o source/reference/ ../movici_simulation_core
+	rm -f source/reference/*
+	$(foreach pkg,$(PACKAGES),\
+		sphinx-apidoc -d 1 -t source/_templates/ -o source/reference/ $(pkg) &&) true
+	printf "API Reference\n=============\n\n.. toctree::\n   :maxdepth: 1\n\n" > source/reference/modules.rst
+	$(foreach pkg,$(PACKAGES),echo "   $(notdir $(pkg))" >> source/reference/modules.rst;)
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).-

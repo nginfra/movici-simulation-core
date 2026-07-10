@@ -16,9 +16,9 @@
 {% set basename = pkgname.split('.')[-1] %}
 
 {%- if is_namespace %}
-{{- [basename, ""] | join(" ") | e | heading }}
+{{- [basename] | join(" ") | e | heading }}
 {% else %}
-{{- [basename, ""] | join(" ") | e | heading }}
+{{- [basename] | join(" ") | e | heading }}
 {% endif %}
 
 {%- if is_namespace %}
@@ -42,7 +42,7 @@ Submodules
 {% set basesubmodule = submodule.split('.')[-1] %}
 
 {% if show_headings %}
-{{- [basesubmodule, ""] | join(" ") | e | heading(2) }}
+{{- [basesubmodule] | join(" ") | e | heading(2) }}
 {% endif %}
 {{ automodule(submodule, automodule_options) }}
 {% endfor %}
