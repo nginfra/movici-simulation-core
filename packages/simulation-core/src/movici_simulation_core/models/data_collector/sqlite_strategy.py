@@ -15,7 +15,7 @@ import orjson
 
 from movici_simulation_core.models.data_collector.strategy import StorageStrategy
 from movici_simulation_core.settings import Settings
-from movici_simulation_core.storage.sqlite_schema import DatasetFormat, SimulationDatabase
+from movici_simulation_core.storage.sqlite_schema import DatasetFormat_, SimulationDatabase
 
 
 class SQLiteStorageStrategy(StorageStrategy):
@@ -187,10 +187,10 @@ class SQLiteStorageStrategy(StorageStrategy):
                 # Non-JSON file - treat as binary
                 dataset_data = dataset_path.read_bytes()
                 self.db.store_initial_dataset(
-                    dataset_name, dataset_data, format=DatasetFormat.BINARY
+                    dataset_name, dataset_data, format=DatasetFormat_.BINARY
                 )
 
-    def _detect_format(self, data: dict) -> DatasetFormat:
+    def _detect_format(self, data: dict) -> DatasetFormat_:
         """Auto-detect if JSON data is entity_based or unstructured.
 
         Entity-based format has structure::
@@ -206,20 +206,20 @@ class SQLiteStorageStrategy(StorageStrategy):
         """
         # Check if data looks like entity-based format
         if not isinstance(data, dict):
-            return DatasetFormat.UNSTRUCTURED
+            return DatasetFormat_.UNSTRUCTURED
 
         # Check if all values are dicts containing attributes with "data" key
         for _entity_group, attributes in data.items():
             if not isinstance(attributes, dict):
-                return DatasetFormat.UNSTRUCTURED
+                return DatasetFormat_.UNSTRUCTURED
 
             # Check if at least one attribute has "data" key
             for _attr_name, attr_data in attributes.items():
                 if isinstance(attr_data, dict) and "data" in attr_data:
                     # Looks like entity-based format
-                    return DatasetFormat.ENTITY_BASED
+                    return DatasetFormat_.ENTITY_BASED
 
-        return DatasetFormat.UNSTRUCTURED
+        return DatasetFormat_.UNSTRUCTURED
 
     def close(self):
         """Clean up database connections.

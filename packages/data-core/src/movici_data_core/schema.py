@@ -56,6 +56,13 @@ BoundingBoxField = t.Annotated[
 
 
 class OutModel(BaseModel, t.Generic[T_dom]):
+    """Base class for output (serialization) models
+
+    :cvar __envelope__: An optional string that may be used as the envelope when serializing a
+        sequence of objects. Instead of serializing to a list, the objects will be serialzed to
+        a dictionary containing the envelope key, and then the serialized sequence of objects
+    """
+
     model_config = ConfigDict(from_attributes=True)
     __envelope__: t.ClassVar[str | None] = None
 
@@ -88,7 +95,7 @@ class WorkspaceListOut(OutModel[t.Sequence[domain_model.Workspace]]):
 class ShortDatasetIn(BaseModel):
     name: str
     display_name: str = ""
-    type: DatasetType | str
+    type: domain_model.DatasetType | str  # refer using namespace to statisfy sphinx autodoc
 
     def to_domain(self):
         return domain_model.Dataset(
@@ -102,7 +109,8 @@ class ShortDatasetOut(OutModel[domain_model.Dataset]):
     id: UUID
     name: str
     display_name: str
-    type: DatasetType = Field(validation_alias="dataset_type")
+    # refer using namespace to statisfy sphinx autodoc
+    type: domain_model.DatasetType = Field(validation_alias="dataset_type")
     has_data: bool
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -153,7 +161,7 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
 
 class ScenarioDatasetIn(BaseModel):
     name: str
-    type: DatasetType | str | None
+    type: domain_model.DatasetType | str | None  # refer using namespace to statisfy sphinx autodoc
 
     def to_domain(self):
         dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
@@ -162,14 +170,15 @@ class ScenarioDatasetIn(BaseModel):
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     name: str
-    type: DatasetType = Field(validation_alias="dataset_type")
+    # refer using namespace to statisfy sphinx autodoc
+    type: domain_model.DatasetType = Field(validation_alias="dataset_type")
     id: UUID
 
 
 class ScenarioModelIn(BaseModel):
     model_config = ConfigDict(extra="allow")
     name: str
-    type: str | ModelType
+    type: str | domain_model.ModelType  # refer using namespace to statisfy sphinx autodoc
 
     def to_domain(self):
         return domain_model.ScenarioModel(
@@ -360,11 +369,11 @@ class UpdateIn(BaseModel):
         data, and that key must either be ``"data"`` or the update's dataset name
 
         :param path: A path to an file containing an update. The file must be in a format that the
-        serializer supports, which is generally either JSON or MessagePack.
+            serializer supports, which is generally either JSON or MessagePack.
         :param serializer: An object that inherits from ``ExternalSerializationStrategy``.
         :param filetype: The filetype for the file. If given, it will be explictly (attempted to
-        be) read as a file of this type. If not given, or None, the filetype will be guessed from
-            the filename (suffix)
+            be) read as a file of this type. If not given, or None, the filetype will be guessed
+            from the filename (suffix)
 
         :return: An Update with the data section in Movici format
         """

@@ -94,7 +94,7 @@ class ProcessRunner:
     ctx = multiprocessing.get_context(_start_method)
 
     def __init__(
-        self, strategies: list[type] | None, schema: t.Optional[AttributeSchema] = None
+        self, strategies: list[t.Type] | None, schema: t.Optional[AttributeSchema] = None
     ) -> None:
         self.strategies = strategies
         self.schema = schema
@@ -137,7 +137,7 @@ class ServiceRunner(ProcessRunner):
         self,
         service: ServiceInfo,
         settings: Settings,
-        strategies: list[type] | None = None,
+        strategies: list[t.Type] | None = None,
         schema: t.Optional[AttributeSchema] = None,
     ):
         super().__init__(strategies=strategies, schema=schema)
@@ -209,7 +209,7 @@ class ModelRunner(ProcessRunner):
         self,
         model_info: ModelInfo,
         settings: Settings,
-        strategies: list[type] | None = None,
+        strategies: list[t.Type] | None = None,
         schema: t.Optional[AttributeSchema] = None,
     ):
         super().__init__(strategies=strategies, schema=schema)

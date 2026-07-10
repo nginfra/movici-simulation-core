@@ -19,6 +19,7 @@ Subpackages
    movici_simulation_core.postprocessing
    movici_simulation_core.preprocessing
    movici_simulation_core.services
+   movici_simulation_core.simulation
    movici_simulation_core.storage
    movici_simulation_core.testing
    movici_simulation_core.utils
@@ -70,16 +71,6 @@ settings
 --------
 
 .. automodule:: movici_simulation_core.settings
-   :members:
-   :show-inheritance:
-   :undoc-members:
-
-
-
-simulation
-----------
-
-.. automodule:: movici_simulation_core.simulation
    :members:
    :show-inheritance:
    :undoc-members:

@@ -26,6 +26,16 @@ dataset
 
 
 
+epanet\_source
+--------------
+
+.. automodule:: movici_drinking_water_model.epanet_source
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+
+
 model
 -----
 

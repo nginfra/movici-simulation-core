@@ -8,3 +8,4 @@ API Reference
    movici_drinking_water_model
    movici_simulation_core
    movici_transport_assignment_model
+   movici_urban_drainage_model

@@ -200,7 +200,7 @@ class ConnectedModel:
         """Send a command message to the model"""
         self.send(message)
 
-    def log_invalid(self, message, valid_messages: t.Iterable[type[Message]]):
+    def log_invalid(self, message, valid_messages: t.Iterable[t.Type[Message]]):
         self.logger.error(
             f"Received invalid message {message} from model '{self.name}'. Expected one of "
             + ", ".join(m.__name__ for m in valid_messages)
@@ -208,8 +208,8 @@ class ConnectedModel:
 
 
 class BaseModelState(State[ConnectedModel], ABC):
-    valid_commands: tuple[type[Command], ...] = ()
-    valid_responses: tuple[type[Response], ...] = ()
+    valid_commands: tuple[t.Type[Command], ...] = ()
+    valid_responses: tuple[t.Type[Response], ...] = ()
 
 
 class WaitingForMessage(BaseModelState):
@@ -306,7 +306,7 @@ class WaitingForMessage(BaseModelState):
         self.context.pending_quit = None
         self.context.pending_updates = []
 
-    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[type[Response]]):
+    def handle_invalid_response(self, msg: Response, valid_messages: t.Iterable[t.Type[Response]]):
         self.context.failed = True
         self.context.log_invalid(msg, valid_messages)
         if not self.context.pending_quit:
