@@ -46,7 +46,7 @@ class ScenarioStatus(str, enum.Enum):
     SUCCEEDED = "succeeded"
 
 
-AttributeDataType = type[bool | int | float | str]
+AttributeDataType = t.Type[bool | int | float | str]
 
 
 def utcnow():
@@ -77,10 +77,11 @@ class Workspace:
 class DatasetType:
     """A DatasetType determines the meaning of a Dataset. Every Dataset must have a type. Examples
     may be ``transport_network`` or ``tabular``
+
     :param name: a *snake_case* name, must be unique in the database
     :param format: determines how Dataset data is formatted
     :param mimetype: in case of a ``DatasetFormat.BINARY`` format, a dataset type may
-      specify a mimetype. When adding data, the mimetype may be validated if given
+        specify a mimetype. When adding data, the mimetype may be validated if given
     """
 
     name: str
@@ -110,7 +111,7 @@ class EntityType:
 class AttributeType:
     """
     An attribute type contains information about an attribute. Every attribute must have a type.
-    Equivalent to an :ref:`AttributeSpec` and can be converted to and from :ref:`AttributeSpec`
+    Equivalent to an :class:`AttributeSpec` and can be converted to and from :class:`AttributeSpec`
 
     :param name: a *snake_case* name for the attribute type. Must be unique in the database
     :param data_type: The data type of the attribute
@@ -132,11 +133,11 @@ class AttributeType:
 
     @classmethod
     def from_attribute_spec(cls, spec: AttributeSpec):
-        """Convert an :ref:`AttributeSpec` to an :ref:`AttributeType`"""
+        """Convert an :class:`AttributeSpec` to an :class:`AttributeType`"""
         return cls(name=spec.name, data_type=spec.data_type, enum_name=spec.enum_name)
 
     def to_attribute_spec(self):
-        """Convert an :ref:`AttributeType` to an :ref:`AttributeSpec`"""
+        """Convert an :class:`AttributeType` to an :class:`AttributeSpec`"""
         return AttributeSpec(name=self.name, data_type=self.data_type, enum_name=self.enum_name)
 
 
@@ -280,7 +281,7 @@ class ScenarioModel:
     :param name: a *snake_case* model name. Must be unique in a scenario
     :param type: the model type
     :param config: the model config dict
-    :param references: a list of :ref:`MoviciDataRefInfo` objects that were extracted from the
+    :param references: a list of :class:`MoviciDataRefInfo` objects that were extracted from the
         model config dict
     """
 
@@ -323,7 +324,7 @@ class Dataset:
     :param display_name: a human readable display name
     :param dataset_type: the dataset's type
     :param id: the dataset ``UUID`` in the database (if any)
-    :param workspace: the :ref:`Workspace` the dataset belongs to (if any)
+    :param workspace: the :class:`Workspace` the dataset belongs to (if any)
     :param general: the dataset's general section (dict) for ``ENTITY_BASED`` and ``UNSTRUCTURED``
         datasets (if any)
     :param epsg_code: the dataset's CRS as an EPSG code

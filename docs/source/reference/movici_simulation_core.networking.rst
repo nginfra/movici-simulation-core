@@ -1,13 +1,13 @@
 
 
 networking
-===========
+==========
 
 
 
 
 client
--------
+------
 
 .. automodule:: movici_simulation_core.networking.client
    :members:
@@ -17,7 +17,7 @@ client
 
 
 stream
--------
+------
 
 .. automodule:: movici_simulation_core.networking.stream
    :members:

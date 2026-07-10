@@ -20,6 +20,7 @@ from pydantic import (
     model_serializer,
 )
 
+from movici_data_core import domain_model
 from movici_data_core.database.model import (
     ATTRIBUTE_DESCRIPTION_MAX_LENGTH,
     ATTRIBUTE_ENUM_NAME_MAX_LENGTH,
@@ -90,6 +91,13 @@ class InModel(BaseModel, t.Generic[T_dom]):
 
 
 class OutModel(BaseModel, t.Generic[T_dom]):
+    """Base class for output (serialization) models
+
+    :cvar __envelope__: An optional string that may be used as the envelope when serializing a
+        sequence of objects. Instead of serializing to a list, the objects will be serialzed to
+        a dictionary containing the envelope key, and then the serialized sequence of objects
+    """
+
     model_config = ConfigDict(from_attributes=True)
     __envelope__: t.ClassVar[str | None] = None
 
@@ -124,7 +132,7 @@ class WorkspaceListOut(OutModel[t.Sequence[Workspace]]):
 class ShortDatasetIn(InModel[Dataset]):
     name: NameStr
     display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)] = ""
-    type: DatasetType | NameStr
+    type: domain_model.DatasetType | NameStr
 
     def to_domain(self):
         return Dataset(
@@ -138,7 +146,8 @@ class ShortDatasetOut(OutModel[Dataset]):
     id: UUID
     name: str
     display_name: str
-    type: DatasetType = Field(validation_alias="dataset_type")
+    # refer using namespace to statisfy sphinx autodoc
+    type: domain_model.DatasetType = Field(validation_alias="dataset_type")
     has_data: bool
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -189,7 +198,8 @@ class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
 
 class ScenarioDatasetIn(InModel[ScenarioDataset]):
     name: NameStr
-    type: DatasetType | NameStr | None = None
+    # refer using namespace to statisfy sphinx autodoc
+    type: domain_model.DatasetType | NameStr | None = None
 
     def to_domain(self):
         dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
@@ -198,14 +208,14 @@ class ScenarioDatasetIn(InModel[ScenarioDataset]):
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     name: str
-    type: DatasetTypeOut = Field(validation_alias="dataset_type")
+    type: DatasetType = Field(validation_alias="dataset_type")
     id: UUID
 
 
 class ScenarioModelIn(InModel[ScenarioModel]):
     model_config = ConfigDict(extra="allow")
     name: NameStr
-    type: NameStr | ModelType
+    type: NameStr | domain_model.ModelType
 
     def to_domain(self):
         return ScenarioModel(
@@ -413,11 +423,11 @@ class UpdateIn(InModel[Update]):
         data, and that key must either be ``"data"`` or the update's dataset name
 
         :param path: A path to an file containing an update. The file must be in a format that the
-        serializer supports, which is generally either JSON or MessagePack.
+            serializer supports, which is generally either JSON or MessagePack.
         :param serializer: An object that inherits from ``ExternalSerializationStrategy``.
         :param filetype: The filetype for the file. If given, it will be explictly (attempted to
-        be) read as a file of this type. If not given, or None, the filetype will be guessed from
-            the filename (suffix)
+            be) read as a file of this type. If not given, or None, the filetype will be guessed
+            from the filename (suffix)
 
         :return: An Update with the data section in Movici format
         """

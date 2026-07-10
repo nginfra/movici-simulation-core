@@ -107,7 +107,7 @@ class InProcessSimulationRunner(SimulationRunner):
         modules: dict[str, ActiveModuleInfo],
         settings: Settings,
         schema: AttributeSchema,
-        strategies: t.Sequence[type],
+        strategies: t.Sequence[t.Type],
     ):
         super().__init__(modules, settings, schema, strategies)
         self._ensure_only_supported_services()

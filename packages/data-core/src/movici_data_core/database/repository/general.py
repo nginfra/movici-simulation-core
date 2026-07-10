@@ -334,6 +334,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         more of the model types does not exist and the database option ``STRICT_MODEL_TYPES`` is
         unset, the non-existing model types will be created. If the ``STRICT_MODEL_TYPES`` options
         is set, an error is raised instead.
+
         :param model_types: The model types to ensure, as a sequence of model type names
         :return: the ``ModelType`` objects as they exist in the database, in the same order as the
             input sequence

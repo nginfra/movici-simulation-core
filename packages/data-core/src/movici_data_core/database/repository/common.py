@@ -106,7 +106,7 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     it is recommended to wrap the ``update`` method in an ``@ensure_valid_id`` decorator
     """
 
-    __resource__: type[NamedResource[T_dom]]
+    __resource__: t.Type[NamedResource[T_dom]]
     __resource_type_name__: str
 
     async def list(self) -> list[T_dom]:
