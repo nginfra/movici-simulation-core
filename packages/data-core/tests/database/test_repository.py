@@ -111,6 +111,7 @@ class TestWorkspaceRepository:
         assert a_workspace.id is not None
         assert a_workspace.name != "new_name"
         assert a_workspace.display_name != "New Name"
+        assert not repository.options.IMMUTABLE_WORKSPACE_NAMES
 
         await repository.workspaces.update(
             a_workspace.id,
@@ -120,6 +121,19 @@ class TestWorkspaceRepository:
         assert updated is not None
         assert updated.name == "new_name"
         assert updated.display_name == "New Name"
+
+    async def test_cannot_update_workspace_name_when_immutable(
+        self, repository: SQLAlchemyRepository, a_workspace
+    ):
+        assert a_workspace.id is not None
+        assert a_workspace.name != "new_name"
+        repository.options.IMMUTABLE_WORKSPACE_NAMES = True
+
+        with pytest.raises(InvalidAction, match="cannot update workspace name"):
+            await repository.workspaces.update(
+                a_workspace.id,
+                dataclasses.replace(a_workspace, name="new_name"),
+            )
 
     async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
         with pytest.raises(MoviciValidationError) as e:

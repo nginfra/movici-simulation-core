@@ -42,6 +42,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": False,
                 "STRICT_ENTITY_TYPES": False,
                 "STRICT_MODEL_TYPES": False,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
         (
@@ -51,6 +52,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": False,
                 "STRICT_ENTITY_TYPES": False,
                 "STRICT_MODEL_TYPES": False,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
         (
@@ -60,6 +62,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": True,
                 "STRICT_ENTITY_TYPES": True,
                 "STRICT_MODEL_TYPES": True,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
     ],

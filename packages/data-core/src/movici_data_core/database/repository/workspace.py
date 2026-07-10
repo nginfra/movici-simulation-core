@@ -9,9 +9,14 @@ from sqlalchemy import func, insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import Workspace
-from movici_data_core.exceptions import ResourceAlreadyExists, map_errors
+from movici_data_core.exceptions import (
+    InvalidAction,
+    ResourceAlreadyExists,
+    ResourceDoesNotExist,
+    map_errors,
+)
 
-from .common import GenericResourceRepository, ensure_valid_id
+from .common import GenericResourceRepository
 
 
 class WorkspaceRepository(GenericResourceRepository[Workspace]):
@@ -95,7 +100,6 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             )
         }
     )
-    @ensure_valid_id
     async def update(self, id: UUID, obj: Workspace):
         """Update a :class:``Workspace`` in the database
 
@@ -104,6 +108,12 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         :param id: the UUID of the stored ``Workspace``
         :param obj: the ``Workspace`` object with the changes
         """
+        if (current := await self.get_by_id(id)) is None:
+            raise ResourceDoesNotExist(self.__resource_type_name__, id=id)
+
+        if self.options.IMMUTABLE_WORKSPACE_NAMES and current.name != obj.name:
+            raise InvalidAction("cannot update workspace name, it is immutable")
+
         payload = self._validated_payload(obj, ("name", "display_name"))
         await self.session.execute(
             update(db.Workspace).where(db.Workspace.id == id).values(**payload)

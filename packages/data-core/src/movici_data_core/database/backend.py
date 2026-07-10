@@ -301,6 +301,7 @@ class SQLAlchemyBackend:
         strict_attribute_types: bool | None = None,
         strict_model_types: bool | None = None,
         strict_scenario_datasets: bool | None = None,
+        immutable_workspace_names: bool | None = None,
     ):
         """Set various database options for the database
 
@@ -319,6 +320,8 @@ class SQLAlchemyBackend:
         :param strict_scenario_datasets: set/unset the ``STRICT_SCENARIO_DATASETS`` option, which
           governs whether to automatically create stubs for non-existing datasets when they are
           encountered in an uploaded scenario config
+        :param immutable_workspace_names: set/unset the  ``IMMUTABLE_WORKSPACE_NAMES`` option,
+          which governes whether it is allowed to update a workspace name
         """
         if strict_dataset_types is not None:
             self.options.STRICT_DATASET_TYPES = strict_dataset_types
@@ -330,6 +333,8 @@ class SQLAlchemyBackend:
             self.options.STRICT_MODEL_TYPES = strict_model_types
         if strict_scenario_datasets is not None:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
+        if immutable_workspace_names is not None:
+            self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
 
     async def update_schema(self):
         schema = await self.attribute_types.as_schema()

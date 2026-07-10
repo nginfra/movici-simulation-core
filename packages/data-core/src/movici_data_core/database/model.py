@@ -158,6 +158,7 @@ class Options(Base):
     STRICT_ATTRIBUTE_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_MODEL_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_SCENARIO_DATASETS: Mapped[bool] = mapped_column(default=False)
+    IMMUTABLE_WORKSPACE_NAMES: Mapped[bool] = mapped_column(default=False)
 
     default_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="RESTRICT")
