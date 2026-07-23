@@ -4,10 +4,18 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import Workspace
+from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
+    InvalidAction,
+    ResourceAlreadyExists,
+    ResourceDoesNotExist,
+    UniqueConstraintFailed,
+    map_errors,
+)
 
 from .common import GenericResourceRepository, ensure_valid_id
 
@@ -65,22 +73,26 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
             ),
         )
 
+    @map_errors(
+        (UniqueConstraintFailed, lambda obj: ResourceAlreadyExists("workspace", name=obj.name))
+    )
     async def create(self, obj: Workspace) -> UUID:
         """Store a :class:``Workspace`` in the database
 
         :param obj: the ``Workspace`` object
         :return: the UUID of the stored ``ModelType``
         """
+        payload = self._validated_payload(obj, ("name", "display_name"))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.Workspace)
-                .values(name=obj.name, display_name=obj.display_name)
-                .returning(db.Workspace.id)
+                insert(db.Workspace).values(**payload).returning(db.Workspace.id)
             ),
         )
 
-    @ensure_valid_id
+    @map_errors(
+        (UniqueConstraintFailed, lambda id, obj: ResourceAlreadyExists("workspace", name=obj.name))
+    )
     async def update(self, id: UUID, obj: Workspace):
         """Update a :class:``Workspace`` in the database
 
@@ -89,8 +101,43 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         :param id: the UUID of the stored ``Workspace``
         :param obj: the ``Workspace`` object with the changes
         """
+        if (current := await self.get_by_id(id)) is None:
+            raise ResourceDoesNotExist(self.__resource_type_name__, id=id)
+
+        if self.options.IMMUTABLE_WORKSPACE_NAMES and current.name != obj.name:
+            raise InvalidAction("cannot update workspace name, it is immutable")
+
+        payload = self._validated_payload(obj, ("name", "display_name"))
         await self.session.execute(
-            update(db.Workspace)
-            .where(db.Workspace.id == id)
-            .values(name=obj.name, display_name=obj.display_name)
+            update(db.Workspace).where(db.Workspace.id == id).values(**payload)
         )
+
+    @ensure_valid_id
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda id: InvalidAction("Cannot delete default workspace"),
+        )
+    )
+    async def delete(self, id: UUID):
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.DatasetAttribute.attribute_id)
+                    .join(db.Dataset)
+                    .where(db.Dataset.workspace_id == id)
+                )
+            )
+        )
+
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.UpdateAttribute.attribute_id)
+                    .join(db.Update)
+                    .join(db.Scenario)
+                    .where(db.Scenario.workspace_id == id)
+                )
+            )
+        )
+        await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))

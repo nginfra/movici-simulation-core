@@ -4,9 +4,11 @@ import dataclasses
 import datetime
 import functools
 import pathlib
+import re
 import typing as t
 from uuid import UUID
 
+from jsonschema import SchemaError
 from pydantic import (
     BaseModel,
     BeforeValidator,
@@ -14,19 +16,40 @@ from pydantic import (
     Field,
     PlainSerializer,
     WithJsonSchema,
+    field_validator,
 )
 
 from movici_data_core import domain_model
+from movici_data_core.database.model import (
+    ATTRIBUTE_DESCRIPTION_MAX_LENGTH,
+    ATTRIBUTE_ENUM_NAME_MAX_LENGTH,
+    ATTRIBUTE_NAME_MAX_LENGTH,
+    ATTRIBUTE_UNIT_MAX_LENGTH,
+    DATASET_TYPE_MIMETYPE_MAX_LENGTH,
+    DEFAULT_DISPLAY_NAME_MAX_LENGTH,
+    DEFAULT_NAME_MAX_LENGTH,
+    SCENARIO_DESCRIPTION_MAX_LENGTH,
+    snake_case_pattern,
+)
 from movici_data_core.domain_model import (
+    AttributeSummary,
+    AttributeType,
     BoundingBox,
+    Dataset,
+    DatasetFormat,
+    DatasetSummary,
     DatasetType,
+    EntityGroupSummary,
+    EntityType,
     ModelType,
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     SimulationInfo,
     Update,
     UpdateModel,
+    Workspace,
 )
 from movici_data_core.exceptions import (
     DeserializationError,
@@ -34,25 +57,35 @@ from movici_data_core.exceptions import (
     UnsupportedFileType,
 )
 from movici_data_core.serialization import load_dict
+from movici_simulation_core import DataType
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS, data_keys
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
+from movici_simulation_core.validate import movici_validator
 
 T_dom = t.TypeVar("T_dom")
 
+NameStr = t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH, pattern=snake_case_pattern)]
+AttributeNameStr = t.Annotated[
+    str, Field(max_length=ATTRIBUTE_NAME_MAX_LENGTH, pattern=snake_case_pattern)
+]
 
 BoundingBoxField = t.Annotated[
-    BoundingBox,
+    BoundingBox | None,
     PlainSerializer(lambda bbox: bbox.as_tuple_or_none()),
     WithJsonSchema(
         {
-            "title": "Bounding Box",
-            "type": "array",
-            "maxItems": 4,
-            "minItems": 4,
-            "items": {"type": "number"},
+            "anyOf": [
+                {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+                {"type": "null"},
+            ]
         }
     ),
 ]
+
+
+class InModel(BaseModel, t.Generic[T_dom]):
+    def to_domain(self) -> T_dom:
+        raise NotImplementedError
 
 
 class OutModel(BaseModel, t.Generic[T_dom]):
@@ -73,39 +106,41 @@ class OutModel(BaseModel, t.Generic[T_dom]):
         return cls.model_validate(obj)
 
 
-class WorkspaceIn(BaseModel):
-    name: str
-    display_name: str
+class WorkspaceIn(InModel):
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)]
 
     def to_domain(self):
-        return domain_model.Workspace(name=self.name, display_name=self.display_name)
+        return Workspace(name=self.name, display_name=self.display_name)
 
 
-class WorkspaceOut(WorkspaceIn, OutModel[domain_model.Workspace]):
+class WorkspaceOut(OutModel[Workspace]):
     id: UUID
+    name: str
+    display_name: str
     scenario_count: int
     dataset_count: int
 
 
-class WorkspaceListOut(OutModel[t.Sequence[domain_model.Workspace]]):
+class WorkspaceListOut(OutModel[t.Sequence[Workspace]]):
     __envelope__ = "workspaces"
     workspaces: list[WorkspaceOut]
 
 
-class ShortDatasetIn(BaseModel):
-    name: str
-    display_name: str = ""
-    type: domain_model.DatasetType | str  # refer using namespace to statisfy sphinx autodoc
+class ShortDatasetIn(InModel[Dataset]):
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)] = ""
+    type: domain_model.DatasetType | NameStr
 
     def to_domain(self):
-        return domain_model.Dataset(
+        return Dataset(
             name=self.name,
             display_name=self.display_name or self.name,
             dataset_type=DatasetType(self.type) if isinstance(self.type, str) else self.type,
         )
 
 
-class ShortDatasetOut(OutModel[domain_model.Dataset]):
+class ShortDatasetOut(OutModel[Dataset]):
     id: UUID
     name: str
     display_name: str
@@ -116,22 +151,22 @@ class ShortDatasetOut(OutModel[domain_model.Dataset]):
     updated_at: datetime.datetime
 
 
-class DatasetList(OutModel[t.Sequence[domain_model.Dataset]]):
+class DatasetListOut(OutModel[t.Sequence[Dataset]]):
     __envelope__ = "datasets"
     datasets: list[ShortDatasetOut]
 
 
 class ScenarioIn(BaseModel):
-    name: str
-    display_name: str
-    description: str = ""
+    name: NameStr
+    display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)]
+    description: t.Annotated[str, Field(max_length=SCENARIO_DESCRIPTION_MAX_LENGTH)] = ""
     epsg_code: int | None = None
     simulation_info: SimulationInfoInOut
     models: list[ScenarioModelIn]
     datasets: list[ScenarioDatasetIn]
 
     def to_domain(self):
-        return domain_model.Scenario(
+        return Scenario(
             name=self.name,
             display_name=self.display_name,
             description=self.description,
@@ -142,7 +177,7 @@ class ScenarioIn(BaseModel):
         )
 
 
-class SimulationInfoInOut(OutModel[SimulationInfo]):
+class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     duration: int
     reference: float
     time_scale: float
@@ -150,7 +185,7 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
     mode: t.Literal["time_oriented"] = "time_oriented"
 
     def to_domain(self):
-        return domain_model.SimulationInfo(
+        return SimulationInfo(
             duration=self.duration,
             reference=self.reference,
             time_scale=self.time_scale,
@@ -159,9 +194,10 @@ class SimulationInfoInOut(OutModel[SimulationInfo]):
         )
 
 
-class ScenarioDatasetIn(BaseModel):
-    name: str
-    type: domain_model.DatasetType | str | None  # refer using namespace to statisfy sphinx autodoc
+class ScenarioDatasetIn(InModel[ScenarioDataset]):
+    name: NameStr
+    # refer using namespace to statisfy sphinx autodoc
+    type: domain_model.DatasetType | NameStr | None = None
 
     def to_domain(self):
         dataset_type = DatasetType(self.type) if isinstance(self.type, str) else self.type
@@ -170,18 +206,17 @@ class ScenarioDatasetIn(BaseModel):
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     name: str
-    # refer using namespace to statisfy sphinx autodoc
     type: domain_model.DatasetType = Field(validation_alias="dataset_type")
     id: UUID
 
 
-class ScenarioModelIn(BaseModel):
+class ScenarioModelIn(InModel[ScenarioModel]):
     model_config = ConfigDict(extra="allow")
-    name: str
-    type: str | domain_model.ModelType  # refer using namespace to statisfy sphinx autodoc
+    name: NameStr
+    type: NameStr | domain_model.ModelType
 
     def to_domain(self):
-        return domain_model.ScenarioModel(
+        return ScenarioModel(
             name=self.name,
             type=ModelType(self.type) if isinstance(self.type, str) else self.type,
             config=self.__pydantic_extra__ or {},
@@ -200,15 +235,28 @@ class ScenarioModelOut(OutModel[ScenarioModel]):
         return ScenarioModelOut(name=obj.name, type=obj.type, **obj.config)
 
 
-class ScenarioOut(OutModel[Scenario]):
+class ShortScenarioOut(OutModel[Scenario]):
     id: UUID
     name: str
     display_name: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    status: ScenarioStatus
+    has_updates: bool
+
+
+class ScenarioOut(ShortScenarioOut):
     description: str
     epsg_code: int | None
+    bounding_box: BoundingBoxField
     simulation_info: SimulationInfoInOut
     models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
     datasets: list[ScenarioDatasetOut]
+
+
+class ScenarioListOut(OutModel[t.Sequence[Scenario]]):
+    __envelope__ = "scenarios"
+    scenarios: list[ShortScenarioOut]
 
 
 class DatasetWithDataIn(ShortDatasetIn):
@@ -269,14 +317,14 @@ class DatasetWithDataOut(ShortDatasetOut):
     """Full output dataset model, only relevant for `ENTITY_BASED` and `UNSTRUCTURED` datasets"""
 
     epsg_code: int | None = None
-    bounding_box: BoundingBoxField | None = None
+    bounding_box: BoundingBoxField = None
     general: dict | None = None
     data: dict
 
 
-class UpdateModelIn(BaseModel):
-    name: str
-    type: str | None = None
+class UpdateModelIn(InModel[UpdateModel]):
+    name: NameStr
+    type: NameStr | None = None
 
     def to_domain(self):
         return UpdateModel(
@@ -288,6 +336,11 @@ class UpdateModelOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     name: str
     type: t.Annotated[str, BeforeValidator(lambda v: v.name)]
+
+
+class UpdateListOut(OutModel[t.Sequence[Update]]):
+    __envelope__ = "updates"
+    updates: list[ShortUpdateOut]
 
 
 class ShortUpdateOut(OutModel[Update]):
@@ -346,7 +399,7 @@ class UpdateWithDataOut(ShortUpdateOut):
             file.write(raw_data)
 
 
-class UpdateIn(BaseModel):
+class UpdateIn(InModel[Update]):
     """Validator for incoming updates. The validator does not process the updates "data" key, this
     must be done separately. However, the ``read_from_file`` method, does process the "data" key
     as well
@@ -423,3 +476,201 @@ class UpdateIn(BaseModel):
             model=self.model.to_domain(),
             created_at=self.created_at,
         )
+
+
+class DatasetTypeListOut(OutModel[t.Sequence[DatasetType]]):
+    __envelope__ = "dataset_types"
+    dataset_types: list[DatasetTypeOut]
+
+
+class DatasetTypeOut(OutModel[DatasetType]):
+    id: UUID
+    name: str
+    format: DatasetFormat | None
+    mimetype: str | None
+
+
+class DatasetTypeInPartial(InModel):
+    name: NameStr
+    format: DatasetFormat | None
+    mimetype: t.Annotated[str, Field(max_length=DATASET_TYPE_MIMETYPE_MAX_LENGTH)] | None = None
+
+    def to_domain(self):
+        return DatasetType(name=self.name, format=self.format, mimetype=self.mimetype)
+
+
+class DatasetTypeIn(DatasetTypeInPartial):
+    format: DatasetFormat  # type:ignore
+
+
+class EntityTypeListOut(OutModel[t.Sequence[EntityType]]):
+    __envelope__ = "entity_types"
+    entity_types: list[EntityTypeOut]
+
+
+class EntityTypeOut(OutModel[EntityType]):
+    id: UUID
+    name: str
+
+
+class EntityTypeIn(InModel[EntityType]):
+    name: NameStr
+
+    def to_domain(self):
+        return EntityType(name=self.name)
+
+
+DataTypePrimitive = t.Literal["bool", "int", "float", "str"]
+
+
+class DataTypeIn(InModel[DataType]):
+    type: DataTypePrimitive
+    unit_shape: list[int] = Field(default_factory=list)
+    csr: bool = False
+
+    def to_domain(self):
+        primitives: dict[DataTypePrimitive, type] = {
+            "bool": bool,
+            "int": int,
+            "float": float,
+            "str": str,
+        }
+
+        return DataType(
+            py_type=primitives[self.type], unit_shape=tuple(self.unit_shape), csr=self.csr
+        )
+
+
+class DataTypeOut(OutModel[DataType]):
+    type: DataTypePrimitive
+    unit_shape: list[int]
+    csr: bool
+
+    @classmethod
+    def from_domain(cls, obj: DataType):
+        primitives: dict[type, DataTypePrimitive] = {
+            bool: "bool",
+            int: "int",
+            float: "float",
+            str: "str",
+        }
+        return DataTypeOut(
+            type=primitives[obj.py_type], unit_shape=list(obj.unit_shape), csr=obj.csr
+        )
+
+
+class AttributeTypeListOut(OutModel[t.Sequence[AttributeType]]):
+    __envelope__ = "attribute_types"
+    attribute_types: list[AttributeTypeOut]
+
+
+class AttributeTypeOut(OutModel[AttributeType]):
+    id: UUID
+    name: str
+    data_type: t.Annotated[DataTypeOut, BeforeValidator(DataTypeOut.from_domain)]
+    unit: str
+    description: str
+    enum_name: str | None
+
+    @classmethod
+    def from_domain(cls, obj: AttributeType):
+        return AttributeTypeOut(
+            id=t.cast(UUID, obj.id),
+            name=obj.name,
+            data_type=obj.data_type,  # type: ignore
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+        )
+
+
+class AttributeTypeIn(InModel[AttributeType]):
+    name: AttributeNameStr
+    data_type: DataTypeIn
+    unit: t.Annotated[str, Field(max_length=ATTRIBUTE_UNIT_MAX_LENGTH)] = ""
+    description: t.Annotated[str, Field(max_length=ATTRIBUTE_DESCRIPTION_MAX_LENGTH)] = ""
+    enum_name: (
+        t.Annotated[
+            str,
+            Field(max_length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH, pattern=re.compile(r"[a-z][a-z_]*")),
+        ]
+        | None
+    ) = None
+
+    def to_domain(self):
+        return AttributeType(
+            name=self.name,
+            data_type=self.data_type.to_domain(),
+            unit=self.unit,
+            description=self.description,
+            enum_name=self.enum_name,
+        )
+
+
+class ModelTypeListOut(OutModel[t.Sequence[ModelType]]):
+    __envelope__ = "model_types"
+    model_types: list[ModelTypeOut]
+
+
+class ModelTypeIn(InModel[ModelType]):
+    name: NameStr
+    jsonschema: dict
+
+    @field_validator("jsonschema", mode="after")
+    @classmethod
+    def _validate_jsonschema(cls, schema):
+        try:
+            # TODO: check that the schema does not contain malicious content, such as a bad regex
+            movici_validator(schema).check_schema(schema)
+        except SchemaError:
+            raise ValueError("invalid schema") from None
+        return schema
+
+    def to_domain(self):
+        return ModelType(name=self.name, jsonschema=self.jsonschema)
+
+
+class ModelTypeOut(OutModel[ModelType]):
+    id: UUID
+    name: str
+    jsonschema: dict
+
+
+class DatasetSummaryOut(OutModel[DatasetSummary]):
+    general: dict
+    epsg_code: int | None
+    bounding_box: BoundingBoxField
+    entity_groups: t.Annotated[
+        list[EntityGroupSummaryOut],
+        BeforeValidator(lambda items: [EntityGroupSummaryOut.from_domain(i) for i in items]),
+    ]
+    count: int
+
+
+class EntityGroupSummaryOut(OutModel[EntityGroupSummary]):
+    name: str
+    count: int
+    attributes: t.Annotated[
+        list[AttributeSummaryOut],
+        BeforeValidator(lambda items: [AttributeSummaryOut.from_domain(i) for i in items]),
+    ]
+
+
+class AttributeSummaryOut(OutModel[AttributeSummary]):
+    name: str
+    data_type: t.Annotated[DataTypeOut, BeforeValidator(DataTypeOut.from_domain)]
+    description: str
+    enum_name: str | None
+    unit: str
+    min_val: bool | int | float | None
+    max_val: bool | int | float | None
+
+
+class OperationSuccess(BaseModel):
+    id: UUID | str
+    message: str
+    result: t.Literal["ok"] = "ok"
+
+    @classmethod
+    def for_path_operation(cls, resource: str, id: UUID, verb: str):
+        return OperationSuccess(id=id, message=f"{resource} {verb}")

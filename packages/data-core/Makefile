@@ -5,7 +5,8 @@ unittest:
 
 coverage:
 	NUMBA_DISABLE_JIT=1 uv run coverage run \
-		--source $(MODULE_NAME) \
+		--concurrency greenlet,thread \
+		--source $(MODULE_NAME)  \
 		-m pytest tests/
 	uv run coverage report -m
 	uv run coverage html

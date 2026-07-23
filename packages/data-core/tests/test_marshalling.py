@@ -3,8 +3,11 @@ import pathlib
 import uuid
 
 import pytest
+from pydantic import ValidationError
 
+from movici_data_core.database.repository.general import ModelTypeRepository
 from movici_data_core.domain_model import (
+    BoundingBox,
     Dataset,
     DatasetFormat,
     DatasetType,
@@ -12,6 +15,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     SimulationInfo,
     Update,
     UpdateModel,
@@ -21,9 +25,23 @@ from movici_data_core.exceptions import (
     MoviciValidationError,
     UnsupportedFileType,
 )
-from movici_data_core.schema import DatasetWithDataIn, ScenarioIn, ScenarioOut, UpdateIn
+from movici_data_core.file_helpers import tempfile_delete_on_error
+from movici_data_core.marshalling import (
+    AttributeTypeIn,
+    DatasetTypeIn,
+    DatasetWithDataIn,
+    EntityTypeIn,
+    ModelTypeIn,
+    ScenarioDatasetIn,
+    ScenarioIn,
+    ScenarioModelIn,
+    ScenarioOut,
+    ShortDatasetIn,
+    UpdateIn,
+    UpdateModelIn,
+    WorkspaceIn,
+)
 from movici_data_core.serialization import dump_dict
-from movici_data_core.services.common import tempfile_delete_on_error
 from movici_simulation_core import AttributeSchema, AttributeSpec, EntityInitDataFormat
 from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import FileType
@@ -277,7 +295,9 @@ class TestScenarioInOut:
         scenario_id = uuid.uuid4()
         dataset_id = uuid.uuid4()
         dataset_type_id = uuid.uuid4()
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
         scenario_config["id"] = scenario_id
+        scenario_config["bounding_box"] = (1, 2, 3, 4)
         scenario_config["datasets"][0]["id"] = dataset_id
         scenario_config["datasets"][0]["type"] = {
             "name": scenario_config["datasets"][0]["type"],
@@ -285,6 +305,10 @@ class TestScenarioInOut:
             "format": DatasetFormat.ENTITY_BASED,
             "mimetype": None,
         }
+        scenario_config["created_at"] = now
+        scenario_config["updated_at"] = now
+        scenario_config["has_updates"] = False
+        scenario_config["status"] = ScenarioStatus.READY
         assert (
             ScenarioOut.from_domain(
                 Scenario(
@@ -293,6 +317,7 @@ class TestScenarioInOut:
                     display_name="A scenario",
                     description="lalala description",
                     epsg_code=1234,
+                    bounding_box=BoundingBox(1, 2, 3, 4),
                     simulation_info=SimulationInfo(
                         start_time=12,
                         duration=42,
@@ -300,6 +325,8 @@ class TestScenarioInOut:
                         reference=9000.1,
                         mode="time_oriented",
                     ),
+                    created_at=now,
+                    updated_at=now,
                     models=[
                         ScenarioModel(
                             "model1", type=ModelType("model_a"), config={"dataset": "a_dataset"}
@@ -319,3 +346,93 @@ class TestScenarioInOut:
             ).model_dump()
             == scenario_config
         )
+
+    @pytest.mark.parametrize(
+        "payload, expected",
+        [
+            (
+                {"name": "a_dataset", "type": "a_type"},
+                ScenarioDataset("a_dataset", DatasetType("a_type")),
+            ),
+            (
+                {"name": "a_dataset", "type": {"name": "a_type"}},
+                ScenarioDataset("a_dataset", DatasetType("a_type")),
+            ),
+            (
+                {"name": "a_dataset", "type": None},
+                ScenarioDataset("a_dataset", None),
+            ),
+        ],
+    )
+    def test_scenario_dataset_in(self, payload, expected):
+        assert ScenarioDatasetIn.model_validate(payload).to_domain() == expected
+
+
+@pytest.mark.parametrize(
+    "cls, base_payload, error_payload",
+    [
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "A"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "Aa"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "aA"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "a-b"}),
+        (ShortDatasetIn, {"name": "a", "display_name": "a", "type": {"name": "a"}}, {"name": "A"}),
+        (DatasetTypeIn, {"name": "a", "format": "binary"}, {"name": "A"}),
+        (
+            ScenarioIn,
+            {
+                "name": "a",
+                "display_name": "a",
+                "simulation_info": {
+                    "mode": "time_oriented",
+                    "duration": 1,
+                    "reference": 0,
+                    "time_scale": 1,
+                    "start_time": 1,
+                },
+                "models": [],
+                "datasets": [],
+            },
+            {"name": "A"},
+        ),
+        (ScenarioDatasetIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (ScenarioDatasetIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (ScenarioModelIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (ScenarioModelIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (UpdateModelIn, {"name": "a", "type": "a"}, {"name": "A"}),
+        (UpdateModelIn, {"name": "a", "type": "a"}, {"type": "A"}),
+        (EntityTypeIn, {"name": "a"}, {"name": "A"}),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"name": "A"},
+        ),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"enum_name": "A"},
+        ),
+        (ModelTypeIn, {"name": "a", "jsonschema": {}}, {"name": "A"}),
+    ],
+)
+def test_snake_case(cls, base_payload, error_payload):
+    assert isinstance(cls(**base_payload), cls)
+    with pytest.raises(ValidationError):
+        cls(**{**base_payload, **error_payload})
+
+
+def test_validates_model_type_jsonschema():
+    schema = ModelTypeRepository._default_jsonschema("a_model")
+    assert isinstance(ModelTypeIn(name="a_model", jsonschema=schema).to_domain(), ModelType)
+
+
+def test_model_type_raises_on_invalid_jsonschema():
+    with pytest.raises(ValidationError):
+        ModelTypeIn(name="a_model", jsonschema={"type": "invalid"})

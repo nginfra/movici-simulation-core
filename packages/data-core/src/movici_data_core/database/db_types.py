@@ -1,8 +1,9 @@
 import datetime
+import re
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import JSON, DateTime
+from sqlalchemy import JSON, DateTime, String
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.types import CHAR, TypeDecorator
@@ -83,4 +84,26 @@ class JSONTuple(TypeDecorator):
     def process_result_value(self, value, dialect):
         if value is not None:
             value = tuple(value)
+        return value
+
+
+class RegexMatchingString(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def __init__(self, *args, pattern: str | re.Pattern, **kwargs):
+        self.pattern = re.compile(pattern) if isinstance(pattern, str) else pattern
+        super().__init__(*args, **kwargs)
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+
+        if not isinstance(value, str):
+            raise TypeError("must be a str")
+        if not re.match(self.pattern, value):
+            raise ValueError(f"value {value} did not match the required pattern")
+        return value
+
+    def process_result_value(self, value, dialect):
         return value

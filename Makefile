@@ -17,6 +17,7 @@ unittest:
 comma:= ,
 coverage:
 	NUMBA_DISABLE_JIT=1 uv run coverage run \
+	  --concurrency greenlet,thread \
 	  --source $(subst $(eval ) ,$(comma),$(wildcard packages/*/src/*)) \
 		-m pytest packages/*/tests/
 	uv run coverage report -m
