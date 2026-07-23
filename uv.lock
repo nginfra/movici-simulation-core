@@ -1461,12 +1461,10 @@ standard = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "aiosqlite" },
     { name = "httpx" },
     { name = "pytest-asyncio" },
     { name = "uvicorn", extra = ["standard"] },
-]
-sqlite = [
-    { name = "aiosqlite" },
 ]
 
 [package.metadata]
@@ -1486,11 +1484,11 @@ provides-extras = ["standard"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "httpx", specifier = ">=0.23.0,<1.0.0" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.12.0" },
 ]
-sqlite = [{ name = "aiosqlite", specifier = ">=0.22.1" }]
 
 [[package]]
 name = "movici-drinking-water-model"
