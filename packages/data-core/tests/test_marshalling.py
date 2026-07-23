@@ -438,6 +438,7 @@ class TestScenarioInOut:
             {"enum_name": "Aa"},
         ),
         (ModelTypeIn, {"name": "a", "jsonschema": {}}, {"name": "A"}),
+        (ModelTypeIn, {"name": "a", "config": {}}, {"name": "A"}),
     ],
 )
 def test_snake_case(cls, base_payload, error_payload):

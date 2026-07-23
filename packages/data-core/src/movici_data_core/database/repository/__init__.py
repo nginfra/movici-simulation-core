@@ -16,6 +16,7 @@ from .general import (
 )
 from .scenario import ScenarioRepository
 from .updates import UpdateRepository
+from .views import ViewRepository
 from .workspace import WorkspaceRepository
 
 
@@ -119,6 +120,10 @@ class SQLAlchemyRepository:
     def updates(self):
         return UpdateRepository(self.session, self.options, self, scenario_id=self.scenario_id)
 
+    @property
+    def views(self):
+        return ViewRepository(self.session, self.options, self, scenario_id=self.scenario_id)
+
 
 __all__ = [
     "DatasetDataRepository",
@@ -129,6 +134,7 @@ __all__ = [
     "ModelTypeRepository",
     "ScenarioRepository",
     "UpdateRepository",
+    "ViewRepository",
     "WorkspaceRepository",
     "SQLAlchemyRepository",
 ]
