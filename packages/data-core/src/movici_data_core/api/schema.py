@@ -34,9 +34,9 @@ def create_router(
     prefix: str,
     resource_type: str,
     get_service: ServiceGetter[T],
-    in_model: type[InModel[T]],
-    out_model: type[OutModel[T]],
-    out_model_list: type[OutModel[t.Sequence[T]]],
+    in_model: t.Type[InModel[T]],
+    out_model: t.Type[OutModel[T]],
+    out_model_list: t.Type[OutModel[t.Sequence[T]]],
 ):
     router = APIRouter(prefix=prefix)
 

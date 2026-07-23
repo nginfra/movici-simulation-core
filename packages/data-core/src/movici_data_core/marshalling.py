@@ -206,7 +206,7 @@ class ScenarioDatasetIn(InModel[ScenarioDataset]):
 
 class ScenarioDatasetOut(OutModel[ScenarioDataset]):
     name: str
-    type: DatasetType = Field(validation_alias="dataset_type")
+    type: domain_model.DatasetType = Field(validation_alias="dataset_type")
     id: UUID
 
 

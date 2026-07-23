@@ -47,7 +47,7 @@ class SQLResourceRepository:
 
 
 def validated_payload(
-    resource: type[NamedResource[T_dom]], obj: T_dom, keys: t.Collection[str]
+    resource: t.Type[NamedResource[T_dom]], obj: T_dom, keys: t.Collection[str]
 ) -> dict[str, t.Any]:
     """Get an INSERT/UPDATE payload as a ``dict`` based on an object ``obj`` and its associated
     database resource model ``resource``. Only ``keys`` are extracted from the ``obj`` object and
@@ -65,7 +65,7 @@ def validated_payload(
     return validated_payload_dict(resource, **payload)
 
 
-def validated_payload_dict(resource: type[NamedResource], **payload) -> dict[str, t.Any]:
+def validated_payload_dict(resource: t.Type[NamedResource], **payload) -> dict[str, t.Any]:
     """Take an INSERT/UPDATE payload as a ``dict`` and validate its content to the given
     :class:`NamedResource` database model. The payload is validated against the model and
     validation include checking for the maximum length certain ``str`` fields are allowed

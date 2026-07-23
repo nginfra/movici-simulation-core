@@ -37,8 +37,8 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         )
     )
     async def create(self, obj: DatasetType) -> UUID:
-        """Store a :class:``DatasetType`` in the database. When storing a ``DatasetType``, its
-        ``format`` field may not be set to ``None``.
+        """Store a :class:`movici_data_core.domain_model.DatasetType` in the database. When
+        storing a ``DatasetType``, its ``format`` field may not be set to ``None``.
 
         :param obj: the ``DatasetType`` object
         :return: the UUID of the stored ``DatasetType``
@@ -64,7 +64,7 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         )
     )
     async def update(self, id: UUID, obj: DatasetType):
-        """Update a :class:``DatasetType`` in the database
+        """Update a :class:`movici_data_core.domain_model.DatasetType` in the database
 
         Valid fields to update are: ``name``, ``mimetype``
 
@@ -123,7 +123,7 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
         )
     )
     async def create(self, obj: EntityType) -> UUID:
-        """Store a :class:``EntityType`` in the database
+        """Store a :class:`EntityType` in the database
 
         :param obj: the ``EntityType`` object
         :return: the UUID of the stored ``EntityType``
@@ -144,7 +144,7 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
     )
     @ensure_valid_id
     async def update(self, id: UUID, obj: EntityType):
-        """Update a :class:``EntityType`` in the database
+        """Update a :class:`EntityType` in the database
 
         Valid fields to update are: ``name``
 
@@ -179,7 +179,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         )
     )
     async def create(self, obj: AttributeType) -> UUID:
-        """Store a :class:``AttributeType`` in the database
+        """Store a :class:`AttributeType` in the database
 
         :param obj: the ``AttributeType`` object
         :return: the UUID of the stored ``AttributeType``
@@ -215,7 +215,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         )
     )
     async def update(self, id: UUID, obj: AttributeType):
-        """Update a :class:``AttributeType`` in the database
+        """Update a :class:`AttributeType` in the database
 
         Valid fields to update are: ``name``, ``data_type``, ``unit``, ``description``,
         ``enum_name``
@@ -283,7 +283,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         )
     )
     async def create(self, obj: ModelType) -> UUID:
-        """Store a :class:``ModelType`` in the database
+        """Store a :class:`ModelType` in the database
 
         :param obj: the ``ModelType`` object
         :return: the UUID of the stored ``ModelType``
@@ -306,7 +306,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
     )
     @ensure_valid_id
     async def update(self, id: UUID, obj: ModelType):
-        """Update a :class:``ModelType`` in the database
+        """Update a :class:`movici_data_core.domain_model.ModelType` in the database
 
         Valid fields to update are: ``name``, ``jsonschema``
 
