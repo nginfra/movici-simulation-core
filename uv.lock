@@ -807,7 +807,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1584,26 +1584,28 @@ requires-dist = [
 
 [[package]]
 name = "movici-geo-query"
-version = "1.4.0"
+version = "1.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.14'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b5/82/ec3dc2a8897b14baa4a669d96a49e9bef4fe3574dbc13e3baae8e4f26f07/movici_geo_query-1.4.0.tar.gz", hash = "sha256:f32ffc796cb249d70ee5ebb019ef0eec121a29ccbd8dd90e1f01c79993f20596", size = 90768, upload-time = "2025-11-17T14:36:38.575Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/b7/e3198206c46d05b5ee468e253d41bb00e2b0b9636434a2a5c3e15ad60f33/movici_geo_query-1.5.0.tar.gz", hash = "sha256:803652ad48ce752b4b17553c735dd2a921ca2dbf5341179e5fb978483bd07434", size = 91072, upload-time = "2026-07-23T11:43:03.325Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ef/c9/82f916b806b033c48f90cfd80480981e5bb7cb74a2d26bac38525ef2b992/movici_geo_query-1.4.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:506903f2f85474addd35ece9c0e15d8decd233ce6df53c06917d6213dc9fb435", size = 561521, upload-time = "2025-11-17T14:36:21.987Z" },
-    { url = "https://files.pythonhosted.org/packages/79/55/0477d635f71782cd181be979813f65a227bd54cb843599725a2e46828b70/movici_geo_query-1.4.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d3d23ffae2c0db971b73a495f7e6def94e627755f2b4fbf24bc8ffdeaa6cad13", size = 642730, upload-time = "2025-11-17T14:36:23.622Z" },
-    { url = "https://files.pythonhosted.org/packages/9c/d8/872c8f27f563f04aaca7230518452c245c52a158334338caf051ba1fd5a0/movici_geo_query-1.4.0-cp310-cp310-win_amd64.whl", hash = "sha256:bc4171f418d0f0f82649e1428a490530decd517b429f142ece254479151ea997", size = 356269, upload-time = "2025-11-17T14:36:24.695Z" },
-    { url = "https://files.pythonhosted.org/packages/59/f4/35bff01dd8d7bd7fa04f430cda236f383bce7f09a51c98ca0a581487399f/movici_geo_query-1.4.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:db3a82985aeac2c71e7b417dbca1f3c45a12102da06ab6245e41e4bb0c76bc89", size = 562789, upload-time = "2025-11-17T14:36:25.825Z" },
-    { url = "https://files.pythonhosted.org/packages/23/ee/016b3f1d96d4b24e11e5e2015183b5f50cdb5878c2a6f49aedcbb390e681/movici_geo_query-1.4.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b0db3a473736508dffc52085ad0f4e6a2099807d3194f3ca2c76828b972c6a3b", size = 644035, upload-time = "2025-11-17T14:36:26.998Z" },
-    { url = "https://files.pythonhosted.org/packages/a0/78/e740ff70a5684e7942d12ea3f83cc4eb2ac894ad0b0681882f3790993331/movici_geo_query-1.4.0-cp311-cp311-win_amd64.whl", hash = "sha256:fc5552819b6a402a20015447ac50f4042e905f7f77283d9647d5bbdda62bc238", size = 356739, upload-time = "2025-11-17T14:36:28.27Z" },
-    { url = "https://files.pythonhosted.org/packages/fd/19/954e3495cf2ccccd27df18f0b52016a046240ab501c3ae1ecb304eabb9eb/movici_geo_query-1.4.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:2eae1f4db4d9eacece3c3707df2e2e8a228805d917d4b25c76b3511b1982c011", size = 563037, upload-time = "2025-11-17T14:36:29.391Z" },
-    { url = "https://files.pythonhosted.org/packages/7c/31/ce84786f4c3ea9dfc8e1280f685d41aff07c87456ba8f83b1ebcf8eab32c/movici_geo_query-1.4.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7a23a001c5e1fa4f2a097f483db24f5a371e2698eb01a1e92c1e3ec850a7ac9b", size = 646389, upload-time = "2025-11-17T14:36:30.859Z" },
-    { url = "https://files.pythonhosted.org/packages/af/7b/9973b165ed06bc6c6d1d34f71a22e72aeaf5fb2170d7ca68a540c4223caa/movici_geo_query-1.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:7dc2b3c8487b7fa8c1442c6fc2761b5ab4fdf9d2f3437a3cb04d40eb5c7d1375", size = 358684, upload-time = "2025-11-17T14:36:32.164Z" },
-    { url = "https://files.pythonhosted.org/packages/19/8d/5ce5f4c2f8c3c797c13b585ce960e2116d285992186f7321b37b8d3d5e96/movici_geo_query-1.4.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:6b8320ee2390eb67ba6bea9b0132af1d5404f5dbe58ac64473239c195d906840", size = 563127, upload-time = "2025-11-17T14:36:33.291Z" },
-    { url = "https://files.pythonhosted.org/packages/4a/64/5b177b98d01282734830531befecc3a43132ef45c9316d350476a25a4083/movici_geo_query-1.4.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7ee5331400cb8e21941b974e407e2b738eb841145a2c0ff637bf3a29da259a3c", size = 646540, upload-time = "2025-11-17T14:36:34.943Z" },
-    { url = "https://files.pythonhosted.org/packages/15/66/ab4b38178296161a389cf363455750070642d1c0e52fe69c90fadb3f5758/movici_geo_query-1.4.0-cp313-cp313-win_amd64.whl", hash = "sha256:69690bf0a15274702616398c932a52bfb2436f396e0aa5a7e3ecc938defef898", size = 358696, upload-time = "2025-11-17T14:36:36.889Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/43/dc7688511c5bc6f217bc679724718e1fd40a2c6b62d97ebfe2c9bcf55dd2/movici_geo_query-1.5.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:274a30d4e1e851acd5a81731a6892d6dca839a80ab2a6750def1a5a104366f10", size = 568809, upload-time = "2026-07-23T11:42:45.73Z" },
+    { url = "https://files.pythonhosted.org/packages/99/06/5041c50f9661450af2d5338c1cbfe2b9ee96748e8052aa31f47c76494478/movici_geo_query-1.5.0-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:33df67cc1cdd5be8ef17791262cfdd0630f8c0296916f5d4c21ce010bd8a657f", size = 647303, upload-time = "2026-07-23T11:42:46.879Z" },
+    { url = "https://files.pythonhosted.org/packages/a1/90/79b3c6c1923b81808342b405d9273824fa7953e4f67fda993bcad8478ea5/movici_geo_query-1.5.0-cp310-cp310-win_amd64.whl", hash = "sha256:705243f1dafcc4671d2d82ea9f59b7de306e82735a3c7211a8ee4fdac2910a34", size = 479398, upload-time = "2026-07-23T11:42:48.231Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/c5/3c6500dcc70fbaa59d9a04fe652eb7c8c5580e60527ce60b56c87c01d485/movici_geo_query-1.5.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:397c0d63166d81321189d79b3892ee9eaa961c17d77dfd7e74aa506074d409bc", size = 569672, upload-time = "2026-07-23T11:42:49.344Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/53/76aa51fd64632121a90a80d2aa63dd0d076cdfe5183b285971d3fbdc6c55/movici_geo_query-1.5.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:006c43578620c7ead07c6db8044fcfdb8709f0b0b2921eedbf2073a9103b8afc", size = 648259, upload-time = "2026-07-23T11:42:50.566Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/4f/5d839a0fbb60be5251fb7675b3053b2055733d89dae9777d25d7f0991994/movici_geo_query-1.5.0-cp311-cp311-win_amd64.whl", hash = "sha256:04e6d0f864ba074590c83caadf59086ba0039ba3800bb059707a5150badc446b", size = 480539, upload-time = "2026-07-23T11:42:51.966Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/0e/19b085fd637d81801b9605ae27fe62c5e8ca2ebb5e066a1c2ee79f85efa1/movici_geo_query-1.5.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:34f784deb9cfa0003bd52351d05fadc87025f3c56379ae432312a088637ffd94", size = 570680, upload-time = "2026-07-23T11:42:53.185Z" },
+    { url = "https://files.pythonhosted.org/packages/32/ed/4673a5e96026004df468bffc0c83593f01de772a87329860640e95981668/movici_geo_query-1.5.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:c4d122dc9e76d63d1a6143ba68b7ace2df401ad789fe345719038b732059c328", size = 649005, upload-time = "2026-07-23T11:42:54.32Z" },
+    { url = "https://files.pythonhosted.org/packages/36/ff/c1e9bab62e1f0934cd536d602488e1a9868e213b928588a709553f200ac0/movici_geo_query-1.5.0-cp312-cp312-win_amd64.whl", hash = "sha256:1b5085e14c9afd821f8eaef3fc7b26981d338f3298b7a13b1676b22a2acb33ac", size = 482898, upload-time = "2026-07-23T11:42:55.672Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/1e/50109a614d7a91beac9c38b3c3bf0109bc66e347ba2995761a7d86e5ea14/movici_geo_query-1.5.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:910785df28726a981bcd14c209ea3fff6442cddc0146d1186d3fc6809a678d93", size = 570651, upload-time = "2026-07-23T11:42:56.701Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/b0/e275be45ac212d6515f050ec6e8b04d22d8cf28f781a52f734c6a6742572/movici_geo_query-1.5.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e2507de1f9563ad4fc261b326ad794f8cb2bb011bb30264a3af0b40cec2248b0", size = 648936, upload-time = "2026-07-23T11:42:57.914Z" },
+    { url = "https://files.pythonhosted.org/packages/bd/54/0a665fb52551f5be5083fec49bc25450f74bb729d2e989a4365353fd8484/movici_geo_query-1.5.0-cp313-cp313-win_amd64.whl", hash = "sha256:b43a2424e5dca32fe15ede24c3da0222a8924636f243c98b2077fe5f06497d47", size = 482891, upload-time = "2026-07-23T11:42:59.052Z" },
+    { url = "https://files.pythonhosted.org/packages/d4/ca/9489c6bb10ea80479eaf93b5e39b1087935b7fbedf6c36aeef8ec3979af5/movici_geo_query-1.5.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2333ba67710e1d968d16c291eddebe3033e4dc05a053c2b1961b4ff6323f2457", size = 571166, upload-time = "2026-07-23T11:42:59.998Z" },
+    { url = "https://files.pythonhosted.org/packages/7c/8d/2ffc0b043d5da65577dd30925b7644f01d0c1ac13f9e9aba11a37115aa05/movici_geo_query-1.5.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6a9d4e7f0457f2e8b2e129cabfdb42007603ad30c7fd3eefac43a9f27894d4f9", size = 649097, upload-time = "2026-07-23T11:43:01.164Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/82/13f28ad1df61b30a2b9b5261910805639f71cfcd8d63cf129f5e8e91976b/movici_geo_query-1.5.0-cp314-cp314-win_amd64.whl", hash = "sha256:3b6577c972ca84234ce3644c5bded4980b1d65f7c091b7c3c09d2ec704e58fb3", size = 497685, upload-time = "2026-07-23T11:43:02.424Z" },
 ]
 
 [[package]]
@@ -1634,7 +1636,7 @@ dependencies = [
 
 [package.optional-dependencies]
 all = [
-    { name = "movici-geo-query" },
+    { name = "movici-geo-query", marker = "python_full_version >= '3.14'" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1643,7 +1645,7 @@ all = [
     { name = "sqlalchemy" },
 ]
 models = [
-    { name = "movici-geo-query" },
+    { name = "movici-geo-query", marker = "python_full_version >= '3.14'" },
     { name = "pyproj", version = "3.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pyproj", version = "3.7.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "scipy", version = "1.15.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1660,8 +1662,8 @@ requires-dist = [
     { name = "fiona", specifier = ">=1.9" },
     { name = "geopandas" },
     { name = "jsonschema" },
-    { name = "movici-geo-query", marker = "extra == 'all'", specifier = ">=1.1.1" },
-    { name = "movici-geo-query", marker = "extra == 'models'", specifier = ">=1.1.1" },
+    { name = "movici-geo-query", marker = "python_full_version >= '3.14' and extra == 'all'", specifier = ">=1.1.1,>=1.5.0" },
+    { name = "movici-geo-query", marker = "python_full_version >= '3.14' and extra == 'models'", specifier = ">=1.1.1,>=1.5.0" },
     { name = "msgpack" },
     { name = "netcdf4" },
     { name = "numba", specifier = ">=0.55" },
