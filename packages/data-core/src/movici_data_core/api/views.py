@@ -24,7 +24,7 @@ async def list_views(backend: DepScenarioBackend) -> ViewListOut:
 @view_router.post("/")
 async def create_view(payload: ViewIn, backend: DepScenarioBackend) -> OperationSuccess:
     view_id = await backend.views.create(payload.to_domain())
-    return OperationSuccess(resource="view", id=view_id, verb="created")
+    return OperationSuccess.for_path_operation(resource="view", id=view_id, verb="created")
 
 
 @view_router.get("/{view_id}")
@@ -38,10 +38,10 @@ async def get_view(view_id: UUID, backend: DepBackend) -> ViewOut:
 @view_router.put("/{view_id}")
 async def update_view(view_id: UUID, payload: ViewIn, backend: DepBackend) -> OperationSuccess:
     await backend.views.update(view_id, payload.to_domain())
-    return OperationSuccess(resource="view", id=view_id, verb="updated")
+    return OperationSuccess.for_path_operation(resource="view", id=view_id, verb="updated")
 
 
 @view_router.delete("/{view_id}")
 async def delete_view(view_id: UUID, backend: DepBackend) -> OperationSuccess:
     await backend.views.delete(id=view_id)
-    return OperationSuccess(resource="view", id=view_id, verb="deleted")
+    return OperationSuccess.for_path_operation(resource="view", id=view_id, verb="deleted")
