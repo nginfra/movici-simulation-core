@@ -6,6 +6,7 @@ import typing as t
 from http import HTTPStatus
 from uuid import UUID
 
+import sqlalchemy.exc
 from jsonschema import ValidationError as JSONSchemaValidationError
 
 from movici_simulation_core.types import FileType
@@ -105,7 +106,7 @@ class DeserializationError(MoviciDataError):
 class MoviciValidationError(MoviciDataError):
     __status_code__ = HTTPStatus.UNPROCESSABLE_ENTITY
     __error_id__ = "validation_error"
-    __error_message__ = "Valdation error"
+    __error_message__ = "Validation error"
 
     def __init__(self, error: str | dict[str, list[str]] | None = None, path: str | int = ""):
         self.path = str(path)
@@ -191,22 +192,62 @@ class InvalidAction(MoviciDataError):
 
 T = t.TypeVar("T")
 
+ExceptionLike = t.Type[Exception] | Exception
+MapErrorRule = t.Tuple[
+    ExceptionLike | t.Callable[[t.Type[Exception]], bool],
+    ExceptionLike | t.Callable[..., ExceptionLike],
+]
+_CallableRule = t.Tuple[t.Callable[[ExceptionLike], bool], t.Callable[..., ExceptionLike]]
+
 
 class map_errors:
     """A decorator to catch certain exceptions and reraise them as a different exception
 
-    :param mapping: a mapping between exceptions or exception types and a callable per exception
-       or exception type. The callable must accept the same arguments as the decorated method
-       except the ``self`` argument
+    :param rules: a sequence of rules. A rule is a tuple where the first item is an exception type
+        and the second argument represents the new exception to be raised.
+
+        The first item in the rule may be either an exception type or a callable. The callable
+        takes in the the raised exception (which may be either a type or an instance) and should
+        return a boolean. If the exception matches the exception type in the rule or the callable
+        returns ``True``, then the exception is converted into the associated new exception, as
+        given by the second item in the rule. All rules are evaluated until a rule matches
+
+        The second item in the rule may either be an exception (as a type or an instance) or a
+        callable. If the second item is a callable, it must accept all arguments and keyword
+        arguments of the decorated method. The result of the callable is the exception
+        that will be raised
+    :param with_self: by default, the callable that returns the new exception, does not receive
+        the self argument of the method. However, by setting the ``with_self`` parameter to
+        ``True``, the self argument will be given to the callable
     """
 
     def __init__(
         self,
-        mapping: t.Mapping[
-            t.Type[Exception], Exception | t.Type[Exception] | t.Callable[..., Exception]
-        ],
+        *rules: MapErrorRule,
+        with_self: bool = False,
     ):
-        self.mapping = mapping
+        self.mapping = [self._ensure_callable_rule(r) for r in rules]
+        self.with_self = with_self
+
+    @classmethod
+    def _ensure_callable_rule(cls, rule: MapErrorRule) -> _CallableRule:
+        cond, result = rule
+        if isinstance(cond, type) and issubclass(cond, Exception):
+            cond = cls._exc_checker(cond)
+        if (isinstance(result, type) and issubclass(result, Exception)) or (
+            isinstance(result, Exception)
+        ):
+            result_ = result
+            result = lambda *_, **__: result_  #  noqa: E731
+        return t.cast(_CallableRule, (cond, result))
+
+    @staticmethod
+    def _exc_checker(exc_type: t.Type[Exception]):
+        def is_of_exc_type(exc: t.Type[Exception] | Exception):
+            this_type = type(exc) if isinstance(exc, Exception) else exc
+            return issubclass(this_type, exc_type)
+
+        return is_of_exc_type
 
     def __call__(self, func: T) -> T:
         if inspect.iscoroutinefunction(func):
@@ -219,7 +260,7 @@ class map_errors:
             try:
                 return func(inst, *args, **kwargs)
             except Exception as e:
-                raise self._map_error(e, args, kwargs) from e
+                raise self._map_error(e, args, kwargs, inst=inst) from e
 
         return _wrapped
 
@@ -229,19 +270,29 @@ class map_errors:
             try:
                 return await func(inst, *args, **kwargs)
             except Exception as e:
-                raise self._map_error(e, args, kwargs) from e
+                raise self._map_error(e, args, kwargs, inst) from e
             except BaseException:
                 raise
 
         return _wrapped
 
     def _map_error(
-        self, exc: t.Type[Exception] | Exception, args, kwargs
+        self, exc: t.Type[Exception] | Exception, args, kwargs, inst=None
     ) -> t.Type[Exception] | Exception:
-        exc_type = type(exc) if isinstance(exc, Exception) else exc
-        if exc_type in self.mapping:
-            mapped = self.mapping[exc_type]
-            if callable(mapped):
-                mapped = mapped(*args, **kwargs)
-            return mapped
+        for cond, result in self.mapping:
+            if cond(exc):
+                if inst is not None and self.with_self:
+                    args = (inst, *args)
+                return result(*args, **kwargs)
         return exc
+
+
+# Below are exception checkers that may be used inside ``map_errors`` rules. These are defined as
+# lambdas instead of regular functions, to give them the right color in IDEs
+
+UniqueConstraintFailed = lambda exc: (  # noqa: E731
+    isinstance(exc, sqlalchemy.exc.IntegrityError) and "UNIQUE constraint failed" in str(exc)
+)
+ForeignKeyConstraintFailed = lambda exc: (  # noqa: E731
+    isinstance(exc, sqlalchemy.exc.IntegrityError) and "FOREIGN KEY constraint failed" in str(exc)
+)

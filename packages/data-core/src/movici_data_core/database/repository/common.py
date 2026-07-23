@@ -17,7 +17,12 @@ from sqlalchemy.orm import joinedload
 from movici_data_core.database import model as db
 from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
 from movici_data_core.domain_model import AttributeType, DatasetData, EntityType
-from movici_data_core.exceptions import ResourceDoesNotExist
+from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
+    InvalidAction,
+    ResourceDoesNotExist,
+    map_errors,
+)
 from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
@@ -127,6 +132,15 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
         return to_domain_or_none(await self.session.get(self.__resource__, id))
 
     @ensure_valid_id
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda self, id: InvalidAction(
+                f"Cannot delete {self.__resource_type_name__} when it is still in use"
+            ),
+        ),
+        with_self=True,
+    )
     async def delete(self, id: UUID):
         await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))
 

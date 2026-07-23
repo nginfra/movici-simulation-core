@@ -4,19 +4,20 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-import sqlalchemy.exc
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import Workspace
 from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
     InvalidAction,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
     map_errors,
 )
 
-from .common import GenericResourceRepository
+from .common import GenericResourceRepository, ensure_valid_id
 
 
 class WorkspaceRepository(GenericResourceRepository[Workspace]):
@@ -73,11 +74,7 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         )
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
-                "workspace", name=obj.name
-            )
-        }
+        (UniqueConstraintFailed, lambda obj: ResourceAlreadyExists("workspace", name=obj.name))
     )
     async def create(self, obj: Workspace) -> UUID:
         """Store a :class:``Workspace`` in the database
@@ -94,11 +91,7 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         )
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda id, obj: ResourceAlreadyExists(
-                "workspace", name=obj.name
-            )
-        }
+        (UniqueConstraintFailed, lambda id, obj: ResourceAlreadyExists("workspace", name=obj.name))
     )
     async def update(self, id: UUID, obj: Workspace):
         """Update a :class:``Workspace`` in the database
@@ -118,3 +111,33 @@ class WorkspaceRepository(GenericResourceRepository[Workspace]):
         await self.session.execute(
             update(db.Workspace).where(db.Workspace.id == id).values(**payload)
         )
+
+    @ensure_valid_id
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda id: InvalidAction("Cannot delete default workspace"),
+        )
+    )
+    async def delete(self, id: UUID):
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.DatasetAttribute.attribute_id)
+                    .join(db.Dataset)
+                    .where(db.Dataset.workspace_id == id)
+                )
+            )
+        )
+
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.UpdateAttribute.attribute_id)
+                    .join(db.Update)
+                    .join(db.Scenario)
+                    .where(db.Scenario.workspace_id == id)
+                )
+            )
+        )
+        await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))

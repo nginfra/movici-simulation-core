@@ -60,6 +60,10 @@ def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
 
 
 DepServer = t.Annotated[SQLAlchemyServer, Depends(server)]
-DepBackend = t.Annotated[SQLAlchemyBackend, Depends(get_backend)]
-DepWorkspaceBackend = t.Annotated[SQLAlchemyBackend, Depends(get_workspace_backend)]
-DepScenarioBackend = t.Annotated[SQLAlchemyBackend, Depends(get_scenario_backend)]
+DepBackend = t.Annotated[SQLAlchemyBackend, Depends(get_backend, scope="function")]
+DepWorkspaceBackend = t.Annotated[
+    SQLAlchemyBackend, Depends(get_workspace_backend, scope="function")
+]
+DepScenarioBackend = t.Annotated[
+    SQLAlchemyBackend, Depends(get_scenario_backend, scope="function")
+]

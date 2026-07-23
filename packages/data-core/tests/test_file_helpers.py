@@ -7,6 +7,7 @@ from movici_data_core.file_helpers import (
     get_mimetype,
     infer_filetype_from_filename_or_mimetype,
     store_file_to_disk,
+    store_request_stream_to_disk,
     tempfile_delete_on_error,
 )
 from movici_simulation_core.types import FileType
@@ -109,3 +110,31 @@ def test_infer_filetype_from_filename_or_mimetype(filename, mimetype, expected):
 )
 def test_get_mimetype(filetype, mimetype):
     assert get_mimetype(filetype) == mimetype
+
+
+async def test_store_request_stream_to_disk(tmp_path):
+    class MockRequest:
+        def __init__(self, stream_values):
+            self.iter = iter(stream_values)
+
+        def stream(self):
+            return self
+
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self.iter)
+            except StopIteration:
+                raise StopAsyncIteration from None
+
+    file = await store_request_stream_to_disk(
+        MockRequest([b"abcd", b"efgh", b"ijkl", b"mnop"]),
+        tmp_path,
+        filetype=FileType.NETCDF,
+        prefix="some_prefix",
+    )
+    assert file.name.startswith("some_prefix")
+    assert file.suffix == FileType.NETCDF.default_extension
+    assert file.read_bytes() == b"abcdefghijklmnop"

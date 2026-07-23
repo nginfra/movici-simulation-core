@@ -54,25 +54,27 @@ def create_router(
     async def create_resource(backend: DepBackend, payload: InModel) -> OperationSuccess:
         service = get_service(backend)
         result = await service.create(obj=payload.to_domain())
-        return OperationSuccess(resource=resource_type, verb="created", id=result)
+        return OperationSuccess.for_path_operation(
+            resource=resource_type, verb="created", id=result
+        )
 
     create_resource.__annotations__["payload"] = in_model
 
     async def update_resource(id: UUID, backend: DepBackend, payload: InModel) -> OperationSuccess:
         service = get_service(backend)
         await service.update(id=id, obj=payload.to_domain())
-        return OperationSuccess(resource=resource_type, verb="updated", id=id)
+        return OperationSuccess.for_path_operation(resource=resource_type, verb="updated", id=id)
 
     update_resource.__annotations__["payload"] = in_model
 
     async def delete_resource(id: UUID, backend: DepBackend) -> OperationSuccess:
         service = get_service(backend)
         await service.delete(id=id)
-        return OperationSuccess(resource=resource_type, verb="deleted", id=id)
+        return OperationSuccess.for_path_operation(resource=resource_type, verb="deleted", id=id)
 
-    router.get("/", response_model=out_model_list)(list_resources)
+    router.get("", response_model=out_model_list)(list_resources)
     router.get("/{id}", response_model=out_model)(get_resource)
-    router.post("/")(create_resource)
+    router.post("")(create_resource)
     router.put("/{id}")(update_resource)
     router.delete("/{id}")(delete_resource)
     return router

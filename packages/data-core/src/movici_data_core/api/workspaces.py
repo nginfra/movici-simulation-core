@@ -19,16 +19,18 @@ workspace_router = APIRouter(
 )
 
 
-@workspace_router.get("/")
+@workspace_router.get("")
 async def list_workspaces(backend: DepBackend) -> WorkspaceListOut:
     workspace = await backend.workspaces.list()
     return WorkspaceListOut.from_domain(workspace)
 
 
-@workspace_router.post("/")
+@workspace_router.post("")
 async def create_workspace(payload: WorkspaceIn, backend: DepBackend) -> OperationSuccess:
     workspace_id = await backend.workspaces.create(payload.to_domain())
-    return OperationSuccess(resource="workspace", id=workspace_id, verb="created")
+    return OperationSuccess.for_path_operation(
+        resource="workspace", id=workspace_id, verb="created"
+    )
 
 
 @workspace_router.get("/{workspace_id}")
@@ -44,10 +46,14 @@ async def update_workspace(
     workspace_id: UUID, payload: WorkspaceIn, backend: DepBackend
 ) -> OperationSuccess:
     await backend.workspaces.update(workspace_id, payload.to_domain())
-    return OperationSuccess(resource="workspace", id=workspace_id, verb="updated")
+    return OperationSuccess.for_path_operation(
+        resource="workspace", id=workspace_id, verb="updated"
+    )
 
 
 @workspace_router.delete("/{workspace_id}")
 async def delete_workspace(workspace_id: UUID, backend: DepBackend) -> OperationSuccess:
     await backend.workspaces.delete(id=workspace_id)
-    return OperationSuccess(resource="workspace", id=workspace_id, verb="deleted")
+    return OperationSuccess.for_path_operation(
+        resource="workspace", id=workspace_id, verb="deleted"
+    )

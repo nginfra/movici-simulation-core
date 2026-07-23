@@ -17,7 +17,6 @@ from pydantic import (
     PlainSerializer,
     WithJsonSchema,
     field_validator,
-    model_serializer,
 )
 
 from movici_data_core import domain_model
@@ -71,15 +70,14 @@ AttributeNameStr = t.Annotated[
 ]
 
 BoundingBoxField = t.Annotated[
-    BoundingBox,
+    BoundingBox | None,
     PlainSerializer(lambda bbox: bbox.as_tuple_or_none()),
     WithJsonSchema(
         {
-            "title": "Bounding Box",
-            "type": "array",
-            "maxItems": 4,
-            "minItems": 4,
-            "items": {"type": "number"},
+            "anyOf": [
+                {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+                {"type": "null"},
+            ]
         }
     ),
 ]
@@ -250,6 +248,7 @@ class ShortScenarioOut(OutModel[Scenario]):
 class ScenarioOut(ShortScenarioOut):
     description: str
     epsg_code: int | None
+    bounding_box: BoundingBoxField
     simulation_info: SimulationInfoInOut
     models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
     datasets: list[ScenarioDatasetOut]
@@ -318,7 +317,7 @@ class DatasetWithDataOut(ShortDatasetOut):
     """Full output dataset model, only relevant for `ENTITY_BASED` and `UNSTRUCTURED` datasets"""
 
     epsg_code: int | None = None
-    bounding_box: BoundingBoxField | None = None
+    bounding_box: BoundingBoxField = None
     general: dict | None = None
     data: dict
 
@@ -621,6 +620,7 @@ class ModelTypeIn(InModel[ModelType]):
     @classmethod
     def _validate_jsonschema(cls, schema):
         try:
+            # TODO: check that the schema does not contain malicious content, such as a bad regex
             movici_validator(schema).check_schema(schema)
         except SchemaError:
             raise ValueError("invalid schema") from None
@@ -667,10 +667,10 @@ class AttributeSummaryOut(OutModel[AttributeSummary]):
 
 
 class OperationSuccess(BaseModel):
-    resource: str
     id: UUID | str
-    verb: str
+    message: str
+    result: t.Literal["ok"] = "ok"
 
-    @model_serializer
-    def serialize(self):
-        return {"result": "ok", "id": self.id, "message": f"{self.resource} {self.verb}"}
+    @classmethod
+    def for_path_operation(cls, resource: str, id: UUID, verb: str):
+        return OperationSuccess(id=id, message=f"{resource} {verb}")

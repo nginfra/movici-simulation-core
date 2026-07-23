@@ -6,8 +6,7 @@ import itertools
 import typing as t
 from uuid import UUID
 
-import sqlalchemy.exc
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import ColumnElement, delete, exists, insert, select, update
 from sqlalchemy.orm import joinedload, selectinload
 
 from movici_data_core import bounding_box
@@ -23,10 +22,12 @@ from movici_data_core.domain_model import (
     ScenarioStatus,
 )
 from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
     InvalidAction,
     MoviciValidationError,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
     map_errors,
 )
 from movici_data_core.validators import ModelConfigValidator
@@ -63,16 +64,22 @@ class ScenarioRepository(SQLResourceRepository):
     async def list(self) -> list[Scenario]:
         """List all scenarios in the active workspace"""
         workspace_id = self._ensure_workspace_id()
-        result = await self.session.scalars(
-            select(db.Scenario)
+        result = await self.session.execute(
+            select(
+                db.Scenario,
+                exists().where(db.Update.scenario_id == db.Scenario.id),
+            )
             .options(joinedload(db.Scenario.workspace))
             .where(db.Scenario.workspace_id == workspace_id)
         )
-        return [obj.to_domain() for obj in result]
+        return [obj.to_domain(has_updates) for (obj, has_updates) in result]
 
     @property
     def selector(self):
-        return select(db.Scenario).options(
+        return select(
+            db.Scenario,
+            exists().where(db.Update.scenario_id == db.Scenario.id),
+        ).options(
             joinedload(db.Scenario.workspace),
             selectinload(db.Scenario.datasets)
             .joinedload(db.ScenarioDataset.dataset)
@@ -100,16 +107,33 @@ class ScenarioRepository(SQLResourceRepository):
         id = self._ensure_scenario_id()
         return await self._exists(db.Scenario.id == id)
 
+    async def _get_one_full_scenario(self, where_clause: ColumnElement[bool]):
+        result = (await self.session.execute(self.selector.where(where_clause).limit(1))).first()
+
+        if result is None:
+            return None
+
+        scenario, has_updates = result
+        bounding_box = await self._get_bounding_box(scenario.id)
+        return dataclasses.replace(
+            scenario.to_domain(has_updates),
+            bounding_box=bounding_box,
+            datasets=[
+                ds.to_domain() for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
+            ],
+            models=[
+                model.to_domain()
+                for model in sorted(scenario.models, key=lambda model: model.sequence)
+            ],
+        )
+
     async def get_by_name(self, name: str) -> Scenario | None:
         """Get a scenario by name, in the active workspace"""
         workspace_id = self._ensure_workspace_id()
-        record = await self.session.scalar(
-            self.selector.where(db.Scenario.name == name, db.Scenario.workspace_id == workspace_id)
+
+        return await self._get_one_full_scenario(
+            (db.Scenario.name == name) & (db.Scenario.workspace_id == workspace_id)
         )
-        if record is None:
-            return None
-        bounding_box = await self._get_bounding_box(record.id)
-        return self._load_full_scenario(record, bounding_box=bounding_box)
 
     async def get(self) -> Scenario | None:
         """Get the active scenario from the database
@@ -117,11 +141,7 @@ class ScenarioRepository(SQLResourceRepository):
         :return: The Scenario, or None if it does not exist
         """
         id = self._ensure_scenario_id()
-        record = await self.session.scalar(self.selector.where(db.Scenario.id == id))
-        if record is None:
-            return None
-        bounding_box = await self._get_bounding_box(record.id)
-        return self._load_full_scenario(record, bounding_box=bounding_box)
+        return await self._get_one_full_scenario(db.Scenario.id == id)
 
     async def _get_bounding_box(self, scenario_id: UUID):
         bboxs_from_datasets = await self.session.scalars(
@@ -139,17 +159,35 @@ class ScenarioRepository(SQLResourceRepository):
             *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
         )
 
+    @map_errors(
+        (ForeignKeyConstraintFailed, lambda: InvalidAction("Cannot delete default scenario"))
+    )
     async def delete(self):
         """Delete de active scenario, if it exists"""
         id = self._ensure_scenario_id()
+        await self.session.execute(
+            delete(db.Attribute).where(
+                db.Attribute.id.in_(
+                    select(db.UpdateAttribute.attribute_id)
+                    .join(db.Update)
+                    .where(db.Update.scenario_id == id)
+                )
+            )
+        )
         await self.session.execute(delete(db.Scenario).where(db.Scenario.id == id))
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda obj, validator: ResourceAlreadyExists(
-                "scenario", name=obj.name
-            )
-        }
+        (
+            UniqueConstraintFailed,
+            lambda self, obj, validator: ResourceAlreadyExists("scenario", name=obj.name),
+        ),
+        (
+            ForeignKeyConstraintFailed,
+            lambda self, obj, validator: ResourceDoesNotExist(
+                "workspace", id=self._ensure_workspace_id()
+            ),
+        ),
+        with_self=True,
     )
     async def create(self, obj: Scenario, validator: ModelConfigValidator) -> UUID:
         """Store a new Scenario in the database. This method can only be invoked if there is no
@@ -182,11 +220,10 @@ class ScenarioRepository(SQLResourceRepository):
         return scenario_id
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda obj, validator: ResourceAlreadyExists(
-                "scenario", name=obj.name
-            )
-        }
+        (
+            UniqueConstraintFailed,
+            lambda obj, validator: ResourceAlreadyExists("scenario", name=obj.name),
+        )
     )
     async def update(self, obj: Scenario, validator: ModelConfigValidator):
         """Update a scenario in the database. The scenario to update must be the active scenario
@@ -313,12 +350,22 @@ class ScenarioRepository(SQLResourceRepository):
             entity_group_name = attribute.entity_type.name
 
             if attribute.attribute_type.name == "id" and is_dataset:
+                # we currently do not support creating new entities through updates, so all
+                # entities must exist in the dataset. We therefore only need to check the length
+                # of the entity array in the dataset.
                 entity_counts[entity_group_name] = attribute.length
 
             entity_summary = attribute_summaries.setdefault(entity_group_name, {})
             if (attribute_summary := entity_summary.get(attribute_name)) is not None:
-                attribute_summary.min_val = min(attribute_summary.min_val, min_val)
-                attribute_summary.max_val = max(attribute_summary.max_val, max_val)
+                if attribute_summary.min_val is None:
+                    attribute_summary.min_val = min_val
+                elif min_val is not None:
+                    attribute_summary.min_val = min(attribute_summary.min_val, min_val)
+
+                if attribute_summary.max_val is None:
+                    attribute_summary.max_val = max_val
+                elif max_val is not None:
+                    attribute_summary.max_val = max(attribute_summary.max_val, max_val)
             else:
                 entity_summary[attribute_name] = AttributeSummary(
                     name=attribute_type.name,
@@ -370,11 +417,10 @@ class ScenarioRepository(SQLResourceRepository):
         repository = self.all_data.for_workspace(workspace_id)
         scenario_datasets = []
         if obj.datasets:
-            # deduplicate datasets by name
-            datasets_by_name = {ds.name: ds for ds in obj.datasets}
+            self._check_duplicate_datasets(obj.datasets)
             try:
                 scenario_datasets = await repository.datasets.ensure_scenario_datasets(
-                    list(datasets_by_name.values())
+                    obj.datasets
                 )
             except MoviciValidationError as e:
                 raise MoviciValidationError.from_errors(e, path="datasets") from e
@@ -401,25 +447,21 @@ class ScenarioRepository(SQLResourceRepository):
         # both self.all_data.model_types.ensure_model_types and validator.process_model_configs
         # return a list the length of obj.models. Let's assert that to be absolutely sure
         assert len(scenario_models) == len(model_types) == len(obj.models)
-        try:
-            scenario_model_records = await self.session.scalars(
-                insert(db.ScenarioModel).returning(db.ScenarioModel),
-                [
-                    {
-                        "name": model.name,
-                        "scenario_id": scenario_id,
-                        "model_type_id": model_type.id,
-                        "sequence": idx,
-                        "config": self._stripped_config(model),
-                    }
-                    for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
-                ],
-            )
-        except sqlalchemy.exc.IntegrityError as exc:
-            model_name: str = exc.params[1]  # type: ignore
-            raise ResourceAlreadyExists(
-                "scenario_model", name=model_name, message="duplicate model name"
-            ) from exc
+
+        self._check_duplicate_models(scenario_models)
+        scenario_model_records = await self.session.scalars(
+            insert(db.ScenarioModel).returning(db.ScenarioModel),
+            [
+                {
+                    "name": model.name,
+                    "scenario_id": scenario_id,
+                    "model_type_id": model_type.id,
+                    "sequence": idx,
+                    "config": self._stripped_config(model),
+                }
+                for idx, (model, model_type) in enumerate(zip(scenario_models, model_types))
+            ],
+        )
 
         refs_to_add: list[dict] = []
         for scenario_model, record in zip(
@@ -434,19 +476,21 @@ class ScenarioRepository(SQLResourceRepository):
         if refs_to_add:
             await self.session.execute(insert(db.ScenarioModelReference), refs_to_add)
 
-    @classmethod
-    def _load_full_scenario(cls, scenario: db.Scenario, bounding_box: BoundingBox) -> Scenario:
-        return dataclasses.replace(
-            scenario.to_domain(),
-            bounding_box=bounding_box,
-            datasets=[
-                ds.to_domain() for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
-            ],
-            models=[
-                model.to_domain()
-                for model in sorted(scenario.models, key=lambda model: model.sequence)
-            ],
-        )
+    @staticmethod
+    def _check_duplicate_datasets(datasets: t.Sequence[ScenarioDataset]):
+        found = set()
+        for idx, ds in enumerate(datasets):
+            if ds.name in found:
+                raise MoviciValidationError("duplicate dataset in scenario", f"datasets.{idx}")
+            found.add(ds.name)
+
+    @staticmethod
+    def _check_duplicate_models(datasets: t.Sequence[ScenarioModel]):
+        found = set()
+        for idx, ds in enumerate(datasets):
+            if ds.name in found:
+                raise MoviciValidationError("duplicate model name in scenario", f"models.{idx}")
+            found.add(ds.name)
 
     @staticmethod
     def _stripped_config(scenario_model: ScenarioModel):

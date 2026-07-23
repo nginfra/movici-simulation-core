@@ -67,7 +67,6 @@ async def test_get_scenario_backend(
         (DatabaseMode.MULTIPLE_WORKSPACES, A_SCENARIO_NAME, "asdf", ResourceDoesNotExist),
         (DatabaseMode.MULTIPLE_WORKSPACES, "asdf", A_WORKSPACE_NAME, ResourceDoesNotExist),
         (DatabaseMode.MULTIPLE_WORKSPACES, UUID(int=0), A_WORKSPACE_ID, ResourceDoesNotExist),
-        (DatabaseMode.MULTIPLE_WORKSPACES, A_SCENARIO_NAME, "asdf", ResourceDoesNotExist),
         (DatabaseMode.MULTIPLE_WORKSPACES, A_SCENARIO_NAME, UUID(int=0), ResourceDoesNotExist),
     ],
 )

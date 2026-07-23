@@ -160,12 +160,12 @@ class SQLAlchemyBackend:
     session: AsyncSession
     options: db.Options
     serializer: ExternalSerializationStrategy
+    tmpfile_dir: pathlib.Path
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
     single_scenario_mode: bool = False
     single_workspace_mode: bool = False
 
-    tmpfile_dir: pathlib.Path | None = None
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService

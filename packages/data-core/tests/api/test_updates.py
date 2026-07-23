@@ -2,6 +2,10 @@ from itertools import count
 
 import pytest
 
+from movici_data_core.file_helpers import get_mimetype
+from movici_data_core.serialization import dump_dict
+from movici_simulation_core.types import FileType
+
 
 @pytest.fixture
 def scenario_id(create_scenario_through_api, a_dataset, default_model_types):
@@ -41,8 +45,29 @@ def create_update_through_api(scenario_id, get_json, a_dataset, an_entity_type, 
     return _create_update
 
 
-def test_create_update(create_update_through_api):
-    result = create_update_through_api()
+@pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
+def test_create_update(
+    client, a_dataset, scenario_id, an_entity_type, an_attribute_type, filetype
+):
+    update = {
+        "dataset": {"name": a_dataset.name},
+        "model": {"name": "model_a"},
+        "timestamp": 0,
+        "iteration": 0,
+        "data": {
+            an_entity_type.name: {
+                "id": [1, 2, 3],
+                an_attribute_type.name: [4, 5, 6],
+            }
+        },
+    }
+    serialized = dump_dict(update, filetype)
+    result = client.post(
+        url="/updates",
+        params={"scenario": str(scenario_id)},
+        headers={"content-type": get_mimetype(filetype)},
+        data=serialized,
+    ).json()
     update_id = result.pop("id")
     assert update_id is not None
     assert result == {

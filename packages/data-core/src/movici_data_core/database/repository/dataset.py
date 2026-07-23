@@ -4,7 +4,6 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-import sqlalchemy.exc
 from sqlalchemy import (
     ColumnElement,
     Insert,
@@ -29,11 +28,13 @@ from movici_data_core.domain_model import (
     ScenarioDataset,
 )
 from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
     InvalidAction,
     InvalidResource,
     MoviciValidationError,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
     map_errors,
 )
 
@@ -101,6 +102,14 @@ class DatasetRepository(SQLResourceRepository):
         ds, has_raw_data, has_attributes = result
         return ds.to_domain(has_raw_data, has_attributes)
 
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda id: InvalidAction(
+                "Cannot delete dataset when it is still in use by a scenario"
+            ),
+        )
+    )
     async def delete(self, id: UUID):
         await self.all_data.dataset_data.delete(id)
         await self.session.execute(delete(db.Dataset).where(db.Dataset.id == id))
@@ -162,11 +171,15 @@ class DatasetRepository(SQLResourceRepository):
         )
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
-                "dataset", name=obj.name
-            )
-        }
+        (
+            UniqueConstraintFailed,
+            lambda self, obj: ResourceAlreadyExists("dataset", name=obj.name),
+        ),
+        (
+            ForeignKeyConstraintFailed,
+            lambda self, obj: ResourceDoesNotExist("workspace", id=self._ensure_workspace_id()),
+        ),
+        with_self=True,
     )
     async def create(self, obj: Dataset) -> UUID:
         workspace_id = self._ensure_workspace_id()
@@ -187,11 +200,10 @@ class DatasetRepository(SQLResourceRepository):
         )
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda id, obj, chunk_size=0: ResourceAlreadyExists(
-                "dataset", name=obj.name
-            )
-        }
+        (
+            UniqueConstraintFailed,
+            lambda id, obj, chunk_size=0: ResourceAlreadyExists("dataset", name=obj.name),
+        )
     )
     async def update(self, id: UUID, obj: Dataset, chunk_size=0):
         """Update a dataset. When not given ``obj.data``, only the ``name`` and ``display_name``

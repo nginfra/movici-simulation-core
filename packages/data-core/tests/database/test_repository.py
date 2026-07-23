@@ -1,6 +1,8 @@
+import asyncio
 import dataclasses
 import typing as t
 import uuid
+from asyncio import Barrier
 from io import BytesIO
 from unittest.mock import patch
 
@@ -10,7 +12,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from movici_data_core.database import model as db
-from movici_data_core.database.repository import DatasetDataRepository, SQLAlchemyRepository
+from movici_data_core.database.backend import SQLAlchemyServer
+from movici_data_core.database.repository import (
+    DatasetDataRepository,
+    SQLAlchemyRepository,
+)
 from movici_data_core.domain_model import (
     AttributeSummary,
     AttributeType,
@@ -37,6 +43,7 @@ from movici_data_core.exceptions import (
     ResourceAlreadyExists,
     ResourceDoesNotExist,
 )
+from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.core import DataType
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.testing import (
@@ -148,6 +155,56 @@ class TestWorkspaceRepository:
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
+    @pytest.mark.database_mode(db.DatabaseMode.SINGLE_WORKSPACE)
+    async def test_cannot_delete_default_workspace(
+        self, a_workspace, repository: SQLAlchemyRepository
+    ):
+        with pytest.raises(InvalidAction) as e:
+            await repository.workspaces.delete(a_workspace.id)
+        assert e.value.message == "Cannot delete default workspace"
+
+    async def test_deleting_workspace_clears_dataset_and_update_data(
+        self,
+        session,
+        repository: SQLAlchemyRepository,
+        an_entity_type,
+        a_workspace,
+        a_dataset,
+        a_scenario,
+        create_update,
+    ):
+        base_count = await session.scalar(select(func.count(db.Attribute.id)))
+        await repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy({an_entity_type.name: {"id": [1, 2]}}),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        assert (await session.scalar(select(func.count(db.Attribute.id)))) == base_count + 3
+
+        await repository.workspaces.delete(a_workspace.id)
+
+        assert (await session.scalar(select(func.count(db.Attribute.id)))) == base_count
+
+    async def test_deleting_workspace_clears_raw_data(
+        self, session, repository: SQLAlchemyRepository, a_workspace, a_dataset
+    ):
+        base_count = await session.scalar(select(func.count(db.RawDataChunk.id)))
+        await repository.dataset_data.create(
+            a_dataset.id,
+            b"asdfasdf",
+            format=DatasetFormat.BINARY,
+        )
+        assert (await session.scalar(select(func.count(db.RawDataChunk.id)))) > base_count
+
+        await repository.workspaces.delete(a_workspace.id)
+
+        assert (await session.scalar(select(func.count(db.RawDataChunk.id)))) == base_count
+
 
 class TestDatasetTypeRepository:
     async def test_create_and_delete_a_dataset_type(self, repository: SQLAlchemyRepository):
@@ -211,6 +268,15 @@ class TestDatasetTypeRepository:
         with pytest.raises(InvalidAction):
             await repository.dataset_types.create(DatasetType(name="a_dataset_type"))
 
+    async def test_cannot_delete_dataset_type_when_in_use(
+        self, repository: SQLAlchemyRepository, a_dataset_type, a_dataset
+    ):
+
+        with pytest.raises(InvalidAction) as e:
+            await repository.dataset_types.delete(a_dataset_type.id)
+
+        assert e.value.message == "Cannot delete dataset_type when it is still in use"
+
     async def test_update_dataset_type(self, repository: SQLAlchemyRepository):
 
         dataset_type = DatasetType(name="a_dataset_type", format=DatasetFormat.ENTITY_BASED)
@@ -259,7 +325,7 @@ class TestDatasetTypeRepository:
 
         with pytest.raises(ResourceDoesNotExist):
             await repository.dataset_types.ensure_dataset_type(
-                DatasetType(name="non-existing", format=DatasetFormat.ENTITY_BASED)
+                DatasetType(name="non_existing", format=DatasetFormat.ENTITY_BASED)
             )
 
     async def test_automatically_creates_dataset_type_when_not_strict(
@@ -368,6 +434,20 @@ class TestEntityTypeRepository:
             await repository.entity_types.update(id, EntityType(name="a" * 51))
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_cannot_delete_entity_type_when_in_use(
+        self, repository: SQLAlchemyRepository, an_entity_type, a_dataset
+    ):
+
+        await repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy({an_entity_type.name: {"id": [1, 2]}}),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        with pytest.raises(InvalidAction) as e:
+            await repository.entity_types.delete(an_entity_type.id)
+
+        assert e.value.message == "Cannot delete entity_type when it is still in use"
 
 
 class TestAttributeTypeRepository:
@@ -523,6 +603,22 @@ class TestAttributeTypeRepository:
             "enum_name",
         }
 
+    async def test_cannot_delete_attribute_type_when_in_use(
+        self, repository: SQLAlchemyRepository, an_entity_type, an_attribute_type, a_dataset
+    ):
+
+        await repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy(
+                {an_entity_type.name: {"id": [1, 2], an_attribute_type.name: [1.0, 2.0]}}
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        with pytest.raises(InvalidAction) as e:
+            await repository.attribute_types.delete(an_attribute_type.id)
+
+        assert e.value.message == "Cannot delete attribute_type when it is still in use"
+
 
 class TestModelTypeRepository:
     @pytest.fixture
@@ -576,7 +672,7 @@ class TestModelTypeRepository:
         repository.options.STRICT_MODEL_TYPES = True
 
         with pytest.raises(ResourceDoesNotExist):
-            await repository.model_types.ensure_model_types([ModelType("non-existing")])
+            await repository.model_types.ensure_model_types([ModelType("non_existing")])
 
     async def test_automatically_creates_model_type_with_passall_schema_when_not_strict(
         self, repository: SQLAlchemyRepository, a_model_type
@@ -622,6 +718,20 @@ class TestModelTypeRepository:
             await repository.model_types.ensure_model_types([ModelType(name="a" * 51)])
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name"}
+
+    async def test_cannot_delete_model_type_when_in_use(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+
+        model_type_name = a_scenario.models[0].type.name
+        model_type = await repository.model_types.get_by_name(model_type_name)
+        assert model_type is not None
+        assert model_type.id is not None
+
+        with pytest.raises(InvalidAction) as e:
+            await repository.model_types.delete(model_type.id)
+
+        assert e.value.message == "Cannot delete model_type when it is still in use"
 
 
 class TestDatasetRepository:
@@ -704,7 +814,7 @@ class TestDatasetRepository:
 
         with pytest.raises(MoviciValidationError):
             await repository.datasets.ensure_scenario_datasets(
-                [ScenarioDataset("non-existing", dataset_type=DatasetType("transport_network"))],
+                [ScenarioDataset("non_existing", dataset_type=DatasetType("transport_network"))],
             )
 
     async def test_automatically_creates_dataset_stubs_when_not_strict(
@@ -857,6 +967,49 @@ class TestDatasetRepository:
             )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+
+    async def test_cannot_delete_dataset_when_in_use_by_scenario(
+        self, repository: SQLAlchemyRepository, a_scenario, a_dataset
+    ):
+
+        with pytest.raises(InvalidAction) as e:
+            await repository.datasets.delete(a_dataset.id)
+
+        assert e.value.message == "Cannot delete dataset when it is still in use by a scenario"
+
+    async def test_raises_not_found_when_creating_dataset_when_workspace_gets_deleted(
+        self, db: SQLAlchemyServer, a_dataset_type, a_workspace
+    ):
+        b1 = Barrier(2)
+        b2 = Barrier(2)
+
+        async def retrieve_workspace_and_create_dataset(
+            server: SQLAlchemyServer, workspace_id: uuid.UUID
+        ):
+            async with server.get_backend() as backend:
+                workspace = await backend.workspaces.get(id=workspace_id)
+                assert workspace is not None
+                await b1.wait()
+                await b2.wait()
+
+                await backend.for_workspace(workspace_id).datasets.create(
+                    Dataset("a_new_dataset", "some name", dataset_type=a_dataset_type)
+                )
+
+        async def delete_workspace(server: SQLAlchemyServer, workspace_id: uuid.UUID):
+            async with server.get_backend() as backend:
+                await b1.wait()
+
+                await backend.workspaces.delete(workspace_id)
+            await b2.wait()
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await asyncio.gather(
+                retrieve_workspace_and_create_dataset(db, workspace_id=a_workspace.id),
+                delete_workspace(db, workspace_id=a_workspace.id),
+            )
+        assert exc.value.id == a_workspace.id
+        assert exc.value.resource_type == "workspace"
 
 
 class TestDatasetDataRepository:
@@ -1166,6 +1319,41 @@ class TestDatasetDataRepository:
             ],
         )
 
+    async def test_raises_not_found_when_creating_scenario_when_workspace_gets_deleted(
+        self, db: SQLAlchemyServer, a_scenario, a_workspace
+    ):
+        b1 = Barrier(2)
+        b2 = Barrier(2)
+
+        async def retrieve_workspace_and_create_scenario(
+            server: SQLAlchemyServer, workspace_id: uuid.UUID
+        ):
+            async with server.get_backend() as backend:
+                workspace = await backend.workspaces.get(id=workspace_id)
+                assert workspace is not None
+                await b1.wait()
+                await b2.wait()
+
+                await backend.for_workspace(workspace_id).scenarios.create(
+                    Scenario("a_new_scenario", "some name", "descripton"),
+                    ModelConfigValidator(),
+                )
+
+        async def delete_workspace(server: SQLAlchemyServer, workspace_id: uuid.UUID):
+            async with server.get_backend() as backend:
+                await b1.wait()
+
+                await backend.workspaces.delete(workspace_id)
+            await b2.wait()
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await asyncio.gather(
+                retrieve_workspace_and_create_scenario(db, workspace_id=a_workspace.id),
+                delete_workspace(db, workspace_id=a_workspace.id),
+            )
+        assert exc.value.id == a_workspace.id
+        assert exc.value.resource_type == "workspace"
+
 
 class TestScenarioRepository:
     @pytest.fixture
@@ -1221,8 +1409,26 @@ class TestScenarioRepository:
 
         assert repository.scenarios.for_id(a_scenario.id).scenario_id == a_scenario.id
 
-    async def test_list_scenarios(self, repository: SQLAlchemyRepository, a_scenario):
-        return len(await repository.scenarios.list()) == 1
+    async def test_list_scenarios_with_updates(
+        self,
+        repository: SQLAlchemyRepository,
+        a_scenario,
+        new_scenario,
+        get_model_config_validator,
+        create_update,
+    ):
+        validator = await get_model_config_validator()
+        await repository.scenarios.create(new_scenario, validator)
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        scenarios = await repository.scenarios.list()
+
+        has_updates = {scenario.name: scenario.has_updates for scenario in scenarios}
+
+        assert has_updates == {a_scenario.name: True, new_scenario.name: False}
 
     async def test_scenario_round_trip(
         self,
@@ -1253,6 +1459,22 @@ class TestScenarioRepository:
             models=[],
         ) == dataclasses.replace(new_scenario, models=[])
 
+    async def test_get_scenario_with_updates(
+        self, repository: SQLAlchemyRepository, a_scenario, create_update
+    ):
+        scenario = await repository.scenarios.for_id(a_scenario.id).get()
+        assert scenario is not None
+        assert not scenario.has_updates
+
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        scenario = await repository.scenarios.for_id(a_scenario.id).get()
+        assert scenario is not None
+        assert scenario.has_updates
+
     async def test_create_scenario_with_no_models_and_datasets(
         self, repository: SQLAlchemyRepository, get_model_config_validator
     ):
@@ -1267,29 +1489,69 @@ class TestScenarioRepository:
         )
         assert scenario_id is not None
 
-    async def test_deduplicates_datasets_on_create(
+    async def test_raises_on_duplicate_datasets_on_create(
         self, repository: SQLAlchemyRepository, get_model_config_validator, a_dataset
     ):
-        scenario_id = await repository.scenarios.create(
-            Scenario(
-                name="a_scenario",
-                display_name="a scenario",
-                description="",
-                epsg_code=0,
-                datasets=[
-                    ScenarioDataset.from_dataset(a_dataset),
-                    ScenarioDataset.from_dataset(a_dataset),
-                ],
-            ),
-            validator=await get_model_config_validator(),
-        )
-        scenario = await repository.scenarios.for_id(scenario_id).get()
-        assert scenario is not None
-        assert len(scenario.datasets) == 1
+        with pytest.raises(MoviciValidationError) as exc:
+            await repository.scenarios.create(
+                Scenario(
+                    name="a_scenario",
+                    display_name="a scenario",
+                    description="",
+                    epsg_code=0,
+                    datasets=[
+                        ScenarioDataset.from_dataset(a_dataset),
+                        ScenarioDataset.from_dataset(a_dataset),
+                    ],
+                ),
+                validator=await get_model_config_validator(),
+            )
+        assert list(exc.value.iter_messages()) == [("datasets.1", "duplicate dataset in scenario")]
+
+    async def test_raises_on_duplicate_model_name_on_create(
+        self,
+        repository: SQLAlchemyRepository,
+        get_model_config_validator,
+        a_dataset,
+        default_model_types,
+    ):
+        with pytest.raises(MoviciValidationError) as exc:
+            await repository.scenarios.create(
+                Scenario(
+                    name="a_scenario",
+                    display_name="a scenario",
+                    description="",
+                    epsg_code=0,
+                    models=[
+                        ScenarioModel("name", default_model_types[1], config={"field": "value"}),
+                        ScenarioModel("name", default_model_types[1], config={"field": "value"}),
+                    ],
+                ),
+                validator=await get_model_config_validator(),
+            )
+        assert list(exc.value.iter_messages()) == [
+            ("models.1", "duplicate model name in scenario")
+        ]
 
     async def test_get_scenario_by_name(self, repository: SQLAlchemyRepository, a_scenario):
         result = await repository.scenarios.get_by_name(a_scenario.name)
         assert result is not None
+
+    async def test_get_scenario_by_name_with_updates(
+        self, repository: SQLAlchemyRepository, a_scenario, create_update
+    ):
+        scenario = await repository.scenarios.get_by_name(a_scenario.name)
+        assert scenario is not None
+        assert not scenario.has_updates
+
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        scenario = await repository.scenarios.get_by_name(a_scenario.name)
+        assert scenario is not None
+        assert scenario.has_updates
 
     async def test_scenario_exists(
         self, repository: SQLAlchemyRepository, new_scenario, get_model_config_validator
@@ -1346,6 +1608,29 @@ class TestScenarioRepository:
         await repository.session.commit()
         assert len(await repository.scenarios.list()) == 0
         assert (await repository.session.scalar(query)) == 0
+
+    async def test_delete_scenario_deletes_update_data(
+        self, session, repository: SQLAlchemyRepository, create_update, a_scenario
+    ):
+        base_count = await session.scalar(select(func.count(db.Attribute.id)))
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [13.0, 14.0]}},
+        )
+        assert (await session.scalar(select(func.count(db.Attribute.id)))) == base_count + 2
+
+        await repository.scenarios.for_id(a_scenario.id).delete()
+
+        assert (await session.scalar(select(func.count(db.Attribute.id)))) == base_count
+
+    @pytest.mark.database_mode(db.DatabaseMode.SINGLE_SCENARIO)
+    async def test_cannot_delete_default_scenario(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+        with pytest.raises(InvalidAction) as e:
+            await repository.scenarios.for_id(a_scenario.id).delete()
+        assert e.value.message == "Cannot delete default scenario"
 
     async def test_create_invalid_scenario(
         self, repository: SQLAlchemyRepository, new_scenario: Scenario, get_model_config_validator
@@ -1486,6 +1771,70 @@ class TestScenarioRepository:
             ],
         )
 
+    async def test_get_scenario_summary_with_str_type(
+        self, repository: SQLAlchemyRepository, a_dataset, a_scenario: Scenario, create_update
+    ):
+        assert a_scenario.id is not None
+        await repository.datasets.update(
+            a_dataset.id,
+            dataclasses.replace(
+                a_dataset,
+                data=dataset_data_to_numpy(
+                    {
+                        "transport_nodes": {
+                            "id": [1, 2, 3],
+                            "text": ["a", "b"],
+                        },
+                    }
+                ),
+            ),
+        )
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={
+                "transport_nodes": {
+                    "id": [1, 2],
+                    "text": ["c", "c"],
+                },
+            },
+        )
+
+        assert (
+            await repository.scenarios.for_id(a_scenario.id).get_summary(a_dataset.id)
+        ) == DatasetSummary(
+            general={},
+            epsg_code=None,
+            bounding_box=BoundingBox.empty(),
+            count=3,
+            entity_groups=[
+                EntityGroupSummary(
+                    name="transport_nodes",
+                    count=3,
+                    attributes=[
+                        AttributeSummary(
+                            name="id",
+                            data_type=DataType(int),
+                            description="Entity ID",
+                            enum_name=None,
+                            unit="",
+                            min_val=1,
+                            max_val=3,
+                        ),
+                        AttributeSummary(
+                            name="text",
+                            data_type=DataType(str),
+                            description="",
+                            enum_name=None,
+                            unit="",
+                            min_val=None,
+                            max_val=None,
+                        ),
+                    ],
+                ),
+            ],
+        )
+
     async def test_doesnt_return_summary_for_other_dataset(
         self,
         repository: SQLAlchemyRepository,
@@ -1593,6 +1942,40 @@ class TestScenarioRepository:
             "display_name",
             "description",
         }
+
+    async def test_raises_not_found_when_creating_dataset_when_workspace_gets_deleted(
+        self, db: SQLAlchemyServer, a_dataset_type, a_workspace
+    ):
+        b1 = Barrier(2)
+        b2 = Barrier(2)
+
+        async def retrieve_workspace_and_create_dataset(
+            server: SQLAlchemyServer, workspace_id: uuid.UUID
+        ):
+            async with server.get_backend() as backend:
+                workspace = await backend.workspaces.get(id=workspace_id)
+                assert workspace is not None
+                await b1.wait()
+                await b2.wait()
+
+                await backend.for_workspace(workspace_id).datasets.create(
+                    Dataset("a_new_dataset", "some name", dataset_type=a_dataset_type)
+                )
+
+        async def delete_workspace(server: SQLAlchemyServer, workspace_id: uuid.UUID):
+            async with server.get_backend() as backend:
+                await b1.wait()
+
+                await backend.workspaces.delete(workspace_id)
+            await b2.wait()
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await asyncio.gather(
+                retrieve_workspace_and_create_dataset(db, workspace_id=a_workspace.id),
+                delete_workspace(db, workspace_id=a_workspace.id),
+            )
+        assert exc.value.id == a_workspace.id
+        assert exc.value.resource_type == "workspace"
 
 
 class TestUpdateRepository:
@@ -1714,3 +2097,67 @@ class TestUpdateRepository:
         await repository.updates.delete_all()
 
         assert (await session.scalar(select(func.count(db.DataArray.id)))) == 2
+
+    async def test_cannot_create_duplicate_update(self, create_update):
+        await create_update(timestamp=0, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+
+        with pytest.raises(ResourceAlreadyExists) as e:
+            await create_update(timestamp=0, iteration=1, ids=[0, 1], array=[2.0, 3.0])
+        assert e.value.name == "t0_1"
+
+    async def test_raises_validation_error_for_incorrect_scenario_model(
+        self, repository: SQLAlchemyRepository, a_scenario
+    ):
+
+        with pytest.raises(MoviciValidationError) as exc:
+            await repository.updates.create(
+                Update(
+                    a_scenario.datasets[0],
+                    0,
+                    0,
+                    UpdateModel("invalid"),
+                    data={},
+                )
+            )
+        assert exc.value.path == "model.name"
+
+    async def test_raises_not_found_when_scenario_gets_deleted_during_update(
+        self, db: SQLAlchemyServer, a_scenario: Scenario
+    ):
+        assert a_scenario.id is not None
+        b1 = Barrier(2)
+        b2 = Barrier(2)
+
+        async def retrieve_scenario_and_create_update(
+            server: SQLAlchemyServer, scenario_id: uuid.UUID
+        ):
+            async with server.get_backend() as backend:
+                scenario = await backend.scenarios.get(id=scenario_id)
+                assert scenario is not None
+                await b1.wait()
+                await b2.wait()
+
+                await backend.for_scenario(scenario_id).repository.updates.create(
+                    Update(
+                        a_scenario.datasets[0],
+                        0,
+                        0,
+                        UpdateModel.from_scenario_model(a_scenario.models[0]),
+                        data={},
+                    )
+                )
+
+        async def delete_scenario(server: SQLAlchemyServer, scenario_id: uuid.UUID):
+            async with server.get_backend() as backend:
+                await b1.wait()
+
+                await backend.for_scenario(scenario_id).scenarios.delete()
+            await b2.wait()
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await asyncio.gather(
+                retrieve_scenario_and_create_update(db, scenario_id=a_scenario.id),
+                delete_scenario(db, scenario_id=a_scenario.id),
+            )
+        assert exc.value.resource_type == "scenario"
+        assert exc.value.id == a_scenario.id

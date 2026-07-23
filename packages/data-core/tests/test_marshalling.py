@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from movici_data_core.database.repository.general import ModelTypeRepository
 from movici_data_core.domain_model import (
+    BoundingBox,
     Dataset,
     DatasetFormat,
     DatasetType,
@@ -296,6 +297,7 @@ class TestScenarioInOut:
         dataset_type_id = uuid.uuid4()
         now = datetime.datetime.now(tz=datetime.timezone.utc)
         scenario_config["id"] = scenario_id
+        scenario_config["bounding_box"] = (1, 2, 3, 4)
         scenario_config["datasets"][0]["id"] = dataset_id
         scenario_config["datasets"][0]["type"] = {
             "name": scenario_config["datasets"][0]["type"],
@@ -315,6 +317,7 @@ class TestScenarioInOut:
                     display_name="A scenario",
                     description="lalala description",
                     epsg_code=1234,
+                    bounding_box=BoundingBox(1, 2, 3, 4),
                     simulation_info=SimulationInfo(
                         start_time=12,
                         duration=42,
@@ -369,6 +372,9 @@ class TestScenarioInOut:
     "cls, base_payload, error_payload",
     [
         (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "A"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "Aa"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "aA"}),
+        (WorkspaceIn, {"name": "a", "display_name": "a"}, {"name": "a-b"}),
         (ShortDatasetIn, {"name": "a", "display_name": "a", "type": {"name": "a"}}, {"name": "A"}),
         (DatasetTypeIn, {"name": "a", "format": "binary"}, {"name": "A"}),
         (

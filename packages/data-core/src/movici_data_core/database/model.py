@@ -24,7 +24,7 @@ from movici_simulation_core.validate import MoviciDataRefInfo
 from .db_types import GUID, JSONTuple, RegexMatchingString, TZDateTime
 
 T_dom = t.TypeVar("T_dom", covariant=True)
-snake_case_pattern = re.compile(r"[a-z_][a-z0-9_.]*")
+snake_case_pattern = re.compile(r"^[a-z_][a-z0-9_.]*$")
 
 
 class NamedResource(t.Protocol[T_dom]):
@@ -417,7 +417,7 @@ class Scenario(Base):
     datasets: Mapped[list[ScenarioDataset]] = relationship()
     models: Mapped[list[ScenarioModel]] = relationship()
 
-    def to_domain(self) -> domain_model.Scenario:
+    def to_domain(self, has_updates: bool) -> domain_model.Scenario:
         return domain_model.Scenario(
             id=self.id,
             workspace=self.workspace.to_domain(),
@@ -428,6 +428,7 @@ class Scenario(Base):
             epsg_code=self.epsg_code,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            has_updates=has_updates,
         )
 
 

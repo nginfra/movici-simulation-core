@@ -125,9 +125,21 @@ def begin_server_from_session_db(tmp_path):
     return _copy_and_begin
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "database_mode(mode): mark tests to use a specific database mode"
+    )
+
+
 @pytest.fixture
-def database_mode():
-    return DatabaseMode.MULTIPLE_WORKSPACES
+def database_mode(request):
+    marker = request.node.get_closest_marker("database_mode")
+    if marker is None:
+        return DatabaseMode.MULTIPLE_WORKSPACES
+    mode = marker.args[0]
+    if not isinstance(mode, DatabaseMode):
+        raise TypeError("database_mode marker must be a valid DatabaseMode")
+    return mode
 
 
 @pytest.fixture
@@ -234,6 +246,7 @@ def default_attribute_types():
         AttributeType("topology.to_node_id", DataType(int)),
         AttributeType("transport.capacity", DataType(float)),
         AttributeType("labels", DataType(int, (), True), enum_name="label"),
+        AttributeType("text", DataType(str)),
     ]
 
 
