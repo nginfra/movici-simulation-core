@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "movici"
 dynamic = ["version"]
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 dependencies = [
   "movici-data-core",
   "movici-drinking-water-model",
