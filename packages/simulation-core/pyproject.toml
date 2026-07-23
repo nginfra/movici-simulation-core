@@ -44,7 +44,6 @@ dependencies = [
   "jsonschema",
   "pyproj",
   "netCDF4",
-  "Fiona>=1.9",
   "pyparsing",
 ]
 
@@ -52,14 +51,16 @@ dependencies = [
 models = [
   "shapely>=1.7.1",
   "pyproj>=3.0.1",
-  'movici-geo-query>=1.1.1, >=1.5.0; python_version >= "3.14"',
+  'movici-geo-query>=1.1.1; python_version < "3.14"',
+  'movici-geo-query>=1.5.0; python_version >= "3.14"',
   "scipy",
 ]
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 all = [
   "shapely>=1.7.1",
   "pyproj>=3.0.1",
-  'movici-geo-query>=1.1.1, >=1.5.0; python_version >= "3.14"',
+  'movici-geo-query>=1.1.1; python_version < "3.14"',
+  'movici-geo-query>=1.5.0; python_version >= "3.14"',
   "scipy",
   "sqlalchemy>=1.4,<3.0",
 ]
