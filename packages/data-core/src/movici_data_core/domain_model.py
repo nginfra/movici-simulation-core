@@ -457,3 +457,10 @@ class AttributeSummary(t.Generic[T_datatype]):
     unit: str
     min_val: T_datatype | None
     max_val: T_datatype | None
+
+
+@dataclasses.dataclass
+class View:
+    name: str
+    config: dict
+    id: UUID | None = None

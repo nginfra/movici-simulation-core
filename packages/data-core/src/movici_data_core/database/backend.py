@@ -20,6 +20,7 @@ from movici_data_core.services import (
     EntityTypeService,
     ModelTypeService,
     ScenarioService,
+    ViewService,
     WorkspaceService,
 )
 from movici_data_core.services.update import UpdateService
@@ -62,6 +63,7 @@ class SQLAlchemyServer:
     dataset_service_cls: t.Type[DatasetService] = DatasetService
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
+    view_service_cls: t.Type[ViewService] = ViewService
 
     def __init__(
         self,
@@ -159,6 +161,7 @@ class SQLAlchemyServer:
             dataset_service_cls=self.dataset_service_cls,
             scenario_service_cls=self.scenario_service_cls,
             update_service_cls=self.update_service_cls,
+            view_service_cls=self.view_service_cls,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -207,6 +210,7 @@ class SQLAlchemyBackend:
     dataset_service_cls: t.Type[DatasetService] = DatasetService
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
+    view_service_cls: t.Type[ViewService] = ViewService
 
     @property
     def repository(self):
@@ -257,6 +261,10 @@ class SQLAlchemyBackend:
         return self.update_service_cls(
             self.repository, serializer=self.serializer, tmpfile_dir=self.tmpfile_dir
         )
+
+    @property
+    def views(self):
+        return self.view_service_cls(self.repository)
 
     async def set_database_mode(self, new_mode: db.DatabaseMode):
         """Change the mode of this database. Upgrading is always possible along the path

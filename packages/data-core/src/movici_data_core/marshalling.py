@@ -48,6 +48,7 @@ from movici_data_core.domain_model import (
     SimulationInfo,
     Update,
     UpdateModel,
+    View,
     Workspace,
 )
 from movici_data_core.exceptions import (
@@ -663,6 +664,25 @@ class AttributeSummaryOut(OutModel[AttributeSummary]):
     unit: str
     min_val: bool | int | float | None
     max_val: bool | int | float | None
+
+
+class ViewOut(OutModel[View]):
+    id: UUID
+    name: str
+    config: t.Any  # t.Any skips any pydantic validation
+
+
+class ViewListOut(OutModel[t.Sequence[View]]):
+    __envelope__ = "views"
+    views: list[ViewOut]
+
+
+class ViewIn(InModel[View]):
+    name: NameStr
+    config: dict
+
+    def to_domain(self) -> View:
+        return domain_model.View(name=self.name, config=self.config)
 
 
 class OperationSuccess(BaseModel):

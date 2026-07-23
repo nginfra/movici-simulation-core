@@ -34,6 +34,7 @@ from movici_data_core.domain_model import (
     SimulationInfo,
     Update,
     UpdateModel,
+    View,
     Workspace,
 )
 from movici_data_core.exceptions import (
@@ -2161,3 +2162,110 @@ class TestUpdateRepository:
             )
         assert exc.value.resource_type == "scenario"
         assert exc.value.id == a_scenario.id
+
+
+class TestViewRepository:
+    @pytest.fixture
+    def repository(self, repository: SQLAlchemyRepository, a_scenario):
+        return repository.for_scenario(a_scenario.id)
+
+    async def test_create_and_get_view_by_id(self, repository: SQLAlchemyRepository):
+        view = View(name="a_view", config={"a": "config"})
+        view_id = await repository.views.create(view)
+        result = await repository.views.get_by_id(view_id)
+        assert result is not None
+        assert result.id is not None
+        assert dataclasses.replace(result, id=None) == view
+
+    async def test_create_and_get_view_by_name(self, repository: SQLAlchemyRepository):
+        view = View(name="a_view", config={"a": "config"})
+        await repository.views.create(view)
+        result = await repository.views.get_by_name(view.name)
+
+        assert result is not None
+        assert result.id is not None
+        assert dataclasses.replace(result, id=None) == view
+
+    async def test_list_views(self, repository: SQLAlchemyRepository, create_view):
+        await create_view()
+        await create_view()
+        await create_view()
+
+        result = await repository.views.list()
+        assert len(result) == 3
+        assert all(isinstance(v, View) for v in result)
+
+    async def test_update_view(self, repository: SQLAlchemyRepository, create_view):
+        view_id = await create_view(name="a_view", config={"some": "config"})
+        payload = View("new_name", config={"new": "config"})
+        await repository.views.update(view_id, payload)
+        result = await repository.views.get_by_id(view_id)
+        assert result == dataclasses.replace(payload, id=view_id)
+
+    async def test_delete_view(self, repository: SQLAlchemyRepository, create_view):
+        view_id = await create_view()
+
+        assert len(await repository.views.list()) == 1
+        await repository.views.delete(view_id)
+
+        assert (await repository.views.get_by_id(view_id)) is None
+        assert len(await repository.views.list()) == 0
+
+    async def test_create_view_raises_on_conflicting_view_name(self, create_view):
+        await create_view(name="a_view")
+        with pytest.raises(ResourceAlreadyExists):
+            await create_view(name="a_view")
+
+    async def test_update_view_raises_on_conflicting_view_name(
+        self, repository: SQLAlchemyRepository, create_view
+    ):
+        await create_view(name="a_view")
+        view_id = await create_view(name="another_view")
+        with pytest.raises(ResourceAlreadyExists):
+            await repository.views.update(view_id, View("a_view", config={}))
+
+    async def test_create_view_validates_max_length(self, create_view):
+        with pytest.raises(MoviciValidationError):
+            await create_view(name="a" * 51)
+        pass
+
+    async def test_update_view_validates_max_length(
+        self, repository: SQLAlchemyRepository, create_view
+    ):
+        view_id = await create_view()
+        with pytest.raises(MoviciValidationError):
+            await repository.views.update(view_id, View("a" * 51, config={}))
+
+    async def test_raises_not_found_when_scenario_gets_deleted_during_update(
+        self, db: SQLAlchemyServer, a_scenario: Scenario
+    ):
+        assert a_scenario.id is not None
+        b1 = Barrier(2)
+        b2 = Barrier(2)
+
+        async def retrieve_scenario_and_create_update(
+            server: SQLAlchemyServer, scenario_id: uuid.UUID
+        ):
+            async with server.get_backend() as backend:
+                scenario = await backend.scenarios.get(id=scenario_id)
+                assert scenario is not None
+                await b1.wait()
+                await b2.wait()
+
+                await backend.for_scenario(scenario_id).repository.views.create(
+                    View("new_name", config={"a": "config"})
+                )
+
+        async def delete_scenario(server: SQLAlchemyServer, scenario_id: uuid.UUID):
+            async with server.get_backend() as backend:
+                await b1.wait()
+
+                await backend.for_scenario(scenario_id).scenarios.delete()
+            await b2.wait()
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await asyncio.gather(
+                retrieve_scenario_and_create_update(db, scenario_id=a_scenario.id),
+                delete_scenario(db, scenario_id=a_scenario.id),
+            )
+        assert exc.value.resource_type == "scenario"
