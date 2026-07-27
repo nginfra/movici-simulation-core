@@ -467,3 +467,17 @@ class View:
     name: str
     config: dict
     id: UUID | None = None
+
+
+@dataclasses.dataclass
+class DatasetFilterAttribute:
+    entity_group: str
+    attribute: str
+
+
+@dataclasses.dataclass
+class DatasetFilter:
+    attributes: list[DatasetFilterAttribute]
+
+    def is_empty(self):
+        return not len(self.attributes)

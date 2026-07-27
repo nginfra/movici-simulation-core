@@ -21,6 +21,8 @@ from movici_data_core.domain_model import (
     AttributeSummary,
     Dataset,
     DatasetData,
+    DatasetFilter,
+    DatasetFilterAttribute,
     DatasetFormat,
     DatasetSummary,
     DatasetType,
@@ -410,14 +412,14 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await RawDataProcessor(self.session).get_dict(id)
 
-    async def get_entity_data(self, id: UUID):
+    async def get_entity_data(self, id: UUID, dataset_filter: DatasetFilter | None = None):
         """return the dataset data for an ``ENTITY_BASED`` dataset
 
         :param id: the dataset ``UUID``
         :return: The entity based dataset data section
         """
         return await EntityDataProcessor(
-            self.session, all_data=self.all_data, selector=DatasetDataSelector()
+            self.session, all_data=self.all_data, selector=DatasetDataSelector(dataset_filter)
         ).get(id)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
@@ -467,12 +469,35 @@ class DatasetDataRepository(SQLResourceRepository):
 
 
 class DatasetDataSelector(EntityDataSelector):
+    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
+        self.dataset_filter = dataset_filter
+
     def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
-        return (
-            select(db.Attribute)
+        subquery = (
+            select(db.Attribute.id)
             .join(db.DatasetAttribute)
+            .join(db.EntityType)
+            .join(db.AttributeType)
             .where(db.DatasetAttribute.dataset_id == id)
         )
+
+        if self.dataset_filter is not None and not self.dataset_filter.is_empty():
+            subquery = subquery.where(self.filter_to_where_clause(self.dataset_filter))
+
+        return select(db.Attribute).where(db.Attribute.id.in_(subquery))
+
+    @staticmethod
+    def filter_to_where_clause(dataset_filter: DatasetFilter):
+        where_clause = db.AttributeType.name == "id"
+
+        def _to_where_clause(single_filter: DatasetFilterAttribute):
+            return (db.EntityType.name == single_filter.entity_group) & (
+                db.AttributeType.name == single_filter.attribute
+            )
+
+        for filter in dataset_filter.attributes:
+            where_clause |= _to_where_clause(filter)
+        return where_clause
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
         return insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)
