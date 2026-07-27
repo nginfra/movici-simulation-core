@@ -321,7 +321,9 @@ class DataArray(Base):
     min_val: Mapped[float | None]
     max_val: Mapped[float | None]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="data")
 
     def to_numpy(self) -> np.ndarray:
@@ -338,7 +340,9 @@ class RowptrArray(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     data: Mapped[bytes]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
     def to_numpy(self) -> np.ndarray:
@@ -370,7 +374,9 @@ class DatasetAttribute(Base):
     __tablename__ = "dataset_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    dataset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dataset.id", ondelete="CASCADE"), index=True
+    )
     attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
 
     dataset: Mapped[Dataset] = relationship()
@@ -579,7 +585,9 @@ class UpdateAttribute(Base):
     __tablename__ = "update_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    update_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("update.id", ondelete="CASCADE"))
+    update_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("update.id", ondelete="CASCADE"), index=True
+    )
     attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
 
     update: Mapped[Update] = relationship()
