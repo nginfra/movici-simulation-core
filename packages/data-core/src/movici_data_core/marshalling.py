@@ -9,6 +9,7 @@ from uuid import UUID
 
 from jsonschema import SchemaError
 from pydantic import (
+    AfterValidator,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -673,3 +674,31 @@ class OperationSuccess(BaseModel):
     @classmethod
     def for_path_operation(cls, resource: str, id: UUID, verb: str):
         return OperationSuccess(id=id, message=f"{resource} {verb}")
+
+
+attribute_path_pattern = re.compile(r"^[a-z_][a-z0-9_.]{0,49}:[a-z_][a-z0-9_.]{0,99}$")
+
+
+def validate_dataset_filter_attribute_path_string(val: str):
+    if not re.match(attribute_path_pattern, val):
+        raise ValueError("attribute path must be of format <entity_group>:<attribute>")
+    return val
+
+
+DatasetFilterAttributePathString = t.Annotated[
+    str, AfterValidator(validate_dataset_filter_attribute_path_string)
+]
+
+
+class DatasetFilterIn(BaseModel):
+    attribute: list[DatasetFilterAttributePathString] = []
+
+    def to_domain(self) -> domain_model.DatasetFilter | None:
+        if not self.attribute:
+            return None
+        return domain_model.DatasetFilter(
+            [
+                domain_model.DatasetFilterAttribute(*attr.split(":", maxsplit=1))
+                for attr in self.attribute
+            ]
+        )

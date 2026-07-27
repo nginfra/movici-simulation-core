@@ -16,7 +16,11 @@ from sqlalchemy.orm import joinedload
 
 from movici_data_core.database import model as db
 from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
-from movici_data_core.domain_model import AttributeType, DatasetData, EntityType
+from movici_data_core.domain_model import (
+    AttributeType,
+    DatasetData,
+    EntityType,
+)
 from movici_data_core.exceptions import (
     ForeignKeyConstraintFailed,
     InvalidAction,
@@ -179,16 +183,16 @@ class EntityDataProcessor:
 
     async def get(self, id: UUID) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
-        for attribute in (
-            await self.session.scalars(
-                self.selector.select_linked_attribute(id).options(
-                    joinedload(db.Attribute.rowptr),
-                    joinedload(db.Attribute.data),
-                    joinedload(db.Attribute.entity_type),
-                    joinedload(db.Attribute.attribute_type),
-                )
-            )
-        ).all():
+        query = self.selector.select_linked_attribute(id)
+
+        query = query.options(
+            joinedload(db.Attribute.rowptr),
+            joinedload(db.Attribute.data),
+            joinedload(db.Attribute.entity_type),
+            joinedload(db.Attribute.attribute_type),
+        )
+        attrs = (await self.session.scalars(query)).all()
+        for attribute in attrs:
             entity_group = result.setdefault(attribute.entity_type.name, {})
             attr_data: NumpyAttributeData = {"data": attribute.data.to_numpy()}
             if attribute.rowptr is not None:

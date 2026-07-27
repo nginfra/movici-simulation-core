@@ -7,6 +7,7 @@ from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.domain_model import (
     Dataset,
+    DatasetFilter,
     DatasetFormat,
     DatasetType,
 )
@@ -62,7 +63,10 @@ class DatasetService:
         return await self.repository.datasets.delete(dataset_id)
 
     async def get_dataset_as_file(
-        self, dataset_id: UUID, filetype: FileType = FileType.JSON
+        self,
+        dataset_id: UUID,
+        filetype: FileType = FileType.JSON,
+        dataset_filter: DatasetFilter | None = None,
     ) -> pathlib.Path | None:
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
@@ -78,7 +82,9 @@ class DatasetService:
                     if filetype not in self.serializer.supported_file_types():
                         raise UnsupportedFileType(filetype)
 
-                    data = await self.repository.dataset_data.get_entity_data(dataset_id)
+                    data = await self.repository.dataset_data.get_entity_data(
+                        dataset_id, dataset_filter=dataset_filter
+                    )
 
                     # prevent pydantic from processing the data section
                     raw_data = DatasetWithDataOut.from_domain(
@@ -94,6 +100,10 @@ class DatasetService:
                     )
 
                 case DatasetFormat.UNSTRUCTURED:
+                    if dataset_filter is not None:
+                        raise InvalidAction(
+                            "Cannot provide a dataset filter when retrieving non-entity data"
+                        )
                     data = await self.repository.dataset_data.get_unstructured_data(dataset_id)
                     #
                     # prevent pydantic from processing the data section
@@ -104,6 +114,10 @@ class DatasetService:
                     outfile.write(dump_dict(raw_data, filetype=filetype))
 
                 case DatasetFormat.BINARY:
+                    if dataset_filter is not None:
+                        raise InvalidAction(
+                            "Cannot provide a dataset filter when retrieving non-entity data"
+                        )
                     streamer = await self.repository.dataset_data.stream_binary_data(dataset_id)
                     async for chunk in streamer:
                         outfile.write(chunk)

@@ -9,6 +9,8 @@ from movici_data_core.database.repository.general import ModelTypeRepository
 from movici_data_core.domain_model import (
     BoundingBox,
     Dataset,
+    DatasetFilter,
+    DatasetFilterAttribute,
     DatasetFormat,
     DatasetType,
     ModelType,
@@ -28,6 +30,7 @@ from movici_data_core.exceptions import (
 from movici_data_core.file_helpers import tempfile_delete_on_error
 from movici_data_core.marshalling import (
     AttributeTypeIn,
+    DatasetFilterIn,
     DatasetTypeIn,
     DatasetWithDataIn,
     EntityTypeIn,
@@ -454,3 +457,31 @@ def test_validates_model_type_jsonschema():
 def test_model_type_raises_on_invalid_jsonschema():
     with pytest.raises(ValidationError):
         ModelTypeIn(name="a_model", jsonschema={"type": "invalid"})
+
+
+def test_dataset_filter_in():
+    attribute_queries = ["some_entities:some_attr", "more_entities:other_attr"]
+    assert DatasetFilterIn(attribute=attribute_queries).to_domain() == DatasetFilter(
+        attributes=[
+            DatasetFilterAttribute("some_entities", "some_attr"),
+            DatasetFilterAttribute("more_entities", "other_attr"),
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    "filter",
+    [
+        "only_attr",
+        "one:two:three",
+        "Aa:a",
+        "a:aA",
+        "Aa:aA",
+        "a" * 51 + ":a",
+        "a:" + "a" * 101,
+        123,
+    ],
+)
+def test_invalid_dataset_filter(filter):
+    with pytest.raises(ValidationError):
+        DatasetFilterIn(attribute=[filter])

@@ -27,16 +27,19 @@ T_dom = t.TypeVar("T_dom", covariant=True)
 snake_case_pattern = re.compile(r"^[a-z_][a-z0-9_.]*$")
 
 
-class NamedResource(t.Protocol[T_dom]):
+class IToDomain(t.Protocol[T_dom]):
+    def to_domain(self) -> T_dom: ...
+
+
+class NamedResource(IToDomain[T_dom], t.Protocol[T_dom]):
     id: Mapped[uuid.UUID]
     name: Mapped[str]
 
     @classmethod
     def validate_field_lengths(cls, payload: dict[str, t.Any]) -> None: ...
-    def to_domain(self) -> T_dom: ...
 
 
-def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
+def to_domain_or_none(obj: IToDomain[T_dom] | None) -> T_dom | None:
     return obj.to_domain() if obj is not None else None
 
 

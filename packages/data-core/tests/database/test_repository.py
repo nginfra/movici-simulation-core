@@ -22,6 +22,8 @@ from movici_data_core.domain_model import (
     AttributeType,
     BoundingBox,
     Dataset,
+    DatasetFilter,
+    DatasetFilterAttribute,
     DatasetFormat,
     DatasetSummary,
     DatasetType,
@@ -1111,6 +1113,50 @@ class TestDatasetDataRepository:
         await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
         result = await repository.dataset_data.get_entity_data(a_dataset.id)
         assert_dataset_dicts_equal(data, result)
+
+    async def test_get_dataset_data_with_filter(self, repository: SQLAlchemyRepository, a_dataset):
+        await repository.dataset_data.create(
+            a_dataset.id,
+            dataset_data_to_numpy(
+                {
+                    "roads": {
+                        "id": [1, 2, 3],
+                        "topology.from_node_id": [4, 5, 6],
+                        "topology.to_node_id": [5, 6, 4],
+                    },
+                    "transport_nodes": {
+                        "id": [4, 5, 6],
+                        "text": ["a", "a", "b'"],
+                    },
+                }
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+        result = await repository.dataset_data.get_entity_data(
+            id=a_dataset.id,
+            dataset_filter=DatasetFilter(
+                attributes=[
+                    DatasetFilterAttribute("roads", "topology.from_node_id"),
+                    DatasetFilterAttribute("transport_nodes", "text"),
+                ],
+            ),
+        )
+
+        assert_dataset_dicts_equal(
+            result,
+            dataset_data_to_numpy(
+                {
+                    "roads": {
+                        "id": [1, 2, 3],
+                        "topology.from_node_id": [4, 5, 6],
+                    },
+                    "transport_nodes": {
+                        "id": [4, 5, 6],
+                        "text": ["a", "a", "b'"],
+                    },
+                }
+            ),
+        )
 
     @pytest.mark.parametrize(
         "datatype, values, min_val, max_val",

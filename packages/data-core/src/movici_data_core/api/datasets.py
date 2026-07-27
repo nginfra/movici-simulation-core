@@ -13,6 +13,7 @@ from movici_data_core.file_helpers import (
     store_file_to_disk,
 )
 from movici_data_core.marshalling import (
+    DatasetFilterIn,
     DatasetListOut,
     DatasetSummaryOut,
     DatasetWithDataOut,
@@ -78,10 +79,16 @@ async def delete_dataset(dataset_id: UUID, backend: DepBackend) -> OperationSucc
     },
 )
 async def get_dataset_data(
-    dataset_id: UUID, backend: DepBackend, background_tasks: fastapi.BackgroundTasks
-) -> DatasetWithDataOut:
+    dataset_id: UUID,
+    backend: DepBackend,
+    dataset_filter: t.Annotated[DatasetFilterIn, fastapi.Query()],
+    background_tasks: fastapi.BackgroundTasks
+):
     # TODO: use accept header to serve msgpack or json
-    result = await backend.datasets.get_dataset_as_file(dataset_id)
+
+    result = await backend.datasets.get_dataset_as_file(
+        dataset_id, dataset_filter=dataset_filter.to_domain()
+    )
     if result is None:
         raise ResourceDoesNotExist("dataset", id=dataset_id)
     background_tasks.add_task(os.remove, result)
