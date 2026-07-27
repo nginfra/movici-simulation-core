@@ -5,6 +5,7 @@ from uuid import UUID
 
 from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.domain_model import DatasetFilter
 from movici_data_core.exceptions import UnsupportedFileType
 from movici_data_core.file_helpers import tempfile_delete_on_error
 from movici_data_core.marshalling import UpdateIn, UpdateWithDataOut
@@ -28,12 +29,17 @@ class UpdateService:
         return await self.repository.updates.list()
 
     async def get_update_as_file(
-        self, update_id: UUID, filetype: FileType = FileType.JSON
+        self,
+        update_id: UUID,
+        filetype: FileType = FileType.JSON,
+        dataset_filter: DatasetFilter | None = None,
     ) -> pathlib.Path | None:
         if filetype not in self.serializer.supported_file_types():
             raise UnsupportedFileType(filetype)
 
-        result = await self.repository.updates.get_by_id(update_id, with_data=True)
+        result = await self.repository.updates.get_by_id(
+            update_id, with_data=True, dataset_filter=dataset_filter
+        )
         if result is None:
             return result
 
