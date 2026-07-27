@@ -5,11 +5,15 @@ import typing as t
 from uuid import UUID
 
 import sqlalchemy.exc
-from sqlalchemy import delete, insert, select
+from sqlalchemy import Select, delete, insert, select
 from sqlalchemy.orm import joinedload
 
 from movici_data_core.database import model as db
-from movici_data_core.domain_model import Update
+from movici_data_core.domain_model import (
+    DatasetFilter,
+    DatasetFilterAttribute,
+    Update,
+)
 from movici_data_core.exceptions import (
     InvalidAction,
     MoviciValidationError,
@@ -66,18 +70,22 @@ class UpdateRepository(SQLResourceRepository):
         scenario_id = self._ensure_scenario_id()
         return await self._exists(db.Update.scenario_id == scenario_id)
 
-    async def get_by_id(self, id: UUID, with_data=False) -> Update | None:
+    async def get_by_id(
+        self, id: UUID, with_data=False, dataset_filter: DatasetFilter | None = None
+    ) -> Update | None:
         record = await self.session.scalar(self.selector.where(db.Update.id == id))
         if record is None:
             return None
         result = record.to_domain()
         if with_data:
-            result = dataclasses.replace(result, data=await self._get_data(id=id))
+            result = dataclasses.replace(
+                result, data=await self._get_data(id=id, dataset_filter=dataset_filter)
+            )
         return result
 
-    async def _get_data(self, id: UUID) -> dict:
+    async def _get_data(self, id: UUID, dataset_filter: DatasetFilter | None = None) -> dict:
         return await EntityDataProcessor(
-            self.session, all_data=self.all_data, selector=UpdateDataSelector()
+            self.session, all_data=self.all_data, selector=UpdateDataSelector(dataset_filter)
         ).get(id)
 
     @map_errors(
@@ -164,10 +172,35 @@ class UpdateRepository(SQLResourceRepository):
 class UpdateDataSelector(EntityDataSelector):
     """Subclass of EntityDataSelector to be use for Updates"""
 
-    def select_linked_attribute(self, id: UUID):
-        return (
-            select(db.Attribute).join(db.UpdateAttribute).where(db.UpdateAttribute.update_id == id)
+    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
+        self.dataset_filter = dataset_filter
+
+    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
+        subquery = (
+            select(db.Attribute.id)
+            .join(db.UpdateAttribute)
+            .join(db.EntityType)
+            .join(db.AttributeType)
+            .where(db.UpdateAttribute.update_id == id)
         )
+
+        if self.dataset_filter is not None and not self.dataset_filter.is_empty():
+            subquery = subquery.where(self.filter_to_where_clause(self.dataset_filter))
+
+        return select(db.Attribute).where(db.Attribute.id.in_(subquery))
+
+    @staticmethod
+    def filter_to_where_clause(dataset_filter: DatasetFilter):
+        where_clause = db.AttributeType.name == "id"
+
+        def _to_where_clause(single_filter: DatasetFilterAttribute):
+            return (db.EntityType.name == single_filter.entity_group) & (
+                db.AttributeType.name == single_filter.attribute
+            )
+
+        for filter in dataset_filter.attributes:
+            where_clause |= _to_where_clause(filter)
+        return where_clause
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID):
         return insert(db.UpdateAttribute).values(update_id=id, attribute_id=attribute_id)
