@@ -22,7 +22,6 @@ from movici_data_core.domain_model import (
     Dataset,
     DatasetData,
     DatasetFilter,
-    DatasetFilterAttribute,
     DatasetFormat,
     DatasetSummary,
     DatasetType,
@@ -45,6 +44,7 @@ from .common import (
     EntityDataSelector,
     RawDataProcessor,
     SQLResourceRepository,
+    dataset_filter_to_where_clause,
     validated_payload,
     validated_payload_dict,
 )
@@ -469,10 +469,7 @@ class DatasetDataRepository(SQLResourceRepository):
 
 
 class DatasetDataSelector(EntityDataSelector):
-    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
-        self.dataset_filter = dataset_filter
-
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
         subquery = (
             select(db.Attribute.id)
             .join(db.DatasetAttribute)
@@ -482,22 +479,9 @@ class DatasetDataSelector(EntityDataSelector):
         )
 
         if self.dataset_filter is not None and not self.dataset_filter.is_empty():
-            subquery = subquery.where(self.filter_to_where_clause(self.dataset_filter))
+            subquery = subquery.where(dataset_filter_to_where_clause(self.dataset_filter))
 
-        return select(db.Attribute).where(db.Attribute.id.in_(subquery))
-
-    @staticmethod
-    def filter_to_where_clause(dataset_filter: DatasetFilter):
-        where_clause = db.AttributeType.name == "id"
-
-        def _to_where_clause(single_filter: DatasetFilterAttribute):
-            return (db.EntityType.name == single_filter.entity_group) & (
-                db.AttributeType.name == single_filter.attribute
-            )
-
-        for filter in dataset_filter.attributes:
-            where_clause |= _to_where_clause(filter)
-        return where_clause
+        return subquery
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
         return insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)

@@ -10,6 +10,7 @@ from uuid import UUID
 
 import numpy as np
 import orjson
+import sqlalchemy
 from sqlalchemy import Insert, Select, delete, exists, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -19,6 +20,7 @@ from movici_data_core.database.model import NamedResource, Options, to_domain_or
 from movici_data_core.domain_model import (
     AttributeType,
     DatasetData,
+    DatasetFilter,
     EntityType,
 )
 from movici_data_core.exceptions import (
@@ -161,13 +163,33 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
         return validated_payload_dict(self.__resource__, **payload)
 
 
-class EntityDataSelector(t.Protocol):
+class EntityDataSelector:
     """EntityDataSelector is a Protocol that EntityDataProcessor uses to retrieve SQLAlchemy
     queries for the resource it is operating on, ie Dataset or Update.
     """
 
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]: ...
-    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert: ...
+    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
+        self.dataset_filter = dataset_filter
+
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
+        raise NotImplementedError
+
+    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
+        raise NotImplementedError
+
+
+def dataset_filter_to_where_clause(dataset_filter: DatasetFilter):
+    attributes_per_entity_group: dict[str, set[str]] = {}
+    for attr in dataset_filter.attributes:
+        attributes_per_entity_group.setdefault(attr.entity_group, {"id"}).add(attr.attribute)
+
+    def _to_where_clause(entity_group: str, attributes: set[str]):
+        return (db.EntityType.name == entity_group) & (db.AttributeType.name.in_(attributes))
+
+    where_clause = sqlalchemy.sql.false()
+    for entity_group, attributes in attributes_per_entity_group.items():
+        where_clause |= _to_where_clause(entity_group, attributes)
+    return where_clause
 
 
 class EntityDataProcessor:
@@ -183,13 +205,16 @@ class EntityDataProcessor:
 
     async def get(self, id: UUID) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
-        query = self.selector.select_linked_attribute(id)
-
-        query = query.options(
-            joinedload(db.Attribute.rowptr),
-            joinedload(db.Attribute.data),
-            joinedload(db.Attribute.entity_type),
-            joinedload(db.Attribute.attribute_type),
+        subquery = self.selector.selector_subquery(id)
+        query = (
+            select(db.Attribute)
+            .where(db.Attribute.id.in_(subquery))
+            .options(
+                joinedload(db.Attribute.rowptr),
+                joinedload(db.Attribute.data),
+                joinedload(db.Attribute.entity_type),
+                joinedload(db.Attribute.attribute_type),
+            )
         )
         attrs = (await self.session.scalars(query)).all()
         for attribute in attrs:
@@ -205,7 +230,11 @@ class EntityDataProcessor:
         :param id: dataset UUID
         :param data: dataset data section in numpy format
         """
+
         for entity_group, attributes in data.items():
+            if "id" not in attributes:
+                raise InvalidAction(f"'id' array required for entity group '{entity_group}'")
+
             entity_type = await self.all_data.entity_types.ensure_entity_type(
                 EntityType(entity_group)
             )

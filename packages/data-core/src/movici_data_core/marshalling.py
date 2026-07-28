@@ -10,6 +10,7 @@ from uuid import UUID
 from jsonschema import SchemaError
 from pydantic import (
     AfterValidator,
+    AliasChoices,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -691,14 +692,32 @@ DatasetFilterAttributePathString = t.Annotated[
 
 
 class DatasetFilterIn(BaseModel):
-    attribute: list[DatasetFilterAttributePathString] = []
+    attributes: t.Annotated[
+        list[DatasetFilterAttributePathString],
+        Field(validation_alias=AliasChoices("attribute", "attributes")),
+    ] = []
 
     def to_domain(self) -> domain_model.DatasetFilter | None:
-        if not self.attribute:
+        if not self.attributes:
             return None
-        return domain_model.DatasetFilter(
-            [
-                domain_model.DatasetFilterAttribute(*attr.split(":", maxsplit=1))
-                for attr in self.attribute
-            ]
+        return domain_model.DatasetFilter(self.parse_attributes(self.attributes))
+
+    @staticmethod
+    def parse_attributes(attributes: list[str]):
+        return [
+            domain_model.DatasetFilterAttribute(*attr.split(":", maxsplit=1))
+            for attr in attributes
+        ]
+
+
+class ScenarioStateFilterIn:
+    attributes: t.Annotated[list[DatasetFilterAttributePathString], Field(alias="attribute")] = []
+    timestamp: t.Annotated[int, Field(ge=0)] = 0
+    dataset: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
+
+    def to_domain(self) -> domain_model.ScenarioStateFilter:
+        return domain_model.ScenarioStateFilter(
+            attributes=DatasetFilterIn.parse_attributes(self.attributes),
+            timestamp=self.timestamp,
+            dataset=self.dataset,
         )

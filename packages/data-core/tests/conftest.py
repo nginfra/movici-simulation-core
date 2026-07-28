@@ -182,6 +182,7 @@ def db(default_db):
 async def session(db: SQLAlchemyServer):
     async with db.get_session() as session:
         yield session
+        await session.commit()
 
 
 @pytest.fixture

@@ -33,6 +33,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStateFilter,
     SimulationInfo,
     Update,
     UpdateModel,
@@ -505,13 +506,14 @@ class TestAttributeTypeRepository:
 
         await repository.dataset_data.create(
             a_dataset.id,
-            {
-                an_entity_type.name: {
-                    an_attribute_type.name: {
-                        "data": np.array([1.0, 2.0]),
-                    },
+            dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": [1, 2],
+                        an_attribute_type.name: [1.0, 2.0],
+                    }
                 }
-            },
+            ),
             format=DatasetFormat.ENTITY_BASED,
         )
         with pytest.raises(InvalidAction):
@@ -1064,17 +1066,18 @@ class TestDatasetDataRepository:
         a_csr_attribute_type,
     ):
         assert not await repository.dataset_data.exists_for(a_dataset.id)
-        data = {
-            an_entity_type.name: {
-                an_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                },
-                a_csr_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                    "indptr": np.array([0, 2, 2]),
-                },
+        data = dataset_data_to_numpy(
+            {
+                an_entity_type.name: {
+                    "id": [1, 2],
+                    an_attribute_type.name: [1.0, 2.0],
+                    a_csr_attribute_type.name: {
+                        "data": [1.0, 2.0],
+                        "indptr": [0, 2, 2],
+                    },
+                }
             }
-        }
+        )
         await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
         assert await repository.dataset_data.exists_for(a_dataset.id)
         result = await repository.dataset_data.get_entity_data(a_dataset.id)
@@ -1091,23 +1094,22 @@ class TestDatasetDataRepository:
         another_dataset = Dataset("another_dataset", "Another Dataset", a_dataset.dataset_type)
 
         another_dataset_id = await repository.datasets.create(another_dataset)
-        data = {
-            an_entity_type.name: {
-                an_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                }
-            }
-        }
+        data = dataset_data_to_numpy(
+            {an_entity_type.name: {"id": [1, 2], an_attribute_type.name: [1.0, 2.0]}}
+        )
         await repository.dataset_data.create(
             another_dataset_id,
-            {
-                an_entity_type.name: {
-                    a_csr_attribute_type.name: {
-                        "data": np.array([1.0, 2.0]),
-                        "indptr": np.array([0, 2, 2]),
-                    },
+            dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": [3, 4],
+                        a_csr_attribute_type.name: {
+                            "data": [1.0, 2.0],
+                            "indptr": [0, 2, 2],
+                        },
+                    }
                 }
-            },
+            ),
             format=DatasetFormat.ENTITY_BASED,
         )
         await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
@@ -1184,14 +1186,23 @@ class TestDatasetDataRepository:
 
         await repository.dataset_data.create(
             a_dataset.id,
-            {an_entity_type.name: {"some.attr": {"data": np.asarray(values, dtype=datatype)}}},
+            dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": np.arange(len(values), dtype=int),
+                        "some.attr": np.asarray(values, dtype=datatype),
+                    }
+                }
+            ),
             format=DatasetFormat.ENTITY_BASED,
         )
         attribute = await repository.session.scalar(
             select(db.Attribute)
             .options(joinedload(db.Attribute.data))
+            .join(db.AttributeType)
             .join(db.DatasetAttribute)
             .where(db.DatasetAttribute.dataset_id == a_dataset.id)
+            .where(db.AttributeType.name == "some.attr")
             .limit(1)
         )
         assert attribute is not None
@@ -1220,7 +1231,14 @@ class TestDatasetDataRepository:
 
         await repository.dataset_data.create(
             a_dataset.id,
-            {an_entity_type.name: {"some.attr": {"data": np.asarray(values)}}},
+            dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": np.arange(len(values), dtype=int),
+                        "some.attr": values,
+                    }
+                }
+            ),
             format=DatasetFormat.ENTITY_BASED,
         )
 
@@ -1236,13 +1254,9 @@ class TestDatasetDataRepository:
     async def test_deletes_entity_data(
         self, repository: SQLAlchemyRepository, a_dataset, an_entity_type, an_attribute_type
     ):
-        data = {
-            an_entity_type.name: {
-                an_attribute_type.name: {
-                    "data": np.array([1.0, 2.0]),
-                }
-            }
-        }
+        data = dataset_data_to_numpy(
+            {an_entity_type.name: {"id": [1, 2], an_attribute_type.name: [1.0, 2.0]}}
+        )
         await repository.dataset_data.create(a_dataset.id, data, format=DatasetFormat.ENTITY_BASED)
         attribute_count = await repository.session.scalar(select(func.count(db.Attribute.id)))
         assert attribute_count != 0
@@ -1365,40 +1379,23 @@ class TestDatasetDataRepository:
             ],
         )
 
-    async def test_raises_not_found_when_creating_scenario_when_workspace_gets_deleted(
-        self, db: SQLAlchemyServer, a_scenario, a_workspace
+    async def test_cannot_add_entity_data_without_entity_ids(
+        self, repository: SQLAlchemyRepository, a_dataset
     ):
-        b1 = Barrier(2)
-        b2 = Barrier(2)
 
-        async def retrieve_workspace_and_create_scenario(
-            server: SQLAlchemyServer, workspace_id: uuid.UUID
-        ):
-            async with server.get_backend() as backend:
-                workspace = await backend.workspaces.get(id=workspace_id)
-                assert workspace is not None
-                await b1.wait()
-                await b2.wait()
-
-                await backend.for_workspace(workspace_id).scenarios.create(
-                    Scenario("a_new_scenario", "some name", "descripton"),
-                    ModelConfigValidator(),
-                )
-
-        async def delete_workspace(server: SQLAlchemyServer, workspace_id: uuid.UUID):
-            async with server.get_backend() as backend:
-                await b1.wait()
-
-                await backend.workspaces.delete(workspace_id)
-            await b2.wait()
-
-        with pytest.raises(ResourceDoesNotExist) as exc:
-            await asyncio.gather(
-                retrieve_workspace_and_create_scenario(db, workspace_id=a_workspace.id),
-                delete_workspace(db, workspace_id=a_workspace.id),
+        with pytest.raises(InvalidAction) as exc:
+            await repository.dataset_data.create(
+                a_dataset.id,
+                dataset_data_to_numpy(
+                    {
+                        "roads": {
+                            "topology.from_node_id": [4, 5, 6],
+                        },
+                    }
+                ),
+                format=DatasetFormat.ENTITY_BASED,
             )
-        assert exc.value.id == a_workspace.id
-        assert exc.value.resource_type == "workspace"
+        assert exc.value.message == "'id' array required for entity group 'roads'"
 
 
 class TestScenarioRepository:
@@ -1520,6 +1517,115 @@ class TestScenarioRepository:
         scenario = await repository.scenarios.for_id(a_scenario.id).get()
         assert scenario is not None
         assert scenario.has_updates
+
+    async def test_get_full_scenario_state_at_t0(
+        self, repository: SQLAlchemyRepository, a_scenario, create_update, a_dataset
+    ):
+        await repository.dataset_data.create(
+            a_dataset.id,
+            data=dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2, 3],
+                    },
+                    "roads": {
+                        "id": [4, 5, 6, 7],
+                        "transport.capacity": [12.0, 13.0, 14.0, 15.0],
+                    },
+                }
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={"transport_nodes": {"id": [1, 3], "transport.capacity": [130.0, 140.0]}},
+        )
+        await create_update(
+            timestamp=0,
+            iteration=1,
+            data={"transport_nodes": {"id": [2], "transport.capacity": [150.0]}},
+        )
+
+        await create_update(  # an update that shouldn't be included
+            timestamp=1,
+            iteration=0,
+            data={"transport_nodes": {"id": [2], "transport.capacity": [200.0]}},
+        )
+        result = await repository.scenarios.for_id(a_scenario.id).get_state(
+            ScenarioStateFilter.all_attributes(dataset=a_dataset.name, timestamp=0)
+        )
+        await repository.session.commit()
+        assert dataset_dicts_equal(
+            result,
+            dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2, 3],
+                        "transport.capacity": [130.0, 150.0, 140.0],
+                    },
+                    "roads": {
+                        "id": [4, 5, 6, 7],
+                        "transport.capacity": [12.0, 13.0, 14.0, 15.0],
+                    },
+                }
+            ),
+        )
+
+    async def test_get_filtered_scenario_state_at_t0(
+        self, repository: SQLAlchemyRepository, a_scenario, create_update, a_dataset
+    ):
+        await repository.dataset_data.create(
+            a_dataset.id,
+            data=dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2, 3],
+                    },
+                    "roads": {
+                        "id": [4, 5, 6, 7],
+                        "transport.capacity": [12.0, 13.0, 14.0, 15.0],
+                    },
+                }
+            ),
+            format=DatasetFormat.ENTITY_BASED,
+        )
+
+        await create_update(
+            timestamp=0,
+            iteration=0,
+            data={
+                "transport_nodes": {"id": [1, 2, 3], "transport.capacity": [130.0, 150.0, 140.0]}
+            },
+        )
+        await create_update(
+            timestamp=0,
+            iteration=1,
+            data={"roads": {"id": [4], "transport.capacity": [50.0]}},
+        )
+
+        result = await repository.scenarios.for_id(a_scenario.id).get_state(
+            ScenarioStateFilter(
+                attributes=[
+                    DatasetFilterAttribute("transport_nodes", "transport.capacity"),
+                ],
+                dataset=a_dataset.name,
+                timestamp=0,
+            )
+        )
+        await repository.session.commit()
+        assert dataset_dicts_equal(
+            result,
+            dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2, 3],
+                        "transport.capacity": [130.0, 150.0, 140.0],
+                    },
+                }
+            ),
+        )
 
     async def test_create_scenario_with_no_models_and_datasets(
         self, repository: SQLAlchemyRepository, get_model_config_validator
@@ -1989,13 +2095,13 @@ class TestScenarioRepository:
             "description",
         }
 
-    async def test_raises_not_found_when_creating_dataset_when_workspace_gets_deleted(
-        self, db: SQLAlchemyServer, a_dataset_type, a_workspace
+    async def test_raises_not_found_when_creating_scenario_when_workspace_gets_deleted(
+        self, db: SQLAlchemyServer, a_scenario, a_workspace
     ):
         b1 = Barrier(2)
         b2 = Barrier(2)
 
-        async def retrieve_workspace_and_create_dataset(
+        async def retrieve_workspace_and_create_scenario(
             server: SQLAlchemyServer, workspace_id: uuid.UUID
         ):
             async with server.get_backend() as backend:
@@ -2004,8 +2110,9 @@ class TestScenarioRepository:
                 await b1.wait()
                 await b2.wait()
 
-                await backend.for_workspace(workspace_id).datasets.create(
-                    Dataset("a_new_dataset", "some name", dataset_type=a_dataset_type)
+                await backend.for_workspace(workspace_id).scenarios.create(
+                    Scenario("a_new_scenario", "some name", "descripton"),
+                    ModelConfigValidator(),
                 )
 
         async def delete_workspace(server: SQLAlchemyServer, workspace_id: uuid.UUID):
@@ -2017,7 +2124,7 @@ class TestScenarioRepository:
 
         with pytest.raises(ResourceDoesNotExist) as exc:
             await asyncio.gather(
-                retrieve_workspace_and_create_dataset(db, workspace_id=a_workspace.id),
+                retrieve_workspace_and_create_scenario(db, workspace_id=a_workspace.id),
                 delete_workspace(db, workspace_id=a_workspace.id),
             )
         assert exc.value.id == a_workspace.id
@@ -2196,6 +2303,22 @@ class TestUpdateRepository:
         with pytest.raises(ResourceAlreadyExists) as e:
             await create_update(timestamp=0, iteration=1, ids=[0, 1], array=[2.0, 3.0])
         assert e.value.name == "t0_1"
+
+    async def test_cannot_create_update_for_dataset_not_in_scenario(
+        self, repository: SQLAlchemyRepository, create_update, a_dataset_type
+    ):
+        dataset = Dataset("a_new_dataset", "a_new_dataset", dataset_type=a_dataset_type)
+        dataset_id = await repository.datasets.create(dataset)
+
+        with pytest.raises(ResourceDoesNotExist) as exc:
+            await create_update(
+                timestamp=0,
+                iteration=1,
+                ids=[0, 1],
+                array=[2.0, 3.0],
+                dataset=dataclasses.replace(dataset, id=dataset_id),
+            )
+        assert exc.value.message == "Dataset does not exist or is not part of this scenario"
 
     async def test_raises_validation_error_for_incorrect_scenario_model(
         self, repository: SQLAlchemyRepository, a_scenario

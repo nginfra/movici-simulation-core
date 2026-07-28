@@ -11,7 +11,6 @@ from sqlalchemy.orm import joinedload
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
     DatasetFilter,
-    DatasetFilterAttribute,
     Update,
 )
 from movici_data_core.exceptions import (
@@ -23,7 +22,12 @@ from movici_data_core.exceptions import (
     map_errors,
 )
 
-from .common import EntityDataProcessor, EntityDataSelector, SQLResourceRepository
+from .common import (
+    EntityDataProcessor,
+    EntityDataSelector,
+    SQLResourceRepository,
+    dataset_filter_to_where_clause,
+)
 
 
 @dataclasses.dataclass
@@ -128,7 +132,11 @@ class UpdateRepository(SQLResourceRepository):
             .where(db.Dataset.name == obj.dataset.name)
         )
         if dataset is None:
-            raise ResourceDoesNotExist("dataset", name=obj.dataset.name)
+            raise ResourceDoesNotExist(
+                "dataset",
+                name=obj.dataset.name,
+                message="Dataset does not exist or is not part of this scenario",
+            )
 
         update_id = t.cast(
             UUID,
@@ -172,10 +180,7 @@ class UpdateRepository(SQLResourceRepository):
 class UpdateDataSelector(EntityDataSelector):
     """Subclass of EntityDataSelector to be use for Updates"""
 
-    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
-        self.dataset_filter = dataset_filter
-
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
         subquery = (
             select(db.Attribute.id)
             .join(db.UpdateAttribute)
@@ -185,22 +190,9 @@ class UpdateDataSelector(EntityDataSelector):
         )
 
         if self.dataset_filter is not None and not self.dataset_filter.is_empty():
-            subquery = subquery.where(self.filter_to_where_clause(self.dataset_filter))
+            subquery = subquery.where(dataset_filter_to_where_clause(self.dataset_filter))
 
-        return select(db.Attribute).where(db.Attribute.id.in_(subquery))
-
-    @staticmethod
-    def filter_to_where_clause(dataset_filter: DatasetFilter):
-        where_clause = db.AttributeType.name == "id"
-
-        def _to_where_clause(single_filter: DatasetFilterAttribute):
-            return (db.EntityType.name == single_filter.entity_group) & (
-                db.AttributeType.name == single_filter.attribute
-            )
-
-        for filter in dataset_filter.attributes:
-            where_clause |= _to_where_clause(filter)
-        return where_clause
+        return subquery
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID):
         return insert(db.UpdateAttribute).values(update_id=id, attribute_id=attribute_id)

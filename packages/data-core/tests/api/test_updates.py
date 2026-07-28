@@ -67,7 +67,7 @@ def test_create_update(
         url="/updates",
         params={"scenario": str(scenario_id)},
         headers={"content-type": get_mimetype(filetype)},
-        data=serialized,
+        content=serialized,
     ).json()
     update_id = result.pop("id")
     assert update_id is not None

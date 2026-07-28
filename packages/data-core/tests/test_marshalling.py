@@ -461,7 +461,7 @@ def test_model_type_raises_on_invalid_jsonschema():
 
 def test_dataset_filter_in():
     attribute_queries = ["some_entities:some_attr", "more_entities:other_attr"]
-    assert DatasetFilterIn(attribute=attribute_queries).to_domain() == DatasetFilter(
+    assert DatasetFilterIn(attributes=attribute_queries).to_domain() == DatasetFilter(
         attributes=[
             DatasetFilterAttribute("some_entities", "some_attr"),
             DatasetFilterAttribute("more_entities", "other_attr"),
@@ -484,4 +484,4 @@ def test_dataset_filter_in():
 )
 def test_invalid_dataset_filter(filter):
     with pytest.raises(ValidationError):
-        DatasetFilterIn(attribute=[filter])
+        DatasetFilterIn(attributes=[filter])
