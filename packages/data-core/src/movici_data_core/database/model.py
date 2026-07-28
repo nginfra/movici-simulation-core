@@ -326,12 +326,15 @@ class DataArray(Base):
     )
     attribute: Mapped[Attribute] = relationship(back_populates="data")
 
-    def to_numpy(self) -> np.ndarray:
+    def to_numpy(self, copy=False) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
         :return: Reconstructed NumPy array
         """
-        return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+        result = np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+        if copy:
+            result = result.copy()
+        return result
 
 
 class RowptrArray(Base):
@@ -345,12 +348,15 @@ class RowptrArray(Base):
     )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
-    def to_numpy(self) -> np.ndarray:
+    def to_numpy(self, copy=False) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
         :return: Reconstructed NumPy array
         """
-        return np.frombuffer(self.data, dtype=int)
+        result = np.frombuffer(self.data, dtype=int)
+        if copy:
+            result = result.copy()
+        return result
 
 
 class Attribute(Base):
@@ -364,8 +370,8 @@ class Attribute(Base):
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
     length: Mapped[int]
-    entity_type: Mapped[EntityType] = relationship()
-    attribute_type: Mapped[AttributeType] = relationship()
+    entity_type: Mapped[EntityType] = relationship(lazy="joined", innerjoin=True)
+    attribute_type: Mapped[AttributeType] = relationship(lazy="joined", innerjoin=True)
     data: Mapped[DataArray] = relationship()
     rowptr: Mapped[RowptrArray | None] = relationship()
 
@@ -588,7 +594,9 @@ class UpdateAttribute(Base):
     update_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("update.id", ondelete="CASCADE"), index=True
     )
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
 
     update: Mapped[Update] = relationship()
     attribute: Mapped[Attribute] = relationship()
