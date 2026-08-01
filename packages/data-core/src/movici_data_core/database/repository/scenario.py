@@ -7,7 +7,7 @@ import typing as t
 from uuid import UUID
 
 import numpy as np
-from sqlalchemy import ColumnElement, Select, delete, exists, insert, select, update
+from sqlalchemy import ColumnElement, delete, exists, insert, select, update
 from sqlalchemy.orm import contains_eager, joinedload, selectinload
 
 from movici_data_core import bounding_box
@@ -603,7 +603,7 @@ class ScenarioStateAggregator:
         result = self.combine_attributes(attributes, copy=True)
         for eg, data in result.items():
             if "id" not in data:
-                raise ValueError(f"No 'id' array found for entity group {eg}")
+                raise ValueError(f"No 'id' array found for entity group '{eg}'")
             self.indexes[eg] = Index(data["id"]["data"])
             self.state = result
 
@@ -614,11 +614,18 @@ class ScenarioStateAggregator:
         result = self.combine_attributes(attributes, copy=True)
         for entity_group, entity_group_data in result.items():
             if "id" not in entity_group_data:
-                raise ValueError(f"No 'id' array found for entity group {entity_group}")
+                raise ValueError(f"No 'id' array found for entity group '{entity_group}'")
             if (index := self.indexes.get(entity_group)) is None:
-                raise ValueError(f"'{entity_group} is not valid entity group for this dataset")
+                raise ValueError(f"'{entity_group}' is not valid entity group for this dataset")
 
-            indices = t.cast(np.ndarray, index[entity_group_data["id"]["data"]])
+            ids = entity_group_data["id"]["data"]
+            indices = t.cast(np.ndarray, index[ids])
+
+            if np.any(invalid := (indices == -1)):
+                raise ValueError(
+                    f"id{'s' if len(invalid) > 1 else ''} "
+                    f"{', '.join(str(val) for val in ids[invalid])} not found in dataset"
+                )
             current_state = self.state[entity_group]
             for attribute_name, attr_data in entity_group_data.items():
                 if attribute_name == "id":
@@ -634,10 +641,10 @@ class ScenarioStateAggregator:
                         is_csr=is_csr,
                     )
                 current_data = current_state[attribute_name]
+                if dtype := determine_new_unicode_dtype(data, current_data["data"]):
+                    current_data["data"] = current_data["data"].astype(dtype)
                 if is_csr:
                     current_rowptr = get_rowptr(t.cast(dict, current_data))
-                    if dtype := determine_new_unicode_dtype(data, current_data["data"]):
-                        current_data = current_data["data"].astype(dtype)
 
                     new_data, new_rowptr = update_csr_array(
                         data=current_data["data"],
@@ -671,32 +678,16 @@ class ScenarioStateAggregator:
         for attribute in attributes:
             attribute_name = attribute.attribute_type.name
             entity_group_name = attribute.entity_type.name
-            if attribute_name in result:
-                raise ValueError(f"Duplicate attribute name found {attribute_name}")
+            entity_group_data = result.setdefault(entity_group_name, {})
+            if attribute_name in entity_group_data:
+                raise ValueError(
+                    f"Duplicate attribute '{attribute_name}' found in"
+                    f" entity group '{entity_group_name}'"
+                )
 
             data = attribute.data.to_numpy(copy=copy)
             attr_data: NumpyAttributeData = {"data": data}
             if attribute.rowptr is not None:
                 attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy(copy=copy)
-            result.setdefault(entity_group_name, {})[attribute_name] = attr_data
+            entity_group_data[attribute_name] = attr_data
         return result
-
-
-def scenario_state_subquery(
-    scenario_id: UUID, dataset_id: UUID, state_filter: ScenarioStateFilter
-) -> Select[tuple[UUID]]:
-    subquery = (
-        select(db.Attribute.id)
-        .join(db.UpdateAttribute)
-        .join(db.EntityType)
-        .join(db.AttributeType)
-        .join(db.Update)
-        .where(db.Update.scenario_id == scenario_id)
-        .where(db.Update.dataset_id == dataset_id)
-        .where(db.Update.timestamp <= state_filter.timestamp)
-    )
-
-    if not state_filter.is_empty():
-        subquery = subquery.where(dataset_filter_to_where_clause(state_filter))
-
-    return subquery

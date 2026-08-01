@@ -69,7 +69,7 @@ def get_py_type(dtype: np.dtype):
         return int
     if dtype.kind == "f":
         return float
-    if dtype.kind == "u":
+    if dtype.kind == "U":
         return str
     return None
 
