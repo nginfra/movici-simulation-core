@@ -114,15 +114,14 @@ def _dataset_dicts_equal_helper(
             )
 
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
-        if np.issubdtype(
-            getattr(a, "dtype", None) or getattr(b, "dtype", None), float
-        ) and not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
-            current_errors[current_path] = f"{a} not equal to {b}"
+        if np.issubdtype(getattr(a, "dtype", None) or getattr(b, "dtype", None), float):
+            if not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
+                current_errors[current_path] = f"{a} not equal to {b}"
 
-        if not np.array_equal(a, b):
+        elif not np.array_equal(a, b):
             current_errors[current_path] = f"{a} not equal to {b}"
     elif a is not None and b is not None and (isinstance(a, float) or isinstance(b, float)):
-        if not np.isclose(a, b, rtol=rtol, atol=atol):
+        if not np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
             current_errors[current_path] = f"{a} not close to {b}"
     else:
         if not a == b:
