@@ -1556,7 +1556,6 @@ class TestScenarioRepository:
         result = await repository.scenarios.for_id(a_scenario.id).get_state(
             ScenarioStateFilter.all_attributes(dataset=a_dataset.name, timestamp=0)
         )
-        await repository.session.commit()
         assert dataset_dicts_equal(
             result,
             dataset_data_to_numpy(
@@ -1614,7 +1613,6 @@ class TestScenarioRepository:
                 timestamp=0,
             )
         )
-        await repository.session.commit()
         assert dataset_dicts_equal(
             result,
             dataset_data_to_numpy(

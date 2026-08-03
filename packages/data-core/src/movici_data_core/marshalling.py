@@ -323,6 +323,10 @@ class DatasetWithDataOut(ShortDatasetOut):
     data: dict
 
 
+class ScenarioStateOut(BaseModel):
+    data: dict
+
+
 class UpdateModelIn(InModel[UpdateModel]):
     name: NameStr
     type: NameStr | None = None
@@ -690,12 +694,15 @@ DatasetFilterAttributePathString = t.Annotated[
     str, AfterValidator(validate_dataset_filter_attribute_path_string)
 ]
 
+DatasetFilterAttributeList = t.Annotated[
+    list[DatasetFilterAttributePathString],
+    BeforeValidator(lambda a: a if isinstance(a, list) else [a]),
+    Field(validation_alias=AliasChoices("attribute", "attributes")),
+]
+
 
 class DatasetFilterIn(BaseModel):
-    attributes: t.Annotated[
-        list[DatasetFilterAttributePathString],
-        Field(validation_alias=AliasChoices("attribute", "attributes")),
-    ] = []
+    attributes: DatasetFilterAttributeList = []
 
     def to_domain(self) -> domain_model.DatasetFilter | None:
         if not self.attributes:
@@ -710,10 +717,10 @@ class DatasetFilterIn(BaseModel):
         ]
 
 
-class ScenarioStateFilterIn:
-    attributes: t.Annotated[list[DatasetFilterAttributePathString], Field(alias="attribute")] = []
-    timestamp: t.Annotated[int, Field(ge=0)] = 0
+class ScenarioStateFilterIn(BaseModel):
     dataset: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
+    attributes: DatasetFilterAttributeList = []
+    timestamp: t.Annotated[int, Field(ge=0)]
 
     def to_domain(self) -> domain_model.ScenarioStateFilter:
         return domain_model.ScenarioStateFilter(

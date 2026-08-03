@@ -249,7 +249,10 @@ class SQLAlchemyBackend:
     @property
     def scenarios(self):
         return self.scenario_service_cls(
-            self.repository, single_scenario_mode=self.single_scenario_mode
+            self.repository,
+            single_scenario_mode=self.single_scenario_mode,
+            serializer=self.serializer,
+            tmpfile_dir=self.tmpfile_dir,
         )
 
     @property
