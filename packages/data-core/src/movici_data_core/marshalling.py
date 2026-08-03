@@ -28,6 +28,7 @@ from movici_data_core.database.model import (
     DEFAULT_DISPLAY_NAME_MAX_LENGTH,
     DEFAULT_NAME_MAX_LENGTH,
     SCENARIO_DESCRIPTION_MAX_LENGTH,
+    DatabaseMode,
     snake_case_pattern,
 )
 from movici_data_core.domain_model import (
@@ -665,11 +666,31 @@ class AttributeSummaryOut(OutModel[AttributeSummary]):
     max_val: bool | int | float | None
 
 
+class OptionsIn(BaseModel):
+    mode: DatabaseMode | None = None
+    strict_dataset_types: bool | None = None
+    strict_entity_types: bool | None = None
+    strict_attribute_types: bool | None = None
+    strict_model_types: bool | None = None
+    strict_scenario_datasets: bool | None = None
+    immutable_workspace_names: bool | None = None
+
+
+class OptionsOut(BaseModel):
+    mode: DatabaseMode
+    strict_dataset_types: bool
+    strict_entity_types: bool
+    strict_attribute_types: bool
+    strict_model_types: bool
+    strict_scenario_datasets: bool
+    immutable_workspace_names: bool
+
+
 class OperationSuccess(BaseModel):
-    id: UUID | str
+    id: UUID | str | None = None
     message: str
     result: t.Literal["ok"] = "ok"
 
     @classmethod
-    def for_path_operation(cls, resource: str, id: UUID, verb: str):
+    def for_path_operation(cls, resource: str, verb: str, id: UUID | None = None):
         return OperationSuccess(id=id, message=f"{resource} {verb}")
