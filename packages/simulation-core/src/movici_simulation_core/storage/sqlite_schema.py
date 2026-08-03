@@ -37,7 +37,9 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 Base = declarative_base()
 
 
-class DatasetFormat(str, enum.Enum):
+# Add a trailing underscore to prevent name clashes in Sphinx with movici-data-core
+# The module is deprecated and will be replaced by movici-data-core
+class DatasetFormat_(str, enum.Enum):
     """Format types for dataset storage.
 
     Matches the ``format`` field used in the platform:
@@ -217,7 +219,7 @@ class InitialDataset(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     dataset_name = Column(String, unique=True, nullable=False)
-    format = Column(Enum(DatasetFormat), nullable=False)
+    format = Column(Enum(DatasetFormat_), nullable=False)
     data = Column(LargeBinary)
 
     attributes = relationship(
@@ -416,7 +418,7 @@ class SimulationDatabase:
         self,
         dataset_name: str,
         dataset_data: t.Union[dict, bytes],
-        format: DatasetFormat = DatasetFormat.UNSTRUCTURED,
+        format: DatasetFormat_ = DatasetFormat_.UNSTRUCTURED,
     ) -> int:
         """Store initial dataset snapshot in database.
 
@@ -433,7 +435,7 @@ class SimulationDatabase:
                 initial_dataset = InitialDataset(dataset_name=dataset_name, format=format)
                 session.add(initial_dataset)
 
-                if format == DatasetFormat.ENTITY_BASED:
+                if format == DatasetFormat_.ENTITY_BASED:
                     for entity_group, attributes in dataset_data.items():
                         if not isinstance(attributes, dict):
                             continue
@@ -462,10 +464,10 @@ class SimulationDatabase:
                             )
                             session.add(initial_dataset_attr)
 
-                elif format == DatasetFormat.UNSTRUCTURED:
+                elif format == DatasetFormat_.UNSTRUCTURED:
                     initial_dataset.data = orjson.dumps(dataset_data)
 
-                elif format == DatasetFormat.BINARY:
+                elif format == DatasetFormat_.BINARY:
                     if not isinstance(dataset_data, bytes):
                         raise TypeError("Binary format requires bytes data")
                     initial_dataset.data = dataset_data
@@ -489,7 +491,7 @@ class SimulationDatabase:
             if not initial_dataset:
                 return None
 
-            if initial_dataset.format == DatasetFormat.ENTITY_BASED:
+            if initial_dataset.format == DatasetFormat_.ENTITY_BASED:
                 data = {}
                 for attr in initial_dataset.attributes:
                     if attr.entity_group not in data:
@@ -497,10 +499,10 @@ class SimulationDatabase:
                     data[attr.entity_group][attr.attribute_name] = attr.get_data()
                 return data
 
-            elif initial_dataset.format == DatasetFormat.UNSTRUCTURED:
+            elif initial_dataset.format == DatasetFormat_.UNSTRUCTURED:
                 return orjson.loads(initial_dataset.data)
 
-            elif initial_dataset.format == DatasetFormat.BINARY:
+            elif initial_dataset.format == DatasetFormat_.BINARY:
                 return initial_dataset.data
 
             return None

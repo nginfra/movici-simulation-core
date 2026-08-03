@@ -1,13 +1,13 @@
 
 
 postprocessing
-===============
+==============
 
 
 
 
 results
---------
+-------
 
 .. automodule:: movici_simulation_core.postprocessing.results
    :members:
@@ -17,7 +17,7 @@ results
 
 
 sqlite\_results
-----------------
+---------------
 
 .. automodule:: movici_simulation_core.postprocessing.sqlite_results
    :members:

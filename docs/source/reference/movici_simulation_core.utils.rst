@@ -1,13 +1,13 @@
 
 
 utils
-======
+=====
 
 
 
 
 attribute\_loader
-------------------
+-----------------
 
 .. automodule:: movici_simulation_core.utils.attribute_loader
    :members:
@@ -17,7 +17,7 @@ attribute\_loader
 
 
 data\_mask
------------
+----------
 
 .. automodule:: movici_simulation_core.utils.data_mask
    :members:
@@ -27,7 +27,7 @@ data\_mask
 
 
 lifecycle
-----------
+---------
 
 .. automodule:: movici_simulation_core.utils.lifecycle
    :members:
@@ -37,7 +37,7 @@ lifecycle
 
 
 logging
---------
+-------
 
 .. automodule:: movici_simulation_core.utils.logging
    :members:
@@ -47,7 +47,7 @@ logging
 
 
 path
------
+----
 
 .. automodule:: movici_simulation_core.utils.path
    :members:
@@ -57,7 +57,7 @@ path
 
 
 strategies
------------
+----------
 
 .. automodule:: movici_simulation_core.utils.strategies
    :members:
@@ -67,7 +67,7 @@ strategies
 
 
 time
------
+----
 
 .. automodule:: movici_simulation_core.utils.time
    :members:
@@ -77,7 +77,7 @@ time
 
 
 unicode
---------
+-------
 
 .. automodule:: movici_simulation_core.utils.unicode
    :members:

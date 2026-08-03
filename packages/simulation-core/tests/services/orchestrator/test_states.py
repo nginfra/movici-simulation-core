@@ -1,3 +1,4 @@
+import typing as t
 from unittest.mock import Mock, call
 
 import pytest
@@ -22,7 +23,7 @@ from movici_simulation_core.services.orchestrator.states import (
 
 
 class BaseTestState:
-    state_cls: type[OrchestratorState]
+    state_cls: t.Type[OrchestratorState]
 
     @pytest.fixture
     def state(self, context):

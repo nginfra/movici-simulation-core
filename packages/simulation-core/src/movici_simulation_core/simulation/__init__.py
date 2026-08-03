@@ -62,7 +62,7 @@ class Simulation(Extensible):
         if debug:
             self.settings.log_level = "DEBUG"
 
-        self.strategies: t.List[type] = []
+        self.strategies: t.List[t.Type] = []
         self.set_default_strategies()
 
         if use_global_plugins:
@@ -196,8 +196,8 @@ class Simulation(Extensible):
         `Model.get_schema_attributes` method.
 
         :param identifier: A unique identifier for a model type. When configuring the `Simulation`
-            using `Simulation.configure`, this identifier must match the `type` key of the model
-            config
+            using ``Simulation.configure``, this identifier must match the ``type`` key of the
+            model config
         :param model_type: The `Model` subclass to register
 
         """

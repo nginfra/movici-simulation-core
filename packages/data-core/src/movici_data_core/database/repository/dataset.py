@@ -236,15 +236,15 @@ class DatasetRepository(SQLResourceRepository):
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
     ) -> t.List[ScenarioDataset]:
-        r"""Ensure that the :class:`Dataset`s of a sequences of :class:`ScenarioDataset`\s exist in
-        the database or raise an error. If one or more of the ``Dataset``s do not exist and the
+        r"""Ensure that the :class:`Dataset`\s of a sequences of :class:`ScenarioDataset`\s exist
+        in the database or raise an error. If one or more of the ``Dataset``s do not exist and the
         database option ``STRICT_SCENARIO_DATASETS`` is unset, the non-existing datasets will be
         created as a stub. If any of the newly created datasets has a dataset type that does not
         yet exist, then the ``STRICT_DATASET_TYPES`` database option must also be unset. Otherwise
         an error will be raise.  An error is also raised if a ``Dataset`` already exists but with a
         different dataset type.
 
-        :param datasets: The ``ScenarioDataset``s to ensure
+        :param datasets: The ``ScenarioDataset``\s to ensure
         :return: The datasets as they exist in the database, as ``ScenarioDataset`` objects, in
             the same order as the input sequence
         """
