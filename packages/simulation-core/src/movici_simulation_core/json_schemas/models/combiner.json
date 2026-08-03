@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/combiner/1.0.0",
+  "type": "object",
+  "required": [
+    "attribute"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "attribute": {
+      "type": "object",
+      "required": [
+        "dataset",
+        "entity_group",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "dataset": {
+          "type": "string",
+          "movici.type": "dataset"
+        },
+        "entity_group": {
+          "type": "string",
+          "movici.type": "entityGroup"
+        },
+        "name": {
+          "type": "string",
+          "movici.type": "attribute"
+        }
+      }
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "sum",
+        "mean",
+        "min",
+        "max"
+      ]
+    }
+  }
+}
