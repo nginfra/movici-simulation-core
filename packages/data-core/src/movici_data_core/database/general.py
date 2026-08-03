@@ -11,6 +11,8 @@ from movici_data_core.database.model import (
     DEFAULT_SCENARIO_NAME,
     DEFAULT_SCHEMA_VERSION,
     DEFAULT_WORKSPACE_NAME,
+    AttributeDataType,
+    AttributeType,
     DatabaseMode,
     Metadata,
     Options,
@@ -63,6 +65,77 @@ async def initialize_database(session: AsyncSession, mode: DatabaseMode):
             **_default_flags(mode),
         )
     )
+    await create_default_attribute_types(session)
+
+
+async def create_default_attribute_types(session: AsyncSession):
+    default_attributes = [
+        dict(
+            name="id",
+            has_rowptr=False,
+            unit_type=AttributeDataType.INT,
+            unit_shape=(),
+            unit="",
+            description="Entity ID",
+        ),
+        dict(
+            name="geometry.x",
+            has_rowptr=False,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(),
+            unit="m",
+            description="Point geometry x component",
+        ),
+        dict(
+            name="geometry.y",
+            has_rowptr=False,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(),
+            unit="m",
+            description="Point geometry y component",
+        ),
+        dict(
+            name="geometry.linestring_2d",
+            has_rowptr=True,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(2,),
+            unit="m",
+            description="2D linestring geometry",
+        ),
+        dict(
+            name="geometry.linestring_3d",
+            has_rowptr=True,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(3,),
+            unit="m",
+            description="3D linestring geometry",
+        ),
+        dict(
+            name="geometry.polygon",
+            has_rowptr=True,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(2,),
+            unit="m",
+            description="polygon geometry (2D)",
+        ),
+        dict(
+            name="geometry.polygon_2d",
+            has_rowptr=True,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(2,),
+            unit="m",
+            description="2D polygon geometry",
+        ),
+        dict(
+            name="geometry.polygon_3d",
+            has_rowptr=True,
+            unit_type=AttributeDataType.FLOAT,
+            unit_shape=(3,),
+            unit="m",
+            description="3D polygon geometry",
+        ),
+    ]
+    await session.execute(insert(AttributeType), default_attributes)
 
 
 async def create_default_workspace(

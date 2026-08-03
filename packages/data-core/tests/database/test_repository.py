@@ -1281,7 +1281,7 @@ class TestDatasetDataRepository:
                         AttributeSummary(
                             name="geometry.x",
                             data_type=DataType(float),
-                            description="",
+                            description="Point geometry x component",
                             enum_name=None,
                             unit="m",
                             min_val=4,
@@ -1290,7 +1290,7 @@ class TestDatasetDataRepository:
                         AttributeSummary(
                             name="geometry.y",
                             data_type=DataType(float),
-                            description="",
+                            description="Point geometry y component",
                             enum_name=None,
                             unit="m",
                             min_val=4,
