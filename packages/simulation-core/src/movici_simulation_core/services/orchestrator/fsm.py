@@ -17,7 +17,7 @@ class FSMConfig(t.Generic[T]):
     """A config for setting up a :class:`FSM` final state machine
 
     :param initial_state: the initial state
-    :param states: a dictionary of all possible states as ``type``s and their transitions.
+    :param states: a dictionary of all possible states as ``type`` objects and their transitions.
         Transitions are a sequence of ``(type[Condition], type[State])`` tuples. When determining
         which State to transition to, the transitions are checked starting from the top entry in
         the transitions sequence. The FSM transitions to the state belonging to the first

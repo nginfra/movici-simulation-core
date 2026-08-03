@@ -101,7 +101,8 @@ class ModelConnector(t.Generic[T]):
     def remap(self, message: RemapMessage) -> None:
         """Process a ``REMAP`` command from the orchestrator. The adapter decides what
         middleware to install; the connector stores the rename dictionaries and rewrites
-        its sub mask so subsequent ``GET``s ask for the variant keys. See issue #127."""
+        its sub mask so subsequent ``GET`` requests ask for the variant keys. See issue
+        #127."""
 
         auto_remap = self.model.remap(message)
 

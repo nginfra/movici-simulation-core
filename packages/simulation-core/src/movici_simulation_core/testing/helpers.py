@@ -63,7 +63,7 @@ def dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
 
 def assert_dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
     r"""Deep compares two nested structures (such as ``dict``) and asserts that they are
-    equivalent. ``list``\s and ``numpy.ndarray``s are compared using ``numpy.isequal`` or
+    equivalent. ``list``\s and ``numpy.ndarray``\s are compared using ``numpy.isequal`` or
     ``numpy.isclose`` with ``equal_nan=True``
 
     :param a: the left dictionary object
