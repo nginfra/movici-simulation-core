@@ -194,7 +194,7 @@ async def test_get_filtered_entity_data(
     await repository.session.commit()
     result = get_json(
         f"/datasets/{a_dataset.id}/data",
-        params={"attribute": ["roads:topology.from_node_id", "transport_nodes:text"]},
+        params={"attributes": ["roads:topology.from_node_id", "transport_nodes:text"]},
     )
     assert result["data"] == {
         "roads": {

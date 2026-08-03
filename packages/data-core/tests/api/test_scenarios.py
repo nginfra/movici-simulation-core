@@ -208,3 +208,67 @@ async def test_get_summary_by_dataset_id(
         f"/scenarios/{a_scenario.id}/summary", params={"dataset": getattr(a_dataset, name_or_id)}
     )
     assert result == expected
+
+
+async def test_get_full_scenario_state(repository, get_json, a_scenario, a_dataset, create_update):
+    await repository.dataset_data.create(
+        a_dataset.id,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "topology.from_node_id": [9, 9, 9]}}),
+        DatasetFormat.ENTITY_BASED,
+    )
+    await create_update(
+        timestamp=1,
+        iteration=0,
+        data=dataset_data_to_numpy({"roads": {"id": [1, 2], "transport.capacity": [10.0, 20.0]}}),
+    )
+    await repository.session.commit()
+
+    result = get_json(
+        f"/scenarios/{a_scenario.id}/state",
+        params={
+            "dataset": a_dataset.name,
+            "timestamp": 1,
+        },
+    )
+    assert result == {
+        "data": {
+            "roads": {
+                "id": [1, 2, 3],
+                "topology.from_node_id": [9, 9, 9],
+                "transport.capacity": [10.0, 20.0, None],
+            }
+        }
+    }
+
+
+async def test_get_filtered_scenario_state(
+    repository, get_json, a_scenario, a_dataset, create_update
+):
+    await repository.dataset_data.create(
+        a_dataset.id,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "topology.from_node_id": [9, 9, 9]}}),
+        DatasetFormat.ENTITY_BASED,
+    )
+    await create_update(
+        timestamp=1,
+        iteration=0,
+        data=dataset_data_to_numpy({"roads": {"id": [1, 2], "transport.capacity": [10.0, 20.0]}}),
+    )
+    await repository.session.commit()
+
+    result = get_json(
+        f"/scenarios/{a_scenario.id}/state",
+        params={
+            "dataset": a_dataset.name,
+            "attribute": "roads:transport.capacity",
+            "timestamp": 1,
+        },
+    )
+    assert result == {
+        "data": {
+            "roads": {
+                "id": [1, 2, 3],
+                "transport.capacity": [10.0, 20.0, None],
+            }
+        }
+    }
