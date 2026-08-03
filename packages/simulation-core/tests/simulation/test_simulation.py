@@ -23,13 +23,12 @@ from movici_simulation_core.settings import Settings
 from movici_simulation_core.simulation import (
     ModelFromInstanceInfo,
     ModelFromTypeInfo,
-    ModelRunner,
     ModelTypeInfo,
     ServiceInfo,
-    ServiceRunner,
     ServiceTypeInfo,
     Simulation,
 )
+from movici_simulation_core.simulation.distributed import ModelRunner, ServiceRunner
 from movici_simulation_core.testing.dummy import DummyModel
 
 
@@ -74,6 +73,15 @@ class SimpleModel(TrackedModel):
         sim.register_model_type("dummy", cls)
 
 
+class CrashingModel(SimpleModel):
+    def update(self, **_):
+        raise ValueError
+
+    @classmethod
+    def install(cls, sim: Simulation):
+        sim.register_model_type("crashing_dummy", cls)
+
+
 @pytest.fixture(autouse=True)
 def reset_dummy_model_mocks():
     yield
@@ -108,7 +116,7 @@ def temp_output_file(tmp_path):
 
 @pytest.fixture
 def service_info():
-    info = ServiceInfo("dummy", DummyService)
+    info = ServiceInfo("dummy", cls=DummyService, daemon=False)
     yield info
     if info.process is not None:
         info.process.join()
@@ -116,7 +124,7 @@ def service_info():
 
 @pytest.fixture
 def model_info():
-    info = ModelFromTypeInfo("model", DummyModel)
+    info = ModelFromTypeInfo("model", cls=DummyModel, daemon=False)
     yield info
     if info.process is not None:
         info.process.join()
@@ -178,7 +186,14 @@ class TestServiceRunnerEntryPoint:
             setup = Mock()
             run = Mock(return_value=0)
 
-        ServiceRunner(ServiceInfo("service", MockService), settings).entry_point(Mock())
+        ServiceRunner(
+            ServiceInfo(
+                "service",
+                cls=MockService,
+                daemon=False,
+            ),
+            settings,
+        ).entry_point(Mock())
         assert MockService.setup.call_count == 1
         assert MockService.setup.call_count == 1
 
@@ -370,8 +385,9 @@ class TestSimulation:
             simulation.register_attributes(attrs)
 
 
-def test_full_simulation_run(temp_output_file, tmp_path):
-    sim = Simulation(data_dir=tmp_path, debug=True)
+@pytest.mark.parametrize("distributed", [False, True])
+def test_full_simulation_run(temp_output_file, tmp_path, distributed):
+    sim = Simulation(data_dir=tmp_path, debug=True, distributed=distributed)
 
     sim.add_model("pub", SimpleModel({"mode": "pub"}))
     sim.add_model(
@@ -389,3 +405,15 @@ def test_full_simulation_run(temp_output_file, tmp_path):
     assert json.loads(temp_output_file.read_text()) == {
         "dataset": {"entity": {"id": [1], "attr": [1.0]}}
     }
+
+
+@pytest.mark.parametrize("distributed", [False, True])
+def test_simulation_failure(tmp_path, distributed):
+    sim = Simulation(data_dir=tmp_path, debug=True, distributed=distributed)
+    sim.add_model("pub", CrashingModel({"mode": "pub"}))
+    sim.add_model("sub", SimpleModel({"mode": "pub"}))
+
+    sim.set_timeline_info(TimelineInfo(reference=0, time_scale=1, start_time=0))
+    sim.run()
+
+    assert sim.exit_code == 1

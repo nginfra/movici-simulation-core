@@ -7,17 +7,20 @@ name = "movici"
 dynamic = ["version"]
 requires-python = ">=3.10,<3.14"
 dependencies = [
-  "movici-simulation-core",
+  "movici-data-core",
   "movici-drinking-water-model",
+  "movici-simulation-core",
   "movici-transport-assignment-model",
   "movici-power-grid-model",
+  "movici-urban-drainage-model",
 ]
 
 [dependency-groups]
 dev = [
   "movici-simulation-core[all]",
+  "movici-data-core[sqlite]",
   "pytest",
-  "pytest-cov",
+  "coverage",
   "mypy",
   "taplo",
   "ruff",
@@ -38,9 +41,11 @@ Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
+movici-data-core = { workspace = true }
 movici-drinking-water-model = { workspace = true }
 movici-transport-assignment-model = { workspace = true }
 movici-power-grid-model = { workspace = true }
+movici-urban-drainage-model = { workspace = true }
 
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -87,21 +92,28 @@ ignore = [
   "B027", # empty method in abstract base class
   "B028", # warnings explicit `stack_level` kwarg
   "B905", # zip explicit `strict` kwarg
+  "S101",
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"packages/data-core/*" = ["S101", "B011"]
+"packages/data-core/tests/*" = ["S"]
+"packages/data-core/examples/*" = ["T20"]
+"packages/drinking-water/tests/*" = ["S"]
 "packages/simulation-core/tests/*" = ["S"]
 "packages/simulation-core/examples/*" = ["S101", "T20"]
-"packages/drinking-water/tests/*" = ["S"]
 "packages/transport-assignment/tests/*" = ["S"]
 "packages/power-grid/tests/*" = ["S"]
+"packages/urban-drainage/tests/*" = ["S"]
 
 [tool.ruff.lint.isort]
 known-first-party = [
-  "movici_simulation_core",
+  "movici_data_core",
   "movici_drinking_water_model",
+  "movici_simulation_core",
   "movici_transport_assignment_model",
   "movici_power_grid_model",
+  "movici_urban_drainage_model",
 ]
 
 [tool.ruff.format]
@@ -112,6 +124,7 @@ minversion = "7.0"
 addopts = ["--tb=short", "--strict-markers", "--strict-config"]
 testpaths = ["tests"]
 filterwarnings = ["ignore:.*ABCs from 'collections'.*:DeprecationWarning"]
+asyncio_mode = "auto"                                                      # work with regular async @pytest.fixtures
 
 [tool.mypy]
 disallow_untyped_calls = true

@@ -19,7 +19,7 @@ from movici_simulation_core.core.data_format import EntityInitDataFormat
 from movici_simulation_core.core.moment import set_timeline_info
 from movici_simulation_core.core.schema import AttributeSchema
 from movici_simulation_core.core.serialization import UpdateDataFormat
-from movici_simulation_core.model_connector.init_data import DirectoryInitDataHandler
+from movici_simulation_core.model_connector.init_data import DirectoryInitDataClient
 from movici_simulation_core.models.common.attributes import CommonAttributes
 from movici_simulation_core.testing.model_tester import ModelTester
 from movici_simulation_core.utils import strategies
@@ -82,7 +82,7 @@ def time_scale():
 @pytest.fixture
 def init_data_handler(tmp_path_factory):
     root = tmp_path_factory.mktemp("init_data_handler")
-    return DirectoryInitDataHandler(root)
+    return DirectoryInitDataClient(root)
 
 
 @pytest.fixture

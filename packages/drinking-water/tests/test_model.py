@@ -603,6 +603,15 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
             },
         }
 
+    @staticmethod
+    def _get_level(result):
+        if result is None:
+            return None
+        try:
+            return result["water_network"]["water_tank_entities"]["drinking_water.level"][0]
+        except (KeyError, IndexError):
+            return None
+
     # TODO: find a way to run a WNTR simulation to obtain its initial state
     @pytest.mark.xfail
     def test_tank_level_at_initial_value(self, tester):
@@ -614,7 +623,7 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
 
         assert "water_tank_entities" not in result["water_network"]
 
-    def test_tank_level_changes_across_timesteps(self, tester, model_config):
+    def test_tank_level_changes_across_timesteps(self, tester):
         """Tank level should decrease linearly by junction demand. Messing with the hydraulic
         timestep or the wn.sim_time has no effect on the results"""
 
@@ -633,14 +642,74 @@ class TestTankLevelProgression(TestDrinkingWaterModelBase):
                 tester.new_time(t)
             result, _ = tester.update(t, None)
             assert result is not None
-            levels.append(
-                result["water_network"]["water_tank_entities"]["drinking_water.level"][0]
-            )
+            levels.append(self._get_level(result))
 
         # With a junction demand of 0.1 m3/s and a surface area of 10 m2, we expect the tank to
         # empty out 1 meter per 100 seconds, or 4 meters per 400 seconds. We start at 40m
         assert 0 < 40 - levels[0] < 1e-2  # the first timestep is a bit skewed because it is at t=1
         np.testing.assert_allclose(levels[1:], [36, 32, 28])
+
+    def test_tank_level_with_interrupted_stop(self, tester):
+        """Test whether the model can be interrupted from its normal cadence by a change in the
+        topology. It should calculate normally until the time of interruption, and then process the
+        change"""
+        tester.initialize()
+        tester.new_time(0)
+        _, next_time = tester.update(0, None)
+        assert next_time > 200
+
+        tester.new_time(200)
+        result, next_time = tester.update(
+            200,
+            {
+                "water_network": {
+                    "water_pipe_entities": {"id": [101], "operational.status": [False]}
+                }
+            },
+        )
+
+        # tank level drops by 1 m every 100 seconds
+        assert pytest.approx(self._get_level(result)) == 38
+
+        # now there should not be a change to the level
+        tester.new_time(400)
+        result, next_time = tester.update(400, None)
+        assert self._get_level(result) is None
+
+    def test_tank_level_with_stop_after_result(self, create_model_tester, model_config):
+        """Test whether the model can be interrupted at the same timestamp as when it has already
+        published a result. It should not publish a new result, but process the changes for the
+        next time it continues calculation"""
+
+        model_config["options"]["report_timestep"] = 400
+        model_config["options"]["hydraulic_timestep"] = 400
+
+        tester = create_model_tester(Model, model_config)
+        tester.initialize()
+        tester.new_time(0)
+        _, next_time = tester.update(0, None)
+        assert next_time == 400
+
+        # after 400s the level should have dropped to 36
+        tester.new_time(400)
+        result, next_time = tester.update(400, None)
+        assert pytest.approx(self._get_level(result)) == 36
+
+        result, _ = tester.update(
+            400,
+            {
+                "water_network": {
+                    "water_pipe_entities": {"id": [101], "operational.status": [False]}
+                }
+            },
+        )
+
+        # it should not have a changed level
+        assert self._get_level(result) is None
+
+        # It still should not have a changed level since the pipe remains closed
+        result, _ = tester.update(800, None)
+        assert self._get_level(result) is None
 
 
 class TestMixedPumpTypes(TestDrinkingWaterModelBase):

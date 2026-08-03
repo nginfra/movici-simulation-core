@@ -52,7 +52,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev --frozen
+      run: uv sync --all-packages --group dev --frozen
 
     - name: Run tests
       run: |
@@ -82,7 +82,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev --frozen
+      run: uv sync --all-packages --group dev --frozen
 
     - name: Run tests with Numba JIT enabled
       run: |
@@ -111,7 +111,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev
+      run: uv sync --all-packages --group dev --frozen
 
     - name: Run tests with coverage
       run: |
@@ -137,7 +137,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-          uv sync --all-groups
+          uv sync --all-packages --all-groups --frozen
 
     - name: Test docs
       run: |

@@ -12,3 +12,4 @@ Model Library
    power_grid_model
    rules_model
    traffic_assignment
+   urban_drainage_model

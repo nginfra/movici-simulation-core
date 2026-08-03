@@ -1,0 +1,901 @@
+"""Tests for the pyswmm SimulationWrapper and its ``.inp`` synthesis."""
+
+import copy
+import dataclasses
+from pathlib import Path
+
+import pytest
+
+from movici_simulation_core.core.attribute import PUBLISH
+from movici_simulation_core.core.data_format import EntityInitDataFormat
+from movici_simulation_core.core.state import TrackedState
+from movici_urban_drainage_model.model import Model
+from movici_urban_drainage_model.simulation_wrapper import IdMapper, SimulationWrapper
+
+DS = "urban_drainage"
+
+ENUMS = {
+    "xsection_shape": ["CIRCULAR", "RECT_CLOSED", "RECT_OPEN"],
+    "outfall_type": ["FREE", "NORMAL", "FIXED", "TIDAL", "TIMESERIES"],
+    "pump_curve_type": ["IDEAL", "PUMP1", "PUMP2", "PUMP3", "PUMP4"],
+}
+
+NETWORK = {
+    "version": 4,
+    "name": DS,
+    "type": "urban_drainage_network",
+    "general": {"enum": ENUMS},
+    "data": {
+        "drainage_junction_entities": {
+            "id": [1, 2],
+            "geometry.x": [0.0, 100.0],
+            "geometry.y": [0.0, 0.0],
+            "urban_drainage.invert_elevation": [10.0, 9.0],
+            "urban_drainage.max_depth": [5.0, 5.0],
+        },
+        "drainage_outfall_entities": {
+            "id": [3],
+            "geometry.x": [200.0],
+            "geometry.y": [0.0],
+            "urban_drainage.invert_elevation": [8.0],
+            "urban_drainage.outfall_type": [0],
+        },
+        "drainage_conduit_entities": {
+            "id": [10, 11],
+            "topology.from_node_id": [1, 2],
+            "topology.to_node_id": [2, 3],
+            "shape.length": [100.0, 100.0],
+            "urban_drainage.roughness": [0.01, 0.01],
+            "urban_drainage.cross_section_shape": [0, 0],
+            "urban_drainage.cross_section_geometry": [
+                [1.0, 0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0, 0.0],
+            ],
+        },
+        "drainage_raingage_entities": {
+            "id": [4],
+            "geometry.x": [-100.0],
+            "geometry.y": [100.0],
+        },
+        "drainage_subcatchment_entities": {
+            "id": [5],
+            "geometry.polygon": [[[0.0, 0.0], [0.0, 50.0], [50.0, 50.0], [0.0, 0.0]]],
+            "urban_drainage.area": [4.0],
+            "urban_drainage.width": [400.0],
+            "urban_drainage.percent_impervious": [50.0],
+            "urban_drainage.slope": [0.5],
+            "urban_drainage.outlet_node_id": [1],
+            "urban_drainage.raingage_id": [4],
+        },
+    },
+}
+
+
+class TestIdMapper:
+    def test_register_and_lookup(self):
+        mapper = IdMapper()
+        mapper.register(1, "J1")
+        assert mapper.get_swmm_name(1) == "J1"
+
+    def test_duplicate_id_raises(self):
+        mapper = IdMapper()
+        mapper.register(1, "J1")
+        with pytest.raises(ValueError, match="Duplicate entity id"):
+            mapper.register(1, "OF1")
+
+
+# ``global_schema`` is built from ``additional_attributes``, so the model's
+# specs are already registered - no separate ``schema`` fixture is needed.
+@pytest.fixture
+def additional_attributes():
+    return Model.get_schema_attributes()
+
+
+@pytest.fixture
+def state(global_schema):
+    return TrackedState(schema=global_schema)
+
+
+@pytest.fixture
+def initialize_wrapper(global_schema, state):
+    converter = EntityInitDataFormat(global_schema)
+    created = None
+
+    def _initialize(network=NETWORK, dataset_name=DS):
+        nonlocal created
+        # only one SWMM simulation may be open per process, so a test must open one
+        assert created is None, "initialize_wrapper called more than once in a test"
+        # deep-copy: state.process_general_section pops "enum" from the dict
+        network = copy.deepcopy(network)
+        dataset = Model._register_dataset(state, dataset_name=dataset_name)
+        state.receive_update(converter.load_json(network), is_initial=True)
+        for f in dataclasses.fields(dataset):
+            eg = getattr(dataset, f.name)
+            for attr_name in eg.attributes:
+                attr = getattr(eg, attr_name)
+                if attr.flags & PUBLISH and not attr.has_data():
+                    attr.initialize(len(eg))
+        wrapper = SimulationWrapper()
+        created = wrapper
+        wrapper.configure_options({"hydraulic_timestep": 30, "report_timestep": 300})
+        wrapper.initialize(dataset)
+        return wrapper, dataset
+
+    yield _initialize
+
+    # always release the simulation - even if a test fails mid-run - or subsequent
+    # tests hit MultiSimulationError.
+    if created is not None:
+        try:
+            created.close()
+        except Exception:
+            pass
+
+
+class TestInpSynthesis:
+    def test_inp_contains_expected_sections(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        inp = Path(wrapper._inp_path).read_text()
+        for section in (
+            "[JUNCTIONS]",
+            "[OUTFALLS]",
+            "[CONDUITS]",
+            "[XSECTIONS]",
+            "[SUBCATCHMENTS]",
+            "[RAINGAGES]",
+            "[COORDINATES]",
+        ):
+            assert section in inp
+        assert "J1" in inp and "J2" in inp  # junction prefix
+        assert "OF3" in inp  # outfall prefix
+        assert "C10" in inp and "C11" in inp  # conduit prefix
+        wrapper.close()
+
+    def test_id_mapper_prefixes(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        assert wrapper.id_mapper.get_swmm_name(1) == "J1"
+        assert wrapper.id_mapper.get_swmm_name(3) == "OF3"
+        assert wrapper.id_mapper.get_swmm_name(10) == "C10"
+        wrapper.close()
+
+    def test_partial_cross_section_geometry_builds(self, initialize_wrapper):
+        # A CIRCULAR conduit uses only Geom1; leaving the other slots unspecified
+        # (null -> NaN) must not crash .inp synthesis (fmt_num coerces NaN -> 0).
+        network = copy.deepcopy(NETWORK)
+        network["data"]["drainage_conduit_entities"]["urban_drainage.cross_section_geometry"] = [
+            [1.0, None, None, None],
+            [1.0, None, None, None],
+        ]
+        wrapper, _ = initialize_wrapper(network)
+        inp = Path(wrapper._inp_path).read_text()
+        # the unspecified slots were emitted as 0, and SWMM accepted the model
+        assert "[XSECTIONS]" in inp
+        wrapper.advance_to(0)
+        wrapper.close()
+
+
+class TestStepping:
+    def test_t0_reads_initial_conditions(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper()
+        wrapper.advance_to(0)
+        wrapper.write_results()
+        # head == invert at t=0 with zero initial depth
+        assert list(dataset.junctions.hydraulic_head.array) == pytest.approx([10.0, 9.0])
+        wrapper.close()
+
+    def test_advance_reaches_target(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        hydraulic_timestep = 30
+        wrapper.advance_to(600)
+        elapsed = wrapper.elapsed_seconds()
+        # advance_to only exits once within <1s of the target, so the lower bound
+        # is tight; it may overshoot by at most one routing step.
+        assert 599 <= elapsed <= 600 + hydraulic_timestep
+        # re-advancing to the same (already reached) target is a no-op
+        wrapper.advance_to(600)
+        assert wrapper.elapsed_seconds() == pytest.approx(elapsed)
+        wrapper.close()
+
+    def test_rainfall_control_produces_runoff(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper()
+        # inject rainfall via the rain gage control input
+        if not dataset.raingages.rainfall_intensity.has_data():
+            dataset.raingages.rainfall_intensity.initialize(len(dataset.raingages))
+        dataset.raingages.rainfall_intensity.array[:] = [10.0]
+        for target in (300, 600, 900):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.raingages.rainfall.array[0] == pytest.approx(10.0, rel=1e-3)
+        assert dataset.subcatchments.runoff.array[0] > 0.0
+        assert max(dataset.conduits.flow.array) > 0.0
+        wrapper.close()
+
+
+# Enum set covering the control-structure types
+STRUCT_ENUMS = {
+    "outfall_type": ["FREE", "NORMAL", "FIXED", "TIDAL", "TIMESERIES"],
+    "orifice_type": ["SIDE", "BOTTOM"],
+    "orifice_shape": ["CIRCULAR", "RECT_CLOSED"],
+    "weir_type": ["TRANSVERSE", "SIDEFLOW", "V-NOTCH", "TRAPEZOIDAL", "ROADWAY"],
+    "outlet_rating_type": [
+        "FUNCTIONAL/DEPTH",
+        "FUNCTIONAL/HEAD",
+        "TABULAR/DEPTH",
+        "TABULAR/HEAD",
+    ],
+}
+
+
+def _one_link_network(link_group, link_attrs, inflow=0.3):
+    """Storage fed by a constant inflow, draining through a single link.
+
+    With one drain the link conveys the whole inflow at equilibrium, so its flow
+    is guaranteed positive once the storage has filled - making per-structure
+    result assertions robust.
+    """
+    data = {
+        "drainage_storage_entities": {
+            "id": [1],
+            "geometry.x": [0.0],
+            "geometry.y": [0.0],
+            "urban_drainage.invert_elevation": [0.0],
+            "urban_drainage.max_depth": [10.0],
+            "urban_drainage.storage_constant": [200.0],
+            "urban_drainage.generated_inflow": [inflow],
+        },
+        "drainage_outfall_entities": {
+            "id": [2],
+            "geometry.x": [100.0],
+            "geometry.y": [0.0],
+            "urban_drainage.invert_elevation": [0.0],
+            "urban_drainage.outfall_type": [0],
+        },
+        link_group: {
+            "id": [20],
+            "topology.from_node_id": [1],
+            "topology.to_node_id": [2],
+            **link_attrs,
+        },
+    }
+    return {
+        "version": 4,
+        "name": DS,
+        "type": "urban_drainage_network",
+        "general": {"enum": STRUCT_ENUMS},
+        "data": data,
+    }
+
+
+def _run(wrapper, until=2400):
+    for target in range(300, until + 1, 300):
+        wrapper.process_changes()
+        wrapper.advance_to(target)
+    wrapper.write_results()
+
+
+class TestStructures:
+    def test_orifice_runs(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_orifice_entities",
+            {
+                "urban_drainage.orifice_type": [1],  # BOTTOM
+                "urban_drainage.orifice_shape": [1],  # RECT_CLOSED
+                "urban_drainage.cross_section_geometry": [[1.0, 1.0, 0.0, 0.0]],
+                "urban_drainage.discharge_coefficient": [0.65],
+                "urban_drainage.crest_height": [0.0],
+            },
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        _run(wrapper)
+        assert dataset.orifices.flow.array[0] > 0.0
+        # current_setting reads back for an uncontrolled structure
+        assert dataset.orifices.current_setting.array[0] == pytest.approx(1.0)
+
+    def test_vnotch_weir_builds_triangular_and_runs(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_weir_entities",
+            {
+                "urban_drainage.weir_type": [2],  # V-NOTCH -> TRIANGULAR xsection
+                "urban_drainage.cross_section_geometry": [[3.0, 3.0, 0.0, 0.0]],
+                "urban_drainage.discharge_coefficient": [1.8],
+                "urban_drainage.crest_height": [0.0],
+            },
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        # The bug this guards: a V-NOTCH weir must emit a TRIANGULAR opening, not
+        # RECT_OPEN, or SWMM rejects the model (ERROR 143).
+        assert "TRIANGULAR" in Path(wrapper._inp_path).read_text()
+        _run(wrapper)
+        assert dataset.weirs.flow.array[0] > 0.0
+
+    def test_trapezoidal_weir_builds_trapezoidal(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_weir_entities",
+            {
+                "urban_drainage.weir_type": [3],  # TRAPEZOIDAL -> TRAPEZOIDAL xsection
+                "urban_drainage.cross_section_geometry": [[3.0, 3.0, 0.5, 0.5]],
+                "urban_drainage.discharge_coefficient": [1.8],
+                "urban_drainage.crest_height": [0.0],
+            },
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        assert "TRAPEZOIDAL" in Path(wrapper._inp_path).read_text()
+        _run(wrapper)
+        # the storage fills and drains through the sole weir, so flow is positive
+        assert dataset.weirs.flow.array[0] > 0.0
+
+    def test_functional_outlet_runs(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_outlet_entities",
+            {
+                "urban_drainage.outlet_rating_type": [0],  # FUNCTIONAL/DEPTH
+                "urban_drainage.rating_coefficient": [1.5],
+                "urban_drainage.rating_exponent": [0.5],
+            },
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        _run(wrapper)
+        assert dataset.outlets.flow.array[0] > 0.0
+
+    def test_tabular_outlet_builds_curve_and_runs(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_outlet_entities",
+            {
+                "urban_drainage.outlet_rating_type": [2],  # TABULAR/DEPTH
+                "urban_drainage.rating_curve": [[[0.0, 0.0], [1.0, 0.3], [2.0, 0.6]]],
+            },
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        inp = Path(wrapper._inp_path).read_text()
+        assert "[CURVES]" in inp and "Rating" in inp
+        _run(wrapper)
+        assert dataset.outlets.flow.array[0] > 0.0
+
+    def test_tabular_outlet_without_curve_raises(self, initialize_wrapper):
+        network = _one_link_network(
+            "drainage_outlet_entities",
+            {"urban_drainage.outlet_rating_type": [2]},  # TABULAR but no rating_curve
+        )
+        with pytest.raises(ValueError, match="requires a rating_curve"):
+            initialize_wrapper(network)
+
+    @pytest.mark.parametrize("outfall_index", [3, 4])  # TIDAL, TIMESERIES
+    def test_unsupported_outfall_type_raises(self, initialize_wrapper, outfall_index):
+        # TIDAL / TIMESERIES need an external tide curve / timeseries the model does
+        # not synthesise, so build_inp must fail fast rather than emit a bad row.
+        network = _one_link_network(
+            "drainage_conduit_entities",
+            {
+                "shape.length": [100.0],
+                "urban_drainage.roughness": [0.01],
+                "urban_drainage.cross_section_shape": [0],
+                "urban_drainage.cross_section_geometry": [[1.0, 0.0, 0.0, 0.0]],
+            },
+        )
+        network["data"]["drainage_outfall_entities"]["urban_drainage.outfall_type"] = [
+            outfall_index
+        ]
+        with pytest.raises(ValueError, match="unsupported outfall_type"):
+            initialize_wrapper(network)
+
+    def test_storage_volume_and_inflow_mapping(self, initialize_wrapper):
+        # small orifice so the storage keeps filling; the injected inflow shows up
+        # as lateral_inflow (distinct from total_outflow) and the volume rises.
+        network = _one_link_network(
+            "drainage_orifice_entities",
+            {
+                "urban_drainage.orifice_type": [1],
+                "urban_drainage.orifice_shape": [1],
+                "urban_drainage.cross_section_geometry": [[0.2, 0.2, 0.0, 0.0]],
+                "urban_drainage.discharge_coefficient": [0.65],
+                "urban_drainage.crest_height": [0.0],
+            },
+            inflow=0.3,
+        )
+        wrapper, dataset = initialize_wrapper(network)
+        wrapper.process_changes()
+        wrapper.advance_to(300)
+        wrapper.write_results()
+        volume_early = dataset.storage.stored_volume.array[0]
+        wrapper.process_changes()
+        wrapper.advance_to(1200)
+        wrapper.write_results()
+        st = dataset.storage
+        # injected inflow maps to lateral_inflow / total_inflow (not total_outflow)
+        assert st.lateral_inflow.array[0] == pytest.approx(0.3, rel=1e-2)
+        assert st.total_inflow.array[0] == pytest.approx(0.3, rel=1e-2)
+        assert st.total_outflow.array[0] < st.total_inflow.array[0]  # still filling
+        # stored volume is positive and rises while filling
+        assert volume_early > 0.0
+        assert st.stored_volume.array[0] > volume_early
+
+
+class TestNodeInflowControl:
+    def test_generated_inflow_injects_node_inflow(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper()
+        # inject inflow at junction id 1 via the control input
+        if not dataset.junctions.generated_inflow.has_data():
+            dataset.junctions.generated_inflow.initialize(len(dataset.junctions))
+        dataset.junctions.generated_inflow.array[:] = [0.2, 0.0]
+        for target in (300, 600):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        # the injected inflow shows up as inflow on the fed node and routes downstream
+        assert dataset.junctions.total_inflow.array[0] > 0.0
+        assert max(dataset.conduits.flow.array) > 0.0
+        wrapper.close()
+
+
+class TestEndOfHorizon:
+    def test_advance_past_end_logs_and_freezes(self, initialize_wrapper, caplog):
+        import logging
+        from datetime import datetime
+
+        wrapper, _ = initialize_wrapper()
+        # close the real simulation first (only one may be open per process), then
+        # swap in a stub whose iteration is immediately exhausted
+        wrapper.close()
+
+        class _ExhaustedSim:
+            _t = datetime(2020, 1, 1)
+            start_time = _t
+            current_time = _t
+
+            def step_advance(self, seconds):
+                pass
+
+            def __next__(self):
+                raise StopIteration
+
+            def report(self):
+                pass
+
+            def close(self):
+                pass
+
+        wrapper.sim = _ExhaustedSim()
+        with caplog.at_level(logging.WARNING):
+            wrapper.advance_to(600)  # must not raise
+        assert "reached its end time" in caplog.text
+
+
+class TestMultiRainGage:
+    def test_distinct_intensities_route_to_correct_subcatchments(self, initialize_wrapper):
+        enums = {"outfall_type": ["FREE", "NORMAL", "FIXED", "TIDAL", "TIMESERIES"]}
+        network = {
+            "version": 4,
+            "name": DS,
+            "type": "urban_drainage_network",
+            "general": {"enum": enums},
+            "data": {
+                "drainage_junction_entities": {
+                    "id": [1, 2],
+                    "geometry.x": [0.0, 50.0],
+                    "geometry.y": [0.0, 0.0],
+                    "urban_drainage.invert_elevation": [10.0, 10.0],
+                },
+                "drainage_outfall_entities": {
+                    "id": [3, 4],
+                    "geometry.x": [0.0, 50.0],
+                    "geometry.y": [-50.0, -50.0],
+                    "urban_drainage.invert_elevation": [8.0, 8.0],
+                    "urban_drainage.outfall_type": [0, 0],
+                },
+                "drainage_conduit_entities": {
+                    "id": [10, 11],
+                    "topology.from_node_id": [1, 2],
+                    "topology.to_node_id": [3, 4],
+                    "shape.length": [50.0, 50.0],
+                    "urban_drainage.roughness": [0.01, 0.01],
+                    "urban_drainage.cross_section_shape": [0, 0],
+                    "urban_drainage.cross_section_geometry": [
+                        [1.0, 0.0, 0.0, 0.0],
+                        [1.0, 0.0, 0.0, 0.0],
+                    ],
+                },
+                "drainage_raingage_entities": {
+                    "id": [5, 6],
+                    "geometry.x": [-50.0, 100.0],
+                    "geometry.y": [50.0, 50.0],
+                },
+                "drainage_subcatchment_entities": {
+                    "id": [7, 8],
+                    "urban_drainage.area": [4.0, 4.0],
+                    "urban_drainage.width": [400.0, 400.0],
+                    "urban_drainage.percent_impervious": [80.0, 80.0],
+                    "urban_drainage.slope": [0.5, 0.5],
+                    "urban_drainage.outlet_node_id": [1, 2],
+                    "urban_drainage.raingage_id": [5, 6],
+                },
+            },
+        }
+        enums["xsection_shape"] = ["CIRCULAR"]
+        wrapper, dataset = initialize_wrapper(network)
+        if not dataset.raingages.rainfall_intensity.has_data():
+            dataset.raingages.rainfall_intensity.initialize(len(dataset.raingages))
+        dataset.raingages.rainfall_intensity.array[:] = [12.0, 0.0]  # gage 5 wet, gage 6 dry
+        for target in (300, 600):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        # each gage reports its own intensity
+        assert dataset.raingages.rainfall.array[0] == pytest.approx(12.0, rel=1e-3)
+        assert dataset.raingages.rainfall.array[1] == pytest.approx(0.0, abs=1e-6)
+        # only the subcatchment fed by the wet gage produces runoff
+        assert dataset.subcatchments.runoff.array[0] > 0.0
+        assert dataset.subcatchments.runoff.array[1] == pytest.approx(0.0, abs=1e-9)
+        wrapper.close()
+
+
+def _filling_storage_network():
+    """Storage filled by a constant inflow, drained by a small orifice."""
+    return _one_link_network(
+        "drainage_orifice_entities",
+        {
+            "urban_drainage.orifice_type": [1],
+            "urban_drainage.orifice_shape": [1],
+            "urban_drainage.cross_section_geometry": [[0.2, 0.2, 0.0, 0.0]],
+            "urban_drainage.discharge_coefficient": [0.65],
+            "urban_drainage.crest_height": [0.0],
+        },
+        inflow=0.3,
+    )
+
+
+class TestHotstart:
+    """The checkpoint/rollback engine primitives (not wired into the model loop)."""
+
+    def test_checkpoint_and_rollback_restores_state(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper(_filling_storage_network())
+        for target in (300, 600):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        volume = dataset.storage.stored_volume.array[0]
+        depth = dataset.storage.water_depth.array[0]
+        assert volume > 0.0
+
+        checkpoint = wrapper.checkpoint()  # snapshot the state at t=600
+
+        # advance further, then roll back to the checkpoint
+        wrapper.process_changes()
+        wrapper.advance_to(1200)
+        assert wrapper.elapsed_seconds() > 600
+        wrapper.rollback_to(checkpoint)
+
+        # state and reported clock are restored exactly to the checkpoint instant
+        assert wrapper.elapsed_seconds() == pytest.approx(600, abs=30)
+        wrapper.write_results()
+        assert dataset.storage.stored_volume.array[0] == pytest.approx(volume, rel=1e-4)
+        assert dataset.storage.water_depth.array[0] == pytest.approx(depth, rel=1e-4)
+        # and it can keep stepping forward from there
+        wrapper.process_changes()
+        wrapper.advance_to(900)
+        assert wrapper.elapsed_seconds() >= 870
+
+    def test_rollback_enables_step_replay_with_different_control(self, initialize_wrapper):
+        wrapper, dataset = initialize_wrapper(_filling_storage_network())
+        for target in (300, 600):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        checkpoint = wrapper.checkpoint()
+
+        # re-run [600 -> 900] with the orifice open
+        wrapper.process_changes()
+        wrapper.advance_to(900)
+        wrapper.write_results()
+        flow_open = dataset.orifices.flow.array[0]
+        assert flow_open > 0.0
+
+        # roll the step back and re-run it with the (sole) orifice closed
+        wrapper.rollback_to(checkpoint)
+        if not dataset.orifices.target_setting.has_data():
+            dataset.orifices.target_setting.initialize(len(dataset.orifices))
+        dataset.orifices.target_setting.array[:] = [0.0]
+        wrapper.process_changes()
+        wrapper.advance_to(900)
+        wrapper.write_results()
+        # the re-run diverges from the trajectory it was rolled back from
+        assert dataset.orifices.flow.array[0] < 1e-6
+
+
+class TestOneSimulationPerProcess:
+    def test_concurrent_simulation_raises_clear_error(self, initialize_wrapper):
+        # the fixture's wrapper holds the one simulation EPA-SWMM allows
+        initialize_wrapper()
+        other = SimulationWrapper()
+        with pytest.raises(RuntimeError, match="already open"):
+            other._open_simulation()
+
+    def test_close_releases_ownership_even_if_report_raises(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        wrapper.close()  # release the real simulation cleanly
+
+        # simulate an owned simulation whose report() raises on teardown
+        class _BadReportSim:
+            def report(self):
+                raise RuntimeError("report boom")
+
+            def close(self):
+                pass
+
+        wrapper.sim = _BadReportSim()
+        SimulationWrapper._active = wrapper
+        wrapper.close()  # must swallow the error and still release ownership
+        assert SimulationWrapper._active is None
+        assert wrapper.sim is None
+
+
+class TestStorageInference:
+    def test_storage_curve_infers_tabular(self, initialize_wrapper):
+        # a storage_curve (with no functional coefficients) must be emitted as a
+        # TABULAR storage with a [CURVES] entry - the type is inferred, not set
+        network = {
+            "version": 4,
+            "name": DS,
+            "type": "urban_drainage_network",
+            "general": {"enum": {"outfall_type": ["FREE", "NORMAL", "FIXED"]}},
+            "data": {
+                "drainage_storage_entities": {
+                    "id": [1],
+                    "geometry.x": [0.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [0.0],
+                    "urban_drainage.max_depth": [5.0],
+                    "urban_drainage.storage_curve": [[[0.0, 100.0], [5.0, 400.0]]],
+                    "urban_drainage.generated_inflow": [0.2],
+                },
+                "drainage_outfall_entities": {
+                    "id": [2],
+                    "geometry.x": [100.0],
+                    "geometry.y": [0.0],
+                    "urban_drainage.invert_elevation": [0.0],
+                    "urban_drainage.outfall_type": [0],
+                },
+                "drainage_weir_entities": {
+                    "id": [20],
+                    "topology.from_node_id": [1],
+                    "topology.to_node_id": [2],
+                    "urban_drainage.weir_type": [0],
+                    "urban_drainage.cross_section_geometry": [[2.0, 3.0, 0.0, 0.0]],
+                    "urban_drainage.discharge_coefficient": [1.8],
+                    "urban_drainage.crest_height": [0.0],
+                },
+            },
+        }
+        network["general"]["enum"]["weir_type"] = [
+            "TRANSVERSE",
+            "SIDEFLOW",
+            "V-NOTCH",
+            "TRAPEZOIDAL",
+            "ROADWAY",
+        ]
+        wrapper, dataset = initialize_wrapper(network)
+        inp = Path(wrapper._inp_path).read_text()
+        assert "TABULAR" in inp and "[CURVES]" in inp and "Storage" in inp
+        for target in (300, 600, 900):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.storage.stored_volume.array[0] > 0.0
+
+
+_STORAGE_GEOMETRY_ENUM = [
+    "FUNCTIONAL",
+    "TABULAR",
+    "CYLINDRICAL",
+    "CONICAL",
+    "PARABOLIC",
+    "PYRAMIDAL",
+]
+
+
+def _geometric_storage_network(geometry, params, inflow=0.3):
+    """A storage with an explicit geometric shape (by name), filled by inflow, drained."""
+    geometry_index = _STORAGE_GEOMETRY_ENUM.index(geometry)
+    enums = {
+        "outfall_type": ["FREE", "NORMAL", "FIXED"],
+        "orifice_type": ["SIDE", "BOTTOM"],
+        "orifice_shape": ["CIRCULAR", "RECT_CLOSED"],
+        "storage_geometry": _STORAGE_GEOMETRY_ENUM,
+    }
+    return {
+        "version": 4,
+        "name": DS,
+        "type": "urban_drainage_network",
+        "general": {"enum": enums},
+        "data": {
+            "drainage_storage_entities": {
+                "id": [1],
+                "geometry.x": [0.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [0.0],
+                "urban_drainage.max_depth": [10.0],
+                "urban_drainage.storage_geometry": [geometry_index],
+                "urban_drainage.storage_geometry_parameters": [params],
+                "urban_drainage.generated_inflow": [inflow],
+            },
+            "drainage_outfall_entities": {
+                "id": [2],
+                "geometry.x": [100.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [0.0],
+                "urban_drainage.outfall_type": [0],
+            },
+            "drainage_orifice_entities": {
+                "id": [20],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "urban_drainage.orifice_type": [1],
+                "urban_drainage.orifice_shape": [1],
+                "urban_drainage.cross_section_geometry": [[0.3, 0.3, 0.0, 0.0]],
+                "urban_drainage.discharge_coefficient": [0.65],
+                "urban_drainage.crest_height": [0.0],
+            },
+        },
+    }
+
+
+class TestStorageGeometry:
+    @pytest.mark.parametrize(
+        "shape, params",
+        [
+            ("CYLINDRICAL", [10.0, 5.0, 0.0]),
+            ("CONICAL", [10.0, 5.0, 2.0]),
+            ("PARABOLIC", [10.0, 5.0, 10.0]),
+            ("PYRAMIDAL", [10.0, 5.0, 2.0]),
+        ],
+    )
+    def test_geometric_shape_builds_and_runs(self, initialize_wrapper, shape, params):
+        wrapper, dataset = initialize_wrapper(_geometric_storage_network(shape, params))
+        # explicit geometry emitted, not a 1000-area default
+        assert shape in Path(wrapper._inp_path).read_text()
+        for target in (300, 600, 900):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.storage.stored_volume.array[0] > 0.0
+
+    def test_parabolic_requires_positive_height(self, initialize_wrapper):
+        # PARABOLIC needs a positive full height (Z); SWMM rejects Z == 0
+        network = _geometric_storage_network("PARABOLIC", [10.0, 5.0, 0.0])
+        with pytest.raises(ValueError, match="PARABOLIC"):
+            initialize_wrapper(network)
+
+    def test_storage_without_area_definition_raises(self, initialize_wrapper):
+        # No storage_geometry, no storage_curve, no functional coefficients: rather
+        # than silently substituting a constant area, the build must fail clearly.
+        network = _geometric_storage_network("PARABOLIC", [10.0, 5.0, 10.0])
+        storage = network["data"]["drainage_storage_entities"]
+        del storage["urban_drainage.storage_geometry"]
+        del storage["urban_drainage.storage_geometry_parameters"]
+        with pytest.raises(ValueError, match="no surface-area definition"):
+            initialize_wrapper(network)
+
+
+class TestTempFileCleanup:
+    def test_close_removes_inp_report_and_output_siblings(self, initialize_wrapper):
+        wrapper, _ = initialize_wrapper()
+        wrapper.advance_to(0)
+        stem = wrapper._inp_path[:-4]
+        wrapper.close()
+        # pyswmm derives .rpt/.out from the .inp path; all three must be cleaned up
+        for suffix in (".inp", ".rpt", ".out"):
+            assert not Path(stem + suffix).exists(), f"{suffix} leaked"
+
+
+class TestUnitSystemDefaults:
+    def test_flow_units_select_unit_appropriate_defaults(self):
+        # flow_units is data-determined, so it is read from the dataset general
+        # section (2nd arg), not the model config.
+        wrapper = SimulationWrapper()
+        wrapper.configure_options({}, {"flow_units": "CFS"})  # US (inches)
+        assert wrapper.is_us_units
+        assert wrapper.subarea_defaults["horton_max"] == 3.0  # in/hr
+        wrapper.configure_options({}, {"flow_units": "CMS"})  # SI (mm)
+        assert not wrapper.is_us_units
+        assert wrapper.subarea_defaults["horton_max"] == 76.2  # mm/hr
+
+    def test_flow_units_not_read_from_model_config(self):
+        # setting flow_units in the model config (1st arg) must be ignored
+        wrapper = SimulationWrapper()
+        wrapper.configure_options({"flow_units": "CFS"}, {})
+        assert not wrapper.is_us_units
+
+
+def _infiltration_row(inp_text, name):
+    section = inp_text.split("[INFILTRATION]", 1)[1]
+    for line in section.splitlines():
+        toks = line.split()
+        if toks and toks[0] == name:
+            return toks
+        if line.startswith("["):
+            break
+    raise AssertionError(f"no INFILTRATION row for {name}")
+
+
+def _two_family_subcatchment_network():
+    """Two subcatchments: S5 has Horton-family attrs, S6 has Green-Ampt-family attrs."""
+    return {
+        "version": 4,
+        "name": DS,
+        "type": "urban_drainage_network",
+        "general": {"enum": {"outfall_type": ["FREE"], "xsection_shape": ["CIRCULAR"]}},
+        "data": {
+            "drainage_junction_entities": {
+                "id": [1],
+                "geometry.x": [0.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [10.0],
+            },
+            "drainage_outfall_entities": {
+                "id": [2],
+                "geometry.x": [50.0],
+                "geometry.y": [0.0],
+                "urban_drainage.invert_elevation": [8.0],
+                "urban_drainage.outfall_type": [0],
+            },
+            "drainage_conduit_entities": {
+                "id": [10],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "shape.length": [50.0],
+                "urban_drainage.roughness": [0.01],
+                "urban_drainage.cross_section_shape": [0],
+                "urban_drainage.cross_section_geometry": [[1.0, 0.0, 0.0, 0.0]],
+            },
+            "drainage_raingage_entities": {"id": [4], "geometry.x": [-50.0], "geometry.y": [50.0]},
+            "drainage_subcatchment_entities": {
+                "id": [5, 6],
+                "urban_drainage.area": [4.0, 4.0],
+                "urban_drainage.width": [400.0, 400.0],
+                "urban_drainage.percent_impervious": [50.0, 50.0],
+                "urban_drainage.slope": [0.5, 0.5],
+                "urban_drainage.outlet_node_id": [1, 1],
+                "urban_drainage.raingage_id": [4, 4],
+                "urban_drainage.max_infiltration_rate": [80.0, None],  # S5 -> Horton family
+                "urban_drainage.min_infiltration_rate": [5.0, None],
+                "urban_drainage.suction_head": [None, 100.0],  # S6 -> Green-Ampt family
+                "urban_drainage.initial_deficit": [None, 0.3],
+            },
+        },
+    }
+
+
+class TestInfiltrationResolution:
+    def test_model_inferred_per_subcatchment(self, initialize_wrapper):
+        # no override/default: each subcatchment's model is inferred from which
+        # attribute family is present, and emitted as the trailing method keyword.
+        wrapper, _ = initialize_wrapper(_two_family_subcatchment_network())
+        inp = Path(wrapper._inp_path).read_text()
+        assert _infiltration_row(inp, "S5")[-1] == "HORTON"
+        assert _infiltration_row(inp, "S6")[-1] == "GREEN_AMPT"
+
+
+class TestInitialConditionSeeds:
+    def test_water_depth_seeds_initial_depth(self, initialize_wrapper):
+        # water_depth is PUB|OPT: supplied as input it seeds the JUNCTIONS Y0 column.
+        network = copy.deepcopy(NETWORK)
+        network["data"]["drainage_junction_entities"]["urban_drainage.water_depth"] = [1.5, 0.0]
+        wrapper, _ = initialize_wrapper(network)
+        section = Path(wrapper._inp_path).read_text().split("[JUNCTIONS]", 1)[1]
+        j1 = next(ln.split() for ln in section.splitlines() if ln.strip().startswith("J1 "))
+        assert float(j1[3]) == 1.5  # Name Elev Ymax Y0 ...
+        wrapper.close()
+
+
+class TestOutfallInflow:
+    def test_generated_inflow_on_outfall_is_applied(self, initialize_wrapper):
+        # pyswmm supports node inflow at an outfall (verified); the attribute is kept.
+        wrapper, dataset = initialize_wrapper()
+        if not dataset.outfalls.generated_inflow.has_data():
+            dataset.outfalls.generated_inflow.initialize(len(dataset.outfalls))
+        dataset.outfalls.generated_inflow.array[:] = [0.1]
+        for target in (300, 600):
+            wrapper.process_changes()
+            wrapper.advance_to(target)
+        wrapper.write_results()
+        assert dataset.outfalls.total_inflow.array[0] > 0.0
+        wrapper.close()

@@ -1,13 +1,13 @@
 
 
 data\_collector
-================
+===============
 
 
 
 
 concurrent
------------
+----------
 
 .. automodule:: movici_simulation_core.models.data_collector.concurrent
    :members:
@@ -17,7 +17,7 @@ concurrent
 
 
 data\_collector
-----------------
+---------------
 
 .. automodule:: movici_simulation_core.models.data_collector.data_collector
    :members:
@@ -27,7 +27,7 @@ data\_collector
 
 
 sqlite\_strategy
------------------
+----------------
 
 .. automodule:: movici_simulation_core.models.data_collector.sqlite_strategy
    :members:
@@ -37,7 +37,7 @@ sqlite\_strategy
 
 
 strategy
----------
+--------
 
 .. automodule:: movici_simulation_core.models.data_collector.strategy
    :members:

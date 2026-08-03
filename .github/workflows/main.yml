@@ -36,7 +36,7 @@ jobs:
         os: ${{ matrix.os }}
 
     - name: Install
-      run: uv sync --group dev --frozen
+      run: uv sync --all-packages --group dev --frozen
 
     - name: Run tests
       run: |

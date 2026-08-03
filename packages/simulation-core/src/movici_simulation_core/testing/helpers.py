@@ -18,7 +18,7 @@ from movici_simulation_core.models.common.attributes import CommonAttributes
 def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
     if isinstance(data, dict):
         if "data" in data:
-            return data
+            return {k: np.asanyarray(v) for k, v in data.items()}
         return {key: dataset_data_to_numpy(val) for key, val in data.items()}
     return {"data": np.asarray(data)}
 
@@ -63,7 +63,7 @@ def dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
 
 def assert_dataset_dicts_equal(a, b, rtol=1e-5, atol=1e-8):
     r"""Deep compares two nested structures (such as ``dict``) and asserts that they are
-    equivalent. ``list``\s and ``numpy.ndarray``s are compared using ``numpy.isequal`` or
+    equivalent. ``list``\s and ``numpy.ndarray``\s are compared using ``numpy.isequal`` or
     ``numpy.isclose`` with ``equal_nan=True``
 
     :param a: the left dictionary object

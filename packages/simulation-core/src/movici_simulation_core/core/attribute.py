@@ -116,6 +116,41 @@ class AttributeOptions(t.Generic[T]):
             )
         return self._enum
 
+    def get_enum_value(self, string: str, case_sensitive: bool = True) -> int:
+        """Return the integer index of the enum member *string*.
+
+        :param string: the enum keyword to look up
+        :param case_sensitive: when ``False``, match case-insensitively
+        :raises ValueError: if no enumeration is configured or *string* is not a member
+        """
+        if self.enum_values is None:
+            raise ValueError("No enumeration is configured for this attribute")
+        if case_sensitive:
+            if string in self.enum_values:
+                return self.enum_values.index(string)
+        else:
+            target = string.casefold()
+            for idx, val in enumerate(self.enum_values):
+                if val.casefold() == target:
+                    return idx
+        raise ValueError(
+            f"'{string}' is not a member of enum '{self.enum_name}': {self.enum_values}"
+        )
+
+    def get_enum_string(self, value: int) -> str:
+        """Return the enum member string for integer index *value*.
+
+        :raises ValueError: if no enumeration is configured or *value* is out of range
+        """
+        if self.enum_values is None:
+            raise ValueError("No enumeration is configured for this attribute")
+        if not 0 <= value < len(self.enum_values):
+            raise ValueError(
+                f"Enum value {value} is out of range for enum '{self.enum_name}' "
+                f"({len(self.enum_values)} members)"
+            )
+        return self.enum_values[value]
+
 
 class Attribute(abc.ABC):
     def __init__(
@@ -179,6 +214,16 @@ class Attribute(abc.ABC):
 
     def get_enumeration(self):
         return self.options.get_enumeration()
+
+    def get_enum_value(self, string: str, case_sensitive: bool = True) -> int:
+        """Return the integer index of the enum member *string* (see
+        :meth:`AttributeOptions.get_enum_value`)."""
+        return self.options.get_enum_value(string, case_sensitive=case_sensitive)
+
+    def get_enum_string(self, value: int) -> str:
+        """Return the enum member string for integer index *value* (see
+        :meth:`AttributeOptions.get_enum_string`)."""
+        return self.options.get_enum_string(value)
 
     @abc.abstractmethod
     def __len__(self):

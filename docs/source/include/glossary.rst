@@ -14,6 +14,7 @@
 .. |Pub/Sub| replace:: :term:`Pub/Sub<Datamask>`
 .. |Scenario| replace:: :term:`Scenario`
 .. |Scenarios| replace:: :term:`Scenarios<Scenario>`
+.. |Service| replace:: :term:`Service`
 .. |Services| replace:: :term:`Services<Service>`
 .. |Simulation| replace:: :term:`Simulation`
 .. |Special| replace:: :term:`Special`

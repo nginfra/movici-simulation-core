@@ -1,17 +1,17 @@
 from .connector import ConnectorStreamHandler, ModelConnector, UpdateDataClient
 from .init_data import (
-    DirectoryInitDataHandler,
+    DirectoryInitDataClient,
     InitDataClient,
     InitDataHandler,
-    ServicedInitDataHandler,
+    ServicedInitDataClient,
 )
 
 __all__ = [
     "ConnectorStreamHandler",
     "ModelConnector",
     "UpdateDataClient",
-    "DirectoryInitDataHandler",
+    "DirectoryInitDataClient",
     "InitDataClient",
     "InitDataHandler",
-    "ServicedInitDataHandler",
+    "ServicedInitDataClient",
 ]

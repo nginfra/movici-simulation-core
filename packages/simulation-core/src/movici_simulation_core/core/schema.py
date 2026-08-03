@@ -24,15 +24,30 @@ class AttributeSchema(types.Extensible):
     def get(self, key, default=None):
         return self.attributes.get(key, default)
 
+    @t.overload
     def get_spec(
         self,
-        name: t.Union[str, t.Tuple[t.Optional[str], str]],
+        name: str,
+        default_data_type: t.Union[DataType, t.Callable[[], DataType]],
+        cache=False,
+    ) -> AttributeSpec: ...
+
+    @t.overload
+    def get_spec(
+        self,
+        name: str,
+        default_data_type: t.Union[DataType, t.Callable[[], DataType], None] = None,
+        cache=False,
+    ) -> AttributeSpec | None: ...
+
+    def get_spec(
+        self,
+        name: str,
         default_data_type: t.Union[DataType, t.Callable[[], DataType], None] = None,
         cache=False,
     ):
         if not isinstance(name, str):
-            name = self._extract_name(name)
-
+            raise TypeError("name must be a single string")
         if spec := self.get(name):
             return spec
         if default_data_type is None:
@@ -43,19 +58,6 @@ class AttributeSchema(types.Extensible):
         if cache:
             self.add_attribute(spec)
         return spec
-
-    # TODO: Remove _extract_name once all models convert old style to new style
-    @staticmethod
-    def _extract_name(identifier):
-        # fallback behaviour for dealing with (component, attribute) style attribute identifier
-        if not isinstance(identifier, t.Sequence) or len(identifier) != 2:
-            raise TypeError(f"name must be a string, not {type(identifier)}")
-        component, name = identifier
-        if component is not None:
-            raise ValueError(
-                f"Components are no longer supported, received attribute identifier {identifier}"
-            )
-        return name
 
     def add_attributes(self, attributes: t.Iterable[AttributeSpec]):
         for attr in attributes:
@@ -125,7 +127,7 @@ def attributes_from_dict(d: dict):
     return filter(lambda i: isinstance(i, AttributeSpec), d.values())
 
 
-ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr"}
+ALL_ROWPTR_KEYS = {"row_ptr", "ind_ptr", "indptr", "rowptr"}
 DEFAULT_ROWPTR_KEY = "indptr"
 
 
@@ -140,7 +142,7 @@ def get_rowptr(d: dict):
         return None
 
 
-def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]):
+def infer_data_type_from_array(attr_data: t.Union[dict, np.ndarray, TrackedCSRArray]) -> DataType:
     """given array data, either as an np.ndarray, TrackedCSRArray or a "data"/"row_ptr" dictionary
     infer the `DataType` of that array data
     """

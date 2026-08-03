@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[project]
+name = "movici-urban-drainage-model"
+dynamic = ["version"]
+description = "Urban drainage (storm/sewer) network simulation model for Movici using pyswmm/SWMM"
+readme = "README.rst"
+requires-python = ">=3.10,<3.14"
+license = { text = "Movici Public License" }
+authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
+maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: Free for non-commercial use",
+  "License :: Other/Proprietary License",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+]
+
+dependencies = ["movici-simulation-core", "numpy", "pyswmm>=2.0,<3.0"]
+
+[project.entry-points."movici.plugins"]
+urban_drainage = "movici_urban_drainage_model.model:Model"
+urban_drainage_attributes = "movici_urban_drainage_model.attributes:UrbanDrainageAttributes"
+
+[project.entry-points."movici.dataset_creator.source"]
+swmm = "movici_urban_drainage_model.swmm_source:SWMMSource"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+fallback-version = "0.0.0"

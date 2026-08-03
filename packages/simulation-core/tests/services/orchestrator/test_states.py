@@ -1,12 +1,17 @@
+import typing as t
 from unittest.mock import Mock, call
 
 import pytest
 
-from movici_simulation_core.exceptions import SimulationExit
-from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.messages import QuitMessage, RemapMessage
 from movici_simulation_core.services.orchestrator.context import ConnectedModel, ModelCollection
-from movici_simulation_core.services.orchestrator.fsm import FSMDone, send_silent
+from movici_simulation_core.services.orchestrator.fsm import FSMDone, FSMError
+from movici_simulation_core.services.orchestrator.remap import (
+    AttributeRef,
+    RemapConflictError,
+)
 from movici_simulation_core.services.orchestrator.states import (
+    ComputeAndSendRemap,
     EndFinalizingPhase,
     NewTime,
     OrchestratorState,
@@ -18,7 +23,7 @@ from movici_simulation_core.services.orchestrator.states import (
 
 
 class BaseTestState:
-    state_cls = OrchestratorState
+    state_cls: t.Type[OrchestratorState]
 
     @pytest.fixture
     def state(self, context):
@@ -56,14 +61,11 @@ class TestWaitForModels(BaseTestState):
 
     @pytest.fixture
     def send_message(self, state, event):
-        runner = state.run()
-        send_silent(runner, None)
 
         def _send(name=None, msg=None):
             msg = msg or event
             name = name or "model_a"
-            send_silent(runner, (name, msg))
-            return runner
+            state.handle_event((name, msg))
 
         return _send
 
@@ -72,14 +74,61 @@ class TestWaitForModels(BaseTestState):
         send_message()
         assert model_mock.recv_event.call_args == call(event)
 
-    def test_quits_when_model_crashes(self, send_message, model_mock, state):
-        model_mock.handle_message.side_effect = SimulationExit
-        send_message(name="model_a")
-        assert state.context.failed == ["model_a"]
+    def test_ignores_unknown_models(self, send_message, context):
+        context.recv_message = Mock()
 
-    def test_ignores_unknown_models(self, send_message, model_mock):
+        # a known model is called
+        send_message(name="model_a")
+        assert context.recv_message.call_count == 1
+        context.recv_message.reset_mock()
+
+        # an unknown model is ignored
         send_message(name="unknown")
-        assert model_mock.handle_message.call_count == 0
+        assert context.recv_message.call_count == 0
+
+
+class TestComputeAndSendRemap(BaseTestState):
+    state_cls = ComputeAndSendRemap
+
+    def test_no_plan_no_messages_sent(self, state, context):
+        context.models.compute_remap_plan.return_value = {}
+        state.run()
+        assert context.models.apply_remap_plan.call_count == 0
+
+    def test_plan_is_applied(self, state, context):
+        plan = {"model_a": RemapMessage(pub={"ds": {"eg": {"x": "x:model_a:i"}}})}
+        context.models.compute_remap_plan.return_value = plan
+        state.run()
+        assert context.models.apply_remap_plan.call_args == call(plan)
+
+    def test_conflict_marks_all_models_failed(self, state, context):
+        # Use real ConnectedModels so we can assert .failed flips on them.
+        models = ModelCollection(
+            a=ConnectedModel("a", Mock(), Mock()),
+            b=ConnectedModel("b", Mock(), Mock()),
+        )
+        context.models = models
+        context.logger = Mock()
+        compute_mock = Mock(
+            side_effect=RemapConflictError(AttributeRef("ds", "eg", "x"), ["a", "b"], priority=10)
+        )
+        models.compute_remap_plan = compute_mock
+        state.run()
+        assert all(m.failed for m in models.values())
+
+    def test_conflict_calls_logger(self, state, context):
+        models = ModelCollection(
+            a=ConnectedModel("a", Mock(), Mock()),
+            b=ConnectedModel("b", Mock(), Mock()),
+        )
+        context.models = models
+        context.logger = Mock()
+        compute_mock = Mock(
+            side_effect=RemapConflictError(AttributeRef("ds", "eg", "x"), ["a", "b"], priority=10)
+        )
+        models.compute_remap_plan = compute_mock
+        state.run()
+        assert context.logger.exception.call_count == 1
 
 
 class TestStartRunningPhase(BaseTestState):
@@ -97,9 +146,13 @@ class TestStartRunningPhase(BaseTestState):
 class TestNewTime(BaseTestState):
     state_cls = NewTime
 
+    @pytest.fixture
+    def context(self):
+        return Mock()
+
     def test_queues_models(self, state, context):
         state.run()
-        assert context.timeline.queue_for_next_time.call_args == call(context.models)
+        assert context.queue_models_for_next_time.call_count == 1
 
 
 class TestStartFinalizingPhase(BaseTestState):
@@ -110,12 +163,18 @@ class TestStartFinalizingPhase(BaseTestState):
         assert context.phase_timer.restart.call_count == 1
 
     def test_replaces_queue_with_quit_message(self, state, context):
+        context.recv_for_all = Mock()
         state.run()
-        assert type(context.models.queue_all.call_args[0][0]) is QuitMessage
+        assert type(context.recv_for_all.call_args[0][0]) is QuitMessage
 
 
 class TestEndFinalizingPhase(BaseTestState):
     state_cls = EndFinalizingPhase
+
+    @pytest.fixture
+    def context(self, context):
+        context.models = ModelCollection(model_b=ConnectedModel("model", Mock(), Mock()))
+        return context
 
     def run_silent(self, state):
         try:
@@ -125,5 +184,13 @@ class TestEndFinalizingPhase(BaseTestState):
 
     def test_finalizes_context(self, context, state):
         context.finalize = Mock()
-        self.run_silent(state)
+        with pytest.raises(FSMDone):
+            state.run()
+        assert context.finalize.call_count == 1
+
+    def test_raises_FSMError_on_error(self, context, state):
+        context.finalize = Mock()
+        next(iter(context.models.values())).failed = True
+        with pytest.raises(FSMError):
+            state.run()
         assert context.finalize.call_count == 1

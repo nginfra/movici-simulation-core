@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -13,18 +14,30 @@ from movici_simulation_core.messages import (
     PutDataMessage,
     QuitMessage,
     RegistrationMessage,
+    RemapMessage,
     ResultMessage,
     UpdateMessage,
     UpdateSeriesMessage,
     dump_message,
     load_message,
 )
+from movici_simulation_core.types import Priority
 
 
 @pytest.mark.parametrize(
     "message",
     [
-        RegistrationMessage(pub={"a": None}, sub={"b": None}),
+        RegistrationMessage(pub={"a": None}, sub={"b": None}, priority=10),
+        RegistrationMessage(
+            pub={"a": None}, sub={"b": None}, priority=int(Priority.SOLVER_HELPER)
+        ),
+        RemapMessage(),
+        RemapMessage(pub={"ds": {"eg": {"speed": "speed:model_a:i"}}}),
+        RemapMessage(sub={"ds": {"eg": {"speed:model_a:i": "speed"}}}),
+        RemapMessage(
+            pub={"ds": {"eg": {"speed": "speed:model_a:i"}}},
+            sub={"ds": {"eg": {"a:model_a:i": "a", "a:model_a2:i": "a"}}},
+        ),
         UpdateMessage(1, "key", "address"),
         UpdateMessage(1, "key", "address", origin="some_model"),
         UpdateMessage(1, None, None),
@@ -96,6 +109,16 @@ def test_dump_update_data_message():
 def test_error_on_invalid_message_content():
     with pytest.raises(ValueError):
         ResultMessage(key=None, address="something")
+
+
+def test_registration_message_casts_priority_to_int():
+    serialized = RegistrationMessage(pub=None, sub=None, priority=Priority.REGULAR).to_bytes()
+    assert json.loads(serialized[0])["priority"] == int(Priority.REGULAR)
+
+
+def test_registration_message_rejects_negative_priority():
+    with pytest.raises(ValueError, match="non-negative"):
+        RegistrationMessage(pub=None, sub=None, priority=-1)
 
 
 def test_update_series_message_has_no_timestamp_when_emtpy():

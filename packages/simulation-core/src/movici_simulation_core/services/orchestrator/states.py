@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from abc import ABC
 
-from movici_simulation_core.messages import QuitMessage
+from movici_simulation_core.messages import ModelMessage, QuitMessage
 from movici_simulation_core.services.orchestrator.context import Context
 from movici_simulation_core.services.orchestrator.fsm import (
-    Always,
     Condition,
     FSMDone,
+    FSMError,
     State,
-    TransitionsT,
 )
+from movici_simulation_core.services.orchestrator.remap import RemapPlanningError
 
 
 class OrchestratorCondition(Condition[Context], ABC):
@@ -42,25 +42,55 @@ class StartInitializingPhase(OrchestratorState):
         self.context.phase_timer.start()
         self.context.log_new_phase("Initializing Phase")
 
-    def transitions(self):
-        return [(Always, ModelsRegistration)]
-
 
 class WaitForModels(OrchestratorState, ABC):
-    def run(self):
-        ident, msg = yield
+    requires_event = True
+
+    def handle_event(self, event: ModelMessage):
+        ident, msg = event
 
         if not (model := self.context.models.get(ident)):
             return
-        model.recv_event(msg)
+        self.context.recv_message(model, msg)
 
 
 class ModelsRegistration(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsReady, StartRunningPhase),
-        ]
+    pass
+
+
+class ComputeAndSendRemap(OrchestratorState):
+    """Compute the REMAP plan from the registered pub/sub masks + priorities and queue a
+    REMAP command for every affected model. Each affected model transitions to its
+    Remapping state (Busy) and must acknowledge. Models that need no remap stay in
+    AwaitingRemap (not busy) and pass through transparently. See issue #127.
+
+    REMAP is one-shot: this state runs exactly once, after all models have registered and
+    before the first ``NEW_TIME``. Attribute ownership (and therefore the pub/sub renaming)
+    is fixed for the whole run — there is no path that re-enters this state, so priorities
+    cannot change mid-simulation. Runtime ownership transfer is deliberately out of scope
+    (see issue #127)."""
+
+    def run(self):
+        try:
+            plan = self.context.models.compute_remap_plan()
+        except RemapPlanningError:
+            # No valid plan (ownership conflict, wildcard subscriber, ...) — log a
+            # user-actionable message and tear the simulation down via the standard
+            # finalize path so any partially-registered models still get a clean QUIT.
+            self.context.logger.exception("An error occurred while planning attribute remaps")
+            for model in self.context.models.values():
+                model.failed = True
+            return
+        if not plan:
+            return
+        self.context.models.apply_remap_plan(plan)
+
+
+class WaitForRemapAcks(WaitForModels):
+    """Wait until every model that received a REMAP has acknowledged before proceeding to
+    the Running phase. See issue #127."""
+
+    pass
 
 
 class StartRunningPhase(OrchestratorState):
@@ -70,47 +100,29 @@ class StartRunningPhase(OrchestratorState):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Running Phase")
 
-    def transitions(self) -> TransitionsT:
-        return [(Always, NewTime)]
-
 
 class NewTime(OrchestratorState):
     def run(self):
         self.context.log_new_time()
-        self.context.timeline.queue_for_next_time(self.context.models)
-
-    def transitions(self) -> TransitionsT:
-        return [(Always, WaitForResults)]
+        self.context.queue_models_for_next_time()
 
 
 class WaitForResults(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [
-            (Failed, StartFinalizingPhase),
-            (AllModelsDone, StartFinalizingPhase),
-            (AllModelsReady, NewTime),
-        ]
+    pass
 
 
 class StartFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.phase_timer.restart()
         self.context.log_new_phase("Finalizing Phase")
-        self.context.models.queue_all(QuitMessage(due_to_failure=bool(self.context.failed)))
-
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase), (Always, FinalizingWaitForModels)]
+        self.context.recv_for_all(QuitMessage(due_to_failure=bool(self.context.failed)))
 
 
 class FinalizingWaitForModels(WaitForModels):
-    def transitions(self) -> TransitionsT:
-        return [(AllModelsReady, EndFinalizingPhase)]
+    pass
 
 
 class EndFinalizingPhase(OrchestratorState):
     def run(self):
         self.context.finalize()
-        raise FSMDone
-
-    def transitions(self) -> TransitionsT:
-        return []
+        raise FSMError if self.context.failed else FSMDone

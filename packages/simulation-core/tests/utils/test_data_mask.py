@@ -1,6 +1,15 @@
 import pytest
 
-from movici_simulation_core.utils.data_mask import filter_data, masks_overlap, validate_mask
+from movici_simulation_core.messages import RemapMessage
+from movici_simulation_core.types import DataMask
+from movici_simulation_core.utils.data_mask import (
+    apply_remap_to_data_mask,
+    apply_remap_to_pub_mask,
+    apply_remap_to_sub_mask,
+    filter_data,
+    masks_overlap,
+    validate_mask,
+)
 
 pub_sub_masks = [
     (
@@ -243,6 +252,155 @@ test_cases = {
         ],
     },
 }
+
+
+dataset_with_internal = {
+    "dataset": {
+        "entity_group": {
+            "id": {"data": [1, 2, 3]},
+            "a": {"data": [1, 2, 3]},
+            "a:model_a:i": {"data": [10, 20, 30]},
+            "a:model_b:i": {"data": [100, 200, 300]},
+        },
+    }
+}
+
+
+def test_wildcard_skips_internal_attributes():
+    """Wildcard subscribers (e.g. a data collector with ``gather_filter: "*"``) must not
+    receive the per-publisher internal variants of an attribute. See issue #127."""
+    result = filter_data(dataset_with_internal, None)
+    assert has_path(result, "dataset/entity_group/a/data")
+    assert has_path(result, "dataset/entity_group/id/data")
+    assert not has_path(result, "dataset/entity_group/a:model_a:i/data")
+    assert not has_path(result, "dataset/entity_group/a:model_b:i/data")
+
+
+def test_entity_wildcard_skips_internal_attributes():
+    """Wildcard at the entity-group level (e.g. ``{"dataset": {"entity_group": None}}``)
+    also filters out ``:i`` attributes — the rule applies wherever the leaf mask is open."""
+    result = filter_data(dataset_with_internal, {"dataset": {"entity_group": None}})
+    assert has_path(result, "dataset/entity_group/a/data")
+    assert not has_path(result, "dataset/entity_group/a:model_a:i/data")
+
+
+def test_explicit_internal_subscription_returns_it():
+    """If a model explicitly subscribes to an internal variant, it gets the data — this is
+    the path solver helpers use after a REMAP installs a sub remap."""
+    result = filter_data(
+        dataset_with_internal,
+        {"dataset": {"entity_group": ["a:model_a:i"]}},
+    )
+    assert has_path(result, "dataset/entity_group/a:model_a:i/data")
+    assert not has_path(result, "dataset/entity_group/a/data")
+
+
+def test_dataset_wildcard_skips_internal_attributes():
+    """Wildcard at the dataset level still filters at the attribute leaf."""
+    result = filter_data(dataset_with_internal, {"dataset": None})
+    assert has_path(result, "dataset/entity_group/a/data")
+    assert not has_path(result, "dataset/entity_group/a:model_a:i/data")
+
+
+def test_apply_remap_to_datamask():
+    mask: DataMask = {
+        "pub": {"ds": {"eg": ["attr"]}},
+        "sub": {"ds": {"eg": ["attr2"]}},
+    }
+
+    remap = RemapMessage(
+        pub={"ds": {"eg": {"attr": "attr:m:i"}}},
+        sub={"ds": {"eg": {"attr2:m:i": "attr2"}}},
+    )
+    assert apply_remap_to_data_mask(mask, remap) == {
+        "pub": {"ds": {"eg": ["attr:m:i"]}},
+        "sub": {"ds": {"eg": ["attr2:m:i"]}},
+    }
+
+
+class TestApplyRemapToSubMask:
+    def test_replaces_originals_with_variants(self):
+        mask = {"ds": {"eg": ["a", "b"]}}
+        result = apply_remap_to_sub_mask(mask, {"ds": {"eg": {"a:m1:i": "a", "a:m2:i": "a"}}})
+        # 'a' was replaced by its variants; 'b' (untouched by REMAP) stays.
+        assert result is not None
+        assert set(result["ds"]["eg"]) == {"a:m1:i", "a:m2:i", "b"}
+
+    def test_back_propagation_keeps_canonical(self):
+        mask = {"ds": {"eg": ["a"]}}
+        result = apply_remap_to_sub_mask(mask, {"ds": {"eg": {"a:m1:i": "a", "a": "a"}}})
+        assert result is not None
+        assert set(result["ds"]["eg"]) == {"a", "a:m1:i"}
+
+    @pytest.mark.parametrize(
+        "data_mask, expected",
+        [
+            (None, None),
+            ({"ds": None}, {"ds": None}),
+            ({"another": None}, {"another": None, "ds": {"eg": ["a:m:i"]}}),
+            ({"another": None, "ds": {"eg": ["a"]}}, {"another": None, "ds": {"eg": ["a:m:i"]}}),
+            ({"ds": {"eg": ["a"], "another": None}}, {"ds": {"eg": ["a:m:i"], "another": None}}),
+            ({"ds": {"eg": None}}, {"ds": {"eg": None}}),
+        ],
+    )
+    def test_wildcards_are_preserved(self, data_mask, expected):
+        # A wildcard subscription must remain a wildcard after REMAP — otherwise a model
+        # subscribing to "everything" silently loses everything except the variants
+        # mentioned in the REMAP
+        remap = {"ds": {"eg": {"a:m:i": "a"}}}
+        assert apply_remap_to_sub_mask(data_mask, remap) == expected
+
+    def test_empty_remap_is_noop(self):
+        mask = {"ds": {"eg": ["a"]}}
+        assert apply_remap_to_sub_mask(mask, None) is mask
+        assert apply_remap_to_sub_mask(mask, {}) is mask
+
+    def test_malformed_entity_group_value_raises(self):
+        # A non-list, non-None entity-group entry is a programmer error elsewhere; fail
+        # noisily rather than silently dropping the original data.
+        with pytest.raises(ValueError, match="Malformed mask"):
+            apply_remap_to_sub_mask({"ds": {"eg": "not_a_list"}}, {"ds": {"eg": {"a:m1:i": "a"}}})
+
+    def test_adds_new_attributes_to_sub_mask(self):
+        result = apply_remap_to_sub_mask({}, {"ds": {"eg": {"a:m1:i": "a", "a:m2:i": "a"}}})
+        assert result is not None
+        assert set(result["ds"]["eg"]) == {"a:m1:i", "a:m2:i"}
+
+
+class TestApplyRemapToPubMask:
+    def test_replaces_originals_with_variants(self):
+        result = apply_remap_to_pub_mask(
+            {"ds": {"eg": ["speed"]}}, {"ds": {"eg": {"speed": "speed:m:i"}}}
+        )
+        assert result == {"ds": {"eg": ["speed:m:i"]}}
+
+    @pytest.mark.parametrize(
+        "data_mask, expected",
+        [
+            (None, None),
+            ({"ds": None}, {"ds": None}),
+            ({"another": None}, {"another": None}),
+            ({"another": None, "ds": {"eg": ["a"]}}, {"another": None, "ds": {"eg": ["a:m:i"]}}),
+            ({"ds": {"eg": None}}, {"ds": {"eg": None}}),
+        ],
+    )
+    def test_wildcards_are_preserved(self, data_mask, expected):
+        remap = {"ds": {"eg": {"a": "a:m:i"}}}
+        assert apply_remap_to_pub_mask(data_mask, remap) == expected
+
+    def test_dataset_wildcard_preserved(self):
+        assert apply_remap_to_pub_mask({"ds": None}, {"ds": {"eg": {"a": "a:m:i"}}})
+
+    def test_entity_group_wildcard_preserved(self):
+        assert apply_remap_to_pub_mask(None, {"ds": {"eg": {"a": "a:m:i"}}}) is None
+
+    def test_empty_remap_is_noop(self):
+        mask = {"ds": {"eg": ["a"]}}
+        assert apply_remap_to_pub_mask(mask, None) is mask
+
+    def test_malformed_entity_group_value_raises(self):
+        with pytest.raises(ValueError, match="Malformed mask"):
+            apply_remap_to_pub_mask({"ds": {"eg": 42}}, {"ds": {"eg": {"a": "a:m:i"}}})
 
 
 @pytest.mark.parametrize(

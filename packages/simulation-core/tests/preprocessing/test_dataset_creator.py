@@ -358,6 +358,12 @@ def sources(create_data_sources):
 
 
 class TestSourcesSetup:
+    @pytest.fixture(autouse=True)
+    def clean_sources_setup(self):
+        current_registry = dict(SourcesSetup._source_types)
+        yield
+        SourcesSetup._source_types = current_registry
+
     @pytest.fixture
     def sources(self):
         return {
@@ -388,6 +394,38 @@ class TestSourcesSetup:
         op({}, sources=sources)
         assert sources.keys() == {"some_points", "some_lines", "empty"}
         assert all(isinstance(s, DataSource) for s in sources.values())
+
+    def test_unknown_source_type_raises(self):
+        config = {
+            "__sources__": {"foo": {"source_type": "definitely-not-registered", "path": "/x"}},
+            "data": {},
+        }
+        with pytest.raises(ValueError, match="Unknown source type"):
+            SourcesSetup(config)({}, sources={})
+
+    def test_register_adds_source_type(self):
+        class DummySource(DataSource):
+            seen: t.ClassVar[t.List[dict]] = []
+
+            @classmethod
+            def from_source_info(cls, source_info):
+                cls.seen.append(source_info)
+                return cls()
+
+            def __len__(self):
+                return 0
+
+        SourcesSetup.register("dummy-test", DummySource)
+        op = SourcesSetup(
+            {
+                "__sources__": {"x": {"source_type": "dummy-test", "path": "/p"}},
+                "data": {},
+            }
+        )
+        sources = {}
+        op({}, sources=sources)
+        assert isinstance(sources["x"], DummySource)
+        assert DummySource.seen == [{"source_type": "dummy-test", "path": "/p"}]
 
 
 class TestCRSTransformation:
@@ -1077,7 +1115,10 @@ class TestIDLinking:
 
     @pytest.fixture
     def prepare_dataset(self, sources):
-        def _prepare_dataset(config):
+        default_sources = sources
+
+        def _prepare_dataset(config, sources=None):
+            sources = sources or default_sources
             return DatasetCreator(
                 [
                     AttributeDataLoading,
@@ -1105,6 +1146,31 @@ class TestIDLinking:
                 self.get_val_for_id(result["data"]["points"], "reference", node_id)
                 == node_refs[idx]
             )
+
+    def test_id_linking_skips_none_values(self, config, prepare_dataset, create_data_sources):
+        sources = create_data_sources(
+            {
+                "some_points": [
+                    Point(0, 0, attributes={"ref": "point_0"}),
+                    Point(1, 1, attributes={"ref": "point_1"}),
+                ],
+                "some_lines": [
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": "point_0"}),
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={"node_ref": None}),
+                    LineString([(-1, -1), (0.5, 0.5)], attributes={}),
+                ],
+            }
+        )
+        dataset = prepare_dataset(config, sources=sources)
+        op = IDLinking(config)
+        result = op(dataset, sources=sources)
+        node_refs = result["data"]["lines"]["node_ref"]
+        node_ids = result["data"]["lines"]["node_id"]
+        assert node_refs == [
+            self.get_val_for_id(result["data"]["points"], "reference", node_ids[0]),
+            None,
+            None,
+        ]
 
     def test_link_ids_from_list_of_entries(self, prepare_dataset, sources):
         config = {
@@ -1376,15 +1442,6 @@ class TestSchemaValidation:
                 },
             },
             {**min_required, "extra": "key"},
-            {
-                **min_required,
-                "__sources__": {
-                    "foo": {
-                        "source_type": "invalid",  # invalid source type
-                        "path": "/some/other/path",
-                    },
-                },
-            },
             {"__meta__": {"crs": 12.3}, **min_required},
             {"general": {"enum": ["invalid"]}, **min_required},
             {"general": {"special": ["invalid"]}, **min_required},
