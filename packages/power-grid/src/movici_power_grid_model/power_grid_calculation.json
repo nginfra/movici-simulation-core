@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/power_grid_calculation/1.0.0",
+  "type": "object",
+  "required": ["dataset"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "description": "Name of the electrical network dataset",
+      "movici.type": "dataset",
+      "movici.datasetType": "electrical_network"
+    },
+    "calculation_type": {
+      "type": "string",
+      "description": "Type of calculation to perform",
+      "enum": ["power_flow", "state_estimation", "short_circuit"],
+      "default": "power_flow"
+    },
+    "algorithm": {
+      "type": "string",
+      "description": "Power flow calculation algorithm",
+      "enum": ["newton_raphson", "iterative_current", "linear", "linear_current"],
+      "default": "newton_raphson"
+    },
+    "symmetric": {
+      "type": "boolean",
+      "description": "Use symmetric (balanced) calculation",
+      "default": true
+    },
+    "tap_changing": {
+      "type": "string",
+      "description": "Automatic tap changing strategy",
+      "enum": ["disabled", "any_valid_tap", "min_voltage_tap", "max_voltage_tap", "fast_any_tap"],
+      "default": "disabled"
+    }
+  },
+  "additionalProperties": false
+}
