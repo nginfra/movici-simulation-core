@@ -273,6 +273,9 @@ class AttributeType(Base):
         RegexMatchingString(pattern=r"[a-z][a-z_]*", length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH)
     )
 
+    # prevent attribute from being deleted or renamed
+    protected: Mapped[bool] = mapped_column(default=False)
+
     @property
     def data_type(self):
         py_type = {
@@ -291,6 +294,7 @@ class AttributeType(Base):
             unit=self.unit,
             description=self.description,
             enum_name=self.enum_name,
+            protected=self.protected,
         )
 
 
