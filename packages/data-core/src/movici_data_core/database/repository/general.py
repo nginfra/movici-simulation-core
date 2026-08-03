@@ -192,6 +192,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             unit=obj.unit,
             description=obj.description,
             enum_name=obj.enum_name,
+            protected=obj.protected,
         )
         return t.cast(
             UUID,
@@ -226,6 +227,10 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("attribute_type", id=id)
+
+        if current.protected and current.name != obj.name:
+            raise InvalidAction(f"Cannot rename protected attribute type '{current.name}'")
+
         in_use = await self.session.scalar(
             select(db.Attribute.id).where(db.Attribute.attribute_type_id == id).limit(1)
         )
@@ -241,10 +246,19 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             unit=obj.unit,
             description=obj.description,
             enum_name=obj.enum_name,
+            protected=obj.protected,
         )
         await self.session.execute(
             update(db.AttributeType).where(db.AttributeType.id == id).values(**payload)
         )
+
+    async def delete(self, id: UUID):
+        current = await self.get_by_id(id)
+        if current is None:
+            return
+        if current.protected:
+            raise InvalidAction(f"Cannot delete protected attribute type '{current.name}'")
+        return await super().delete(id)
 
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
         """Ensure that an attribute type exists in the database or raise an error. If the attribute

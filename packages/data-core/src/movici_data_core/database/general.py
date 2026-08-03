@@ -135,7 +135,9 @@ async def create_default_attribute_types(session: AsyncSession):
             description="3D polygon geometry",
         ),
     ]
-    await session.execute(insert(AttributeType), default_attributes)
+    await session.execute(
+        insert(AttributeType), [{**attr, "protected": True} for attr in default_attributes]
+    )
 
 
 async def create_default_workspace(
