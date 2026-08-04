@@ -6,12 +6,12 @@ import itertools
 import typing as t
 from uuid import UUID
 
-import numpy as np
 from sqlalchemy import ColumnElement, delete, exists, insert, select, update
 from sqlalchemy.orm import contains_eager, joinedload, selectinload
 
 from movici_data_core import bounding_box
 from movici_data_core.database import model as db
+from movici_data_core.database.repository.state_aggregator import DatasetStateAggregator
 from movici_data_core.domain_model import (
     AttributeSummary,
     BoundingBox,
@@ -33,14 +33,9 @@ from movici_data_core.exceptions import (
     map_errors,
 )
 from movici_data_core.validators import ModelConfigValidator
-from movici_simulation_core import Index
-from movici_simulation_core.core import get_rowptr
-from movici_simulation_core.core.attribute import get_undefined
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
-from movici_simulation_core.csr import update_csr_array
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
 from movici_simulation_core.types import NumpyAttributeData
-from movici_simulation_core.utils import determine_new_unicode_dtype
 
 from .common import SQLResourceRepository, dataset_filter_to_where_clause, validated_payload_dict
 
@@ -168,9 +163,11 @@ class ScenarioRepository(SQLResourceRepository):
                 message="dataset does not exist for this scenario",
             )
 
-        aggregator = ScenarioStateAggregator()
-        aggregator.add_dataset_attributes(
-            await self._get_dataset_attributes(dataset_id, state_filter)
+        aggregator = DatasetStateAggregator()
+        self._add_attributes_to_aggregator(
+            aggregator,
+            await self._get_dataset_attributes(dataset_id, state_filter),
+            is_initial=True,
         )
         current_update = None
         current_attributes: list[db.Attribute] = []
@@ -181,12 +178,28 @@ class ScenarioRepository(SQLResourceRepository):
             if update_id == current_update:
                 current_attributes.append(attribute)
                 continue
-            aggregator.add_update_attributes(current_attributes)
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
             current_update = update_id
             current_attributes = [attribute]
         if current_attributes:
-            aggregator.add_update_attributes(current_attributes)
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
         return aggregator.state
+
+    async def _get_bounding_box(self, scenario_id: UUID):
+        bboxs_from_datasets = await self.session.scalars(
+            select(db.Dataset.bounding_box)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == scenario_id)
+        )
+        bboxs_from_updates = await self.session.scalars(
+            select(db.Update.bounding_box)
+            .where(db.Update.scenario_id == scenario_id)
+            .where(db.Update.bounding_box.isnot(None))
+        )
+        return bounding_box.calculate_new_bounding_box(
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_datasets),
+            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
+        )
 
     async def _get_dataset_attributes(self, dataset_id: UUID, state_filter: ScenarioStateFilter):
         query = (
@@ -233,21 +246,34 @@ class ScenarioRepository(SQLResourceRepository):
             query = query.where(dataset_filter_to_where_clause(state_filter))
         return (await self.session.execute(query)).all()
 
-    async def _get_bounding_box(self, scenario_id: UUID):
-        bboxs_from_datasets = await self.session.scalars(
-            select(db.Dataset.bounding_box)
-            .join(db.ScenarioDataset)
-            .where(db.ScenarioDataset.scenario_id == scenario_id)
-        )
-        bboxs_from_updates = await self.session.scalars(
-            select(db.Update.bounding_box)
-            .where(db.Update.scenario_id == scenario_id)
-            .where(db.Update.bounding_box.isnot(None))
-        )
-        return bounding_box.calculate_new_bounding_box(
-            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_datasets),
-            *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
-        )
+    def _add_attributes_to_aggregator(
+        self,
+        aggregator: DatasetStateAggregator,
+        attributes: t.Iterable[db.Attribute],
+        is_initial: bool,
+    ):
+        dataset_data = self._combine_attributes(attributes)
+        aggregator.add_dataset_data(dataset_data, allow_new_entity_groups=is_initial)
+
+    @staticmethod
+    def _combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> NumpyDatasetData:
+        result: NumpyDatasetData = {}
+        for attribute in attributes:
+            attribute_name = attribute.attribute_type.name
+            entity_group_name = attribute.entity_type.name
+            entity_group_data = result.setdefault(entity_group_name, {})
+            if attribute_name in entity_group_data:
+                raise ValueError(
+                    f"Duplicate attribute '{attribute_name}' found in"
+                    f" entity group '{entity_group_name}'"
+                )
+
+            data = attribute.data.to_numpy(copy=copy)
+            attr_data: NumpyAttributeData = {"data": data}
+            if attribute.rowptr is not None:
+                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy(copy=copy)
+            entity_group_data[attribute_name] = attr_data
+        return result
 
     @map_errors(
         (ForeignKeyConstraintFailed, lambda: InvalidAction("Cannot delete default scenario"))
@@ -589,105 +615,4 @@ class ScenarioRepository(SQLResourceRepository):
         result.pop("type", None)
         for ref in scenario_model.references:
             ref.unset_value(result)
-        return result
-
-
-class ScenarioStateAggregator:
-    def __init__(self):
-        self.indexes: dict[str, Index] = {}
-        self.state: dict[str, dict[str, NumpyAttributeData]] = {}
-
-    def add_dataset_attributes(self, attributes: t.Iterable[db.Attribute]):
-        r"""Add ``Attribute``\s coming from ``DatasetAttribute`` to the aggregator."""
-
-        result = self.combine_attributes(attributes, copy=True)
-        for eg, data in result.items():
-            if "id" not in data:
-                raise ValueError(f"No 'id' array found for entity group '{eg}'")
-            self.indexes[eg] = Index(data["id"]["data"])
-            self.state = result
-
-    def add_update_attributes(self, attributes: t.Iterable[db.Attribute]):
-        r"""Add ``Attribute``\s coming from ``UpdateAttribute`` to the aggregator. The attributes
-        must be from a single update"""
-
-        result = self.combine_attributes(attributes, copy=True)
-        for entity_group, entity_group_data in result.items():
-            if "id" not in entity_group_data:
-                raise ValueError(f"No 'id' array found for entity group '{entity_group}'")
-            if (index := self.indexes.get(entity_group)) is None:
-                raise ValueError(f"'{entity_group}' is not valid entity group for this dataset")
-
-            ids = entity_group_data["id"]["data"]
-            indices = t.cast(np.ndarray, index[ids])
-
-            if np.any(invalid := (indices == -1)):
-                raise ValueError(
-                    f"id{'s' if len(invalid) > 1 else ''} "
-                    f"{', '.join(str(val) for val in ids[invalid])} not found in dataset"
-                )
-            current_state = self.state[entity_group]
-            for attribute_name, attr_data in entity_group_data.items():
-                if attribute_name == "id":
-                    continue
-                data = attr_data["data"]
-                rowptr = get_rowptr(t.cast(dict, attr_data))
-                is_csr = rowptr is not None
-                if attribute_name not in current_state:
-                    current_state[attribute_name] = self.get_undefined_array(
-                        length=len(index),
-                        unit_shape=data.shape[1:],
-                        dtype=data.dtype,
-                        is_csr=is_csr,
-                    )
-                current_data = current_state[attribute_name]
-                if dtype := determine_new_unicode_dtype(data, current_data["data"]):
-                    current_data["data"] = current_data["data"].astype(dtype)
-                if is_csr:
-                    current_rowptr = get_rowptr(t.cast(dict, current_data))
-
-                    new_data, new_rowptr = update_csr_array(
-                        data=current_data["data"],
-                        row_ptr=current_rowptr,
-                        upd_data=data,
-                        upd_row_ptr=rowptr,
-                        upd_indices=indices,
-                    )
-                    current_state[attribute_name] = {
-                        "data": new_data,
-                        DEFAULT_ROWPTR_KEY: new_rowptr,
-                    }
-                else:
-                    current_state[attribute_name]["data"][indices] = data
-
-    @staticmethod
-    def get_undefined_array(
-        length: int, unit_shape: tuple, dtype: t.Any, is_csr=False
-    ) -> NumpyAttributeData:
-        undefined = get_undefined(dtype)
-        result: NumpyAttributeData = {
-            "data": np.full((length, *unit_shape), fill_value=undefined, dtype=dtype)
-        }
-        if is_csr:
-            result[DEFAULT_ROWPTR_KEY] = np.arange(0, length + 1)
-        return result
-
-    @staticmethod
-    def combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> NumpyDatasetData:
-        result: NumpyDatasetData = {}
-        for attribute in attributes:
-            attribute_name = attribute.attribute_type.name
-            entity_group_name = attribute.entity_type.name
-            entity_group_data = result.setdefault(entity_group_name, {})
-            if attribute_name in entity_group_data:
-                raise ValueError(
-                    f"Duplicate attribute '{attribute_name}' found in"
-                    f" entity group '{entity_group_name}'"
-                )
-
-            data = attribute.data.to_numpy(copy=copy)
-            attr_data: NumpyAttributeData = {"data": data}
-            if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy(copy=copy)
-            entity_group_data[attribute_name] = attr_data
         return result
