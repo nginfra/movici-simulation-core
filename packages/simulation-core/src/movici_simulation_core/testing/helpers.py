@@ -13,14 +13,18 @@ from movici_simulation_core.core import (
     TrackedState,
 )
 from movici_simulation_core.models.common.attributes import CommonAttributes
+from movici_simulation_core.types import DatasetData
 
 
-def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
-    if isinstance(data, dict):
-        if "data" in data:
-            return {k: np.asanyarray(v) for k, v in data.items()}
-        return {key: dataset_data_to_numpy(val) for key, val in data.items()}
-    return {"data": np.asarray(data)}
+def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]) -> DatasetData:
+    def _helper(data):
+        if isinstance(data, dict):
+            if "data" in data:
+                return {k: np.asanyarray(v) for k, v in data.items()}
+            return {key: _helper(val) for key, val in data.items()}
+        return {"data": np.asarray(data)}
+
+    return t.cast(DatasetData, _helper(data))
 
 
 def get_attribute(name="attr", **kwargs):

@@ -15,6 +15,11 @@ class IndexParams:
     def block_count(self):
         return len(self.block_from)
 
+    def max(self):
+        if len(self.block_to) == 0:
+            return -1
+        return self.block_to[-1]
+
 
 # For indexing we make use of the fact that most of the time, ids are arranged in blocks of
 # contiguous ids (eg [1,2,3,7,8,9]). This Index groups the ids in these blocks and stores the
@@ -59,6 +64,9 @@ class Index:
                 "Duplicate entries detected: " + ", ".join(str(i) for i in uniqs[counts != 1])
             )
         return candidates
+
+    def max(self) -> int:
+        return self.params.max()
 
     def __len__(self) -> int:
         return len(self.ids)
