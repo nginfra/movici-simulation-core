@@ -1,11 +1,17 @@
+import typing as t
+
 import numpy as np
 import pytest
 
 from movici_data_core.database import model as db
-from movici_data_core.database.repository.state_aggregator import DatasetStateAggregator
+from movici_data_core.database.repository.state_aggregator import (
+    DatasetStateAggregator,
+    strip_undefined,
+)
 from movici_simulation_core import NP_TYPES, UNDEFINED
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.testing import assert_dataset_dicts_equal, dataset_data_to_numpy
+from movici_simulation_core.types import NumpyAttributeData
 
 
 def create_attribute(entity_group, attribute_name, data, rowptr=None):
@@ -252,3 +258,126 @@ def test_raises_on_new_entity_group_if_not_allowed():
     aggregator.add_dataset_data(dataset_data_to_numpy({"roads": {"id": [1]}}), is_initial=True)
     with pytest.raises(ValueError, match="'others' is not valid entity group for this dataset"):
         aggregator.add_dataset_data(dataset_data_to_numpy({"others": {"id": [1]}}))
+
+
+@pytest.mark.parametrize(
+    "attribute, indices, expected_attribute, expected_indices",
+    [
+        ({"data": []}, [], {"data": []}, []),
+        ({"data": [1]}, [12], {"data": [1]}, [12]),
+        ({"data": [1, UNDEFINED[int], 3]}, [4, 5, 6], {"data": [1, 3]}, [4, 6]),
+        ({"data": [1.0, UNDEFINED[float], 3.0]}, [4, 5, 6], {"data": [1, 3]}, [4, 6]),
+        (
+            {"data": np.array([True, UNDEFINED[bool], False], dtype=np.int8)},
+            [4, 5, 6],
+            {"data": np.array([True, False], dtype=np.int8)},
+            [4, 6],
+        ),
+        ({"data": ["a", UNDEFINED[str], "b"]}, [4, 5, 6], {"data": ["a", "b"]}, [4, 6]),
+        (
+            {"data": [[1, 2], [UNDEFINED[int], UNDEFINED[int]], [3, 4]]},
+            [4, 5, 6],
+            {"data": [[1, 2], [3, 4]]},
+            [4, 6],
+        ),
+        (
+            {"data": [1, UNDEFINED[int], 3, 4], DEFAULT_ROWPTR_KEY: [0, 1, 2, 4]},
+            [4, 5, 6],
+            {"data": [1, 3, 4], DEFAULT_ROWPTR_KEY: [0, 1, 3]},
+            [4, 6],
+        ),
+        (
+            {"data": [1, UNDEFINED[float], 3, 4], DEFAULT_ROWPTR_KEY: [0, 1, 2, 4]},
+            [4, 5, 6],
+            {"data": [1, 3, 4], DEFAULT_ROWPTR_KEY: [0, 1, 3]},
+            [4, 6],
+        ),
+        (
+            {
+                "data": [[1, 2], [UNDEFINED[int], UNDEFINED[int]], [3, 4], [5, 6]],
+                DEFAULT_ROWPTR_KEY: [0, 1, 2, 4],
+            },
+            [4, 5, 6],
+            {"data": [[1, 2], [3, 4], [5, 6]], DEFAULT_ROWPTR_KEY: [0, 1, 3]},
+            [4, 6],
+        ),
+    ],
+)
+def test_strip_undefined(attribute, indices, expected_attribute, expected_indices):
+    attribute = t.cast(NumpyAttributeData, dataset_data_to_numpy(attribute))
+    indices = np.asarray(indices)
+    new_indices, new_attribute = strip_undefined(indices, attribute)
+    assert new_indices.tolist() == expected_indices
+    assert_dataset_dicts_equal(new_attribute, dataset_data_to_numpy(expected_attribute))
+
+
+def test_undefined_are_holes_and_are_ignored_for_uniform_attributes():
+    aggregator = DatasetStateAggregator(allow_new_entities=True)
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {"id": [1, 2, 3], "attr": [10, 20, 30]},
+            }
+        ),
+        is_initial=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2],
+                    "attr": [UNDEFINED[int], 21],
+                }
+            }
+        )
+    )
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "attr": [10, 21, 30]}}),
+    )
+
+
+def test_undefined_are_holes_and_are_ignored_for_csr_attributes():
+    aggregator = DatasetStateAggregator(allow_new_entities=True)
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "csr": {
+                        "data": [10, 20, 21, 22],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 4, 4],
+                    },
+                },
+            }
+        ),
+        is_initial=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [2, 3],
+                    "csr": {
+                        "data": [UNDEFINED[int], 31],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 2],
+                    },
+                },
+            }
+        ),
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "csr": {
+                        "data": [10, 20, 21, 22, 31],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 4, 5],
+                    },
+                },
+            }
+        ),
+    )

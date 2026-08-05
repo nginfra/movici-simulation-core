@@ -78,3 +78,11 @@ def get_undefined(dtype):
     if isinstance(dtype, np.dtype):
         dtype = get_py_type(dtype)
     return UNDEFINED.get(dtype)
+
+
+def get_default_comparator(dtype):
+    if isinstance(dtype, np.dtype):
+        dtype = get_py_type(dtype)
+    if dtype is float:
+        return float_compare()
+    return compare_array
