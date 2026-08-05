@@ -4,9 +4,9 @@ import numpy as np
 
 from movici_simulation_core import Index
 from movici_simulation_core.core import get_rowptr, has_rowptr_key
-from movici_simulation_core.core.attribute import get_undefined
+from movici_simulation_core.core.data_type import get_default_comparator, get_undefined
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
-from movici_simulation_core.csr import update_csr_array
+from movici_simulation_core.csr import remove_undefined_csr, update_csr_array
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
 from movici_simulation_core.types import EntityData, NumpyAttributeData
 from movici_simulation_core.utils import determine_new_unicode_dtype
@@ -90,6 +90,7 @@ class DatasetStateAggregator:
             for attribute_name, attr_data in entity_group_data.items():
                 if attribute_name == "id":
                     continue
+                indices, attr_data = strip_undefined(indices, attr_data)
                 update_data = attr_data["data"]
                 is_csr = has_rowptr_key(t.cast(dict, attr_data))
                 if attribute_name not in current_entity_data:
@@ -186,3 +187,51 @@ class DatasetStateAggregator:
         if is_csr:
             result[DEFAULT_ROWPTR_KEY] = np.arange(0, length + 1)
         return result
+
+
+def strip_undefined(
+    indices: np.ndarray, attr_data: NumpyAttributeData
+) -> tuple[np.ndarray, NumpyAttributeData]:
+    data_array = attr_data["data"]
+    rowptr = get_rowptr(t.cast(dict, attr_data))
+    undefined = get_undefined(attr_data["data"].dtype)
+
+    if undefined is None:
+        raise TypeError(f"unsupported dtype {data_array.dtype} ")
+
+    undefs = is_undefined(data_array, undefined)
+    num_undefined = np.sum(undefs)
+
+    if not num_undefined:
+        return indices, attr_data
+
+    if rowptr is not None:
+        new_data_shape = (data_array.shape[0] - num_undefined, *data_array.shape[1:])
+
+        new_data, new_row_ptr, new_indices = remove_undefined_csr(
+            data_array,
+            rowptr,
+            indices,
+            undefined,
+            num_undefined,
+            new_data_shape,
+            compare=get_default_comparator(data_array.dtype),
+        )
+        return new_indices, {"data": new_data, DEFAULT_ROWPTR_KEY: new_row_ptr}
+    else:
+        if not np.any(undefs):
+            return indices, attr_data
+        return indices[~undefs], {"data": data_array[~undefs]}
+
+
+def is_undefined(arr, undefined):
+    result = arr == undefined
+    if not isinstance(undefined, str) and np.isnan(undefined):
+        return result | np.isnan(arr)
+
+    # reduce over all but the first axis, e.g. an array with shape (10,2,3) should be
+    # reduced to a result array of shape (10,) by reducing over axes (1,2). An single
+    # entity's attribute is considered undefined if the item is undefined in all its
+    # dimensions
+    reduction_axes = tuple(range(1, len(result.shape)))
+    return np.minimum.reduce(result, axis=reduction_axes)

@@ -11,7 +11,6 @@ from sqlalchemy.orm import contains_eager, joinedload, selectinload
 
 from movici_data_core import bounding_box
 from movici_data_core.database import model as db
-from movici_data_core.database.repository.state_aggregator import DatasetStateAggregator
 from movici_data_core.domain_model import (
     AttributeSummary,
     BoundingBox,
@@ -32,6 +31,7 @@ from movici_data_core.exceptions import (
     UniqueConstraintFailed,
     map_errors,
 )
+from movici_data_core.state_aggregator import DatasetStateAggregator
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
@@ -253,7 +253,7 @@ class ScenarioRepository(SQLResourceRepository):
         is_initial: bool,
     ):
         dataset_data = self._combine_attributes(attributes)
-        aggregator.add_dataset_data(dataset_data, allow_new_entity_groups=is_initial)
+        aggregator.add_dataset_data(dataset_data, is_initial=is_initial)
 
     @staticmethod
     def _combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> NumpyDatasetData:
