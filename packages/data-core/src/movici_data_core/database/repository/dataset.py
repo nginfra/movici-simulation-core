@@ -237,7 +237,7 @@ class DatasetRepository(SQLResourceRepository):
                 )
             )
 
-            await self.all_data.dataset_data.delete(id, prune_dataset=False)
+            await self.all_data.dataset_data.delete(id)
             await self.all_data.dataset_data.create(
                 id,
                 data=obj.data,
@@ -246,6 +246,13 @@ class DatasetRepository(SQLResourceRepository):
             )
 
         await self.session.execute(update(db.Dataset).where(db.Dataset.id == id).values(**payload))
+
+    async def prune(self, id: UUID):
+        await self.session.execute(
+            update(db.Dataset)
+            .where(db.Dataset.id == id)
+            .values(general=None, epsg_code=None, bounding_box=None)
+        )
 
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
@@ -412,15 +419,19 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await RawDataProcessor(self.session).get_dict(id)
 
-    async def get_entity_data(self, id: UUID, dataset_filter: DatasetFilter | None = None):
+    async def get_entity_data(
+        self, id: UUID, dataset_filter: DatasetFilter | None = None, copy=False
+    ):
         """return the dataset data for an ``ENTITY_BASED`` dataset
 
         :param id: the dataset ``UUID``
+        :param dataset_filter: an optional DatasetFilter
+        :param copy: whether to copy the data or not. When not copying data, it becomes read-only
         :return: The entity based dataset data section
         """
         return await EntityDataProcessor(
             self.session, all_data=self.all_data, selector=DatasetDataSelector(dataset_filter)
-        ).get(id)
+        ).get(id, copy=copy)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data
@@ -449,7 +460,7 @@ class DatasetDataRepository(SQLResourceRepository):
         if format == DatasetFormat.BINARY:
             await RawDataProcessor(self.session).store(id, data, chunk_size=chunk_size)
 
-    async def delete(self, id: UUID, prune_dataset=True):
+    async def delete(self, id: UUID):
         await self.session.execute(
             delete(db.Attribute).where(
                 db.Attribute.id.in_(
@@ -460,12 +471,6 @@ class DatasetDataRepository(SQLResourceRepository):
             )
         )
         await self.session.execute(delete(db.RawData).where(db.RawData.dataset_id == id))
-        if prune_dataset:
-            await self.session.execute(
-                update(db.Dataset)
-                .where(db.Dataset.id == id)
-                .values(general=None, epsg_code=None, bounding_box=None)
-            )
 
 
 class DatasetDataSelector(EntityDataSelector):

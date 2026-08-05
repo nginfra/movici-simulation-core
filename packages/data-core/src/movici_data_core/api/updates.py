@@ -3,14 +3,13 @@ import typing as t
 from uuid import UUID
 
 import fastapi
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import FileResponse
 
 from movici_data_core.database.model import to_domain_or_none
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.file_helpers import (
     get_mimetype,
-    infer_filetype_from_filename_or_mimetype,
     store_request_stream_to_disk,
 )
 from movici_data_core.marshalling import (
@@ -21,18 +20,9 @@ from movici_data_core.marshalling import (
 )
 from movici_simulation_core.types import FileType
 
-from .dependencies import DepBackend, DepScenarioBackend
+from .dependencies import DepBackend, DepContentType, DepScenarioBackend
 
 update_router = APIRouter(prefix="/updates")
-
-
-def request_filetype(content_type: t.Annotated[str | None, Header()] = None) -> FileType:
-    if not content_type:
-        return FileType.JSON
-    return infer_filetype_from_filename_or_mimetype(mimetype=content_type)
-
-
-DepContentType = t.Annotated[FileType, Depends(request_filetype)]
 
 
 @update_router.get("")

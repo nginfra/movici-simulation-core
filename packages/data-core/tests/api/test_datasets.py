@@ -355,3 +355,29 @@ def test_clean_up_temporary_file_after_uploading_dataset(
 
     new_item_count = len(list(tmpfile_dir.glob("*")))
     assert item_count == new_item_count
+
+
+def test_patch_dataset(get_json, a_dataset_with_data):
+    url = f"/datasets/{a_dataset_with_data.id}/data"
+    patch = {
+        "nulls_overwrite": True,
+        "data": {
+            "roads": {
+                "id": [1, 2, 3],
+                "deleted": [None, True, False],
+                "some.attribute": [1.0, 2.0, None],
+            },
+            "transport_nodes": {"id": [None, None]},
+        },
+    }
+    result = get_json(url, method="patch", json=patch)
+    assert result.pop("id") == str(a_dataset_with_data.id)
+    assert result == {
+        "result": "ok",
+        "message": "dataset data updated",
+    }
+    dataset_data = get_json(url)["data"]
+    assert dataset_data == {
+        "roads": {"id": [1, 3], "some.attribute": [1.0, None]},
+        "transport_nodes": {"id": [4, 5]},
+    }

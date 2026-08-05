@@ -100,6 +100,16 @@ async def create_default_attribute_types(session: AsyncSession):
         )
         for obj in attribute_types
     ]
+    payload.append(
+        dict(
+            name="deleted",
+            has_rowptr=False,
+            unit_type=AttributeDataType.BOOL,
+            unit_shape=(),
+            unit="",
+            description="A pseudoattribute indicating the entity is deleted",
+        ),
+    )
     await session.execute(insert(AttributeType), payload)
 
 

@@ -62,6 +62,7 @@ async def test_creates_default_attribute_types(session):
     repository = AttributeTypeRepository(session, None, None)  # type: ignore
     assert {attr.name for attr in await repository.list()} == {
         "id",
+        "deleted",
         "geometry.x",
         "geometry.y",
         "geometry.z",

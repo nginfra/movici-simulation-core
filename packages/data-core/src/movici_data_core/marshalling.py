@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
-import functools
 import pathlib
 import re
 import typing as t
@@ -39,6 +38,7 @@ from movici_data_core.domain_model import (
     BoundingBox,
     Dataset,
     DatasetFormat,
+    DatasetPatch,
     DatasetSummary,
     DatasetType,
     EntityGroupSummary,
@@ -58,7 +58,7 @@ from movici_data_core.exceptions import (
     MoviciValidationError,
     UnsupportedFileType,
 )
-from movici_data_core.serialization import load_dict
+from movici_data_core.serialization import load_dict, load_dict_from_file
 from movici_simulation_core import DataType
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS, data_keys
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
@@ -272,16 +272,10 @@ class DatasetWithDataIn(ShortDatasetIn):
     def read_entity_based_dataset_from_file(
         cls, path: pathlib.Path, serializer: ExternalSerializationStrategy
     ):
-        filetype = FileType.from_extension(path.suffix)
-        if filetype not in serializer.supported_file_types():
-            raise UnsupportedFileType(filetype)
-
-        dataset_dict = cls.load_dict(
+        dataset_dict = load_dict_from_file(
             path,
-            filetype,
-            dict_loader=functools.partial(
-                serializer.loads, non_data_dict_keys=NON_DATA_DICT_KEYS + ("type", "dataset_type")
-            ),
+            serializer,
+            non_data_dict_keys=NON_DATA_DICT_KEYS + ("type", "dataset_type"),
         )
         dataset_data = dataset_dict.pop("data", {})
         dataset = DatasetWithDataIn.model_validate(dataset_dict).to_domain()
@@ -292,19 +286,14 @@ class DatasetWithDataIn(ShortDatasetIn):
         filetype = FileType.from_extension(path.suffix)
         if filetype not in (FileType.JSON, FileType.MSGPACK):
             raise UnsupportedFileType(filetype)
-        dataset_dict = cls.load_dict(path, filetype, dict_loader=load_dict)
+        try:
+            dataset_dict = load_dict(path.read_bytes(), filetype)
+        except (TypeError, ValueError) as e:
+            raise DeserializationError from e
+
         dataset_data = dataset_dict.pop("data", {})
         dataset = DatasetWithDataIn.model_validate(dataset_dict).to_domain()
         return dataclasses.replace(dataset, data=dataset_data)
-
-    @classmethod
-    def load_dict(
-        cls, path: pathlib.Path, filetype, dict_loader: t.Callable[[bytes, FileType], dict]
-    ) -> dict:
-        try:
-            return dict_loader(path.read_bytes(), filetype)
-        except (TypeError, ValueError) as e:
-            raise DeserializationError from e
 
     def to_domain(self):
         return dataclasses.replace(
@@ -322,6 +311,43 @@ class DatasetWithDataOut(ShortDatasetOut):
     bounding_box: BoundingBoxField = None
     general: dict | None = None
     data: dict
+
+
+class DatasetPatchIn(InModel[DatasetPatch]):
+    data: dict = {}
+    undefined_values_overwrite: t.Annotated[bool, Field(validation_alias="nulls_overwrite")] = (
+        False
+    )
+
+    @classmethod
+    def read_from_file(
+        cls,
+        path: pathlib.Path,
+        serializer: ExternalSerializationStrategy,
+        filetype: FileType | None = None,
+    ) -> DatasetPatch:
+        """Read DatasetPathc from a file.
+
+        :param path: A path to an file containing a dataset patch. The file must be in a format
+            that the serializer supports, which is generally either JSON or MessagePack.
+        :param serializer: An object that inherits from ``ExternalSerializationStrategy``.
+        :param filetype: The filetype for the file. If given, it will be explictly (attempted to
+            be) read as a file of this type. If not given, or None, the filetype will be guessed
+            from the filename (suffix)
+
+        :return: A DatasetPatch with the data section in Movici format
+        """
+
+        patch_dict = load_dict_from_file(path, serializer, filetype)
+
+        patch_data = patch_dict.pop("data", {})
+        patch = DatasetPatchIn.model_validate(patch_dict).to_domain()
+        return dataclasses.replace(patch, data=patch_data)
+
+    def to_domain(self) -> DatasetPatch:
+        return DatasetPatch(
+            data=self.data, undefined_values_overwrite=self.undefined_values_overwrite
+        )
 
 
 class ScenarioStateOut(BaseModel):
@@ -436,23 +462,12 @@ class UpdateIn(InModel[Update]):
 
         :return: An Update with the data section in Movici format
         """
-        filetype = filetype or FileType.from_extension(path.suffix)
-        if filetype not in serializer.supported_file_types():
-            raise UnsupportedFileType(filetype)
-
-        try:
-            update_dict = serializer.loads(
-                path.read_bytes(),
-                filetype,
-                non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset", "model"),
-            )
-        except (TypeError, ValueError) as e:
-            # TODO: better error message from serializer.loads
-            raise DeserializationError from e
-
-        all_data_keys = data_keys(
-            update_dict, ignore_keys=NON_DATA_DICT_KEYS + ("dataset", "model")
+        non_data_dict_keys = NON_DATA_DICT_KEYS + ("dataset", "model")
+        update_dict = load_dict_from_file(
+            path, serializer, filetype, non_data_dict_keys=non_data_dict_keys
         )
+
+        all_data_keys = data_keys(update_dict, ignore_keys=non_data_dict_keys)
 
         # Our data format in theory supports multiple datasets in updates. This is required because
         # models may need to send an update on multiple datasets in a single update. In that case

@@ -202,7 +202,7 @@ def test_raises_if_id_is_from_other_entity_group():
     aggregator.add_dataset_data(
         dataset_data_to_numpy({"roads": {"id": [1]}, "others": {"id": [2]}}), is_initial=True
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="id 2 already exists in entity group 'others'"):
         aggregator.add_dataset_data(dataset_data_to_numpy({"roads": {"id": [2], "attr": [5]}}))
 
 
