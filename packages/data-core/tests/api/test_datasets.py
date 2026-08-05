@@ -381,3 +381,12 @@ def test_patch_dataset(get_json, a_dataset_with_data):
         "roads": {"id": [1, 3], "some.attribute": [1.0, None]},
         "transport_nodes": {"id": [4, 5]},
     }
+
+
+def test_error_when_patching_non_entity_dataset(get_json, create_dataset):
+    dataset_id = create_dataset("tabular_dataset", type="tabular")["id"]
+    patch = {"data": {"roads": {"id": [1]}}}
+    result = get_json(
+        f"/datasets/{dataset_id}/data", method="patch", json=patch, expected_status=400
+    )
+    assert result["message"] == "Cannot patch dataset with format 'unstructured'"

@@ -173,8 +173,9 @@ class DatasetService:
             raise ResourceDoesNotExist("dataset", id=dataset_id)
 
         dataset_type = existing.dataset_type
+        assert dataset_type.format is not None
         if dataset_type.format != DatasetFormat.ENTITY_BASED:
-            raise InvalidAction(f"Cannot patch dataset with format '{dataset_type.format}'")
+            raise InvalidAction(f"Cannot patch dataset with format '{dataset_type.format.value}'")
 
         patch = DatasetPatchIn.read_from_file(path, self.serializer)
         current_data = await self.repository.dataset_data.get_entity_data(dataset_id, copy=True)
