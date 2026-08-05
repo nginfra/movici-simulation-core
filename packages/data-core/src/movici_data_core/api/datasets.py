@@ -6,11 +6,13 @@ import fastapi
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from movici_data_core.exceptions import ResourceDoesNotExist
+from movici_data_core.domain_model import DatasetFormat
+from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.file_helpers import (
     base_mimetype,
     infer_filetype_from_filename_or_mimetype,
     store_file_to_disk,
+    store_request_stream_to_disk,
 )
 from movici_data_core.marshalling import (
     DatasetFilterIn,
@@ -22,7 +24,7 @@ from movici_data_core.marshalling import (
     ShortDatasetOut,
 )
 
-from .dependencies import DepBackend, DepWorkspaceBackend
+from .dependencies import DepBackend, DepContentType, DepWorkspaceBackend
 
 dataset_router = fastapi.APIRouter(prefix="/datasets")
 
@@ -116,6 +118,29 @@ async def create_dataset_data(
     await backend.datasets.update_from_file(dataset_id, filepath, mimetype)
     return OperationSuccess.for_path_operation(
         resource="dataset", id=dataset_id, verb="data created"
+    )
+
+
+@dataset_router.patch("/{dataset_id}/data")
+async def patch_dataset_data(
+    dataset_id: UUID,
+    request: fastapi.Request,
+    backend: DepBackend,
+    filetype: DepContentType,
+) -> OperationSuccess:
+
+    # some checks that are also performed in the DatasetService, but we short circuit here to
+    # pfrevent additional work with handling the incoming file
+    if not (dataset := await backend.datasets.get(id=dataset_id)):
+        raise ResourceDoesNotExist("dataset", id=dataset_id)
+    if dataset.dataset_type.format != DatasetFormat.ENTITY_BASED:
+        raise InvalidAction(f"Cannot patch dataset with format '{dataset.dataset_type.format}'")
+
+    tempfile = await store_request_stream_to_disk(request, backend.tmpfile_dir, filetype=filetype)
+
+    await backend.datasets.patch_from_file(dataset_id, tempfile)
+    return OperationSuccess.for_path_operation(
+        resource="dataset", id=dataset_id, verb="data updated"
     )
 
 

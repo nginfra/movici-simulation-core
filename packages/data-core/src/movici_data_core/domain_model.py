@@ -356,6 +356,12 @@ class Dataset:
 
 
 @dataclasses.dataclass
+class DatasetPatch:
+    data: dict
+    undefined_values_overwrite: bool = False
+
+
+@dataclasses.dataclass
 class UpdateModel:
     """A short form of a ``ScenarioModel`` to be used by ``Update``. Contains only the name and
     the type, and the type is optional
