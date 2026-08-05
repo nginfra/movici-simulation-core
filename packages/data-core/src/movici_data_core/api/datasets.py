@@ -133,8 +133,12 @@ async def patch_dataset_data(
     # pfrevent additional work with handling the incoming file
     if not (dataset := await backend.datasets.get(id=dataset_id)):
         raise ResourceDoesNotExist("dataset", id=dataset_id)
-    if dataset.dataset_type.format != DatasetFormat.ENTITY_BASED:
-        raise InvalidAction(f"Cannot patch dataset with format '{dataset.dataset_type.format}'")
+    dataset_format = dataset.dataset_type.format
+
+    assert dataset_format is not None
+
+    if dataset_format != DatasetFormat.ENTITY_BASED:
+        raise InvalidAction(f"Cannot patch dataset with format '{dataset_format.value}'")
 
     tempfile = await store_request_stream_to_disk(request, backend.tmpfile_dir, filetype=filetype)
 
