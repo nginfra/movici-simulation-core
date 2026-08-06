@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
-from movici_data_core.domain_model import Scenario
+from movici_data_core.domain_model import Scenario, ScenarioStatus, SimulationStatus
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
 
@@ -50,3 +50,10 @@ class ScenarioService:
         )
         assert scenario_dataset.id is not None
         return await self.repository.scenarios.get_summary(scenario_dataset.id)
+
+    async def get_status(self) -> ScenarioStatus | None:
+        result = await self.repository.scenarios.get_scenario_for_status()
+        return result.status if result is not None else None
+
+    async def update_simulation_status(self, status: SimulationStatus):
+        await self.repository.scenarios.update_simulation_status(status)

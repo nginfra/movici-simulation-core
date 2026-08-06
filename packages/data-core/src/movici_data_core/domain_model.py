@@ -31,19 +31,22 @@ class DatasetFormat(str, enum.Enum):
     BINARY = "binary"
 
 
-# TODO: implement proper usage of scenariostatus. Invalid/Ready is managed internally based on the
-# availability of data (do all the scenariodatasets have data?) while the other statuses need an
-# external source, or an (api) endpoint that can set them, based on a simulation that is running
-# or has completed (succesfully or not)
-# Perhaps we also need to think about what happens if simulation just stops reporting about the
-# Scenario. Do we want to trigger setting a scenario status to Failed if a simulation has not
-# updated a scenario for a certain time, either by posting an update or (re)posting the status
 class ScenarioStatus(str, enum.Enum):
-    FAILED = "failed"
     INVALID = "invalid"
     READY = "ready"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @classmethod
+    def from_simulation_status(cls, simulation_status: SimulationStatus):
+        return ScenarioStatus(simulation_status.value)
+
+
+class SimulationStatus(str, enum.Enum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 AttributeDataType = t.Type[bool | int | float | str]
@@ -218,6 +221,23 @@ class SimulationInfo:
 
 
 @dataclasses.dataclass
+class SimulationStatusInfo:
+    SIMULATION_REPORT_THRESHOLD = datetime.timedelta(seconds=10)
+    status: SimulationStatus
+    timestamp: datetime.datetime
+
+    def get_scenario_status(self) -> ScenarioStatus:
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
+        status = self.status
+        if (
+            self.status == SimulationStatus.RUNNING
+            and self.timestamp + self.SIMULATION_REPORT_THRESHOLD < timestamp
+        ):
+            status = SimulationStatus.FAILED
+        return ScenarioStatus.from_simulation_status(status)
+
+
+@dataclasses.dataclass
 class Scenario:
     r"""A Scenario is a description of a simulation. It contains a collection of models that should
     work togehter on a collection of datasets in order to perform a certain, specific, calculation,
@@ -245,7 +265,7 @@ class Scenario:
     epsg_code: int | None = None
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     simulation_info: SimulationInfo = dataclasses.field(default_factory=SimulationInfo.default)
-    status: ScenarioStatus = ScenarioStatus.READY
+    simulation_status_info: SimulationStatusInfo | None = None
 
     id: UUID | None = None
     workspace: Workspace | None = None
@@ -254,6 +274,17 @@ class Scenario:
     models: list[ScenarioModel] = dataclasses.field(default_factory=list)
     datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
     has_updates: bool = False
+
+    @property
+    def status(self) -> ScenarioStatus:
+        status = ScenarioStatus.READY
+        if not all(dataset.has_data for dataset in self.datasets):
+            return ScenarioStatus.INVALID
+        if self.has_updates:
+            status = ScenarioStatus.SUCCEEDED
+        if self.simulation_status_info is not None:
+            status = self.simulation_status_info.get_scenario_status()
+        return status
 
 
 @dataclasses.dataclass
@@ -267,11 +298,17 @@ class ScenarioDataset:
 
     name: str
     dataset_type: DatasetType | None = dataclasses.field(default=None)
+    has_data: bool = False
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
     @classmethod
     def from_dataset(cls, dataset: Dataset):
-        return ScenarioDataset(name=dataset.name, dataset_type=dataset.dataset_type, id=dataset.id)
+        return ScenarioDataset(
+            name=dataset.name,
+            dataset_type=dataset.dataset_type,
+            id=dataset.id,
+            has_data=dataset.has_data,
+        )
 
 
 @dataclasses.dataclass

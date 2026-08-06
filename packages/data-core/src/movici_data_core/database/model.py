@@ -14,8 +14,8 @@ from movici_data_core import domain_model
 from movici_data_core.domain_model import (
     BoundingBox,
     DatasetFormat,
-    ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
 )
 from movici_data_core.exceptions import MoviciValidationError
 from movici_simulation_core.core import DataType
@@ -405,7 +405,6 @@ class Scenario(Base):
     )
     display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
     description: Mapped[str] = mapped_column(Text(SCENARIO_DESCRIPTION_MAX_LENGTH))
-    status: Mapped[ScenarioStatus]
 
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
@@ -416,20 +415,48 @@ class Scenario(Base):
 
     datasets: Mapped[list[ScenarioDataset]] = relationship()
     models: Mapped[list[ScenarioModel]] = relationship()
+    simulation_status_info: Mapped[SimulationStatusInfo | None] = relationship()
 
-    def to_domain(self, has_updates: bool) -> domain_model.Scenario:
+    def to_domain(
+        self,
+        has_updates: bool,
+        datasets: list[ScenarioDataset] | None = None,
+        models: list[ScenarioModel] | None = None,
+    ) -> domain_model.Scenario:
         return domain_model.Scenario(
             id=self.id,
             workspace=self.workspace.to_domain(),
             name=self.name,
             display_name=self.display_name,
             description=self.description,
+            simulation_status_info=(
+                self.simulation_status_info.to_domain()
+                if self.simulation_status_info is not None
+                else None
+            ),
             simulation_info=SimulationInfo(**self.simulation_info),
             epsg_code=self.epsg_code,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            datasets=[ds.to_domain() for ds in sorted(datasets or [], key=lambda ds: ds.sequence)],
+            models=[ds.to_domain() for ds in sorted(models or [], key=lambda ds: ds.sequence)],
             has_updates=has_updates,
         )
+
+
+class SimulationStatusInfo(Base):
+    __tablename__ = "simulation_status_info"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenario.id", ondelete="CASCADE"), unique=True
+    )
+    status: Mapped[SimulationStatus]
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    def to_domain(self):
+
+        return domain_model.SimulationStatusInfo(status=self.status, timestamp=self.updated_at)
 
 
 class ScenarioDataset(Base):

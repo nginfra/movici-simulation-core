@@ -31,7 +31,9 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
     Update,
     UpdateModel,
     Workspace,
@@ -1455,7 +1457,6 @@ class TestScenarioRepository:
             id=None,
             created_at=None,
             updated_at=None,
-            datasets=[dataclasses.replace(result.datasets[0], id=None)],
             models=[],
         ) == dataclasses.replace(new_scenario, models=[])
 
@@ -1976,6 +1977,14 @@ class TestScenarioRepository:
             )
         assert exc.value.id == a_workspace.id
         assert exc.value.resource_type == "workspace"
+
+    @pytest.mark.database_mode(db.DatabaseMode.SINGLE_SCENARIO)
+    async def test_updated_simulation_status_gets_reflected_in_scenario(
+        self, repository: SQLAlchemyRepository
+    ):
+        assert t.cast(Scenario, await repository.scenarios.get()).status != ScenarioStatus.RUNNING
+        await repository.scenarios.update_simulation_status(SimulationStatus.RUNNING)
+        assert t.cast(Scenario, await repository.scenarios.get()).status == ScenarioStatus.RUNNING
 
 
 class TestUpdateRepository:

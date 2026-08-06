@@ -46,6 +46,7 @@ from movici_data_core.domain_model import (
     ScenarioModel,
     ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
     Update,
     UpdateModel,
     Workspace,
@@ -251,6 +252,21 @@ class ScenarioOut(ShortScenarioOut):
     simulation_info: SimulationInfoInOut
     models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
     datasets: list[ScenarioDatasetOut]
+
+
+class SimulationStatusIn(InModel[SimulationStatus]):
+    status: SimulationStatus
+
+    def to_domain(self) -> SimulationStatus:
+        return self.status
+
+
+class ScenarioStatusOut(OutModel[ScenarioStatus]):
+    status: ScenarioStatus
+
+    @classmethod
+    def from_domain(cls, obj: ScenarioStatus) -> ScenarioStatusOut:
+        return ScenarioStatusOut(status=obj)
 
 
 class ScenarioListOut(OutModel[t.Sequence[Scenario]]):
