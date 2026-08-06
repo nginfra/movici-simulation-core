@@ -21,6 +21,7 @@ from movici_data_core.domain_model import (
     ScenarioModel,
     ScenarioStateFilter,
     ScenarioStatus,
+    SimulationStatus,
 )
 from movici_data_core.exceptions import (
     ForeignKeyConstraintFailed,
@@ -73,34 +74,37 @@ class ScenarioRepository(SQLResourceRepository):
         """List all scenarios in the active workspace"""
         workspace_id = self._ensure_workspace_id()
         result = await self.session.execute(
-            select(
-                db.Scenario,
-                exists().where(db.Update.scenario_id == db.Scenario.id),
+            self.selector(include_datasets=False, include_models=False).where(
+                db.Scenario.workspace_id == workspace_id
             )
-            .options(joinedload(db.Scenario.workspace))
-            .where(db.Scenario.workspace_id == workspace_id)
         )
         return [obj.to_domain(has_updates) for (obj, has_updates) in result]
 
-    @property
-    def selector(self):
-        return select(
+    def selector(self, include_datasets=True, include_models=True):
+        query = select(
             db.Scenario,
             exists().where(db.Update.scenario_id == db.Scenario.id),
         ).options(
-            joinedload(db.Scenario.workspace),
-            selectinload(db.Scenario.datasets)
-            .joinedload(db.ScenarioDataset.dataset)
-            .joinedload(db.Dataset.dataset_type),
-            selectinload(db.Scenario.models).options(
-                joinedload(db.ScenarioModel.model_type),
-                selectinload(db.ScenarioModel.references).options(
-                    joinedload(db.ScenarioModelReference.dataset),
-                    joinedload(db.ScenarioModelReference.entity_type),
-                    joinedload(db.ScenarioModelReference.attribute_type),
-                ),
-            ),
+            joinedload(db.Scenario.workspace), joinedload(db.Scenario.simulation_status_info)
         )
+        if include_datasets:
+            query = query.options(
+                selectinload(db.Scenario.datasets)
+                .joinedload(db.ScenarioDataset.dataset)
+                .joinedload(db.Dataset.dataset_type)
+            )
+        if include_models:
+            query = query.options(
+                selectinload(db.Scenario.models).options(
+                    joinedload(db.ScenarioModel.model_type),
+                    selectinload(db.ScenarioModel.references).options(
+                        joinedload(db.ScenarioModelReference.dataset),
+                        joinedload(db.ScenarioModelReference.entity_type),
+                        joinedload(db.ScenarioModelReference.attribute_type),
+                    ),
+                )
+            )
+        return query
 
     async def exists_by_name(self, name: str):
         """checks whether a scenario with a specific name exists in the active workspace
@@ -116,23 +120,16 @@ class ScenarioRepository(SQLResourceRepository):
         return await self._exists(db.Scenario.id == id)
 
     async def _get_one_full_scenario(self, where_clause: ColumnElement[bool]):
-        result = (await self.session.execute(self.selector.where(where_clause).limit(1))).first()
+        result = (await self.session.execute(self.selector().where(where_clause).limit(1))).first()
 
         if result is None:
             return None
 
-        scenario, has_updates = result
+        scenario, has_updates = t.cast(tuple[db.Scenario, bool], result)
         bounding_box = await self._get_bounding_box(scenario.id)
         return dataclasses.replace(
-            scenario.to_domain(has_updates),
+            scenario.to_domain(has_updates, scenario.datasets, scenario.models),
             bounding_box=bounding_box,
-            datasets=[
-                ds.to_domain() for ds in sorted(scenario.datasets, key=lambda ds: ds.sequence)
-            ],
-            models=[
-                model.to_domain()
-                for model in sorted(scenario.models, key=lambda model: model.sequence)
-            ],
         )
 
     async def get_by_name(self, name: str) -> Scenario | None:
@@ -150,43 +147,6 @@ class ScenarioRepository(SQLResourceRepository):
         """
         id = self._ensure_scenario_id()
         return await self._get_one_full_scenario(db.Scenario.id == id)
-
-    async def get_state(self, state_filter: ScenarioStateFilter) -> NumpyDatasetData:
-        id = self._ensure_scenario_id()
-        dataset_id = await self.session.scalar(
-            select(db.Dataset.id)
-            .join(db.ScenarioDataset)
-            .where(db.ScenarioDataset.scenario_id == id)
-            .where(db.Dataset.name == state_filter.dataset)
-        )
-        if dataset_id is None:
-            raise ResourceDoesNotExist(
-                "dataset",
-                name=state_filter.dataset,
-                message="dataset does not exist for this scenario",
-            )
-
-        aggregator = DatasetStateAggregator()
-        self._add_attributes_to_aggregator(
-            aggregator,
-            await self._get_dataset_attributes(dataset_id, state_filter),
-            is_initial=True,
-        )
-        current_update = None
-        current_attributes: list[db.Attribute] = []
-        update_attributes = await self._get_update_attributes(dataset_id, id, state_filter)
-        for update_id, attribute in update_attributes:
-            if current_update is None:
-                current_update = update_id
-            if update_id == current_update:
-                current_attributes.append(attribute)
-                continue
-            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
-            current_update = update_id
-            current_attributes = [attribute]
-        if current_attributes:
-            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
-        return aggregator.state
 
     async def _get_bounding_box(self, scenario_id: UUID):
         bboxs_from_datasets = await self.session.scalars(
@@ -305,7 +265,6 @@ class ScenarioRepository(SQLResourceRepository):
             name=obj.name,
             display_name=obj.display_name,
             description=obj.description,
-            status=obj.status,
             simulation_info=dataclasses.asdict(obj.simulation_info),
             epsg_code=obj.epsg_code,
         )

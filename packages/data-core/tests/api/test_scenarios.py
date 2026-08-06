@@ -280,3 +280,14 @@ async def test_get_filtered_scenario_state(
             }
         }
     }
+def test_update_and_get_scenario_status(get_json, a_scenario):
+    url = f"/scenarios/{a_scenario.id}/status"
+    result = get_json(url, method="post", json={"status": "running"})
+    assert result == {
+        "result": "ok",
+        "id": str(a_scenario.id),
+        "message": "scenario status updated",
+    }
+
+    scenario = get_json(url)
+    assert scenario["status"] == "running"

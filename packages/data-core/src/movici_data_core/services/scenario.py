@@ -3,7 +3,13 @@ from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.database.repository.views import ViewRepository
-from movici_data_core.domain_model import Scenario, ScenarioStateFilter, View
+from movici_data_core.domain_model import (
+    Scenario,
+    ScenarioStateFilter,
+    ScenarioStatus,
+    SimulationStatus,
+    View,
+)
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist, UnsupportedFileType
 from movici_data_core.file_helpers import tempfile_delete_on_error
 from movici_data_core.services.common import GenericService
@@ -88,6 +94,13 @@ class ScenarioService:
             )
 
         return pathlib.Path(outfile.name)
+
+    async def get_status(self) -> ScenarioStatus | None:
+        result = await self.repository.scenarios.get_scenario_for_status()
+        return result.status if result is not None else None
+
+    async def update_simulation_status(self, status: SimulationStatus):
+        await self.repository.scenarios.update_simulation_status(status)
 
 
 class ViewService(GenericService[View]):
