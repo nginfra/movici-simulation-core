@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/power_grid_cascade/1.0.0",
+  "type": "object",
+  "required": ["dataset"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "description": "Name of the electrical network dataset",
+      "movici.type": "dataset",
+      "movici.datasetType": "electrical_network"
+    },
+    "algorithm": {
+      "type": "string",
+      "description": "Power flow calculation algorithm",
+      "enum": ["newton_raphson", "iterative_current", "linear", "linear_current"],
+      "default": "newton_raphson"
+    },
+    "symmetric": {
+      "type": "boolean",
+      "description": "Use symmetric (balanced) power flow calculation",
+      "default": true
+    },
+    "tap_changing": {
+      "type": "string",
+      "description": "Automatic tap changing strategy for the power flow",
+      "enum": ["disabled", "any_valid_tap", "min_voltage_tap", "max_voltage_tap", "fast_any_tap"],
+      "default": "disabled"
+    },
+    "max_cascade_iterations": {
+      "type": "integer",
+      "description": "Maximum number of short-circuit/trip rounds per update",
+      "minimum": 1,
+      "default": 20
+    }
+  },
+  "additionalProperties": false
+}

@@ -568,6 +568,20 @@ class FaultProcessor(PGMElementProcessor):
         arr["x_f"] = _get_optional_array(eg.fault_reactance, default=0.0)
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        status = eg.status
+        # status is OPT and may never receive data; guard before touching .changed
+        if not status.is_initialized() or not status.has_changes():
+            return None
+        idx = np.flatnonzero(status.changed)
+        arr = pgm.initialize_array("update", "fault", len(idx))
+        arr["id"] = eg.index.ids[idx]
+        arr["status"] = status.array[idx].astype(np.int8)
+        return arr
+
     def write_results(self, result: dict):
         eg = self.entity_group
         if not len(eg):

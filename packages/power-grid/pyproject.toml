@@ -31,6 +31,8 @@ dependencies = ["movici-simulation-core", "numpy", "power-grid-model"]
 
 [project.entry-points."movici.plugins"]
 power_grid_calculation = "movici_power_grid_model.model:Model"
+power_grid_cascade = "movici_power_grid_model.cascade:Model"
+power_grid_fault_activation = "movici_power_grid_model.fault_activation:Model"
 power_grid_attributes = "movici_power_grid_model.attributes:PowerGridAttributes"
 
 [tool.hatch.version]

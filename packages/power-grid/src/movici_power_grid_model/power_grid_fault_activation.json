@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "/power_grid_fault_activation/1.0.0",
+  "type": "object",
+  "required": ["dataset", "threshold"],
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "description": "Name of the electrical network dataset",
+      "movici.type": "dataset",
+      "movici.datasetType": "electrical_network"
+    },
+    "monitor_entity_group": {
+      "type": "string",
+      "description": "Entity group holding the monitored attribute",
+      "movici.type": "entityGroup",
+      "default": "electrical_node_entities"
+    },
+    "monitor_attribute": {
+      "type": "string",
+      "description": "Per-node scalar attribute that triggers fault activation",
+      "movici.type": "attribute",
+      "default": "flooding.water_depth"
+    },
+    "threshold": {
+      "type": "number",
+      "description": "Fault activates when the monitored value exceeds this threshold"
+    }
+  },
+  "additionalProperties": false
+}

@@ -243,6 +243,22 @@ Electrical_FaultCurrentAngle = AttributeSpec(
 )  # rad (i_f_angle)
 
 # =============================================================================
+# Protection / Cascade Attributes
+# =============================================================================
+
+# Branch protection relays (input)
+Electrical_PickUpCurrent = AttributeSpec("electrical.pick_up_current", DataType(float))  # A
+Electrical_PickUpTime = AttributeSpec("electrical.pick_up_time", DataType(float))  # s
+Electrical_ProtectedLine = AttributeSpec("electrical.protected_line", DataType(int))  # branch id
+Electrical_ProtectedSide = AttributeSpec(
+    "electrical.protected_side", DataType(int)
+)  # enum branch_side: 0=from_side, 1=to_side
+
+# Cascade output attributes
+Electrical_Tripped = AttributeSpec("electrical.tripped", DataType(int))  # 0/1 relay operated
+Electrical_Energized = AttributeSpec("electrical.energized", DataType(int))  # 0/1 node energized
+
+# =============================================================================
 # Plugin Export
 # =============================================================================
 
