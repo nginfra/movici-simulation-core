@@ -13,6 +13,7 @@ from .fsm import FSM, Always, FSMConfig, FSMDone
 from .states import (
     AllModelsDone,
     AllModelsReady,
+    ComputeAndSendRemap,
     EndFinalizingPhase,
     Failed,
     FinalizingWaitForModels,
@@ -21,6 +22,7 @@ from .states import (
     StartFinalizingPhase,
     StartInitializingPhase,
     StartRunningPhase,
+    WaitForRemapAcks,
     WaitForResults,
 )
 
@@ -30,7 +32,20 @@ FSM_CONFIG = FSMConfig(
         StartInitializingPhase: [
             (Always, ModelsRegistration),
         ],
+        # Between registration and the Running phase the orchestrator computes the REMAP
+        # plan (issue #127) and waits for the affected models to acknowledge their REMAP
+        # commands. When no model needs a remap, AllModelsReady short-circuits straight
+        # to StartRunningPhase.
         ModelsRegistration: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, ComputeAndSendRemap),
+        ],
+        ComputeAndSendRemap: [
+            (Failed, StartFinalizingPhase),
+            (AllModelsReady, StartRunningPhase),
+            (Always, WaitForRemapAcks),
+        ],
+        WaitForRemapAcks: [
             (Failed, StartFinalizingPhase),
             (AllModelsReady, StartRunningPhase),
         ],

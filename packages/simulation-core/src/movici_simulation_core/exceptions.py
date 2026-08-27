@@ -26,6 +26,14 @@ class InvalidMessage(SimulationException):
     pass
 
 
+class RemapError(SimulationException):
+    """Raised when a model cannot honour a ``REMAP`` command. The canonical case is a
+    many-to-one sub remap delivered to a model that has not implemented the ``remap()``
+    callback. See issue #127."""
+
+    pass
+
+
 class FSMException(Exception):
     pass
 

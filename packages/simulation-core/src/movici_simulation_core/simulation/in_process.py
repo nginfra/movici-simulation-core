@@ -14,6 +14,7 @@ from movici_simulation_core.messages import (
     ModelMessage,
     NewTimeMessage,
     QuitMessage,
+    RemapMessage,
     UpdateMessage,
     UpdateSeriesMessage,
 )
@@ -225,6 +226,9 @@ class InProcessSimulationRunner(SimulationRunner):
         try:
             if isinstance(command, NewTimeMessage):
                 model.new_time(command)
+                return AcknowledgeMessage()
+            if isinstance(command, RemapMessage):
+                model.remap(command)
                 return AcknowledgeMessage()
             if isinstance(command, UpdateMessage):
                 return model.update(command)
