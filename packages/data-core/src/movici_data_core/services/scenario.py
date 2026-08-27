@@ -34,7 +34,7 @@ class ScenarioService:
             raise InvalidAction("Unsupported operation in this mode")
         return await self.repository.scenarios.create(scenario, validator)
 
-    async def update(self, scenario: Scenario, validator):
+    async def update(self, scenario: Scenario, validator: ModelConfigValidator):
         return await self.repository.scenarios.update(scenario, validator)
 
     async def delete(self):
@@ -43,3 +43,10 @@ class ScenarioService:
         if not await self.repository.scenarios.exists():
             raise ResourceDoesNotExist("scenario", id=self.repository.scenario_id)
         return await self.repository.scenarios.delete()
+
+    async def get_summary(self, dataset_name_or_id: str):
+        scenario_dataset = await self.repository.scenarios.ensure_valid_scenario_dataset(
+            dataset_name_or_id
+        )
+        assert scenario_dataset.id is not None
+        return await self.repository.scenarios.get_summary(scenario_dataset.id)

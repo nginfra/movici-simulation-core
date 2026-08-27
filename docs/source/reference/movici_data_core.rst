@@ -9,6 +9,7 @@ Subpackages
 .. toctree::
    :maxdepth: 1
 
+   movici_data_core.api
    movici_data_core.database
    movici_data_core.services
 
@@ -45,10 +46,20 @@ exceptions
 
 
 
-schema
-------
+file\_helpers
+-------------
 
-.. automodule:: movici_data_core.schema
+.. automodule:: movici_data_core.file_helpers
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+
+
+marshalling
+-----------
+
+.. automodule:: movici_data_core.marshalling
    :members:
    :show-inheritance:
    :undoc-members:

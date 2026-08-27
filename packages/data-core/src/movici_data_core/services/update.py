@@ -5,9 +5,9 @@ from uuid import UUID
 
 from movici_data_core.bounding_box import calculate_bounding_box_from_data
 from movici_data_core.database.repository import SQLAlchemyRepository
-from movici_data_core.exceptions import ResourceDoesNotExist, UnsupportedFileType
-from movici_data_core.schema import UpdateIn, UpdateWithDataOut
-from movici_data_core.services.common import tempfile_delete_on_error
+from movici_data_core.exceptions import UnsupportedFileType
+from movici_data_core.file_helpers import tempfile_delete_on_error
+from movici_data_core.marshalling import UpdateIn, UpdateWithDataOut
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
 
@@ -29,13 +29,13 @@ class UpdateService:
 
     async def get_update_as_file(
         self, update_id: UUID, filetype: FileType = FileType.JSON
-    ) -> pathlib.Path:
+    ) -> pathlib.Path | None:
         if filetype not in self.serializer.supported_file_types():
             raise UnsupportedFileType(filetype)
 
         result = await self.repository.updates.get_by_id(update_id, with_data=True)
         if result is None:
-            raise ResourceDoesNotExist("update", id=update_id)
+            return result
 
         with tempfile_delete_on_error(
             suffix=filetype.default_extension,

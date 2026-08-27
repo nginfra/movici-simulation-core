@@ -4,7 +4,11 @@ import typing as t
 import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend
-from movici_data_core.domain_model import Dataset, DatasetFormat
+from movici_data_core.domain_model import (
+    Dataset,
+    DatasetFormat,
+    DatasetSummary,
+)
 from movici_data_core.exceptions import InvalidResource
 from movici_data_core.serialization import dump_dict, load_dict
 from movici_simulation_core.testing import dataset_data_to_numpy
@@ -13,9 +17,7 @@ from movici_simulation_core.types import FileType
 
 class TestDatasetService:
     @pytest.fixture
-    async def backend(self, backend: SQLAlchemyBackend, a_dataset, create_default_types):
-        await create_default_types(backend.repository)
-        await backend.update_schema()
+    async def backend(self, backend: SQLAlchemyBackend, a_dataset):
         return backend.for_workspace(a_dataset.workspace.id)
 
     @pytest.fixture
@@ -203,6 +205,7 @@ class TestDatasetService:
 
         await backend.datasets.update_from_file(a_dataset.id, dataset_path)
         file = await backend.datasets.get_dataset_as_file(a_dataset.id, filetype=filetype)
+        assert file is not None
 
         a_dataset = t.cast(Dataset, await backend.datasets.get(id=a_dataset.id))
 
@@ -261,6 +264,7 @@ class TestDatasetService:
         assert updated.updated_at is not None
 
         file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file is not None
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
 
@@ -294,18 +298,46 @@ class TestDatasetService:
         assert created is not None
         assert not created.has_data
 
+        data = b"somedata" * 10
+
         await backend.datasets.update_from_file(
             dataset_id,
             store_dataset(
-                b"somedata" * 10,
+                data,
                 name="some_dataset",
                 filetype=filetype,
             ),
         )
 
         file = await backend.datasets.get_dataset_as_file(dataset_id, filetype=filetype)
+        assert file is not None
         assert file.parent == tmp_path
         assert file.suffix == filetype.default_extension
 
-        result = file.read_bytes()
-        assert result == b"somedata" * 10
+        assert file.read_bytes() == data
+
+    async def test_prune_dataset_deletes_data(
+        self,
+        a_dataset: Dataset,
+        dataset_path,
+        backend: SQLAlchemyBackend,
+    ):
+        assert not a_dataset.has_data
+
+        assert a_dataset.id is not None
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+
+        dataset = await backend.datasets.get(id=a_dataset.id)
+        assert dataset is not None
+        assert dataset.has_data
+
+        await backend.datasets.prune(a_dataset.id)
+
+        dataset = await backend.datasets.get(id=a_dataset.id)
+        assert dataset is not None
+        assert not dataset.has_data
+
+    async def test_get_summary(self, backend: SQLAlchemyBackend, a_dataset, dataset_path):
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        summary = await backend.datasets.get_summary(a_dataset.id)
+        assert isinstance(summary, DatasetSummary)

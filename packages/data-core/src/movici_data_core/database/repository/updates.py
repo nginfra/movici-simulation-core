@@ -4,6 +4,7 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
+import sqlalchemy.exc
 from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import joinedload
 
@@ -12,7 +13,10 @@ from movici_data_core.domain_model import Update
 from movici_data_core.exceptions import (
     InvalidAction,
     MoviciValidationError,
+    ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
+    map_errors,
 )
 
 from .common import EntityDataProcessor, EntityDataSelector, SQLResourceRepository
@@ -76,6 +80,16 @@ class UpdateRepository(SQLResourceRepository):
             self.session, all_data=self.all_data, selector=UpdateDataSelector()
         ).get(id)
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda obj: ResourceAlreadyExists("update", name=f"t{obj.timestamp}_{obj.iteration}"),
+        ),
+        (
+            sqlalchemy.exc.IntegrityError,
+            lambda obj: InvalidAction("Could not create update"),
+        ),
+    )
     async def create(self, obj: Update) -> UUID:
         """
         Store an Update to the active scenario.
@@ -93,6 +107,8 @@ class UpdateRepository(SQLResourceRepository):
             .where(db.ScenarioModel.name == obj.model.name)
         )
         if model_type_id is None:
+            if not (await self._exists(db.Scenario.id == scenario_id)):
+                raise ResourceDoesNotExist("scenario", id=scenario_id)
             raise MoviciValidationError(
                 f"{obj.model.name} is not a valid model for this scenario", "model.name"
             )

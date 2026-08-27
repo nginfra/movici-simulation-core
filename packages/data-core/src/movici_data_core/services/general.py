@@ -8,10 +8,9 @@ from movici_data_core.domain_model import (
     ModelType,
     Workspace,
 )
-from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_simulation_core import AttributeSchema
 
-from .common import GenericService
+from .common import GenericService, ensure_valid_workspace
 
 T_dom = t.TypeVar("T_dom")
 
@@ -21,25 +20,8 @@ class WorkspaceService(GenericService[Workspace]):
     def _repository(self):
         return self.repository.workspaces
 
-    async def ensure_valid_workspace(self, name_or_id: str) -> Workspace:
-        # try workspace as a UUID
-        try:
-            workspace_id = UUID(name_or_id)
-        except ValueError:
-            workspace_id = None
-
-        if workspace_id is not None:
-            # workspace was given as a uuid
-            workspace_obj = await self._repository.get_by_id(id=workspace_id)
-            if workspace_obj is None:
-                raise ResourceDoesNotExist("workspace", id=workspace_id)
-        else:
-            # workspace was given as a name
-            workspace_obj = await self._repository.get_by_name(name_or_id)
-            if workspace_obj is None:
-                raise ResourceDoesNotExist("workspace", name=name_or_id)
-
-        return workspace_obj
+    async def ensure_valid_workspace(self, name_or_id: str | None) -> Workspace:
+        return await ensure_valid_workspace(name_or_id, self.repository)
 
     async def get_with_counts(self, name: str | None = None, id: UUID | None = None):
         result = await self.get(name, id)

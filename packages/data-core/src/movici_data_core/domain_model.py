@@ -39,11 +39,11 @@ class DatasetFormat(str, enum.Enum):
 # Scenario. Do we want to trigger setting a scenario status to Failed if a simulation has not
 # updated a scenario for a certain time, either by posting an update or (re)posting the status
 class ScenarioStatus(str, enum.Enum):
-    FAILED = "Failed"
-    INVALID = "Invalid"
-    READY = "Ready"
-    RUNNING = "Running"
-    SUCCEEDED = "Succeeded"
+    FAILED = "failed"
+    INVALID = "invalid"
+    READY = "ready"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
 
 
 AttributeDataType = t.Type[bool | int | float | str]
