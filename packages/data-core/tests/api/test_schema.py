@@ -173,7 +173,13 @@ class TestAttributeTypes:
         payload.setdefault("description", "")
         payload.setdefault("unit", "")
         payload.setdefault("enum_name", None)
+        payload.setdefault("protected", False)
         assert result == payload
+
+    def test_get_protected_attribute_types(self, get_json):
+        result = get_json("/attribute_types")
+        attribute_types_by_name = {attr["name"]: attr for attr in result["attribute_types"]}
+        assert attribute_types_by_name["id"]["protected"]
 
     def test_update_attribute_type(self, get_json):
         created = get_json(

@@ -92,6 +92,15 @@ class AttributeDataType(enum.Enum):
     FLOAT = "float"
     STR = "str"
 
+    @classmethod
+    def from_domain(cls, py_type: domain_model.AttributeDataType):
+        return {
+            bool: AttributeDataType.BOOL,
+            int: AttributeDataType.INT,
+            float: AttributeDataType.FLOAT,
+            str: AttributeDataType.STR,
+        }[py_type]
+
 
 DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"
@@ -273,6 +282,9 @@ class AttributeType(Base):
         RegexMatchingString(pattern=r"[a-z][a-z_]*", length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH)
     )
 
+    # prevent attribute from being deleted or renamed
+    protected: Mapped[bool] = mapped_column(default=False)
+
     @property
     def data_type(self):
         py_type = {
@@ -291,6 +303,7 @@ class AttributeType(Base):
             unit=self.unit,
             description=self.description,
             enum_name=self.enum_name,
+            protected=self.protected,
         )
 
 
