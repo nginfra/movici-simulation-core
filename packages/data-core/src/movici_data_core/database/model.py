@@ -92,6 +92,15 @@ class AttributeDataType(enum.Enum):
     FLOAT = "float"
     STR = "str"
 
+    @classmethod
+    def from_domain(cls, py_type: domain_model.AttributeDataType):
+        return {
+            bool: AttributeDataType.BOOL,
+            int: AttributeDataType.INT,
+            float: AttributeDataType.FLOAT,
+            str: AttributeDataType.STR,
+        }[py_type]
+
 
 DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"

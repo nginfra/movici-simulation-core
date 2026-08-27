@@ -637,6 +637,33 @@ class TestAttributeTypeRepository:
                 id_attribute.id, dataclasses.replace(id_attribute, name="id_new")
             )
 
+    async def test_cannot_change_data_type_of_protected_attribute_type(
+        self, repository: SQLAlchemyRepository
+    ):
+        id_attribute = await repository.attribute_types.get_by_name("id")
+        assert id_attribute is not None
+        assert id_attribute.id is not None
+
+        with pytest.raises(InvalidAction, match="protected"):
+            await repository.attribute_types.update(
+                id_attribute.id, dataclasses.replace(id_attribute, data_type=DataType(float))
+            )
+
+    async def test_protected_status_remains_after_update(self, repository: SQLAlchemyRepository):
+        id_attribute = await repository.attribute_types.get_by_name("id")
+        assert id_attribute is not None
+        assert id_attribute.id is not None
+
+        await repository.attribute_types.update(
+            id_attribute.id,
+            dataclasses.replace(id_attribute, description="new description", protected=False),
+        )
+        attribute = await repository.attribute_types.get_by_name("id")
+
+        assert attribute is not None
+        assert attribute.description == "new description"
+        assert attribute.protected
+
 
 class TestModelTypeRepository:
     @pytest.fixture
