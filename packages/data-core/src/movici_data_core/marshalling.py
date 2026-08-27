@@ -570,6 +570,7 @@ class AttributeTypeOut(OutModel[AttributeType]):
     unit: str
     description: str
     enum_name: str | None
+    protected: bool
 
     @classmethod
     def from_domain(cls, obj: AttributeType):
@@ -580,6 +581,7 @@ class AttributeTypeOut(OutModel[AttributeType]):
             unit=obj.unit,
             description=obj.description,
             enum_name=obj.enum_name,
+            protected=obj.protected,
         )
 
 
