@@ -1,7 +1,10 @@
+import os
+import typing as t
 from uuid import UUID
 
 import fastapi
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.file_helpers import (
@@ -12,6 +15,7 @@ from movici_data_core.file_helpers import (
 from movici_data_core.marshalling import (
     DatasetListOut,
     DatasetSummaryOut,
+    DatasetWithDataOut,
     OperationSuccess,
     ShortDatasetIn,
     ShortDatasetOut,
@@ -58,17 +62,41 @@ async def delete_dataset(dataset_id: UUID, backend: DepBackend) -> OperationSucc
     return OperationSuccess.for_path_operation(resource="dataset", id=dataset_id, verb="deleted")
 
 
-@dataset_router.get("/{dataset_id}/data")
-async def get_dataset_data(dataset_id: UUID, backend: DepBackend):
+@dataset_router.get(
+    "/{dataset_id}/data",
+    responses={
+        200: {
+            "content": {
+                "application/octet-stream": {
+                    "schema": {
+                        "type": "string",
+                        "format": "binary",
+                    }
+                },
+            }
+        }
+    },
+)
+async def get_dataset_data(
+    dataset_id: UUID, backend: DepBackend, background_tasks: fastapi.BackgroundTasks
+) -> DatasetWithDataOut:
     # TODO: use accept header to serve msgpack or json
     result = await backend.datasets.get_dataset_as_file(dataset_id)
     if result is None:
         raise ResourceDoesNotExist("dataset", id=dataset_id)
-    return FileResponse(result)
+    background_tasks.add_task(os.remove, result)
+    return t.cast(
+        DatasetWithDataOut, FileResponse(result, background=BackgroundTask(os.remove, result))
+    )
 
 
 @dataset_router.post("/{dataset_id}/data")
-async def create_dataset_data(dataset_id: UUID, data: fastapi.UploadFile, backend: DepBackend):
+async def create_dataset_data(
+    dataset_id: UUID,
+    data: fastapi.UploadFile,
+    backend: DepBackend,
+    background_tasks: fastapi.BackgroundTasks,
+) -> OperationSuccess:
     if not await backend.datasets.get(id=dataset_id):
         # We also check this in the DatasetService, but we short circuit here to prevent additional
         # work with handling the incoming file
@@ -77,6 +105,7 @@ async def create_dataset_data(dataset_id: UUID, data: fastapi.UploadFile, backen
     mimetype = base_mimetype(data.content_type)
     filetype = infer_filetype_from_filename_or_mimetype(data.filename, mimetype)
     filepath = await store_file_to_disk(data.file, backend.tmpfile_dir, filetype)
+    background_tasks.add_task(os.remove, filepath)
     await backend.datasets.update_from_file(dataset_id, filepath, mimetype)
     return OperationSuccess.for_path_operation(
         resource="dataset", id=dataset_id, verb="data created"
@@ -84,7 +113,7 @@ async def create_dataset_data(dataset_id: UUID, data: fastapi.UploadFile, backen
 
 
 @dataset_router.delete("/{dataset_id}/data")
-async def delete_dataset_data(dataset_id: UUID, backend: DepBackend):
+async def delete_dataset_data(dataset_id: UUID, backend: DepBackend) -> OperationSuccess:
     await backend.datasets.prune(dataset_id)
     return OperationSuccess.for_path_operation(
         resource="dataset", id=dataset_id, verb="data deleted"

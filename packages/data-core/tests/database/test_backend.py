@@ -3,7 +3,7 @@ from uuid import UUID
 
 import pytest
 
-from movici_data_core.database.backend import SQLAlchemyBackend
+from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.domain_model import Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
@@ -13,6 +13,16 @@ from movici_data_core.validators import ModelConfigValidator
 @pytest.fixture
 def database_mode():
     return DatabaseMode.MULTIPLE_WORKSPACES
+
+
+async def test_sqlalchemy_server_creates_temporary_directory(db: SQLAlchemyServer):
+    server = SQLAlchemyServer(db.dbapi_url)
+
+    async with server.begin():
+        tmpfile_dir = server.tmpfile_dir
+        assert tmpfile_dir.is_dir()
+
+    assert not tmpfile_dir.exists()
 
 
 @pytest.mark.parametrize(

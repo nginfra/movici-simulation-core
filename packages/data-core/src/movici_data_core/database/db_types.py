@@ -101,7 +101,7 @@ class RegexMatchingString(TypeDecorator):
 
         if not isinstance(value, str):
             raise TypeError("must be a str")
-        if not re.match(self.pattern, value):
+        if not re.fullmatch(self.pattern, value):
             raise ValueError(f"value {value} did not match the required pattern")
         return value
 

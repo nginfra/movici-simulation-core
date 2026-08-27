@@ -419,6 +419,24 @@ class TestScenarioInOut:
             },
             {"enum_name": "A"},
         ),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"enum_name": "aA"},
+        ),
+        (
+            AttributeTypeIn,
+            {
+                "name": "a",
+                "data_type": {"type": "float", "unit_shape": [], "csr": False},
+                "enum_name": "a",
+            },
+            {"enum_name": "Aa"},
+        ),
         (ModelTypeIn, {"name": "a", "jsonschema": {}}, {"name": "A"}),
     ],
 )

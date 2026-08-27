@@ -4,7 +4,6 @@ import dataclasses
 import datetime
 import functools
 import pathlib
-import re
 import typing as t
 from uuid import UUID
 
@@ -71,7 +70,7 @@ AttributeNameStr = t.Annotated[
 
 BoundingBoxField = t.Annotated[
     BoundingBox | None,
-    PlainSerializer(lambda bbox: bbox.as_tuple_or_none()),
+    PlainSerializer(lambda bbox: bbox.as_tuple_or_none() if bbox is not None else None),
     WithJsonSchema(
         {
             "anyOf": [
@@ -156,7 +155,7 @@ class DatasetListOut(OutModel[t.Sequence[Dataset]]):
     datasets: list[ShortDatasetOut]
 
 
-class ScenarioIn(BaseModel):
+class ScenarioIn(InModel[Scenario]):
     name: NameStr
     display_name: t.Annotated[str, Field(max_length=DEFAULT_DISPLAY_NAME_MAX_LENGTH)]
     description: t.Annotated[str, Field(max_length=SCENARIO_DESCRIPTION_MAX_LENGTH)] = ""
@@ -592,7 +591,7 @@ class AttributeTypeIn(InModel[AttributeType]):
     enum_name: (
         t.Annotated[
             str,
-            Field(max_length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH, pattern=re.compile(r"[a-z][a-z_]*")),
+            Field(max_length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH, pattern=snake_case_pattern),
         ]
         | None
     ) = None

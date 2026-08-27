@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import pathlib
-import tempfile
 import typing as t
 from urllib.parse import urlsplit
 
@@ -105,9 +104,7 @@ def make_app(
 
 
 def make_default_app():
-    tmpfile_path = pathlib.Path(tempfile.mkdtemp(prefix="movici_api_tmp_"))
-
     db_path = pathlib.Path("movici.db")
     dbapi_url = f"sqlite+aiosqlite:///{db_path}"
-    server = SQLAlchemyServer(dbapi_url, tmpfile_dir=tmpfile_path)
+    server = SQLAlchemyServer(dbapi_url)
     return make_app(server)

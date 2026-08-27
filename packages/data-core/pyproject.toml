@@ -29,7 +29,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "fastapi",
+  "fastapi>=0.121.0",         # 0.121.0 required for scoped dependencies
   "jsonschema",
   "movici-simulation-core",
   "numpy",

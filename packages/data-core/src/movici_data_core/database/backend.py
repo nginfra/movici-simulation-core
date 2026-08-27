@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import pathlib
+import tempfile
 import typing as t
 from uuid import UUID
 
@@ -45,15 +46,13 @@ class SQLAlchemyServer:
     :param dbapi_url: a DB API url string
     :param serializer: a class for instantiating an ``ExternalSerializationStrategy``. Default:
       ``EntityInitDataFormat``
-    :param tmpfile_dir: a path to a directory that may be used to store temporary files
+    :param tmpfile_dir: Optional. A path to a directory that may be used to store temporary files.
+        if not given, or ``None``, a temporary directory will be created in the
+        ``SQLAlchemyServer.begin`` context manager and removed when that context is exited
     """
 
     dbapi_url: str
-    tmpfile_dir: pathlib.Path
     serializer: ExternalSerializationStrategy
-
-    session_factory: async_sessionmaker[AsyncSession]
-    engine: AsyncEngine
 
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
@@ -67,22 +66,56 @@ class SQLAlchemyServer:
     def __init__(
         self,
         dbapi_url: str,
-        tmpfile_dir: pathlib.Path,
+        tmpfile_dir: pathlib.Path | None = None,
         serializer: ExternalSerializationStrategy | None = None,
     ):
 
         self.dbapi_url = dbapi_url
-        self.tmpfile_dir = tmpfile_dir
+        self._tmpfile_dir = tmpfile_dir
         self.serializer = serializer or EntityInitDataFormat(
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
         )
 
+        self._session_factory: async_sessionmaker[AsyncSession] | None = None
+        self._engine: AsyncEngine | None = None
+
+    @property
+    def tmpfile_dir(self) -> pathlib.Path:
+        if self._tmpfile_dir is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._tmpfile_dir
+
+    @property
+    def engine(self) -> AsyncEngine:
+        if self._engine is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._engine
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        if self._session_factory is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._session_factory
+
     @contextlib.asynccontextmanager
     async def begin(self, **engine_kwargs):
+        orig_tmpfile_dir = self._tmpfile_dir
+        if orig_tmpfile_dir is not None:
+            tmpdir_context = contextlib.nullcontext(enter_result=orig_tmpfile_dir)
+        else:
+            tmpdir_context = tempfile.TemporaryDirectory(prefix="movici_api_tmp_")
+
         async with get_engine(self.dbapi_url, **engine_kwargs) as engine:
-            self.engine = engine
-            self.session_factory = async_sessionmaker(engine)
-            yield self
+            with tmpdir_context as tmpfile_dir:
+                self._tmpfile_dir = pathlib.Path(tmpfile_dir)
+                self._engine = engine
+                self._session_factory = async_sessionmaker(engine)
+
+                yield self
+
+                self._tmpfile_dir = orig_tmpfile_dir
+                self._engine = None
+                self._session_factory = None
 
     @contextlib.asynccontextmanager
     async def get_session(self, **session_kwargs):

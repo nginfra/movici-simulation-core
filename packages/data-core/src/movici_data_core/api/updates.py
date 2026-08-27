@@ -1,7 +1,8 @@
+import os
 import typing as t
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 from fastapi.responses import FileResponse
 
 from movici_data_core.exceptions import ResourceDoesNotExist
@@ -39,9 +40,13 @@ async def get_updates(backend: DepScenarioBackend) -> UpdateListOut:
 
 @update_router.post("")
 async def create_update(
-    backend: DepScenarioBackend, request: Request, filetype: DepContentType
+    backend: DepScenarioBackend,
+    request: Request,
+    filetype: DepContentType,
+    background_tasks: BackgroundTasks,
 ) -> OperationSuccess:
     tempfile = await store_request_stream_to_disk(request, backend.tmpfile_dir, filetype=filetype)
+    background_tasks.add_task(os.remove, tempfile)
     result = await backend.updates.store_update_from_file(tempfile, filetype)
     return OperationSuccess.for_path_operation(resource="update", id=result, verb="created")
 
@@ -57,10 +62,18 @@ async def delete_updates(backend: DepScenarioBackend) -> OperationSuccess:
 
 @update_router.get("/{update_id}")
 async def get_update(
-    update_id: UUID, backend: DepBackend, filetype: DepContentType
+    update_id: UUID,
+    backend: DepBackend,
+    background_tasks: BackgroundTasks,
 ) -> UpdateWithDataOut:
-    path = await backend.updates.get_update_as_file(update_id=update_id, filetype=filetype)
+    response_filetype = FileType.JSON
+    path = await backend.updates.get_update_as_file(
+        update_id=update_id, filetype=response_filetype
+    )
     if path is None:
         raise ResourceDoesNotExist("update", id=update_id)
 
-    return t.cast(UpdateWithDataOut, FileResponse(path, media_type=get_mimetype(filetype)))
+    background_tasks.add_task(os.remove, path)
+    return t.cast(
+        UpdateWithDataOut, FileResponse(path, media_type=get_mimetype(response_filetype))
+    )

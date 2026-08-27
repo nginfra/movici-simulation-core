@@ -1470,7 +1470,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", marker = "extra == 'standard'", specifier = ">=0.22.1" },
-    { name = "fastapi" },
+    { name = "fastapi", specifier = ">=0.121.0" },
     { name = "fastapi-cli", extras = ["standard-no-fastapi-cloud-cli"], marker = "extra == 'standard'" },
     { name = "jsonschema" },
     { name = "movici-simulation-core", editable = "packages/simulation-core" },

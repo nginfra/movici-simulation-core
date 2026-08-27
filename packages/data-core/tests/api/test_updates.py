@@ -2,6 +2,7 @@ from itertools import count
 
 import pytest
 
+from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.file_helpers import get_mimetype
 from movici_data_core.serialization import dump_dict
 from movici_simulation_core.types import FileType
@@ -129,3 +130,25 @@ def test_delete_updates(get_json, scenario_id, create_update_through_api):
         "message": "updates deleted",
     }
     assert _get_update_count() == 0
+
+
+def test_clean_up_temporary_file_after_uploading_update(
+    db: SQLAlchemyServer, create_update_through_api
+):
+    tmpfile_dir = db.tmpfile_dir
+    item_count = len(list(tmpfile_dir.glob("*")))
+    create_update_through_api()
+    new_item_count = len(list(tmpfile_dir.glob("*")))
+    assert item_count == new_item_count
+
+
+def test_clean_up_temporary_file_after_downloading_update(
+    get_json, db: SQLAlchemyServer, create_update_through_api
+):
+    tmpfile_dir = db.tmpfile_dir
+    update_id = create_update_through_api()["id"]
+
+    item_count = len(list(tmpfile_dir.glob("*")))
+    get_json(f"/updates/{update_id}", expected_status=200)
+    new_item_count = len(list(tmpfile_dir.glob("*")))
+    assert item_count == new_item_count

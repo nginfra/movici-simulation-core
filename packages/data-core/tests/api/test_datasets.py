@@ -6,6 +6,7 @@ import orjson
 import pytest
 from fastapi.testclient import TestClient
 
+from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.serialization import dump_dict
 from movici_simulation_core.types import FileType
 
@@ -289,3 +290,28 @@ def test_get_dataset_summary(get_json, a_dataset_with_data):
             }
         ],
     }
+
+
+def test_clean_up_temporary_file_after_downloading_dataset(
+    get_json, a_dataset_with_data, db: SQLAlchemyServer
+):
+    tmpfile_dir = db.tmpfile_dir
+    item_count = len(list(tmpfile_dir.glob("*")))
+    get_json(f"/datasets/{a_dataset_with_data.id}/data", expected_status=200)
+
+    new_item_count = len(list(tmpfile_dir.glob("*")))
+    assert item_count == new_item_count
+
+
+def test_clean_up_temporary_file_after_uploading_dataset(
+    get_json, a_dataset, dataset_data, db: SQLAlchemyServer, upload_dataset_data
+):
+    tmpfile_dir = db.tmpfile_dir
+    item_count = len(list(tmpfile_dir.glob("*")))
+    response = upload_dataset_data(
+        a_dataset.id, orjson.dumps(dataset_data), mimetype="application/json"
+    )
+    assert response.status_code == 200
+
+    new_item_count = len(list(tmpfile_dir.glob("*")))
+    assert item_count == new_item_count
