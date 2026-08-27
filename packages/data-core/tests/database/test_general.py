@@ -54,3 +54,19 @@ async def test_initialize_db_for_multiple_workspaces_does_not_create_default_wor
     options = await get_options(session)
 
     assert options.default_workspace is None
+
+
+async def test_creates_default_attribute_types(session):
+    await initialize_database(session, mode=DatabaseMode.MULTIPLE_WORKSPACES)
+    repository = AttributeTypeRepository(session, None, None)  # type: ignore
+    assert {attr.name for attr in await repository.list()} == {
+        "id",
+        "geometry.x",
+        "geometry.y",
+        "geometry.z",
+        "geometry.linestring_2d",
+        "geometry.linestring_3d",
+        "geometry.polygon",
+        "geometry.polygon_2d",
+        "geometry.polygon_3d",
+    }
