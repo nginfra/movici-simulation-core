@@ -64,6 +64,7 @@ async def test_creates_default_attribute_types(session):
         "id",
         "geometry.x",
         "geometry.y",
+        "geometry.z",
         "geometry.linestring_2d",
         "geometry.linestring_3d",
         "geometry.polygon",
