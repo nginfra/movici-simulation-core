@@ -23,7 +23,7 @@ from .common import SQLResourceRepository, ensure_valid_id, validated_payload
 class ViewRepository(SQLResourceRepository):
     """A Repository for managing visualization views.
 
-    :param scenario_id: A Scenario UUID to bind this viewRepository to. Most methods require the
+    :param scenario_id: A Scenario UUID to bind this ViewRepository to. Most methods require the
         repository to be bound, with the exception of :meth:`ViewRepository.get_by_id`. Binding
         generally is performed by the ``SQLAlchemyRepository`` that manages this
         ``ViewRepository``
@@ -43,7 +43,7 @@ class ViewRepository(SQLResourceRepository):
     async def list(self) -> list[View]:
         """List all views in the active scenario.
 
-        :return: a list of views, these views do not contain any data
+        :return: a list of views
         """
         scenario_id = self._ensure_scenario_id()
         result = await self.session.scalars(
@@ -101,7 +101,7 @@ class ViewRepository(SQLResourceRepository):
     async def update(self, id: UUID, obj: View):
         """Update a :class:``View`` in the database
 
-        Valid fields to update are: ``name``, ``jsonschema``
+        Valid fields to update are: ``name``, ``config``
 
         :param id: the UUID of the stored ``View``
         :param obj: the ``View`` object with the changes
