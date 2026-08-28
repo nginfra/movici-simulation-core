@@ -285,9 +285,26 @@ class TestSchemaInvalidation:
 
         async with initialized_db.get_backend() as backend:
             await backend.attribute_types.create(AttributeType("some.attribute", DataType(int)))
-            assert initialized_db.schema is None
+            assert initialized_db.schema_dirty
+
+        async with initialized_db.get_backend() as backend:
+            new_schema = initialized_db.schema
+            assert not initialized_db.schema_dirty
+            assert new_schema is not None
+            assert "some.attribute" in new_schema.attributes
+
+    async def test_invalidates_schema_after_autocreating_new_attribute(
+        self, initialized_db: SQLAlchemyServer
+    ):
+
+        async with initialized_db.get_backend() as backend:
+            backend.set_options(strict_attribute_types=False)
+            await backend.repository.attribute_types.ensure_attribute_type(
+                AttributeType("new_attribute", DataType(float, (2,)))
+            )
+            assert initialized_db.schema_dirty
 
         async with initialized_db.get_backend() as backend:
             new_schema = initialized_db.schema
             assert new_schema is not None
-            assert "some.attribute" in new_schema.attributes
+            assert "new_attribute" in new_schema.attributes

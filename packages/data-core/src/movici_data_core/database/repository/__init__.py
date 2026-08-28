@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Callable
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,15 +36,17 @@ class SQLAlchemyRepository:
     options: Options
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
+    invalidate_schema_callable: Callable | None = None
 
     @classmethod
-    async def for_session(cls, session: AsyncSession):
+    async def for_session(cls, session: AsyncSession, **kwargs):
         options = await get_options(session)
         return SQLAlchemyRepository(
             session,
             options,
             workspace_id=options.default_workspace_id,
             scenario_id=options.default_scenario_id,
+            **kwargs,
         )
 
     def for_workspace(self, workspace_id: UUID):
@@ -69,26 +72,30 @@ class SQLAlchemyRepository:
         """
         return dataclasses.replace(self, scenario_id=scenario_id)
 
+    def _invalidate_schema(self):
+        if self.invalidate_schema_callable is not None:
+            self.invalidate_schema_callable()
+
     # define these fields as properties to prevent cyclic references and simplify GC
     @property
     def workspaces(self):
-        return WorkspaceRepository(self.session, self.options, self)
+        return WorkspaceRepository(self.session, self.options, self, self._invalidate_schema)
 
     @property
     def dataset_types(self):
-        return DatasetTypeRepository(self.session, self.options, self)
+        return DatasetTypeRepository(self.session, self.options, self, self._invalidate_schema)
 
     @property
     def entity_types(self):
-        return EntityTypeRepository(self.session, self.options, self)
+        return EntityTypeRepository(self.session, self.options, self, self._invalidate_schema)
 
     @property
     def attribute_types(self):
-        return AttributeTypeRepository(self.session, self.options, self)
+        return AttributeTypeRepository(self.session, self.options, self, self._invalidate_schema)
 
     @property
     def model_types(self):
-        return ModelTypeRepository(self.session, self.options, self)
+        return ModelTypeRepository(self.session, self.options, self, self._invalidate_schema)
 
     @property
     def datasets(self):

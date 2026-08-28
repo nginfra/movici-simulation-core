@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from movici_data_core.database import model as db_model
-from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
+from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.database.general import _default_flags, get_options, initialize_database
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.database.repository import SQLAlchemyRepository
@@ -200,7 +200,10 @@ async def get_repository(db: SQLAlchemyServer, a_workspace):
     @contextlib.asynccontextmanager
     async def _with_repository():
         async with db.get_session() as session:
-            repository = await SQLAlchemyRepository.for_session(session)
+            repository = await SQLAlchemyRepository.for_session(
+                session, invalidate_schema_callable=db.invalidate_schema
+            )
+
             yield repository.for_workspace(a_workspace.id)
             await session.commit()
 
@@ -369,7 +372,8 @@ async def an_entity_type(get_repository):
 
 
 @pytest.fixture
-async def an_attribute_type(get_repository, default_backend: SQLAlchemyBackend) -> AttributeType:
+async def an_attribute_type(get_repository, db: SQLAlchemyServer) -> AttributeType:
+    repository: SQLAlchemyRepository
     async with get_repository() as repository:
         attribute_id = await repository.attribute_types.create(
             AttributeType(
@@ -379,7 +383,6 @@ async def an_attribute_type(get_repository, default_backend: SQLAlchemyBackend) 
                 description="a description",
             )
         )
-        default_backend.invalidate_schema()
         return t.cast(AttributeType, await repository.attribute_types.get_by_id(attribute_id))
 
 
