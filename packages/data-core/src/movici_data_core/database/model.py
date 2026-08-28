@@ -332,8 +332,7 @@ class DataArray(Base):
         :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
             you should make a copy by calling ``array.copy()``
         """
-        result = np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
-        return result
+        return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
 
 
 class RowptrArray(Base):
@@ -347,15 +346,13 @@ class RowptrArray(Base):
     )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
-    def to_numpy(self, copy=False) -> np.ndarray:
+    def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
-        :return: Reconstructed NumPy array
+        :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
+            you should make a copy by calling ``array.copy()``
         """
-        result = np.frombuffer(self.data, dtype=int)
-        if copy:
-            result = result.copy()
-        return result
+        return np.frombuffer(self.data, dtype=int)
 
 
 class Attribute(Base):

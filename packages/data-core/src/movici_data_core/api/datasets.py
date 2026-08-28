@@ -130,7 +130,7 @@ async def patch_dataset_data(
 ) -> OperationSuccess:
 
     # some checks that are also performed in the DatasetService, but we short circuit here to
-    # pfrevent additional work with handling the incoming file
+    # prevent additional work with handling the incoming file
     if not (dataset := await backend.datasets.get(id=dataset_id)):
         raise ResourceDoesNotExist("dataset", id=dataset_id)
     dataset_format = dataset.dataset_type.format
