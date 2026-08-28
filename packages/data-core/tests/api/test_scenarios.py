@@ -219,7 +219,15 @@ async def test_get_full_scenario_state(repository, get_json, a_scenario, a_datas
     await create_update(
         timestamp=1,
         iteration=0,
-        data=dataset_data_to_numpy({"roads": {"id": [1, 2], "transport.capacity": [10.0, 20.0]}}),
+        data=dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2],
+                    "transport.capacity": [10.0, 20.0],
+                    "topology.from_node_id": [9, 10],
+                }
+            }
+        ),
     )
     await repository.session.commit()
 
@@ -234,7 +242,7 @@ async def test_get_full_scenario_state(repository, get_json, a_scenario, a_datas
         "data": {
             "roads": {
                 "id": [1, 2, 3],
-                "topology.from_node_id": [9, 9, 9],
+                "topology.from_node_id": [9, 10, 9],
                 "transport.capacity": [10.0, 20.0, None],
             }
         }

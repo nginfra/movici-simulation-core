@@ -65,14 +65,12 @@ class ScenarioService:
     async def get_state_as_file(
         self, state_filter: ScenarioStateFilter, filetype=FileType.JSON
     ) -> pathlib.Path | None:
-        scenario_id = self.repository.scenarios._ensure_scenario_id()
-
         if not (await self.repository.scenarios.exists()):
             return None
 
         with tempfile_delete_on_error(
             suffix=filetype.default_extension,
-            prefix=f"scenario-{scenario_id}-{state_filter.dataset}",
+            prefix=f"scenario-state-{state_filter.dataset}",
             dir=self.tmpfile_dir,
         ) as outfile:
             if filetype not in self.serializer.supported_file_types():

@@ -256,7 +256,7 @@ class ScenarioRepository(SQLResourceRepository):
         aggregator.add_dataset_data(dataset_data, is_initial=is_initial)
 
     @staticmethod
-    def _combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> NumpyDatasetData:
+    def _combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
         result: NumpyDatasetData = {}
         for attribute in attributes:
             attribute_name = attribute.attribute_type.name
@@ -268,10 +268,10 @@ class ScenarioRepository(SQLResourceRepository):
                     f" entity group '{entity_group_name}'"
                 )
 
-            data = attribute.data.to_numpy(copy=copy)
+            data = attribute.data.to_numpy()
             attr_data: NumpyAttributeData = {"data": data}
             if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy(copy=copy)
+                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
             entity_group_data[attribute_name] = attr_data
         return result
 

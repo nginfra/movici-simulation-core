@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from movici_data_core.database import model as db
-from movici_data_core.database.repository.state_aggregator import (
+from movici_data_core.state_aggregator import (
     DatasetStateAggregator,
     strip_undefined,
 )
@@ -299,6 +299,14 @@ def test_raises_on_new_entity_group_if_not_allowed():
             },
             [4, 5, 6],
             {"data": [[1, 2], [3, 4], [5, 6]], DEFAULT_ROWPTR_KEY: [0, 1, 3]},
+            [4, 6],
+        ),
+        (
+            {
+                "data": [[1.0, 2.0], [UNDEFINED[float], UNDEFINED[float]], [3.0, 4.0]],
+            },
+            [4, 5, 6],
+            {"data": [[1.0, 2.0], [3.0, 4.0]]},
             [4, 6],
         ),
     ],
