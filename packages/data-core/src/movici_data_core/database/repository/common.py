@@ -192,7 +192,7 @@ def dataset_filter_to_where_clause(dataset_filter: DatasetFilter):
     return where_clause
 
 
-def combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> NumpyDatasetData:
+def combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
     result: NumpyDatasetData = {}
     for attribute in attributes:
         attribute_name = attribute.attribute_type.name
@@ -209,7 +209,7 @@ def combine_attributes(attributes: t.Iterable[db.Attribute], copy=False) -> Nump
         data = attribute.data.to_numpy()
         attr_data: NumpyAttributeData = {"data": data}
         if attribute.rowptr is not None:
-            attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy(copy=copy)
+            attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
         entity_group_data[attribute_name] = attr_data
     return result
 
@@ -225,7 +225,7 @@ class EntityDataProcessor:
         self.all_data = all_data
         self.selector = selector
 
-    async def get(self, id: UUID, copy=False) -> NumpyDatasetData:
+    async def get(self, id: UUID) -> NumpyDatasetData:
         subquery = self.selector.selector_subquery(id)
         query = (
             select(db.Attribute)
@@ -238,7 +238,7 @@ class EntityDataProcessor:
             )
         )
         attrs = (await self.session.scalars(query)).all()
-        return combine_attributes(attrs, copy=copy)
+        return combine_attributes(attrs)
 
     async def store(self, id: UUID, data: NumpyDatasetData):
         """
@@ -306,7 +306,7 @@ class RawDataProcessor:
     ``UNSTRUCTURED`` datasets
     """
 
-    RAW_DATA_CHUNK_SIZE = 10_000_000  # 10 MB
+    RAW_DATA_CHUNK_SIZE = 100_000_000  # 100 MB
 
     def __init__(self, session: AsyncSession):
         self.session = session

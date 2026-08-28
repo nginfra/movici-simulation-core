@@ -178,15 +178,19 @@ class DatasetService:
             raise InvalidAction(f"Cannot patch dataset with format '{dataset_type.format.value}'")
 
         patch = DatasetPatchIn.read_from_file(path, self.serializer)
-        current_data = await self.repository.dataset_data.get_entity_data(dataset_id, copy=True)
+        current_data = await self.repository.dataset_data.get_entity_data(dataset_id)
         aggregator = DatasetStateAggregator(allow_new_entities=True)
         aggregator.add_dataset_data(current_data, is_initial=True)
         aggregator.add_dataset_data(
             patch.data, undefined_values_overwrite=patch.undefined_values_overwrite
         )
-        await self.repository.dataset_data.delete(dataset_id)
-        await self.repository.dataset_data.create(
-            dataset_id, aggregator.state, format=DatasetFormat.ENTITY_BASED
+        state = aggregator.state  # store to local variable to prevent extra work in state property
+
+        await self.repository.datasets.update(
+            dataset_id,
+            dataclasses.replace(
+                existing, data=state, bounding_box=calculate_bounding_box_from_data(state)
+            ),
         )
 
     async def prune(self, dataset_id: UUID):

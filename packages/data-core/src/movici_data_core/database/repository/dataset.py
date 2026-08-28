@@ -419,9 +419,7 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await RawDataProcessor(self.session).get_dict(id)
 
-    async def get_entity_data(
-        self, id: UUID, dataset_filter: DatasetFilter | None = None, copy=False
-    ):
+    async def get_entity_data(self, id: UUID, dataset_filter: DatasetFilter | None = None):
         """return the dataset data for an ``ENTITY_BASED`` dataset
 
         :param id: the dataset ``UUID``
@@ -431,7 +429,7 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await EntityDataProcessor(
             self.session, all_data=self.all_data, selector=DatasetDataSelector(dataset_filter)
-        ).get(id, copy=copy)
+        ).get(id)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
         """Store dataset data for a dataset. The dataset must currently not contain any data

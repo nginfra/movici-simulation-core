@@ -137,7 +137,7 @@ class DatasetStateAggregator:
         return np.arange(next_id, next_id + count)
 
     def _add_new_entity_group(self, name: str, entity_data: EntityData):
-        entity_data = self._deep_copy_entity_data(entity_data)
+        entity_data = deep_copy_entity_data(entity_data)
         ids = self._get_filled_ids(entity_data["id"]["data"])
         self._check_unique_ids(ids, name)
         self._state[name] = (Index(ids), {k: v for k, v in entity_data.items() if k != "id"})
@@ -190,14 +190,14 @@ class DatasetStateAggregator:
         t.cast(dict, attribute).clear()
         t.cast(dict, attribute).update(new_attribute)
 
-    @staticmethod
-    def _deep_copy_entity_data(obj: EntityData) -> EntityData:
-        def _helper(obj: dict | np.ndarray):
-            if isinstance(obj, np.ndarray):
-                return obj.copy()
-            return {k: _helper(v) for k, v in obj.items()}
 
-        return t.cast(EntityData, _helper(obj))
+def deep_copy_entity_data(obj: EntityData) -> EntityData:
+    def _helper(obj: dict | np.ndarray):
+        if isinstance(obj, np.ndarray):
+            return obj.copy()
+        return {k: _helper(v) for k, v in obj.items()}
+
+    return t.cast(EntityData, _helper(obj))
 
 
 def update_attribute_data(

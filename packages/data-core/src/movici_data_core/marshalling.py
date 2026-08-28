@@ -326,7 +326,7 @@ class DatasetPatchIn(InModel[DatasetPatch]):
         serializer: ExternalSerializationStrategy,
         filetype: FileType | None = None,
     ) -> DatasetPatch:
-        """Read DatasetPathc from a file.
+        """Read DatasetPatch from a file.
 
         :param path: A path to an file containing a dataset patch. The file must be in a format
             that the serializer supports, which is generally either JSON or MessagePack.
