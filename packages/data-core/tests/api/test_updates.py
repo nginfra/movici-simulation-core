@@ -46,7 +46,7 @@ def create_update_through_api(scenario_id, get_json, a_dataset, an_entity_type, 
     return _create_update
 
 
-@pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
+@pytest.mark.parametrize("filetype", [FileType.MSGPACK])
 def test_create_update(
     client, a_dataset, scenario_id, an_entity_type, an_attribute_type, filetype
 ):

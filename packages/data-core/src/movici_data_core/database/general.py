@@ -7,10 +7,13 @@ from sqlalchemy import event, func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import joinedload
 
+from movici_data_core import domain_model
 from movici_data_core.database.model import (
     DEFAULT_SCENARIO_NAME,
     DEFAULT_SCHEMA_VERSION,
     DEFAULT_WORKSPACE_NAME,
+    AttributeDataType,
+    AttributeType,
     DatabaseMode,
     Metadata,
     Options,
@@ -19,6 +22,7 @@ from movici_data_core.database.model import (
 )
 from movici_data_core.domain_model import ScenarioStatus, SimulationInfo
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
+from movici_simulation_core import attributes
 
 
 @contextlib.asynccontextmanager
@@ -63,6 +67,50 @@ async def initialize_database(session: AsyncSession, mode: DatabaseMode):
             **_default_flags(mode),
         )
     )
+    await create_default_attribute_types(session)
+
+
+async def create_default_attribute_types(session: AsyncSession):
+    default_attributes = (
+        (attributes.Id, dict(unit="", description="Entity ID")),
+        (attributes.Geometry_X, dict(unit="m", description="Point geometry x component")),
+        (attributes.Geometry_Y, dict(unit="m", description="Point geometry y component")),
+        (attributes.Geometry_Z, dict(unit="m", description="Point geometry z component")),
+        (attributes.Geometry_Linestring2d, dict(unit="m", description="2D linestring geometry")),
+        (attributes.Geometry_Linestring3d, dict(unit="m", description="3D linestring geometry")),
+        (attributes.Geometry_Polygon, dict(unit="m", description="Polygon geometry (2D)")),
+        (attributes.Geometry_Polygon2d, dict(unit="m", description="2D polygon geometry")),
+        (attributes.Geometry_Polygon3d, dict(unit="m", description="3D polygon geometry")),
+    )
+    attribute_types = (
+        dataclasses.replace(domain_model.AttributeType.from_attribute_spec(spec), **kwargs)
+        for spec, kwargs in default_attributes
+    )
+
+    payload = [
+        dict(
+            name=obj.name,
+            has_rowptr=obj.data_type.csr,
+            unit_type=AttributeDataType.from_domain(obj.data_type.py_type),
+            unit_shape=obj.data_type.unit_shape,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+            protected=True,
+        )
+        for obj in attribute_types
+    ]
+    payload.append(
+        dict(
+            name="deleted",
+            has_rowptr=False,
+            unit_type=AttributeDataType.BOOL,
+            unit_shape=(),
+            unit="",
+            description="A pseudoattribute indicating the entity is deleted",
+        ),
+    )
+    await session.execute(insert(AttributeType), payload)
 
 
 async def create_default_workspace(

@@ -120,6 +120,8 @@ class AttributeType:
     :param description: a description of the attribute describing it's meaning. Default
       ``""`` (empty string)
     :param enum_name: (Optional) in case of an ``enum`` attribute, the name of the ``enum``
+    :param protected: (Optional) prevent this attribute from being deleted or renamed. Usually this
+        is only used for default attribute types
     """
 
     name: str
@@ -130,6 +132,7 @@ class AttributeType:
     unit: str = ""
     description: str = ""
     enum_name: str | None = None
+    protected: bool = False
 
     @classmethod
     def from_attribute_spec(cls, spec: AttributeSpec):
@@ -350,6 +353,12 @@ class Dataset:
 
     data: DatasetData | None = None
     has_data: bool = False
+
+
+@dataclasses.dataclass
+class DatasetPatch:
+    data: dict
+    undefined_values_overwrite: bool = False
 
 
 @dataclasses.dataclass

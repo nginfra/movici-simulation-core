@@ -355,3 +355,38 @@ def test_clean_up_temporary_file_after_uploading_dataset(
 
     new_item_count = len(list(tmpfile_dir.glob("*")))
     assert item_count == new_item_count
+
+
+def test_patch_dataset(get_json, a_dataset_with_data):
+    url = f"/datasets/{a_dataset_with_data.id}/data"
+    patch = {
+        "nulls_overwrite": True,
+        "data": {
+            "roads": {
+                "id": [1, 2, 3],
+                "deleted": [None, True, False],
+                "some.attribute": [1.0, 2.0, None],
+            },
+            "transport_nodes": {"id": [None, None]},
+        },
+    }
+    result = get_json(url, method="patch", json=patch)
+    assert result.pop("id") == str(a_dataset_with_data.id)
+    assert result == {
+        "result": "ok",
+        "message": "dataset data updated",
+    }
+    dataset_data = get_json(url)["data"]
+    assert dataset_data == {
+        "roads": {"id": [1, 3], "some.attribute": [1.0, None]},
+        "transport_nodes": {"id": [4, 5]},
+    }
+
+
+def test_error_when_patching_non_entity_dataset(get_json, create_dataset):
+    dataset_id = create_dataset("tabular_dataset", type="tabular")["id"]
+    patch = {"data": {"roads": {"id": [1]}}}
+    result = get_json(
+        f"/datasets/{dataset_id}/data", method="patch", json=patch, expected_status=400
+    )
+    assert result["message"] == "Cannot patch dataset with format 'unstructured'"

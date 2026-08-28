@@ -7,7 +7,6 @@ from sqlalchemy import insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
-    AttributeDataType,
     AttributeType,
     DatasetFormat,
     DatasetType,
@@ -187,11 +186,12 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         payload = self._validated_payload_dict(
             name=obj.name,
             has_rowptr=obj.data_type.csr,
-            unit_type=self._db_unit_type(obj.data_type.py_type),
+            unit_type=db.AttributeDataType.from_domain(obj.data_type.py_type),
             unit_shape=obj.data_type.unit_shape,
             unit=obj.unit,
             description=obj.description,
             enum_name=obj.enum_name,
+            protected=obj.protected,
         )
         return t.cast(
             UUID,
@@ -199,14 +199,6 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
                 insert(db.AttributeType).values(**payload).returning(db.AttributeType.id)
             ),
         )
-
-    def _db_unit_type(self, py_type: AttributeDataType):
-        return {
-            bool: db.AttributeDataType.BOOL,
-            int: db.AttributeDataType.INT,
-            float: db.AttributeDataType.FLOAT,
-            str: db.AttributeDataType.STR,
-        }[py_type]
 
     @map_errors(
         (
@@ -226,17 +218,26 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("attribute_type", id=id)
+
+        if current.protected and current.name != obj.name:
+            raise InvalidAction(f"Cannot rename protected attribute type '{current.name}'")
+
         in_use = await self.session.scalar(
             select(db.Attribute.id).where(db.Attribute.attribute_type_id == id).limit(1)
         )
 
-        if in_use and not current.data_type == obj.data_type:
-            raise InvalidAction("cannot change attribute data type when it is in use")
+        if current.data_type != obj.data_type:
+            if current.protected:
+                raise InvalidAction(
+                    f"Cannot data type of protected attribute type '{current.name}'"
+                )
+            if in_use:
+                raise InvalidAction("Cannot change attribute data type when it is in use")
 
         payload = self._validated_payload_dict(
             name=obj.name,
             has_rowptr=obj.data_type.csr,
-            unit_type=self._db_unit_type(obj.data_type.py_type),
+            unit_type=db.AttributeDataType.from_domain(obj.data_type.py_type),
             unit_shape=obj.data_type.unit_shape,
             unit=obj.unit,
             description=obj.description,
@@ -245,6 +246,15 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         await self.session.execute(
             update(db.AttributeType).where(db.AttributeType.id == id).values(**payload)
         )
+
+    async def delete(self, id: UUID):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("attribute_type", id=id)
+
+        if current.protected:
+            raise InvalidAction(f"Cannot delete protected attribute type '{current.name}'")
+        return await super().delete(id)
 
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
         """Ensure that an attribute type exists in the database or raise an error. If the attribute

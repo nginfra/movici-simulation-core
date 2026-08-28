@@ -95,6 +95,15 @@ class AttributeDataType(enum.Enum):
     FLOAT = "float"
     STR = "str"
 
+    @classmethod
+    def from_domain(cls, py_type: domain_model.AttributeDataType):
+        return {
+            bool: AttributeDataType.BOOL,
+            int: AttributeDataType.INT,
+            float: AttributeDataType.FLOAT,
+            str: AttributeDataType.STR,
+        }[py_type]
+
 
 DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"
@@ -276,6 +285,9 @@ class AttributeType(Base):
         RegexMatchingString(pattern=r"[a-z][a-z_]*", length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH)
     )
 
+    # prevent attribute from being deleted or renamed
+    protected: Mapped[bool] = mapped_column(default=False)
+
     @property
     def data_type(self):
         py_type = {
@@ -294,6 +306,7 @@ class AttributeType(Base):
             unit=self.unit,
             description=self.description,
             enum_name=self.enum_name,
+            protected=self.protected,
         )
 
 
@@ -319,8 +332,7 @@ class DataArray(Base):
         :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
             you should make a copy by calling ``array.copy()``
         """
-        result = np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
-        return result
+        return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
 
 
 class RowptrArray(Base):
@@ -334,15 +346,13 @@ class RowptrArray(Base):
     )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
-    def to_numpy(self, copy=False) -> np.ndarray:
+    def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
-        :return: Reconstructed NumPy array
+        :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
+            you should make a copy by calling ``array.copy()``
         """
-        result = np.frombuffer(self.data, dtype=int)
-        if copy:
-            result = result.copy()
-        return result
+        return np.frombuffer(self.data, dtype=int)
 
 
 class Attribute(Base):

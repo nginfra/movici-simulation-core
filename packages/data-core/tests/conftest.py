@@ -239,10 +239,6 @@ def default_entity_types():
 @pytest.fixture(scope="session")
 def default_attribute_types():
     return [
-        AttributeType("id", DataType(int), description="Entity ID"),
-        AttributeType("geometry.x", DataType(float), unit="m"),
-        AttributeType("geometry.y", DataType(float), unit="m"),
-        AttributeType("geometry.linestring_2d", DataType(float, unit_shape=(2,), csr=True)),
         AttributeType("topology.from_node_id", DataType(int)),
         AttributeType("topology.to_node_id", DataType(int)),
         AttributeType("transport.capacity", DataType(float)),

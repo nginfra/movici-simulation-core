@@ -192,6 +192,28 @@ def dataset_filter_to_where_clause(dataset_filter: DatasetFilter):
     return where_clause
 
 
+def combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
+    result: NumpyDatasetData = {}
+    for attribute in attributes:
+        attribute_name = attribute.attribute_type.name
+        entity_group_name = attribute.entity_type.name
+        entity_group_data = result.setdefault(entity_group_name, {})
+        if attribute_name in entity_group_data:
+            # under normal usage this shouldn't happen, but let's make it very clear that something
+            # is wrong if we get here
+            raise ValueError(
+                f"Duplicate attribute '{attribute_name}' found in"
+                f" entity group '{entity_group_name}'"
+            )
+
+        data = attribute.data.to_numpy()
+        attr_data: NumpyAttributeData = {"data": data}
+        if attribute.rowptr is not None:
+            attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
+        entity_group_data[attribute_name] = attr_data
+    return result
+
+
 class EntityDataProcessor:
     """Logic for storing and retrieving entity data from the database. This can be used for both
     Dataset data and Update data"""
@@ -204,7 +226,6 @@ class EntityDataProcessor:
         self.selector = selector
 
     async def get(self, id: UUID) -> NumpyDatasetData:
-        result: NumpyDatasetData = {}
         subquery = self.selector.selector_subquery(id)
         query = (
             select(db.Attribute)
@@ -217,13 +238,7 @@ class EntityDataProcessor:
             )
         )
         attrs = (await self.session.scalars(query)).all()
-        for attribute in attrs:
-            entity_group = result.setdefault(attribute.entity_type.name, {})
-            attr_data: NumpyAttributeData = {"data": attribute.data.to_numpy()}
-            if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
-            entity_group[attribute.attribute_type.name] = attr_data
-        return result
+        return combine_attributes(attrs)
 
     async def store(self, id: UUID, data: NumpyDatasetData):
         """

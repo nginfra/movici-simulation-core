@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import typing as t
 
-from fastapi import Depends, Query, Request
+from fastapi import Depends, Header, Query, Request
 
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import InvalidAction
+from movici_data_core.file_helpers import infer_filetype_from_filename_or_mimetype
 from movici_data_core.services.common import ensure_valid_scenario, ensure_valid_workspace
+from movici_simulation_core.types import FileType
 
 SQLALCHEMY_SERVER_KEY = "__movici_sqlalchemy_server__"
 
@@ -59,6 +61,13 @@ def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
     return Depends(_disallow)
 
 
+def request_filetype(content_type: t.Annotated[str | None, Header()] = None) -> FileType:
+    if not content_type:
+        return FileType.JSON
+    return infer_filetype_from_filename_or_mimetype(mimetype=content_type)
+
+
+DepContentType = t.Annotated[FileType, Depends(request_filetype)]
 DepServer = t.Annotated[SQLAlchemyServer, Depends(server)]
 DepBackend = t.Annotated[SQLAlchemyBackend, Depends(get_backend, scope="function")]
 DepWorkspaceBackend = t.Annotated[

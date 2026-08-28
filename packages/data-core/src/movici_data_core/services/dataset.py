@@ -18,8 +18,9 @@ from movici_data_core.exceptions import (
     UnsupportedFileType,
 )
 from movici_data_core.file_helpers import tempfile_delete_on_error
-from movici_data_core.marshalling import DatasetWithDataIn, DatasetWithDataOut
+from movici_data_core.marshalling import DatasetPatchIn, DatasetWithDataIn, DatasetWithDataOut
 from movici_data_core.serialization import dump_dict
+from movici_data_core.state_aggregator import DatasetStateAggregator
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
@@ -166,8 +167,35 @@ class DatasetService:
 
         assert False, "should not get here"
 
+    async def patch_from_file(self, dataset_id: UUID, path: pathlib.Path):
+        existing = await self.repository.datasets.get_by_id(dataset_id)
+        if existing is None:
+            raise ResourceDoesNotExist("dataset", id=dataset_id)
+
+        dataset_type = existing.dataset_type
+        assert dataset_type.format is not None
+        if dataset_type.format != DatasetFormat.ENTITY_BASED:
+            raise InvalidAction(f"Cannot patch dataset with format '{dataset_type.format.value}'")
+
+        patch = DatasetPatchIn.read_from_file(path, self.serializer)
+        current_data = await self.repository.dataset_data.get_entity_data(dataset_id)
+        aggregator = DatasetStateAggregator(allow_new_entities=True)
+        aggregator.add_dataset_data(current_data, is_initial=True)
+        aggregator.add_dataset_data(
+            patch.data, undefined_values_overwrite=patch.undefined_values_overwrite
+        )
+        state = aggregator.state  # store to local variable to prevent extra work in state property
+
+        await self.repository.datasets.update(
+            dataset_id,
+            dataclasses.replace(
+                existing, data=state, bounding_box=calculate_bounding_box_from_data(state)
+            ),
+        )
+
     async def prune(self, dataset_id: UUID):
-        return await self.repository.dataset_data.delete(dataset_id)
+        await self.repository.datasets.prune(dataset_id)
+        await self.repository.dataset_data.delete(dataset_id)
 
     async def get_summary(self, dataset_id: UUID):
         return await self.repository.datasets.get_summary(dataset_id)
