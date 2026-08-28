@@ -200,7 +200,10 @@ async def get_repository(db: SQLAlchemyServer, a_workspace):
     @contextlib.asynccontextmanager
     async def _with_repository():
         async with db.get_session() as session:
-            repository = await SQLAlchemyRepository.for_session(session)
+            repository = await SQLAlchemyRepository.for_session(
+                session, invalidate_schema_callable=db.invalidate_schema
+            )
+
             yield repository.for_workspace(a_workspace.id)
             await session.commit()
 
@@ -369,7 +372,8 @@ async def an_entity_type(get_repository):
 
 
 @pytest.fixture
-async def an_attribute_type(get_repository) -> AttributeType:
+async def an_attribute_type(get_repository, db: SQLAlchemyServer) -> AttributeType:
+    repository: SQLAlchemyRepository
     async with get_repository() as repository:
         attribute_id = await repository.attribute_types.create(
             AttributeType(

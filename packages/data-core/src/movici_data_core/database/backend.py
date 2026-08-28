@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import pathlib
@@ -23,7 +24,7 @@ from movici_data_core.services import (
     WorkspaceService,
 )
 from movici_data_core.services.update import UpdateService
-from movici_simulation_core import EntityInitDataFormat
+from movici_simulation_core import AttributeSchema, EntityInitDataFormat
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy
 
@@ -54,6 +55,7 @@ class SQLAlchemyServer:
     dbapi_url: str
     serializer: ExternalSerializationStrategy
 
+    schema: AttributeSchema | None
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
@@ -75,7 +77,9 @@ class SQLAlchemyServer:
         self.serializer = serializer or EntityInitDataFormat(
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
         )
-
+        self.schema = None
+        self.schema_dirty = False
+        self.schema_lock = asyncio.locks.Lock()
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._engine: AsyncEngine | None = None
 
@@ -159,6 +163,7 @@ class SQLAlchemyServer:
             dataset_service_cls=self.dataset_service_cls,
             scenario_service_cls=self.scenario_service_cls,
             update_service_cls=self.update_service_cls,
+            invalidate_schema_callable=self.invalidate_schema,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -183,9 +188,20 @@ class SQLAlchemyServer:
 
         assert False, f"Unknown database mode {options.mode}"
 
+    async def _get_updated_schema(self, backend: SQLAlchemyBackend):
+        if self.schema is None or self.schema_dirty:
+            async with self.schema_lock:
+                if self.schema is None or self.schema_dirty:  # recheck since it may have changed
+                    self.schema = await backend.attribute_types.as_schema()
+                    self.schema_dirty = False
+        return self.schema
+
     async def _with_serializer(self, backend: SQLAlchemyBackend):
-        schema = await backend.attribute_types.as_schema()
+        schema = await self._get_updated_schema(backend)
         return dataclasses.replace(backend, serializer=self.serializer.with_schema(schema))
+
+    def invalidate_schema(self):
+        self.schema_dirty = True
 
 
 @dataclasses.dataclass
@@ -208,10 +224,16 @@ class SQLAlchemyBackend:
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
 
+    invalidate_schema_callable: t.Callable[[], None] | None = None
+
     @property
     def repository(self):
         return SQLAlchemyRepository(
-            self.session, self.options, self.workspace_id, self.scenario_id
+            self.session,
+            self.options,
+            self.workspace_id,
+            self.scenario_id,
+            invalidate_schema_callable=self.invalidate_schema_callable,
         )
 
     def for_workspace(self, workspace_id: UUID):
@@ -368,7 +390,3 @@ class SQLAlchemyBackend:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
         if immutable_workspace_names is not None:
             self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
-
-    async def update_schema(self):
-        schema = await self.attribute_types.as_schema()
-        self.serializer = self.serializer.with_schema(schema)

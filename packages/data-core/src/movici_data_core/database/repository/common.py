@@ -95,6 +95,21 @@ def ensure_valid_id(method):
     return _wrapped
 
 
+def invalidates_schema(method):
+    """Decorator to invalidate the schema when a call to the decorated method succeeds
+
+    :param method: an async method from a GenericResourceRepository
+    """
+
+    @functools.wraps(method)
+    async def _wrapped(self: GenericResourceRepository, *args, **kwargs):
+        result = await method(self, *args, **kwargs)
+        self._invalidate_schema()
+        return result
+
+    return _wrapped
+
+
 class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     """A GenericResourceRepository is the simplest CRUD repository. Resources are globally unique
     by name and do not have a parent (such as a Workspace). Resources that are managed through
@@ -113,6 +128,21 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
 
     __resource__: t.Type[NamedResource[T_dom]]
     __resource_type_name__: str
+    __invalidates_schema__: bool = False
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        options: Options,
+        all_data: SQLAlchemyRepository,
+        invalidate_schema_callable: t.Callable,
+    ):
+        super().__init__(session, options, all_data)
+        self._invalidate_schema_callable = invalidate_schema_callable
+
+    def _invalidate_schema(self):
+        if self.__invalidates_schema__:
+            self._invalidate_schema_callable()
 
     async def list(self) -> list[T_dom]:
         result = await self.session.scalars(select(self.__resource__))
@@ -141,6 +171,7 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
         ),
         with_self=True,
     )
+    @invalidates_schema
     async def delete(self, id: UUID):
         await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))
 

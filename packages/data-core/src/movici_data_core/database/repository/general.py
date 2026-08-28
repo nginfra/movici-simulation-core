@@ -23,7 +23,7 @@ from movici_data_core.exceptions import (
     map_errors,
 )
 
-from .common import GenericResourceRepository, ensure_valid_id
+from .common import GenericResourceRepository, ensure_valid_id, invalidates_schema
 
 
 class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
@@ -171,6 +171,7 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
 class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource__ = db.AttributeType
     __resource_type_name__ = "attribute_type"
+    __invalidates_schema__ = True
 
     @map_errors(
         (
@@ -178,6 +179,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             lambda obj: ResourceAlreadyExists("attribute_type", name=obj.name),
         )
     )
+    @invalidates_schema
     async def create(self, obj: AttributeType) -> UUID:
         """Store a :class:`AttributeType` in the database
 
@@ -214,6 +216,7 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
             lambda id, obj: ResourceAlreadyExists("attribute_type", name=obj.name),
         )
     )
+    @invalidates_schema
     async def update(self, id: UUID, obj: AttributeType):
         """Update a :class:`AttributeType` in the database
 
