@@ -67,7 +67,7 @@ def test_create_update(
         url="/updates",
         params={"scenario": str(scenario_id)},
         headers={"content-type": get_mimetype(filetype)},
-        data=serialized,
+        content=serialized,
     ).json()
     update_id = result.pop("id")
     assert update_id is not None
@@ -109,6 +109,39 @@ def test_get_update(
         "timestamp": 12,
         "iteration": 15,
         "data": update_data,
+    }
+
+
+def test_get_update_with_filter(get_json, create_update_through_api):
+    update_data = {
+        "roads": {
+            "id": [1, 2, 3],
+            "topology.from_node_id": [4, 5, 6],
+            "topology.to_node_id": [5, 6, 4],
+        },
+        "transport_nodes": {
+            "id": [4, 5, 6],
+            "text": ["a", "a", "b'"],
+        },
+    }
+
+    update_id = create_update_through_api(data=update_data, timestamp=12, iteration=15)["id"]
+
+    update = get_json(
+        f"/updates/{update_id}",
+        params={"attribute": ["roads:topology.from_node_id", "transport_nodes:text"]},
+    )
+
+    assert update["data"] == {
+        "roads": {
+            "id": [1, 2, 3],
+            "topology.from_node_id": [4, 5, 6],
+            "topology.to_node_id": [5, 6, 4],
+        },
+        "transport_nodes": {
+            "id": [4, 5, 6],
+            "text": ["a", "a", "b'"],
+        },
     }
 
 

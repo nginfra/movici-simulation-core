@@ -7,7 +7,7 @@ import typing as t
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, delete, exists, insert, select, update
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import contains_eager, joinedload, selectinload
 
 from movici_data_core import bounding_box
 from movici_data_core.database import model as db
@@ -19,6 +19,7 @@ from movici_data_core.domain_model import (
     Scenario,
     ScenarioDataset,
     ScenarioModel,
+    ScenarioStateFilter,
     ScenarioStatus,
 )
 from movici_data_core.exceptions import (
@@ -30,9 +31,13 @@ from movici_data_core.exceptions import (
     UniqueConstraintFailed,
     map_errors,
 )
+from movici_data_core.state_aggregator import DatasetStateAggregator
 from movici_data_core.validators import ModelConfigValidator
+from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
+from movici_simulation_core.types import DatasetData as NumpyDatasetData
+from movici_simulation_core.types import NumpyAttributeData
 
-from .common import SQLResourceRepository, validated_payload_dict
+from .common import SQLResourceRepository, dataset_filter_to_where_clause, validated_payload_dict
 
 
 @dataclasses.dataclass
@@ -143,6 +148,43 @@ class ScenarioRepository(SQLResourceRepository):
         id = self._ensure_scenario_id()
         return await self._get_one_full_scenario(db.Scenario.id == id)
 
+    async def get_state(self, state_filter: ScenarioStateFilter) -> NumpyDatasetData:
+        id = self._ensure_scenario_id()
+        dataset_id = await self.session.scalar(
+            select(db.Dataset.id)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == id)
+            .where(db.Dataset.name == state_filter.dataset)
+        )
+        if dataset_id is None:
+            raise ResourceDoesNotExist(
+                "dataset",
+                name=state_filter.dataset,
+                message="dataset does not exist for this scenario",
+            )
+
+        aggregator = DatasetStateAggregator()
+        self._add_attributes_to_aggregator(
+            aggregator,
+            await self._get_dataset_attributes(dataset_id, state_filter),
+            is_initial=True,
+        )
+        current_update = None
+        current_attributes: list[db.Attribute] = []
+        update_attributes = await self._get_update_attributes(dataset_id, id, state_filter)
+        for update_id, attribute in update_attributes:
+            if current_update is None:
+                current_update = update_id
+            if update_id == current_update:
+                current_attributes.append(attribute)
+                continue
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
+            current_update = update_id
+            current_attributes = [attribute]
+        if current_attributes:
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
+        return aggregator.state
+
     async def _get_bounding_box(self, scenario_id: UUID):
         bboxs_from_datasets = await self.session.scalars(
             select(db.Dataset.bounding_box)
@@ -158,6 +200,80 @@ class ScenarioRepository(SQLResourceRepository):
             *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_datasets),
             *(BoundingBox.from_tuple_or_none(bb) for bb in bboxs_from_updates),
         )
+
+    async def _get_dataset_attributes(self, dataset_id: UUID, state_filter: ScenarioStateFilter):
+        query = (
+            select(db.Attribute)
+            .options(
+                joinedload(db.Attribute.rowptr),
+                joinedload(db.Attribute.data),
+                contains_eager(db.Attribute.entity_type),
+                contains_eager(db.Attribute.attribute_type),
+            )
+            .join(db.DatasetAttribute)
+            .join(db.EntityType)
+            .join(db.AttributeType)
+            .where(db.DatasetAttribute.dataset_id == dataset_id)
+            .order_by(db.EntityType.id)
+        )
+
+        if state_filter is not None and not state_filter.is_empty():
+            query = query.where(dataset_filter_to_where_clause(state_filter))
+        return (await self.session.scalars(query)).all()
+
+    async def _get_update_attributes(
+        self, dataset_id: UUID, scenario_id: UUID, state_filter: ScenarioStateFilter
+    ):
+        query = (
+            select(db.Update.id, db.Attribute)
+            .options(
+                joinedload(db.Attribute.rowptr),
+                joinedload(db.Attribute.data),
+                contains_eager(db.Attribute.entity_type),
+                contains_eager(db.Attribute.attribute_type),
+            )
+            .select_from(db.Attribute)
+            .join(db.UpdateAttribute)
+            .join(db.Update)
+            .join(db.EntityType)
+            .join(db.AttributeType)
+            .where(db.Update.scenario_id == scenario_id)
+            .where(db.Update.dataset_id == dataset_id)
+            .where(db.Update.timestamp <= state_filter.timestamp)
+            .order_by(db.Update.timestamp.asc(), db.Update.iteration.asc(), db.EntityType.id)
+        )
+        if not state_filter.is_empty():
+            query = query.where(dataset_filter_to_where_clause(state_filter))
+        return (await self.session.execute(query)).all()
+
+    def _add_attributes_to_aggregator(
+        self,
+        aggregator: DatasetStateAggregator,
+        attributes: t.Iterable[db.Attribute],
+        is_initial: bool,
+    ):
+        dataset_data = self._combine_attributes(attributes)
+        aggregator.add_dataset_data(dataset_data, is_initial=is_initial)
+
+    @staticmethod
+    def _combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
+        result: NumpyDatasetData = {}
+        for attribute in attributes:
+            attribute_name = attribute.attribute_type.name
+            entity_group_name = attribute.entity_type.name
+            entity_group_data = result.setdefault(entity_group_name, {})
+            if attribute_name in entity_group_data:
+                raise ValueError(
+                    f"Duplicate attribute '{attribute_name}' found in"
+                    f" entity group '{entity_group_name}'"
+                )
+
+            data = attribute.data.to_numpy()
+            attr_data: NumpyAttributeData = {"data": data}
+            if attribute.rowptr is not None:
+                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
+            entity_group_data[attribute_name] = attr_data
+        return result
 
     @map_errors(
         (ForeignKeyConstraintFailed, lambda: InvalidAction("Cannot delete default scenario"))

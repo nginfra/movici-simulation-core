@@ -27,16 +27,19 @@ T_dom = t.TypeVar("T_dom", covariant=True)
 snake_case_pattern = re.compile(r"^[a-z_][a-z0-9_.]*$")
 
 
-class NamedResource(t.Protocol[T_dom]):
+class IToDomain(t.Protocol[T_dom]):
+    def to_domain(self) -> T_dom: ...
+
+
+class NamedResource(IToDomain[T_dom], t.Protocol[T_dom]):
     id: Mapped[uuid.UUID]
     name: Mapped[str]
 
     @classmethod
     def validate_field_lengths(cls, payload: dict[str, t.Any]) -> None: ...
-    def to_domain(self) -> T_dom: ...
 
 
-def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
+def to_domain_or_none(obj: IToDomain[T_dom] | None) -> T_dom | None:
     return obj.to_domain() if obj is not None else None
 
 
@@ -305,15 +308,19 @@ class DataArray(Base):
     min_val: Mapped[float | None]
     max_val: Mapped[float | None]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="data")
 
     def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
-        :return: Reconstructed NumPy array
+        :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
+            you should make a copy by calling ``array.copy()``
         """
-        return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+        result = np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
+        return result
 
 
 class RowptrArray(Base):
@@ -322,15 +329,20 @@ class RowptrArray(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     data: Mapped[bytes]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
-    def to_numpy(self) -> np.ndarray:
+    def to_numpy(self, copy=False) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
         :return: Reconstructed NumPy array
         """
-        return np.frombuffer(self.data, dtype=int)
+        result = np.frombuffer(self.data, dtype=int)
+        if copy:
+            result = result.copy()
+        return result
 
 
 class Attribute(Base):
@@ -344,8 +356,8 @@ class Attribute(Base):
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
     length: Mapped[int]
-    entity_type: Mapped[EntityType] = relationship()
-    attribute_type: Mapped[AttributeType] = relationship()
+    entity_type: Mapped[EntityType] = relationship(lazy="joined", innerjoin=True)
+    attribute_type: Mapped[AttributeType] = relationship(lazy="joined", innerjoin=True)
     data: Mapped[DataArray] = relationship()
     rowptr: Mapped[RowptrArray | None] = relationship()
 
@@ -354,7 +366,9 @@ class DatasetAttribute(Base):
     __tablename__ = "dataset_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    dataset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dataset.id", ondelete="CASCADE"), index=True
+    )
     attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
 
     dataset: Mapped[Dataset] = relationship()
@@ -563,8 +577,12 @@ class UpdateAttribute(Base):
     __tablename__ = "update_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    update_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("update.id", ondelete="CASCADE"))
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    update_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("update.id", ondelete="CASCADE"), index=True
+    )
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
 
     update: Mapped[Update] = relationship()
     attribute: Mapped[Attribute] = relationship()

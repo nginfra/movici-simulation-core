@@ -1,18 +1,24 @@
 import typing as t
 from uuid import UUID
 
+import fastapi
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 
 from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import ResourceDoesNotExist
+from movici_data_core.file_helpers import get_mimetype
 from movici_data_core.marshalling import (
     DatasetSummaryOut,
     OperationSuccess,
     ScenarioIn,
     ScenarioListOut,
     ScenarioOut,
+    ScenarioStateFilterIn,
+    ScenarioStateOut,
 )
 from movici_data_core.validators import ModelConfigValidator
+from movici_simulation_core.types import FileType
 
 from .dependencies import DepBackend, DepWorkspaceBackend, allow_in_modes
 
@@ -91,3 +97,17 @@ async def get_scenario_summary(
 ) -> DatasetSummaryOut:
     result = await backend.for_scenario(scenario_id).scenarios.get_summary(dataset_q)
     return DatasetSummaryOut.from_domain(result)
+
+
+@scenario_router.get("/{scenario_id}/state")
+async def get_scenario_state(
+    backend: DepBackend,
+    scenario_id: UUID,
+    state_filter: t.Annotated[ScenarioStateFilterIn, fastapi.Query()],
+) -> ScenarioStateOut:
+    path = await backend.for_scenario(scenario_id).scenarios.get_state_as_file(
+        state_filter.to_domain(), filetype=FileType.JSON
+    )
+    if path is None:
+        raise ResourceDoesNotExist("scenario", id=scenario_id)
+    return t.cast(ScenarioStateOut, FileResponse(path, media_type=get_mimetype(FileType.JSON)))

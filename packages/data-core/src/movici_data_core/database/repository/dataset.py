@@ -21,6 +21,7 @@ from movici_data_core.domain_model import (
     AttributeSummary,
     Dataset,
     DatasetData,
+    DatasetFilter,
     DatasetFormat,
     DatasetSummary,
     DatasetType,
@@ -43,6 +44,7 @@ from .common import (
     EntityDataSelector,
     RawDataProcessor,
     SQLResourceRepository,
+    dataset_filter_to_where_clause,
     validated_payload,
     validated_payload_dict,
 )
@@ -410,14 +412,14 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await RawDataProcessor(self.session).get_dict(id)
 
-    async def get_entity_data(self, id: UUID):
+    async def get_entity_data(self, id: UUID, dataset_filter: DatasetFilter | None = None):
         """return the dataset data for an ``ENTITY_BASED`` dataset
 
         :param id: the dataset ``UUID``
         :return: The entity based dataset data section
         """
         return await EntityDataProcessor(
-            self.session, all_data=self.all_data, selector=DatasetDataSelector()
+            self.session, all_data=self.all_data, selector=DatasetDataSelector(dataset_filter)
         ).get(id)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
@@ -467,12 +469,19 @@ class DatasetDataRepository(SQLResourceRepository):
 
 
 class DatasetDataSelector(EntityDataSelector):
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
-        return (
-            select(db.Attribute)
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
+        subquery = (
+            select(db.Attribute.id)
             .join(db.DatasetAttribute)
+            .join(db.EntityType)
+            .join(db.AttributeType)
             .where(db.DatasetAttribute.dataset_id == id)
         )
+
+        if self.dataset_filter is not None and not self.dataset_filter.is_empty():
+            subquery = subquery.where(dataset_filter_to_where_clause(self.dataset_filter))
+
+        return subquery
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
         return insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)

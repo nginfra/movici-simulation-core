@@ -62,8 +62,27 @@ NP_TYPES = {
 }
 
 
+def get_py_type(dtype: np.dtype):
+    if dtype.name == "int8":
+        return bool
+    if dtype.kind == "i":
+        return int
+    if dtype.kind == "f":
+        return float
+    if dtype.kind == "U":
+        return str
+    return None
+
+
 def get_undefined(dtype):
-    return {
-        **UNDEFINED,
-        **{np_type: UNDEFINED[py_type] for py_type, np_type in NP_TYPES.items()},
-    }.get(dtype)
+    if isinstance(dtype, np.dtype):
+        dtype = get_py_type(dtype)
+    return UNDEFINED.get(dtype)
+
+
+def get_default_comparator(dtype):
+    if isinstance(dtype, np.dtype):
+        dtype = get_py_type(dtype)
+    if dtype is float:
+        return float_compare()
+    return compare_array

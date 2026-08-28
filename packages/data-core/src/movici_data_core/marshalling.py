@@ -4,11 +4,14 @@ import dataclasses
 import datetime
 import functools
 import pathlib
+import re
 import typing as t
 from uuid import UUID
 
 from jsonschema import SchemaError
 from pydantic import (
+    AfterValidator,
+    AliasChoices,
     BaseModel,
     BeforeValidator,
     ConfigDict,
@@ -318,6 +321,10 @@ class DatasetWithDataOut(ShortDatasetOut):
     epsg_code: int | None = None
     bounding_box: BoundingBoxField = None
     general: dict | None = None
+    data: dict
+
+
+class ScenarioStateOut(BaseModel):
     data: dict
 
 
@@ -673,3 +680,52 @@ class OperationSuccess(BaseModel):
     @classmethod
     def for_path_operation(cls, resource: str, id: UUID, verb: str):
         return OperationSuccess(id=id, message=f"{resource} {verb}")
+
+
+attribute_path_pattern = re.compile(r"^[a-z_][a-z0-9_.]{0,49}:[a-z_][a-z0-9_.]{0,99}$")
+
+
+def validate_dataset_filter_attribute_path_string(val: str):
+    if not re.match(attribute_path_pattern, val):
+        raise ValueError("attribute path must be of format <entity_group>:<attribute>")
+    return val
+
+
+DatasetFilterAttributePathString = t.Annotated[
+    str, AfterValidator(validate_dataset_filter_attribute_path_string)
+]
+
+DatasetFilterAttributeList = t.Annotated[
+    list[DatasetFilterAttributePathString],
+    BeforeValidator(lambda a: a if isinstance(a, list) else [a]),
+    Field(validation_alias=AliasChoices("attribute", "attributes")),
+]
+
+
+class DatasetFilterIn(BaseModel):
+    attributes: DatasetFilterAttributeList = []
+
+    def to_domain(self) -> domain_model.DatasetFilter | None:
+        if not self.attributes:
+            return None
+        return domain_model.DatasetFilter(self.parse_attributes(self.attributes))
+
+    @staticmethod
+    def parse_attributes(attributes: list[str]):
+        return [
+            domain_model.DatasetFilterAttribute(*attr.split(":", maxsplit=1))
+            for attr in attributes
+        ]
+
+
+class ScenarioStateFilterIn(BaseModel):
+    dataset: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
+    attributes: DatasetFilterAttributeList = []
+    timestamp: t.Annotated[int, Field(ge=0)]
+
+    def to_domain(self) -> domain_model.ScenarioStateFilter:
+        return domain_model.ScenarioStateFilter(
+            attributes=DatasetFilterIn.parse_attributes(self.attributes),
+            timestamp=self.timestamp,
+            dataset=self.dataset,
+        )

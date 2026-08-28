@@ -7,7 +7,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from movici_data_core.database.backend import SQLAlchemyServer
+from movici_data_core.database.repository import SQLAlchemyRepository
+from movici_data_core.domain_model import DatasetFormat
 from movici_data_core.serialization import dump_dict
+from movici_simulation_core.testing import dataset_data_to_numpy
 from movici_simulation_core.types import FileType
 
 
@@ -166,6 +169,43 @@ def test_get_create_and_get_entity_dataset_data(
     assert result["data"] == dataset_data["data"]
     assert result["general"] == {"some": "data"}
     assert result["epsg_code"] == 1234
+
+
+async def test_get_filtered_entity_data(
+    a_dataset, get_json, dataset_data, repository: SQLAlchemyRepository
+):
+    await repository.dataset_data.create(
+        a_dataset.id,
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "topology.from_node_id": [4, 5, 6],
+                    "topology.to_node_id": [5, 6, 4],
+                },
+                "transport_nodes": {
+                    "id": [4, 5, 6],
+                    "text": ["a", "a", "b'"],
+                },
+            }
+        ),
+        format=DatasetFormat.ENTITY_BASED,
+    )
+    await repository.session.commit()
+    result = get_json(
+        f"/datasets/{a_dataset.id}/data",
+        params={"attributes": ["roads:topology.from_node_id", "transport_nodes:text"]},
+    )
+    assert result["data"] == {
+        "roads": {
+            "id": [1, 2, 3],
+            "topology.from_node_id": [4, 5, 6],
+        },
+        "transport_nodes": {
+            "id": [4, 5, 6],
+            "text": ["a", "a", "b'"],
+        },
+    }
 
 
 @pytest.mark.parametrize(
