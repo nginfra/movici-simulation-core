@@ -14,7 +14,7 @@ from movici_data_core.marshalling import (
 )
 from movici_data_core.validators import ModelConfigValidator
 
-from .dependencies import DepBackend, DepWorkspaceBackend, allow_in_modes
+from .dependencies import DepBackend, DepWorkspaceBackend, available_in_modes
 
 scenario_router = APIRouter(prefix="/scenarios")
 
@@ -39,7 +39,7 @@ async def get_scenarios(backend: DepWorkspaceBackend) -> ScenarioListOut:
 @scenario_router.post(
     "",
     dependencies=[
-        allow_in_modes(
+        available_in_modes(
             "create scenario", [DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES]
         )
     ],
@@ -75,7 +75,7 @@ async def update_scenario(
 @scenario_router.delete(
     "/{scenario_id}",
     dependencies=[
-        allow_in_modes(
+        available_in_modes(
             "delete scenario", [DatabaseMode.SINGLE_WORKSPACE, DatabaseMode.MULTIPLE_WORKSPACES]
         )
     ],

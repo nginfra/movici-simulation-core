@@ -8,7 +8,7 @@ options_router = APIRouter(prefix="/options")
 
 
 @options_router.get("")
-async def get_scenarios(backend: DepBackend) -> OptionsOut:
+async def get_options(backend: DepBackend) -> OptionsOut:
     options = backend.options
     return OptionsOut(
         mode=options.mode,
@@ -21,8 +21,8 @@ async def get_scenarios(backend: DepBackend) -> OptionsOut:
     )
 
 
-@options_router.put("")
-async def update_scenario(
+@options_router.patch("", response_model_exclude_none=True)
+async def update_options(
     options: OptionsIn,
     backend: DepBackend,
 ) -> OperationSuccess:

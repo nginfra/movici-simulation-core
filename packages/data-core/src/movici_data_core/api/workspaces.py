@@ -11,11 +11,11 @@ from movici_data_core.marshalling import (
     WorkspaceOut,
 )
 
-from .dependencies import DepBackend, allow_in_modes
+from .dependencies import DepBackend, available_in_modes
 
 workspace_router = APIRouter(
     prefix="/workspaces",
-    dependencies=[allow_in_modes("workspace operation", [DatabaseMode.MULTIPLE_WORKSPACES])],
+    dependencies=[available_in_modes("workspace operation", [DatabaseMode.MULTIPLE_WORKSPACES])],
 )
 
 
