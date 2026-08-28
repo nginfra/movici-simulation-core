@@ -13,10 +13,15 @@ def test_get_options(get_json):
     }
 
 
+def test_update_options(get_json):
+    result = get_json("/options", method="PATCH", json={"mode": "single_scenario"})
+    assert result == {"result": "ok", "message": "options updated"}
+
+
 def test_get_and_update_database_mode(get_json):
     current_options = get_json("/options")
     assert current_options["mode"] != "single_scenario"
-    get_json("/options", method="PUT", json={"mode": "single_scenario"})
+    get_json("/options", method="PATCH", json={"mode": "single_scenario"})
 
     result = get_json("/options")
     assert result == {**current_options, "mode": "single_scenario"}
@@ -36,7 +41,7 @@ def test_get_and_update_database_mode(get_json):
 def test_get_and_update_options(get_json, option, value):
     current_options = get_json("/options")
     assert current_options[option] != value
-    get_json("/options", method="PUT", json={option: value})
+    get_json("/options", method="PATCH", json={option: value})
 
     result = get_json("/options")
     assert result == {**current_options, option: value}
