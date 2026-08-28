@@ -17,13 +17,13 @@ class TestSingleScenarioMode:
         assert result == {
             "result": "error",
             "type": "invalid_action",
-            "message": "create scenario is not allowed in this mode",
+            "message": "create scenario is not available in this mode",
         }
 
     def test_cannot_get_workspaces(self, get_json):
         result = get_json("/workspaces/", expected_status=400)
         assert result["type"] == "invalid_action"
-        assert "not allowed in this mode" in result["message"]
+        assert "not available in this mode" in result["message"]
 
 
 class TestSingleWorkspaceMode:
@@ -44,7 +44,7 @@ class TestSingleWorkspaceMode:
     def test_cannot_get_workspaces(self, get_json):
         result = get_json("/workspaces/", expected_status=400)
         assert result["type"] == "invalid_action"
-        assert "not allowed in this mode" in result["message"]
+        assert "not available in this mode" in result["message"]
 
 
 class TestMultipleWorkspaceMode:

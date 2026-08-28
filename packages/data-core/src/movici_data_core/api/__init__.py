@@ -14,6 +14,7 @@ from movici_data_core.database.backend import SQLAlchemyServer
 from movici_data_core.exceptions import MoviciDataError
 
 from .datasets import dataset_router
+from .options import options_router
 from .scenarios import scenario_router
 from .schema import (
     attribute_type_router,
@@ -30,6 +31,7 @@ DEFAULT_ROUTERS = (
     dataset_type_router,
     entity_type_router,
     model_type_router,
+    options_router,
     workspace_router,
     update_router,
     scenario_router,
