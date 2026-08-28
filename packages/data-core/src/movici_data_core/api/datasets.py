@@ -82,7 +82,7 @@ async def get_dataset_data(
     dataset_id: UUID,
     backend: DepBackend,
     dataset_filter: t.Annotated[DatasetFilterIn, fastapi.Query()],
-    background_tasks: fastapi.BackgroundTasks
+    background_tasks: fastapi.BackgroundTasks,
 ):
     # TODO: use accept header to serve msgpack or json
 
