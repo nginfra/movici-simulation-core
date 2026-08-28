@@ -218,7 +218,7 @@ class Dataset(Base):
     )
     dataset_type: Mapped[DatasetType] = relationship(DatasetType)
 
-    general: Mapped[dict | None]
+    general: Mapped[dict | None] = mapped_column(JSON)
     epsg_code: Mapped[int | None]
     bounding_box: Mapped[tuple[float, float, float, float] | None] = mapped_column(
         JSONTuple(length=4)
@@ -386,7 +386,7 @@ class ModelType(Base):
         RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
         unique=True,
     )
-    jsonschema: Mapped[dict]
+    jsonschema: Mapped[dict] = mapped_column(JSON)
 
     def to_domain(self) -> domain_model.ModelType:
         return domain_model.ModelType(id=self.id, name=self.name, jsonschema=self.jsonschema)
@@ -407,7 +407,7 @@ class Scenario(Base):
     description: Mapped[str] = mapped_column(Text(SCENARIO_DESCRIPTION_MAX_LENGTH))
     status: Mapped[ScenarioStatus]
 
-    simulation_info: Mapped[dict]
+    simulation_info: Mapped[dict] = mapped_column(JSON)
 
     epsg_code: Mapped[int | None]
 
@@ -576,8 +576,7 @@ class VisualizationView(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(
-        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
-        unique=True,
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
     )
     config: Mapped[dict]
     scenario: Mapped[Scenario] = relationship()

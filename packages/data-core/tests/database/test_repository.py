@@ -2216,6 +2216,25 @@ class TestViewRepository:
         with pytest.raises(ResourceAlreadyExists):
             await create_view(name="a_view")
 
+    async def test_can_create_views_with_same_name_in_different_scenarios(
+        self, repository: SQLAlchemyRepository, create_view, create_scenario, a_scenario
+    ):
+        new_scenario_id = await create_scenario(
+            dataclasses.replace(a_scenario, name="new_scenario")
+        )
+        assert new_scenario_id is not None
+        assert new_scenario_id != a_scenario.id
+
+        await create_view(name="a_view", scenario_id=a_scenario.id)
+        await create_view(name="a_view", scenario_id=new_scenario_id)
+
+        assert (
+            await repository.for_scenario(a_scenario.id).views.get_by_name("a_view")
+        ) is not None
+        assert (
+            await repository.for_scenario(new_scenario_id).views.get_by_name("a_view")
+        ) is not None
+
     async def test_update_view_raises_on_conflicting_view_name(
         self, repository: SQLAlchemyRepository, create_view
     ):
