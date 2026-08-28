@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import pathlib
@@ -77,7 +78,8 @@ class SQLAlchemyServer:
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
         )
         self.schema = None
-
+        self.schema_dirty = False
+        self.schema_lock = asyncio.locks.Lock()
         self._session_factory: async_sessionmaker[AsyncSession] | None = None
         self._engine: AsyncEngine | None = None
 
@@ -161,7 +163,7 @@ class SQLAlchemyServer:
             dataset_service_cls=self.dataset_service_cls,
             scenario_service_cls=self.scenario_service_cls,
             update_service_cls=self.update_service_cls,
-            invalidate_schema_callable=self.invalidate_schema_callable,
+            invalidate_schema_callable=self.invalidate_schema,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -186,13 +188,20 @@ class SQLAlchemyServer:
 
         assert False, f"Unknown database mode {options.mode}"
 
-    async def _with_serializer(self, backend: SQLAlchemyBackend):
-        if self.schema is None:
-            self.schema = await backend.attribute_types.as_schema()
-        return dataclasses.replace(backend, serializer=self.serializer.with_schema(self.schema))
+    async def _get_updated_schema(self, backend: SQLAlchemyBackend):
+        if self.schema is None or self.schema_dirty:
+            async with self.schema_lock:
+                if self.schema is None or self.schema_dirty:  # recheck since it may have changed
+                    self.schema = await backend.attribute_types.as_schema()
+                    self.schema_dirty = False
+        return self.schema
 
-    def invalidate_schema_callable(self):
-        self.schema = None
+    async def _with_serializer(self, backend: SQLAlchemyBackend):
+        schema = await self._get_updated_schema(backend)
+        return dataclasses.replace(backend, serializer=self.serializer.with_schema(schema))
+
+    def invalidate_schema(self):
+        self.schema_dirty = True
 
 
 @dataclasses.dataclass
@@ -217,14 +226,14 @@ class SQLAlchemyBackend:
 
     invalidate_schema_callable: t.Callable[[], None] | None = None
 
-    def invalidate_schema(self):
-        if self.invalidate_schema_callable is not None:
-            self.invalidate_schema_callable()
-
     @property
     def repository(self):
         return SQLAlchemyRepository(
-            self.session, self.options, self.workspace_id, self.scenario_id
+            self.session,
+            self.options,
+            self.workspace_id,
+            self.scenario_id,
+            invalidate_schema_callable=self.invalidate_schema_callable,
         )
 
     def for_workspace(self, workspace_id: UUID):
@@ -249,7 +258,7 @@ class SQLAlchemyBackend:
 
     @property
     def attribute_types(self):
-        return self.attribute_type_service_cls(self.repository, self.invalidate_schema_callable)
+        return self.attribute_type_service_cls(self.repository)
 
     @property
     def model_types(self):
@@ -381,13 +390,3 @@ class SQLAlchemyBackend:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
         if immutable_workspace_names is not None:
             self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
-
-    async def update_schema(self):
-        """Update the AttributeSchema for the serializer. For short lived SQLAlchemyBackend
-        instances, the AttributeSchema will be reconstructed every time the SQLAlchemyServer
-        creates a SQLAlchemyBackend. However, when the lifetime of a backend class is longer and
-        spans multiple operations that change AttributeTypes in the database, the schema must be
-        updated and this method can be invoked to update the serializer's AttributeSchema in place
-        """
-        schema = await self.attribute_types.as_schema()
-        self.serializer = self.serializer.with_schema(schema)

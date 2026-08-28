@@ -10,7 +10,7 @@ from movici_data_core.domain_model import (
 )
 from movici_simulation_core import AttributeSchema
 
-from .common import DatasetSchemaService, GenericService, ensure_valid_workspace
+from .common import GenericService, ensure_valid_workspace
 
 T_dom = t.TypeVar("T_dom")
 
@@ -42,7 +42,7 @@ class EntityTypeService(GenericService[EntityType]):
         return self.repository.entity_types
 
 
-class AttributeTypeService(DatasetSchemaService[AttributeType]):
+class AttributeTypeService(GenericService[AttributeType]):
     @property
     def _repository(self):
         return self.repository.attribute_types
