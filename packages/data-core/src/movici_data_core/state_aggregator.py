@@ -76,21 +76,22 @@ class DatasetStateAggregator:
 
             ids = entity_group_data["id"]["data"]
             indices = t.cast(np.ndarray, index[ids])
-
-            if np.any(invalid := (indices == -1)):
+            invalid = np.flatnonzero(indices == -1)
+            if len(invalid) > 0:
                 if not allow_new_entities:
                     raise ValueError(
                         f"id{'s' if len(invalid) > 1 else ''} "
                         f"{', '.join(str(val) for val in ids[invalid])} not found in dataset"
                     )
                 else:
-                    ids = self._get_filled_ids(ids)
+                    # we don't own the id array, so make a copy instead of mutating (if necessary)
+                    ids = self._get_filled_ids(ids, copy=True)
                     self._create_new_entities(entity_group, ids[invalid])
                     indices = t.cast(np.ndarray, index[ids])
             for attribute_name, attr_data in entity_group_data.items():
                 if attribute_name == "id":
                     continue
-                indices, attr_data = strip_undefined(indices, attr_data)
+                attr_indices, attr_data = strip_undefined(indices, attr_data)
                 update_data = attr_data["data"]
                 is_csr = has_rowptr_key(t.cast(dict, attr_data))
                 if attribute_name not in current_entity_data:
@@ -101,7 +102,7 @@ class DatasetStateAggregator:
                         is_csr=is_csr,
                     )
                 self._update_attribute_data(
-                    current_entity_data[attribute_name], attr_data, indices
+                    current_entity_data[attribute_name], attr_data, attr_indices
                 )
 
     def _update_attribute_data(
@@ -131,6 +132,7 @@ class DatasetStateAggregator:
             current_data["data"][indices] = update_data["data"]
 
     def _add_new_entity_group(self, name: str, entity_data: EntityData):
+        entity_data = self._deep_copy_entity_data(entity_data)
         ids = self._get_filled_ids(entity_data["id"]["data"])
         self._check_unique_ids(ids, name)
         self._state[name] = (Index(ids), {k: v for k, v in entity_data.items() if k != "id"})
@@ -140,18 +142,20 @@ class DatasetStateAggregator:
             if existing_eg == target_entity_group:
                 continue
             indices = t.cast(np.ndarray, index[ids])
-            if np.any(duplicates := (indices >= 0)):
+            duplicates = np.flatnonzero(indices >= 0)
+            if len(duplicates > 0):
                 raise ValueError(
                     f"id{'s' if len(duplicates) > 1 else ''}"
                     f" {', '.join(str(val) for val in ids[duplicates])} already"
                     f" exist{'s' if len(duplicates) == 1 else ''} in entity group '{existing_eg}'"
                 )
 
-    def _get_filled_ids(self, ids: np.ndarray):
+    def _get_filled_ids(self, ids: np.ndarray, copy=False):
         to_create = np.flatnonzero(ids < 0)
         new_ids = np.array([], dtype=np.int32)
         if (count := len(to_create)) > 0:
-            ids = ids.copy()  # we don't own the id array, so make a copy instead of mutating
+            if copy:
+                ids = ids.copy()
             new_ids = self.generate_new_ids(count)
             ids[to_create] = new_ids
         return ids
@@ -175,6 +179,15 @@ class DatasetStateAggregator:
         self._update_attribute_data(new_attribute, attribute, np.arange(0, old_size))
         t.cast(dict, attribute).clear()
         t.cast(dict, attribute).update(new_attribute)
+
+    @staticmethod
+    def _deep_copy_entity_data(obj: EntityData) -> EntityData:
+        def _helper(obj: dict | np.ndarray):
+            if isinstance(obj, np.ndarray):
+                return obj.copy()
+            return {k: _helper(v) for k, v in obj.items()}
+
+        return t.cast(EntityData, _helper(obj))
 
     @staticmethod
     def get_undefined_array(
@@ -227,7 +240,7 @@ def strip_undefined(
 def is_undefined(arr, undefined):
     result = arr == undefined
     if not isinstance(undefined, str) and np.isnan(undefined):
-        return result | np.isnan(arr)
+        result = result | np.isnan(arr)
 
     # reduce over all but the first axis, e.g. an array with shape (10,2,3) should be
     # reduced to a result array of shape (10,) by reducing over axes (1,2). An single

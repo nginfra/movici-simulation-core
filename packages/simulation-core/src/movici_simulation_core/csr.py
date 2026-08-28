@@ -183,7 +183,9 @@ def update_csr_array(
         old_row = get_row(data, row_ptr, pos)
         new_row = get_row(upd_data, upd_row_ptr, upd_idx)
 
-        if changes is not None and compare is not None:
+        if changes is not None:
+            if compare is None:
+                raise ValueError("Provide a compare function when supplying a changes array")
             is_equal = (old_row.shape == new_row.shape) and np.all(compare(old_row, new_row))
             changes[pos] = not is_equal
         set_row(new_data, new_row_ptr, pos, new_row)
