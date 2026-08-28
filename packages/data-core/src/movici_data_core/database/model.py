@@ -568,3 +568,18 @@ class UpdateAttribute(Base):
 
     update: Mapped[Update] = relationship()
     attribute: Mapped[Attribute] = relationship()
+
+
+class VisualizationView(Base):
+    __tablename__ = "visualization_view"
+    __table_args__ = (UniqueConstraint("scenario_id", "name"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
+    config: Mapped[dict]
+    scenario: Mapped[Scenario] = relationship()
+
+    def to_domain(self) -> domain_model.View:
+        return domain_model.View(name=self.name, config=self.config, id=self.id)

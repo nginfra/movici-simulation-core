@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import itertools
 import shutil
 import typing as t
 from unittest.mock import patch
@@ -27,6 +28,7 @@ from movici_data_core.domain_model import (
     SimulationInfo,
     Update,
     UpdateModel,
+    View,
     Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
@@ -340,6 +342,26 @@ async def create_update(
         return await repository.for_scenario(scenario_id).updates.create(update)
 
     return _create_update
+
+
+@pytest.fixture
+async def create_view(
+    repository: SQLAlchemyRepository,
+    a_scenario,
+):
+    view_counter = itertools.count()
+
+    async def _create_view(scenario_id=None, **kwargs):
+        defaults = {
+            "name": f"view_{next(view_counter)}",
+            "config": {"some": "config"},
+        }
+        scenario_id = scenario_id or a_scenario.id
+        view = View(**{**defaults, **kwargs})
+
+        return await repository.for_scenario(scenario_id).views.create(view)
+
+    return _create_view
 
 
 @pytest.fixture

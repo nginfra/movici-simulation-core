@@ -1,8 +1,10 @@
 from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
-from movici_data_core.domain_model import Scenario
+from movici_data_core.database.repository.views import ViewRepository
+from movici_data_core.domain_model import Scenario, View
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
+from movici_data_core.services.common import GenericService
 from movici_data_core.validators import ModelConfigValidator
 
 
@@ -50,3 +52,9 @@ class ScenarioService:
         )
         assert scenario_dataset.id is not None
         return await self.repository.scenarios.get_summary(scenario_dataset.id)
+
+
+class ViewService(GenericService[View]):
+    @property
+    def _repository(self) -> ViewRepository:  # type: ignore
+        return self.repository.views
