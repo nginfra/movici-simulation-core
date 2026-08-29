@@ -1,5 +1,6 @@
 import datetime
 from datetime import timedelta
+from uuid import UUID
 
 import pytest
 
@@ -79,7 +80,7 @@ def test_scenario_status(
             if simulation_status is not None
             else None
         ),
-        datasets=[ScenarioDataset("a_dataset", has_data=scenario_dataset_has_data)],
+        datasets=[ScenarioDataset("a_dataset", id=UUID(int=1))],
         has_updates=scenario_has_updates,
     )
-    assert scenario.status == expected_status
+    assert scenario.with_status({UUID(int=1): scenario_dataset_has_data}).status == expected_status
