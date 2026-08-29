@@ -282,6 +282,14 @@ class Scenario:
         of required initial data and its ``SimulationStatusInfo``. Every entry in
         ``Scenario.datasets`` must have an ``id``.
 
+        A Scenario status is ``INVALID`` as long as its datasets do not have data. Otherwise, it
+        depends on its simulation status (which can be set through the api). A ``RUNNING``
+        simulation status is only valid if it has been last set within a certain time threshold,
+        otherwise it will be assumed that the simulation has stalled, marking it ``FAILED``. If the
+        scenario has no simulation status but it has updates, then the status will be assumed to be
+        ``SUCCEEDED``. If there is no simulation status, and no updates, but all its datasets have
+        data, then the scenario is marked ``READY``
+
         :param datasets_have_data: a dictionary with Dataset UUIDs as keys and a boolean indicating
             whether that dataset has data available. Any dataset that is configured for the
             scenario but not in ``datasets_have_data`` is ignored
