@@ -1,10 +1,18 @@
 import dataclasses
+import typing as t
 
 import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend
 from movici_data_core.database.model import DatabaseMode
-from movici_data_core.domain_model import Dataset, DatasetSummary, ScenarioDataset, ScenarioStatus
+from movici_data_core.domain_model import (
+    Dataset,
+    DatasetSummary,
+    Scenario,
+    ScenarioDataset,
+    ScenarioStatus,
+    SimulationStatus,
+)
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.testing import dataset_data_to_numpy
 
@@ -82,4 +90,14 @@ async def test_calculate_scenario_status_from_scenario_datasets(
             another_dataset_id, dataclasses.replace(another_dataset, data=dataset_data)
         )
 
-    assert await backend.scenarios.get_status() == expected_status
+    scenario = await backend.scenarios.get()
+    assert scenario is not None
+    assert scenario.status == expected_status
+
+
+@pytest.mark.database_mode(DatabaseMode.SINGLE_SCENARIO)
+@pytest.mark.usefixtures("a_dataset_with_data")
+async def test_updated_simulation_status_gets_reflected_in_scenario(backend: SQLAlchemyBackend):
+    assert t.cast(Scenario, await backend.scenarios.get()).status == ScenarioStatus.READY
+    await backend.scenarios.update_simulation_status(SimulationStatus.RUNNING)
+    assert t.cast(Scenario, await backend.scenarios.get()).status == ScenarioStatus.RUNNING

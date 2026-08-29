@@ -66,25 +66,25 @@ class ScenarioRepository(SQLResourceRepository):
         """List all scenarios in the active workspace"""
         workspace_id = self._ensure_workspace_id()
         result = await self.session.execute(
-            self.selector(include_datasets=False, include_models=False).where(
-                db.Scenario.workspace_id == workspace_id
-            )
+            self.selector(include_models=False).where(db.Scenario.workspace_id == workspace_id)
         )
-        return [obj.to_domain(has_updates) for (obj, has_updates) in result]
+        return [obj.to_domain(has_updates, datasets=obj.datasets) for (obj, has_updates) in result]
 
-    def selector(self, include_datasets=True, include_models=True):
-        query = select(
-            db.Scenario,
-            exists().where(db.Update.scenario_id == db.Scenario.id),
-        ).options(
-            joinedload(db.Scenario.workspace), joinedload(db.Scenario.simulation_status_info)
-        )
-        if include_datasets:
-            query = query.options(
+    def selector(self, include_models=True):
+        query = (
+            select(
+                db.Scenario,
+                exists().where(db.Update.scenario_id == db.Scenario.id),
+            )
+            .options(
+                joinedload(db.Scenario.workspace), joinedload(db.Scenario.simulation_status_info)
+            )
+            .options(
                 selectinload(db.Scenario.datasets)
                 .joinedload(db.ScenarioDataset.dataset)
                 .joinedload(db.Dataset.dataset_type)
             )
+        )
         if include_models:
             query = query.options(
                 selectinload(db.Scenario.models).options(
@@ -139,20 +139,6 @@ class ScenarioRepository(SQLResourceRepository):
         """
         id = self._ensure_scenario_id()
         return await self._get_one_full_scenario(db.Scenario.id == id)
-
-    async def get_scenario_for_status(self):
-        id = self._ensure_scenario_id()
-        result = (
-            await self.session.execute(
-                self.selector(include_models=False).where(db.Scenario.id == id).limit(1)
-            )
-        ).first()
-
-        if result is None:
-            return None
-
-        scenario, has_updates = t.cast(tuple[db.Scenario, bool], result)
-        return scenario.to_domain(has_updates, datasets=scenario.datasets)
 
     async def update_simulation_status(self, status: SimulationStatus):
         id = self._ensure_scenario_id()

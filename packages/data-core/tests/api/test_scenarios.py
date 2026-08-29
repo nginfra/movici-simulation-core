@@ -27,6 +27,12 @@ def test_list_scenarios(get_json, a_scenario, scenario_id):
     assert scenario_ids == {str(a_scenario.id), scenario_id}
 
 
+def test_list_scenarios_with_status(get_json, a_scenario, scenario_id):
+    result = get_json("/scenarios", params={"workspace": a_scenario.workspace.id})
+    scenario_status = {scenario["id"]: scenario["status"] for scenario in result["scenarios"]}
+    assert scenario_status == {str(a_scenario.id): "invalid", scenario_id: "ready"}
+
+
 def test_get_scenario(get_json, scenario_id):
     scenario = get_json(f"/scenarios/{scenario_id}")
     assert scenario.pop("created_at") is not None
@@ -210,6 +216,7 @@ async def test_get_summary_by_dataset_id(
     assert result == expected
 
 
+@pytest.mark.usefixtures("a_dataset_with_data")
 def test_update_and_get_scenario_status(get_json, a_scenario):
     url = f"/scenarios/{a_scenario.id}/status"
     result = get_json(url, method="post", json={"status": "running"})

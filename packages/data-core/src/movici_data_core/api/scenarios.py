@@ -97,10 +97,11 @@ async def get_scenario_summary(
 
 @scenario_router.get("/{scenario_id}/status")
 async def get_scenario_status(scenario_id: UUID, backend: DepBackend) -> ScenarioStatusOut:
-    result = await backend.for_scenario(scenario_id).scenarios.get_status()
+    result = await backend.for_scenario(scenario_id).scenarios.get()
     if result is None:
         raise ResourceDoesNotExist("scenario", id=scenario_id)
-    return ScenarioStatusOut.from_domain(result)
+
+    return ScenarioStatusOut.from_domain(result.status)
 
 
 @scenario_router.post("/{scenario_id}/status")

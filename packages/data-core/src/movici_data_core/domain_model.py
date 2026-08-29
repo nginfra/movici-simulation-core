@@ -249,6 +249,7 @@ class Scenario:
     :param epsg_code: The coordinate reference system (as an EPSG code) of the scenario
     :param bounding_box: the scenario bounding box (output only)
     :param simulation_info: the scenario simulation info
+    :param simulation_status_info: a :class:`SimulationStatusInfo` object
     :param status: the scenario status
     :param id: the scenario ``UUID`` in the database (if any)
     :param workspace: The workspace the scenario belongs to (if any)
@@ -266,6 +267,7 @@ class Scenario:
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     simulation_info: SimulationInfo = dataclasses.field(default_factory=SimulationInfo.default)
     simulation_status_info: SimulationStatusInfo | None = None
+    status: ScenarioStatus = ScenarioStatus.READY
 
     id: UUID | None = None
     workspace: Workspace | None = None
@@ -275,16 +277,33 @@ class Scenario:
     datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
     has_updates: bool = False
 
-    @property
-    def status(self) -> ScenarioStatus:
-        status = ScenarioStatus.READY
-        if not all(dataset.has_data for dataset in self.datasets):
-            return ScenarioStatus.INVALID
-        if self.has_updates:
-            status = ScenarioStatus.SUCCEEDED
-        if self.simulation_status_info is not None:
-            status = self.simulation_status_info.get_scenario_status()
-        return status
+    def with_status(self, datasets_have_data: dict[UUID, bool]):
+        """Return a new ``Scenario`` with the ``status`` field updated based on the availability
+        of required initial data and its ``SimulationStatusInfo``. Every entry in
+        ``Scenario.datasets`` must have an ``id``.
+
+        :param datasets_have_data: a dictionary with Dataset UUIDs as keys and a boolean indicating
+            whether that dataset has data available. Any dataset that is configured for the
+            scenario but not in ``datasets_have_data`` is ignored
+        :return: A copy of the ``Scenario`` with the updated ``status`` field
+        """
+        status = ScenarioStatus.READY  # the default status is READY
+        dataset_ids = {dataset.id for dataset in self.datasets}
+        if None in dataset_ids:
+            raise ValueError(
+                "every dataset in Scenario.datasets must have an"
+                " id set in order to calculate the status"
+            )
+        if not all(
+            datasets_have_data.get(ds_id, True) for ds_id in t.cast(set[UUID], dataset_ids)
+        ):
+            status = ScenarioStatus.INVALID
+        else:
+            if self.has_updates:
+                status = ScenarioStatus.SUCCEEDED
+            if self.simulation_status_info is not None:
+                status = self.simulation_status_info.get_scenario_status()
+        return dataclasses.replace(self, status=status)
 
 
 @dataclasses.dataclass
@@ -298,7 +317,6 @@ class ScenarioDataset:
 
     name: str
     dataset_type: DatasetType | None = dataclasses.field(default=None)
-    has_data: bool = False
     id: UUID | None = dataclasses.field(compare=False, default=None)
 
     @classmethod
@@ -307,7 +325,6 @@ class ScenarioDataset:
             name=dataset.name,
             dataset_type=dataset.dataset_type,
             id=dataset.id,
-            has_data=dataset.has_data,
         )
 
 
