@@ -31,19 +31,22 @@ class DatasetFormat(str, enum.Enum):
     BINARY = "binary"
 
 
-# TODO: implement proper usage of scenariostatus. Invalid/Ready is managed internally based on the
-# availability of data (do all the scenariodatasets have data?) while the other statuses need an
-# external source, or an (api) endpoint that can set them, based on a simulation that is running
-# or has completed (succesfully or not)
-# Perhaps we also need to think about what happens if simulation just stops reporting about the
-# Scenario. Do we want to trigger setting a scenario status to Failed if a simulation has not
-# updated a scenario for a certain time, either by posting an update or (re)posting the status
 class ScenarioStatus(str, enum.Enum):
-    FAILED = "failed"
     INVALID = "invalid"
     READY = "ready"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+    @classmethod
+    def from_simulation_status(cls, simulation_status: SimulationStatus):
+        return ScenarioStatus(simulation_status.value)
+
+
+class SimulationStatus(str, enum.Enum):
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
 
 
 AttributeDataType = t.Type[bool | int | float | str]
@@ -218,6 +221,23 @@ class SimulationInfo:
 
 
 @dataclasses.dataclass
+class SimulationStatusInfo:
+    SIMULATION_REPORT_THRESHOLD = datetime.timedelta(seconds=10)
+    status: SimulationStatus
+    timestamp: datetime.datetime
+
+    def get_scenario_status(self) -> ScenarioStatus:
+        timestamp = datetime.datetime.now(tz=datetime.timezone.utc)
+        status = self.status
+        if (
+            self.status == SimulationStatus.RUNNING
+            and self.timestamp + self.SIMULATION_REPORT_THRESHOLD < timestamp
+        ):
+            status = SimulationStatus.FAILED
+        return ScenarioStatus.from_simulation_status(status)
+
+
+@dataclasses.dataclass
 class Scenario:
     r"""A Scenario is a description of a simulation. It contains a collection of models that should
     work togehter on a collection of datasets in order to perform a certain, specific, calculation,
@@ -229,6 +249,7 @@ class Scenario:
     :param epsg_code: The coordinate reference system (as an EPSG code) of the scenario
     :param bounding_box: the scenario bounding box (output only)
     :param simulation_info: the scenario simulation info
+    :param simulation_status_info: a :class:`SimulationStatusInfo` object
     :param status: the scenario status
     :param id: the scenario ``UUID`` in the database (if any)
     :param workspace: The workspace the scenario belongs to (if any)
@@ -245,6 +266,7 @@ class Scenario:
     epsg_code: int | None = None
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
     simulation_info: SimulationInfo = dataclasses.field(default_factory=SimulationInfo.default)
+    simulation_status_info: SimulationStatusInfo | None = None
     status: ScenarioStatus = ScenarioStatus.READY
 
     id: UUID | None = None
@@ -254,6 +276,42 @@ class Scenario:
     models: list[ScenarioModel] = dataclasses.field(default_factory=list)
     datasets: list[ScenarioDataset] = dataclasses.field(default_factory=list)
     has_updates: bool = False
+
+    def with_status(self, datasets_have_data: dict[UUID, bool]):
+        """Return a new ``Scenario`` with the ``status`` field updated based on the availability
+        of required initial data and its ``SimulationStatusInfo``. Every entry in
+        ``Scenario.datasets`` must have an ``id``.
+
+        A Scenario status is ``INVALID`` as long as its datasets do not have data. Otherwise, it
+        depends on its simulation status (which can be set through the api). A ``RUNNING``
+        simulation status is only valid if it has been last set within a certain time threshold,
+        otherwise it will be assumed that the simulation has stalled, marking it ``FAILED``. If the
+        scenario has no simulation status but it has updates, then the status will be assumed to be
+        ``SUCCEEDED``. If there is no simulation status, and no updates, but all its datasets have
+        data, then the scenario is marked ``READY``
+
+        :param datasets_have_data: a dictionary with Dataset UUIDs as keys and a boolean indicating
+            whether that dataset has data available. Any dataset that is configured for the
+            scenario but not in ``datasets_have_data`` is ignored
+        :return: A copy of the ``Scenario`` with the updated ``status`` field
+        """
+        status = ScenarioStatus.READY  # the default status is READY
+        dataset_ids = {dataset.id for dataset in self.datasets}
+        if None in dataset_ids:
+            raise ValueError(
+                "every dataset in Scenario.datasets must have an"
+                " id set in order to calculate the status"
+            )
+        if not all(
+            datasets_have_data.get(ds_id, True) for ds_id in t.cast(set[UUID], dataset_ids)
+        ):
+            status = ScenarioStatus.INVALID
+        else:
+            if self.has_updates:
+                status = ScenarioStatus.SUCCEEDED
+            if self.simulation_status_info is not None:
+                status = self.simulation_status_info.get_scenario_status()
+        return dataclasses.replace(self, status=status)
 
 
 @dataclasses.dataclass
@@ -271,7 +329,11 @@ class ScenarioDataset:
 
     @classmethod
     def from_dataset(cls, dataset: Dataset):
-        return ScenarioDataset(name=dataset.name, dataset_type=dataset.dataset_type, id=dataset.id)
+        return ScenarioDataset(
+            name=dataset.name,
+            dataset_type=dataset.dataset_type,
+            id=dataset.id,
+        )
 
 
 @dataclasses.dataclass

@@ -1455,7 +1455,6 @@ class TestScenarioRepository:
             id=None,
             created_at=None,
             updated_at=None,
-            datasets=[dataclasses.replace(result.datasets[0], id=None)],
             models=[],
         ) == dataclasses.replace(new_scenario, models=[])
 

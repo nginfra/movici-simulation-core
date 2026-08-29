@@ -11,6 +11,8 @@ from movici_data_core.marshalling import (
     ScenarioIn,
     ScenarioListOut,
     ScenarioOut,
+    ScenarioStatusOut,
+    SimulationStatusIn,
 )
 from movici_data_core.validators import ModelConfigValidator
 
@@ -91,3 +93,20 @@ async def get_scenario_summary(
 ) -> DatasetSummaryOut:
     result = await backend.for_scenario(scenario_id).scenarios.get_summary(dataset_q)
     return DatasetSummaryOut.from_domain(result)
+
+
+@scenario_router.get("/{scenario_id}/status")
+async def get_scenario_status(scenario_id: UUID, backend: DepBackend) -> ScenarioStatusOut:
+    result = await backend.for_scenario(scenario_id).scenarios.get()
+    if result is None:
+        raise ResourceDoesNotExist("scenario", id=scenario_id)
+
+    return ScenarioStatusOut.from_domain(result.status)
+
+
+@scenario_router.post("/{scenario_id}/status")
+async def update_scenario_status(
+    scenario_id: UUID, status: SimulationStatusIn, backend: DepBackend
+):
+    await backend.for_scenario(scenario_id).scenarios.update_simulation_status(status.to_domain())
+    return OperationSuccess.for_path_operation("scenario", scenario_id, "status updated")

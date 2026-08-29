@@ -17,7 +17,7 @@ from movici_data_core.database.model import (
     Scenario,
     Workspace,
 )
-from movici_data_core.domain_model import ScenarioStatus, SimulationInfo
+from movici_data_core.domain_model import SimulationInfo
 from movici_data_core.exceptions import DatabaseAlreadyInitialized, DatabaseNotYetInitialized
 
 
@@ -92,7 +92,6 @@ async def create_default_scenario(
                 name=name,
                 display_name=display_name,
                 description="",
-                status=ScenarioStatus.READY,
                 simulation_info=dataclasses.asdict(SimulationInfo.default()),
                 epsg_code=0,
             )
