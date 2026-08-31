@@ -289,6 +289,53 @@ def test_csr_bin_ops(a, b, op, expected):
 
 
 @pytest.mark.parametrize(
+    "a, b, op, expected",
+    [
+        (1, ensure_csr_data([[1, 2], [3], []]), operator.add, [[2, 3], [4], []]),
+        (2, ensure_csr_data([[1, 2], [3], []]), operator.mul, [[2, 4], [6], []]),
+        (10, ensure_csr_data([[1, 2], [5], []]), operator.sub, [[9, 8], [5], []]),
+        (12, ensure_csr_data([[1, 2], [3], []]), operator.truediv, [[12, 6], [4], []]),
+        (2, ensure_csr_data([[1, 2], [3], []]), operator.pow, [[2, 4], [8], []]),
+        (7, ensure_csr_data([[2, 3], [4], []]), operator.mod, [[1, 1], [3], []]),
+        # a per-row operand is broadcast along the rows, also from the left
+        (
+            np.array([10, 20, 30]),
+            ensure_csr_data([[1, 2], [3], []]),
+            operator.sub,
+            [[9, 8], [17], []],
+        ),
+    ],
+)
+def test_csr_reflected_bin_ops(a, b, op, expected):
+    expected = ensure_csr_data(expected)
+    result = op(a, b)
+    np.testing.assert_allclose(expected.data, result.data)
+    np.testing.assert_allclose(expected.row_ptr, result.row_ptr)
+
+
+@pytest.mark.parametrize("op, expected", [(operator.neg, [-1, -2, -3]), (operator.pos, [1, 2, 3])])
+def test_csr_unary_ops(op, expected):
+    result = op(ensure_csr_data([[1, 2], [3], []]))
+    np.testing.assert_allclose(result.data, expected)
+    np.testing.assert_allclose(result.row_ptr, [0, 2, 3, 3])
+
+
+@pytest.mark.parametrize(
+    "op, expected",
+    [
+        (operator.lt, [False, True, False]),
+        (operator.eq, [True, False, False]),
+        (operator.ge, [True, False, True]),
+    ],
+)
+def test_csr_comparison_with_row_operand_yields_booleans(op, expected):
+    """the result dtype must follow from the operator, not from the data being compared"""
+    result = op(ensure_csr_data([[1], [2], [3]]), np.array([1, 3, 2]))
+    assert result.data.dtype == bool
+    np.testing.assert_array_equal(result.data, expected)
+
+
+@pytest.mark.parametrize(
     "array, matrix",
     [
         (

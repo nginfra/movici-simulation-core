@@ -100,6 +100,11 @@ class TrackedCSRArray:
     changed: np.ndarray
     size: int
 
+    # Without this, numpy treats a csr array as an opaque scalar object whenever it appears on the
+    # right hand side of an ndarray operation, and silently produces an object array of csr arrays
+    # instead of deferring to the reflected operators below
+    __array_ufunc__ = None
+
     def __init__(self, data, row_ptr, rtol=1e-05, atol=1e-08, equal_nan=False):
         self.data = np.asarray(data)
         self.row_ptr = np.asarray(row_ptr)
@@ -204,17 +209,51 @@ class TrackedCSRArray:
         except TypeError:
             return NotImplemented
 
+    def __r_bin_op__(self, other, op):
+        """Perform ``op(other, self)``, ie. with this array as the right hand operand"""
+        return self.__bin_op__(other, lambda left, right: op(right, left))
+
     def __add__(self, other):
         return self.__bin_op__(other, np.add)
+
+    def __radd__(self, other):
+        return self.__r_bin_op__(other, np.add)
 
     def __sub__(self, other):
         return self.__bin_op__(other, np.subtract)
 
+    def __rsub__(self, other):
+        return self.__r_bin_op__(other, np.subtract)
+
     def __mul__(self, other):
         return self.__bin_op__(other, np.multiply)
 
+    def __rmul__(self, other):
+        return self.__r_bin_op__(other, np.multiply)
+
     def __truediv__(self, other):
         return self.__bin_op__(other, np.divide)
+
+    def __rtruediv__(self, other):
+        return self.__r_bin_op__(other, np.divide)
+
+    def __mod__(self, other):
+        return self.__bin_op__(other, np.mod)
+
+    def __rmod__(self, other):
+        return self.__r_bin_op__(other, np.mod)
+
+    def __pow__(self, other):
+        return self.__bin_op__(other, np.power)
+
+    def __rpow__(self, other):
+        return self.__r_bin_op__(other, np.power)
+
+    def __neg__(self):
+        return TrackedCSRArray(data=-self.data, row_ptr=self.row_ptr.copy())
+
+    def __pos__(self):
+        return TrackedCSRArray(data=+self.data, row_ptr=self.row_ptr.copy())
 
     def __eq__(self, other):
         return self.__bin_op__(other, np.equal)

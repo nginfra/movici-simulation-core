@@ -134,7 +134,10 @@ def csr_binop(data, row_ptr, operand, operator):
     """
     if len(operand) != len(row_ptr) - 1:
         raise ValueError("Can only add to CSR arrays if array length equals number of rows")
-    rv = np.zeros_like(data)
+
+    # the result dtype follows from the operation, not from the input data: comparison operators
+    # yield booleans even though ``data`` is numeric
+    rv = np.empty_like(data, dtype=operator(data[:0], operand[:0]).dtype)
 
     for idx, val in enumerate(operand):
         begin, end = row_ptr[idx], row_ptr[idx + 1]
