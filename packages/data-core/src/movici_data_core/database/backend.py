@@ -23,6 +23,7 @@ from movici_data_core.services import (
     WorkspaceService,
 )
 from movici_data_core.services.update import UpdateService
+from movici_data_core.validators import ValidatingDatasetSerializer
 from movici_simulation_core import EntityInitDataFormat
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy
@@ -72,8 +73,8 @@ class SQLAlchemyServer:
 
         self.dbapi_url = dbapi_url
         self._tmpfile_dir = tmpfile_dir
-        self.serializer = serializer or EntityInitDataFormat(
-            non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
+        self.serializer = serializer or ValidatingDatasetSerializer(
+            EntityInitDataFormat(non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",))
         )
 
         self._session_factory: async_sessionmaker[AsyncSession] | None = None

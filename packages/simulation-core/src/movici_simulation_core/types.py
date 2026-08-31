@@ -120,6 +120,11 @@ class ExternalSerializationStrategy:
         if filetype not in self.supported_file_types():
             raise TypeError(f"Unsupported file type '{type}'")
 
+    def data_keys(
+        self, dataset: dict, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> t.Iterable[str]:
+        raise NotImplementedError
+
 
 T = t.TypeVar("T", bytes, dict)
 
