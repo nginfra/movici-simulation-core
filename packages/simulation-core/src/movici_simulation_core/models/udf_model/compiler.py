@@ -1,3 +1,35 @@
+"""Compiler for the expressions used by the
+:class:`~movici_simulation_core.models.udf_model.udf_model.UDFModel`.
+
+An expression is tokenized, parsed into an abstract syntax tree and then compiled into a tree of
+closures over numpy operations. Evaluating the result is vectorized over the entities of an entity
+group: every name in an expression refers to a whole attribute, not to a single entity.
+
+**Grammar.** Operators, from lowest to highest precedence::
+
+    or   ||                      elementwise disjunction
+    and  &&                      elementwise conjunction
+    not  !                       elementwise negation
+    ==  !=  <  <=  >  >=         comparison, may not be chained
+    +  -                         addition, subtraction
+    *  /  %                      multiplication, division, remainder
+    +  -                         unary sign
+    **                           exponentiation, right associative
+
+Operands are numbers (``1``, ``2.5``, ``1.5e-3``), the booleans ``true`` and ``false``, attribute
+names (which may contain digits, eg. ``co2_2030``), function calls and parenthesized expressions.
+
+**Values.** Every operator and function accepts uniform attributes, csr attributes and scalars
+in any combination. A scalar or uniform operand is broadcast along the rows of a csr operand, so
+``csr * 2`` and ``2 * csr`` both scale every value, while ``csr * uniform`` multiplies each row by
+the value belonging to that entity.
+
+Undefined values propagate: an expression over an undefined input results in an undefined value.
+Arithmetic that cannot produce a finite number (division by zero, the logarithm of zero) also
+results in an undefined value, since a Movici dataset has no representation for infinity. Use the
+``default`` function to substitute undefined values with something else.
+"""
+
 from __future__ import annotations
 
 import dataclasses
@@ -6,12 +38,15 @@ import operator
 import re
 import typing as t
 
-from movici_simulation_core.models.common.model_util import safe_divide
 from movici_simulation_core.models.udf_model import functions
 
+# The tokenizer tries these patterns in order and takes the first match, so longer operators must
+# be listed before the shorter ones they start with, and keywords before `name`
 TOKENS = {
+    "**": r"\*\*",
     "*": r"\*",
     "/": r"/",
+    "%": r"%",
     "+": r"\+",
     "-": r"-",
     "==": r"==",
@@ -20,13 +55,19 @@ TOKENS = {
     "<=": r"<=",
     "<": r"<",
     ">": r">",
+    "and": r"(&&|and\b)",
+    "or": r"(\|\||or\b)",
+    "not": r"(!|not\b)",
     "(": r"\(",
     ")": r"\)",
     ",": r",",
-    "name": r"[A-Za-z_]+",
+    "bool": r"(true|false)\b",
+    "name": r"[A-Za-z_][A-Za-z0-9_]*",
     "ws": r"\s+",
-    "num": r"([0-9]*[.])?[0-9]+",
+    "num": r"([0-9]*[.])?[0-9]+([eE][-+]?[0-9]+)?",
 }
+
+COMPARISONS = ("==", "!=", "<", ">", "<=", ">=")
 
 
 class Token(t.NamedTuple):
@@ -103,6 +144,11 @@ class Num(Node):
 
 
 @dataclasses.dataclass
+class Bool(Node):
+    pass
+
+
+@dataclasses.dataclass
 class Var(Node):
     pass
 
@@ -163,24 +209,40 @@ class Parser:
             return False
 
     def expr(self):
+        return self.or_expr()
+
+    def or_expr(self):
+        """or_expr : and_expr (("or" | "||") and_expr)*"""
+        node = self.and_expr()
+        while self.expect("or"):
+            node = BinOp("or", left=node, right=self.and_expr())
+        return node
+
+    def and_expr(self):
+        """and_expr : not_expr (("and" | "&&") not_expr)*"""
+        node = self.not_expr()
+        while self.expect("and"):
+            node = BinOp("and", left=node, right=self.not_expr())
+        return node
+
+    def not_expr(self):
+        """not_expr : ("not" | "!") not_expr | comp_expr"""
+        if self.expect("not"):
+            return Func("not", (self.not_expr(),))
         return self.comp_expr()
 
     def comp_expr(self):
-        """comp_expr: add_expr (("==" | "!=") add_expr)*"""
+        """comp_expr: add_expr (("==" | "!=" | "<" | ">" | "<=" | ">=") add_expr)?"""
         node = self.add_expr()
-        if op := self.peek("==", "!=", "<", ">", "<=", ">="):
+        if op := self.peek(*COMPARISONS):
             self.expect(op.type)
             node = BinOp(op.type, left=node, right=self.add_expr())
 
         return node
 
     def add_expr(self):
-        """add_expr : ["+"|"-"] mul_expr (("+" | "-") mul_expr)*"""
-        if op := self.peek("+", "-"):
-            self.expect(op.type)
-            node = BinOp(op.type, Num("0"), self.mul_expr())
-        else:
-            node = self.mul_expr()
+        """add_expr : mul_expr (("+" | "-") mul_expr)*"""
+        node = self.mul_expr()
         while op := self.peek("+", "-"):
             self.expect(op.type)
             node = BinOp(op.type, left=node, right=self.mul_expr())
@@ -188,19 +250,40 @@ class Parser:
         return node
 
     def mul_expr(self):
-        """mul_expr : atom ((MUL | DIV) atom)*"""
-        node = self.atom()
+        """mul_expr : unary_expr (("*" | "/" | "%") unary_expr)*"""
+        node = self.unary_expr()
 
-        while op := self.peek("*", "/"):
+        while op := self.peek("*", "/", "%"):
             self.expect(op.type)
-            node = BinOp(op.type, left=node, right=self.atom())
+            node = BinOp(op.type, left=node, right=self.unary_expr())
+        return node
+
+    def unary_expr(self):
+        """unary_expr : ("+" | "-") unary_expr | power_expr"""
+        if op := self.peek("+", "-"):
+            self.expect(op.type)
+            return BinOp(op.type, Num("0"), self.unary_expr())
+        return self.power_expr()
+
+    def power_expr(self):
+        """power_expr : atom ("**" unary_expr)?
+
+        Exponentiation is right associative and binds tighter than unary minus, so that
+        `-a ** 2` is `-(a ** 2)` and `a ** -2` is valid
+        """
+        node = self.atom()
+        if self.expect("**"):
+            node = BinOp("**", left=node, right=self.unary_expr())
         return node
 
     def atom(self):
-        """factor : num | function_or_name | "(" expr ")" """
+        """atom : num | bool | function_or_name | "(" expr ")" """
         token = self.current_token
         if self.expect("num"):
             return Num(token.text)
+
+        if self.expect("bool"):
+            return Bool(token.text)
 
         if self.peek("name"):
             return self.function_or_name()
@@ -239,6 +322,24 @@ class Parser:
         return expr
 
 
+BINARY_OPERATORS = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": functions.divide,
+    "%": functions.modulo,
+    "**": functions.power,
+    "==": operator.eq,
+    "!=": operator.ne,
+    "<": operator.lt,
+    "<=": operator.le,
+    ">": operator.gt,
+    ">=": operator.ge,
+    "and": functions.logical_and,
+    "or": functions.logical_or,
+}
+
+
 class NodeVisitor:
     def visit(self, node: Node):
         pass
@@ -272,21 +373,15 @@ class UDFCompiler(NodeVisitor):
         return lambda x: numeric
 
     @visit.register
+    def _(self, node: Bool):
+        boolean = node.val == "true"
+        return lambda x: boolean
+
+    @visit.register
     def _(self, node: BinOp):
         if node.left is None or node.right is None:
             raise ValueError("Invalid tree")
-        op = {
-            "+": operator.add,
-            "-": operator.sub,
-            "*": operator.mul,
-            "/": safe_divide,
-            "==": operator.eq,
-            "!=": operator.ne,
-            "<": operator.lt,
-            "<=": operator.le,
-            ">": operator.gt,
-            ">=": operator.ge,
-        }[node.val]
+        op = BINARY_OPERATORS[node.val]
         left = node.left.accept_node(self)
         right = node.right.accept_node(self)
         return lambda x: op(left(x), right(x))

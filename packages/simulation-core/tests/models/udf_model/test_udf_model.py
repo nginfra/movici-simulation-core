@@ -34,6 +34,7 @@ def additional_attributes():
         AttributeSpec("undef_csr", DataType(float, csr=True)),
         AttributeSpec("out_csr", DataType(float, csr=True)),
         AttributeSpec("in_2d", DataType(float, (2,))),
+        AttributeSpec("out_bool", DataType(bool)),
     ]
 
 
@@ -545,3 +546,90 @@ def test_model_config_schema(config_, config):
 
 def test_convert_legacy_model_config(legacy_config, config):
     assert UDFModel(legacy_config).config == config
+
+
+def test_identifiers_may_contain_digits(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a_1": "in_a", "a_2": "in_b"},
+            "functions": [{"expression": "a_1+a_2", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [2.1, 4.2, 6.3]}}}
+
+
+def test_model_with_power_and_math_functions(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a"},
+            "functions": [{"expression": "sqrt(a**2)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [1, 2, 3]}}}
+
+
+def test_model_with_boolean_operators(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a", "b": "in_b", "c": "in_c"},
+            "functions": [{"expression": "a<b and a<c", "output": "out_bool"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {"some_entities": {"id": [1, 2, 3], "out_bool": [True, True, False]}}
+    }
+
+
+def test_division_by_zero_yields_an_undefined_value(create_model_tester):
+    """a division that cannot produce a finite number results in an undefined value, which
+    `default` can then fill in
+    """
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a", "b": "in_b"},
+            "functions": [{"expression": "default(b/(a-a), 0)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [0, 0, 0]}}}
+
+
+def test_csr_with_scalar_on_the_left(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"csr": "in_csr"},
+            "functions": [{"expression": "100-csr", "output": "out_csr"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {"some_entities": {"id": [1, 2, 3], "out_csr": [[90, 89], [80, 78], []]}}
+    }
+
+
+def test_csr_with_uniform_attribute_on_the_left(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"csr": "in_csr", "a": "in_a"},
+            "functions": [{"expression": "a*csr", "output": "out_csr"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {"some_entities": {"id": [1, 2, 3], "out_csr": [[10, 11], [40, 44], []]}}
+    }

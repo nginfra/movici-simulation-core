@@ -19,6 +19,118 @@ def func(name: str):
     return decorator
 
 
+def apply_unary(ufunc, value):
+    """Apply an elementwise function to a csr array, uniform array or scalar. The csr structure of
+    the input is preserved.
+    """
+    if isinstance(value, TrackedCSRArray):
+        return TrackedCSRArray(ufunc(value.data), row_ptr=value.row_ptr.copy())
+    return ufunc(value)
+
+
+def apply_binary(ufunc, left, right):
+    """Apply an elementwise function to any combination of csr arrays, uniform arrays and scalars.
+    A uniform array or scalar operand is broadcast along the rows of a csr operand.
+    """
+    if isinstance(left, TrackedCSRArray):
+        return left.__bin_op__(right, ufunc)
+    if isinstance(right, TrackedCSRArray):
+        return right.__r_bin_op__(left, ufunc)
+    return ufunc(left, right)
+
+
+def undefined_on_non_finite(value):
+    """Turn non-finite results (``inf`` and ``-inf``) into undefined values. A Movici dataset has
+    no representation for infinity, so an expression that cannot produce a finite number produces
+    an undefined value instead. This keeps the result detectable downstream, eg. by ``default``.
+
+    A csr operand is updated to hold the corrected data, so only call this on freshly calculated
+    results.
+    """
+    if isinstance(value, TrackedCSRArray):
+        value.data = undefined_on_non_finite(value.data)
+        return value
+    if isinstance(value, np.ndarray):
+        if not np.issubdtype(value.dtype, np.floating):
+            return value
+        return np.where(np.isfinite(value), value, np.nan)
+    if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+        return np.nan
+    return value
+
+
+def divide(numerator, denominator):
+    """Division as used by the ``/`` operator. Division by zero yields an undefined value rather
+    than an infinity, and undefined operands propagate into the result.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return undefined_on_non_finite(apply_binary(np.divide, numerator, denominator))
+
+
+def power(base, exponent):
+    """Exponentiation as used by the ``**`` operator"""
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        return undefined_on_non_finite(apply_binary(np.power, base, exponent))
+
+
+def modulo(value, divisor):
+    """Remainder as used by the ``%`` operator"""
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return undefined_on_non_finite(apply_binary(np.mod, value, divisor))
+
+
+def logical_and(left, right):
+    """Elementwise conjunction as used by the ``and`` (``&&``) operator"""
+    return apply_binary(np.logical_and, left, right)
+
+
+def logical_or(left, right):
+    """Elementwise disjunction as used by the ``or`` (``||``) operator"""
+    return apply_binary(np.logical_or, left, right)
+
+
+def _register_unary(name: str, ufunc, guard_non_finite: bool = False):
+    """Register an elementwise numpy ufunc as a udf function"""
+
+    def wrapped(value):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = apply_unary(ufunc, value)
+        return undefined_on_non_finite(result) if guard_non_finite else result
+
+    wrapped.__name__ = name
+    wrapped.__doc__ = f"Elementwise ``{name}``, may be applied to uniform and csr attributes"
+    functions[name] = wrapped
+    return wrapped
+
+
+for _name, _ufunc in (
+    ("abs", np.absolute),
+    ("sqrt", np.sqrt),
+    ("exp", np.exp),
+    ("sin", np.sin),
+    ("cos", np.cos),
+    ("tan", np.tan),
+    ("floor", np.floor),
+    ("ceil", np.ceil),
+    ("round", np.round),
+    ("sign", np.sign),
+):
+    _register_unary(_name, _ufunc)
+
+# the logarithm of zero is -inf, which is turned into an undefined value
+for _name, _ufunc in (("log", np.log), ("log10", np.log10), ("log2", np.log2)):
+    _register_unary(_name, _ufunc, guard_non_finite=True)
+
+# `not` is an operator in the expression grammar, the parser lowers it onto this function
+_register_unary("not", np.logical_not)
+
+
+@func("clip")
+def clip_func(value, lower, upper):
+    """Limit ``value`` to the range [``lower``, ``upper``]"""
+    return apply_binary(np.minimum, apply_binary(np.maximum, value, lower), upper)
+
+
 @func("sum")
 def sum_func(arr):
     if isinstance(arr, TrackedCSRArray):
@@ -117,7 +229,9 @@ def _extreme_func_csr(
 def _extreme_func_uniform(
     array: np.ndarray, other: t.Union[np.ndarray, TrackedCSRArray, float, int], extreme_func
 ):
-    return extreme_func(array, other)
+    # `other` may be a csr array, in which case the uniform values are broadcast along its rows
+    # and the result is a csr array
+    return apply_binary(extreme_func, array, other)
 
 
 @func("default")
