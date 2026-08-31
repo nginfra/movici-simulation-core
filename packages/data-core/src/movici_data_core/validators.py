@@ -171,7 +171,7 @@ class ValidatingDatasetSerializer(ExternalSerializationStrategy):
     def validate_dataset_data(self, dataset_data: DatasetData):
         """Perform various validations on dataset_data. The dataset_data comes directly from the
         serializer so we can be sure of some of the shape (entity group dictionaries containing
-         ``NumpyDatasetData``), certain attribute data types are correct (eg. ``"id"``)
+        ``NumpyDatasetData``), certain attribute data types are correct (eg. ``"id"``)
         """
 
         error = MoviciValidationError()
