@@ -203,7 +203,7 @@ class map_errors:
     def __init__(
         self,
         mapping: t.Mapping[
-            type[Exception], Exception | type[Exception] | t.Callable[..., Exception]
+            t.Type[Exception], Exception | t.Type[Exception] | t.Callable[..., Exception]
         ],
     ):
         self.mapping = mapping
@@ -236,8 +236,8 @@ class map_errors:
         return _wrapped
 
     def _map_error(
-        self, exc: type[Exception] | Exception, args, kwargs
-    ) -> type[Exception] | Exception:
+        self, exc: t.Type[Exception] | Exception, args, kwargs
+    ) -> t.Type[Exception] | Exception:
         exc_type = type(exc) if isinstance(exc, Exception) else exc
         if exc_type in self.mapping:
             mapped = self.mapping[exc_type]

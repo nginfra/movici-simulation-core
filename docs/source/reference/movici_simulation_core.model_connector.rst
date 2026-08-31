@@ -1,13 +1,13 @@
 
 
 model\_connector
-=================
+================
 
 
 
 
 connector
-----------
+---------
 
 .. automodule:: movici_simulation_core.model_connector.connector
    :members:
@@ -17,7 +17,7 @@ connector
 
 
 init\_data
------------
+----------
 
 .. automodule:: movici_simulation_core.model_connector.init_data
    :members:

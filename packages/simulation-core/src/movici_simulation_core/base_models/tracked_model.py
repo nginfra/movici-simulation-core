@@ -187,6 +187,12 @@ class TrackedModel(Model):
         automatic behaviour and gain full control over which attributes are reset and when.
         However, when overriding the default behaviour, a model must be very careful in
         implementing this appropriately.
+
+    Solver helpers (see :class:`movici_simulation_core.models.combiner.Combiner`) may
+    additionally override :meth:`Model.remap` to handle a many-to-one sub remap delivered
+    by the orchestrator — see GitHub issue #127. The override typically registers the
+    incoming ``:i``-suffixed variant attributes on the model's ``TrackedState`` so they
+    can be aggregated in ``update()``.
     """
 
     auto_reset = (

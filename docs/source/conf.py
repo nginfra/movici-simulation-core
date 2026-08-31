@@ -13,6 +13,10 @@
 import os
 import sys
 
+from sphinx.util import logging
+
+logger = logging.getLogger(__name__)
+
 sys.path.insert(0, os.path.abspath("."))
 
 import movici_simulation_core  # noqa
@@ -60,9 +64,28 @@ html_static_path = ["_static"]
 
 typehints_document_rtype = False
 add_module_names = False
+autodoc_mock_imports = ["sqlalchemy", "fastapi", "orjson"]
+autodoc_inherit_docstrings = False
 autodoc_default_options = {
     "undoc-members": True,
 }
+
+
+def skip_outmodel_base(app, obj_type, name, obj, skip, options):
+    """``movici_data_core.schema.OutModel is somehow generated mulitpile times for every
+    specialized subclass that uses it. This is weird and leads to warnings/errors. This function
+    only lets sphinx autodoc generate it once"""
+
+    if (
+        getattr(obj, "__module__", "") == "movici_data_core.schema"
+        and "OutModel" in name
+        and name != "OutModel"
+    ):
+        return True
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", skip_outmodel_base)
 
 
 # Plant UML

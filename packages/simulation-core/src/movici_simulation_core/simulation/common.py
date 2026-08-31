@@ -81,7 +81,7 @@ class SimulationRunner:
         modules: dict[str, ActiveModuleInfo],
         settings: Settings,
         schema: AttributeSchema,
-        strategies: t.Sequence[type],
+        strategies: t.Sequence[t.Type],
     ):
         self.modules = modules
         self.settings = settings

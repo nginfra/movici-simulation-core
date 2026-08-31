@@ -14,6 +14,7 @@ from movici_simulation_core.messages import (
     ModelMessage,
     NewTimeMessage,
     QuitMessage,
+    RemapMessage,
     UpdateMessage,
     UpdateSeriesMessage,
 )
@@ -107,7 +108,7 @@ class InProcessSimulationRunner(SimulationRunner):
         modules: dict[str, ActiveModuleInfo],
         settings: Settings,
         schema: AttributeSchema,
-        strategies: t.Sequence[type],
+        strategies: t.Sequence[t.Type],
     ):
         super().__init__(modules, settings, schema, strategies)
         self._ensure_only_supported_services()
@@ -225,6 +226,9 @@ class InProcessSimulationRunner(SimulationRunner):
         try:
             if isinstance(command, NewTimeMessage):
                 model.new_time(command)
+                return AcknowledgeMessage()
+            if isinstance(command, RemapMessage):
+                model.remap(command)
                 return AcknowledgeMessage()
             if isinstance(command, UpdateMessage):
                 return model.update(command)
