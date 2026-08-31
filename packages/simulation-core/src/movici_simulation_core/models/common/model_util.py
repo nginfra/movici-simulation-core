@@ -2,6 +2,8 @@ import typing as t
 
 import numpy as np
 
+from movici_simulation_core.core.arrays import TrackedCSRArray
+
 from .entity_groups import LineEntity, PointEntity, PolygonEntity
 
 modality_link_entities = {
@@ -71,6 +73,13 @@ def find_y_in_x(x: np.ndarray, y: np.ndarray):
 
 
 def safe_divide(numerator, denominator, fill_value=None):
+    if isinstance(numerator, TrackedCSRArray) or isinstance(denominator, TrackedCSRArray):
+        # np.asarray would turn a csr array into an object array, silently producing garbage
+        with np.errstate(divide="ignore", invalid="ignore"):
+            rv = numerator / denominator
+        rv.data = _fill_non_finite(rv.data, fill_value)
+        return rv
+
     with np.errstate(divide="ignore", invalid="ignore"):
         rv = np.asarray(numerator) / np.asarray(denominator)
 
@@ -83,3 +92,10 @@ def safe_divide(numerator, denominator, fill_value=None):
         if not np.isfinite(rv):
             rv = fill_value
     return rv
+
+
+def _fill_non_finite(data: np.ndarray, fill_value):
+    if fill_value is None:
+        return np.nan_to_num(data)
+    data[~np.isfinite(data)] = fill_value
+    return data

@@ -60,6 +60,26 @@ class TrackedArray(np.ndarray):
             self._curr = np.array(self)
 
     @property
+    def is_untouched(self) -> bool:
+        """Whether this array has definitely not been written to since its last reset. Answering
+        this costs nothing, where `changed` compares every value against its previous one.
+        """
+        return self._curr is None
+
+    @property
+    def written(self) -> np.ndarray:
+        """A boolean array marking every value that differs from what it was at the last reset.
+
+        This is a superset of `changed`: it does not apply the comparison tolerance, so a value
+        overwritten with a marginally different one counts as written but not as changed.
+        Determining it is an order of magnitude cheaper than `changed`, which makes it the right
+        question to ask when the answer decides what to recalculate rather than what to publish.
+        """
+        if self._curr is None:
+            return np.zeros(self.shape, dtype=bool)
+        return np.not_equal(np.asarray(self), self._curr)
+
+    @property
     def changed(self):
         if self._changed is not None:
             return self._changed
@@ -99,6 +119,11 @@ class TrackedCSRArray:
     row_ptr: np.ndarray
     changed: np.ndarray
     size: int
+
+    # Without this, numpy treats a csr array as an opaque scalar object whenever it appears on the
+    # right hand side of an ndarray operation, and silently produces an object array of csr arrays
+    # instead of deferring to the reflected operators below
+    __array_ufunc__ = None
 
     def __init__(self, data, row_ptr, rtol=1e-05, atol=1e-08, equal_nan=False):
         self.data = np.asarray(data)
@@ -185,6 +210,22 @@ class TrackedCSRArray:
             self.data, self.row_ptr, vals, self.get_comparator(to_scalar=True, equal_nan=equal_nan)
         )
 
+    @property
+    def is_untouched(self) -> bool:
+        """Whether this array has not been written to since its last reset. Unlike a
+        `TrackedArray` a csr array tracks its changes as they are made, so this only has to look
+        at the flags that are already there.
+        """
+        return not self.changed.any()
+
+    @property
+    def written(self) -> np.ndarray:
+        """A boolean array marking every row that was written to since the last reset. A csr array
+        records its changes as they are made, so unlike a `TrackedArray` there is nothing cheaper
+        to compute than `changed` itself.
+        """
+        return self.changed
+
     def reset(self):
         self.changed = np.zeros((self.size,), dtype=bool)
 
@@ -204,17 +245,51 @@ class TrackedCSRArray:
         except TypeError:
             return NotImplemented
 
+    def __r_bin_op__(self, other, op):
+        """Perform ``op(other, self)``, ie. with this array as the right hand operand"""
+        return self.__bin_op__(other, lambda left, right: op(right, left))
+
     def __add__(self, other):
         return self.__bin_op__(other, np.add)
+
+    def __radd__(self, other):
+        return self.__r_bin_op__(other, np.add)
 
     def __sub__(self, other):
         return self.__bin_op__(other, np.subtract)
 
+    def __rsub__(self, other):
+        return self.__r_bin_op__(other, np.subtract)
+
     def __mul__(self, other):
         return self.__bin_op__(other, np.multiply)
 
+    def __rmul__(self, other):
+        return self.__r_bin_op__(other, np.multiply)
+
     def __truediv__(self, other):
         return self.__bin_op__(other, np.divide)
+
+    def __rtruediv__(self, other):
+        return self.__r_bin_op__(other, np.divide)
+
+    def __mod__(self, other):
+        return self.__bin_op__(other, np.mod)
+
+    def __rmod__(self, other):
+        return self.__r_bin_op__(other, np.mod)
+
+    def __pow__(self, other):
+        return self.__bin_op__(other, np.power)
+
+    def __rpow__(self, other):
+        return self.__r_bin_op__(other, np.power)
+
+    def __neg__(self):
+        return TrackedCSRArray(data=-self.data, row_ptr=self.row_ptr.copy())
+
+    def __pos__(self):
+        return TrackedCSRArray(data=+self.data, row_ptr=self.row_ptr.copy())
 
     def __eq__(self, other):
         return self.__bin_op__(other, np.equal)
