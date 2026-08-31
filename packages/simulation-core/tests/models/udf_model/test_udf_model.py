@@ -2,6 +2,7 @@ import itertools
 import json
 import typing as t
 
+import numpy as np
 import pytest
 
 from movici_simulation_core.core.attribute import REQUIRED, SUB, UniformAttribute
@@ -758,3 +759,162 @@ def test_group_reducer_over_a_csr_attribute(create_model_tester):
     tester.initialize()
     result, _ = tester.update(0, None)
     assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [4, 4, 4]}}}
+
+
+@pytest.fixture
+def create_model_and_tester(tmp_path_factory, init_data, global_schema):
+    """Like `create_model_tester`, but also hands back the model so its udfs can be inspected"""
+    testers: t.List[ModelTester] = []
+    counter = itertools.count()
+
+    def _create(config):
+        model = UDFModel(config)
+        tester = ModelTester(
+            model,
+            tmp_dir=tmp_path_factory.mktemp(f"incremental_{next(counter)}"),
+            schema=global_schema,
+        )
+        tester.add_init_data("some_dataset", init_data)
+        testers.append(tester)
+        return model, tester
+
+    yield _create
+
+    for tester in testers:
+        tester.close()
+        tester.cleanup()
+
+
+class TestIncrementalEvaluation:
+    """An expression is only evaluated for the entities whose inputs were written to"""
+
+    CONFIG = {
+        "entity_group": ["some_dataset", "some_entities"],
+        "inputs": {"a": "in_a", "b": "in_b"},
+        "functions": [{"expression": "a*b", "output": "out"}],
+    }
+
+    @pytest.fixture
+    def init_data(self):
+        """a larger entity group than the other tests use: changing a single one of only three
+        entities is a third of them, which is past the point where evaluating them all is cheaper
+        """
+        return {
+            "some_dataset": {
+                "some_entities": {
+                    "id": list(range(1, 11)),
+                    "in_a": [float(i) for i in range(1, 11)],
+                    "in_b": [1.0] * 10,
+                    "in_c": [2.0] * 10,
+                }
+            }
+        }
+
+    @pytest.fixture
+    def fresh(self, create_model_and_tester):
+        model, tester = create_model_and_tester(self.CONFIG)
+        tester.initialize()
+        return model.udfs[0], model.inputs
+
+    @pytest.fixture
+    def settled(self, create_model_and_tester):
+        """a model that has already evaluated its entity group once, with its inputs reset"""
+        model, tester = create_model_and_tester(self.CONFIG)
+        tester.initialize()
+        tester.update(0, None)
+        return model.udfs[0], model.inputs
+
+    def test_evaluates_the_whole_entity_group_the_first_time(self, fresh):
+        udf, inputs = fresh
+        assert udf.get_changed_indices(inputs) is None
+
+    def test_does_nothing_when_no_input_was_written_to(self, settled):
+        udf, inputs = settled
+        assert len(udf.get_changed_indices(inputs)) == 0
+
+    def test_evaluates_only_the_entities_that_were_written_to(self, settled):
+        udf, inputs = settled
+        inputs["a"][np.array([1, 4])] = [9.0, 9.0]
+        np.testing.assert_array_equal(udf.get_changed_indices(inputs), [1, 4])
+
+    def test_ignores_an_input_the_expression_does_not_use(self, create_model_and_tester):
+        model, tester = create_model_and_tester(
+            {**self.CONFIG, "inputs": {"a": "in_a", "b": "in_b", "c": "in_c"}}
+        )
+        tester.initialize()
+        tester.update(0, None)
+
+        model.inputs["c"][np.array([0, 1, 2])] = [7.0, 8.0, 9.0]
+
+        assert model.udfs[0].input_names == ("a", "b")
+        assert len(model.udfs[0].get_changed_indices(model.inputs)) == 0
+
+    def test_evaluates_the_whole_entity_group_when_too_much_changed(self, settled):
+        udf, inputs = settled
+        inputs["a"][np.arange(8)] = np.arange(8, dtype=float) + 100
+        assert udf.get_changed_indices(inputs) is None
+
+    def test_evaluates_the_whole_entity_group_when_it_grew(self, settled):
+        udf, inputs = settled
+        udf.output.resize(len(udf.output) + 1)
+        assert udf.get_changed_indices(inputs) is None
+
+    def test_an_expression_with_a_group_reduction_is_never_incremental(
+        self, create_model_and_tester
+    ):
+        model, tester = create_model_and_tester(
+            {
+                "entity_group": ["some_dataset", "some_entities"],
+                "inputs": {"a": "in_a"},
+                "functions": [
+                    {"expression": "a+1", "output": "out_local"},
+                    {"expression": "a/total(a)", "output": "out_share"},
+                ],
+            }
+        )
+        tester.initialize()
+        assert [udf.incremental for udf in model.udfs] == [True, False]
+
+    def test_a_group_reduction_still_does_nothing_when_nothing_was_written(
+        self, create_model_and_tester
+    ):
+        model, tester = create_model_and_tester(
+            {
+                "entity_group": ["some_dataset", "some_entities"],
+                "inputs": {"a": "in_a"},
+                "functions": [{"expression": "a/total(a)", "output": "out_share"}],
+            }
+        )
+        tester.initialize()
+        tester.update(0, None)
+        assert len(model.udfs[0].get_changed_indices(model.inputs)) == 0
+
+    @pytest.mark.parametrize("incremental", [True, False])
+    def test_gives_the_same_results_as_evaluating_everything(
+        self, incremental, create_model_and_tester
+    ):
+        """the published updates must be identical however much of the entity group was
+        evaluated
+        """
+        model, tester = create_model_and_tester(self.CONFIG)
+        tester.initialize()
+        for udf in model.udfs:
+            udf.incremental = incremental
+
+        first, _ = tester.update(0, None)
+        # a single entity gets new data
+        update = {"some_dataset": {"some_entities": {"id": [2], "in_a": [99.0]}}}
+        second, _ = tester.update(1, update)
+        # the same data again, so nothing actually changes
+        third, _ = tester.update(2, update)
+
+        assert first == {
+            "some_dataset": {
+                "some_entities": {
+                    "id": list(range(1, 11)),
+                    "out": [float(i) for i in range(1, 11)],
+                }
+            }
+        }
+        assert second == {"some_dataset": {"some_entities": {"id": [2], "out": [99.0]}}}
+        assert third is None

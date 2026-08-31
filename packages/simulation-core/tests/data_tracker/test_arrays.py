@@ -423,3 +423,57 @@ def test_update_csr_from_matrix(array, matrix, exp_change, exp_data, exp_rowptr)
     np.testing.assert_array_equal(array.changed, exp_change)
     np.testing.assert_array_equal(array.data, exp_data)
     np.testing.assert_array_equal(array.row_ptr, exp_rowptr)
+
+
+class TestCheapChangeDetection:
+    def test_a_fresh_array_is_untouched(self):
+        assert TrackedArray([1.0, 2.0]).is_untouched
+
+    def test_a_written_array_is_touched(self):
+        arr = TrackedArray([1.0, 2.0])
+        arr[0] = 3.0
+        assert not arr.is_untouched
+
+    def test_reading_does_not_count_as_touching(self):
+        arr = TrackedArray([1.0, 2.0])
+        assert arr.is_untouched
+        assert arr[0] == 1.0
+
+    def test_a_reset_array_is_untouched_again(self):
+        arr = TrackedArray([1.0, 2.0])
+        arr[0] = 3.0
+        arr.reset()
+        assert arr.is_untouched
+
+    def test_written_marks_the_written_values(self):
+        arr = TrackedArray([1.0, 2.0, 3.0])
+        arr[1] = 4.0
+        np.testing.assert_array_equal(arr.written, [False, True, False])
+
+    def test_written_of_an_untouched_array_is_all_false(self):
+        np.testing.assert_array_equal(TrackedArray([1.0, 2.0]).written, [False, False])
+
+    def test_written_is_a_superset_of_changed(self):
+        """`written` does not apply the comparison tolerance, so a value written with a
+        marginally different one counts as written but not as changed
+        """
+        arr = TrackedArray([1.0, 2.0], rtol=1e-2, atol=1e-2)
+        arr[0] = 1.001
+        np.testing.assert_array_equal(arr.changed, [False, False])
+        np.testing.assert_array_equal(arr.written, [True, False])
+
+    def test_written_reduces_a_multidimensional_array(self):
+        arr = TrackedArray([[1.0, 2.0], [3.0, 4.0]])
+        arr[0, 1] = 5.0
+        np.testing.assert_array_equal(arr.written, [[False, True], [False, False]])
+
+    def test_csr_array_is_untouched(self):
+        csr = ensure_csr_data([[1, 2], [3], []])
+        assert csr.is_untouched
+        csr.update(ensure_csr_data([[9]]), np.array([1]))
+        assert not csr.is_untouched
+
+    def test_csr_written_marks_the_written_rows(self):
+        csr = ensure_csr_data([[1, 2], [3], []])
+        csr.update(ensure_csr_data([[9]]), np.array([1]))
+        np.testing.assert_array_equal(csr.written, [False, True, False])

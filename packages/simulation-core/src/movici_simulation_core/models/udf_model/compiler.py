@@ -116,6 +116,13 @@ def get_vars(node: Node):
     return vis.vars
 
 
+def get_funcs(node: Node):
+    """The names of every function called in an expression"""
+    vis = FunctionNameCollector()
+    node.accept(vis)
+    return vis.funcs
+
+
 def infer_result_type(node: Node, variables: t.Dict[str, ResultType]) -> ResultType:
     """Determine the type and shape of the values an expression produces.
 
@@ -388,6 +395,19 @@ class VariableNameCollector(NodeVisitor):
     @visit.register
     def _(self, node: Var):
         self.vars.add(node.val)
+
+
+class FunctionNameCollector(NodeVisitor):
+    def __init__(self):
+        self.funcs = set()
+
+    @functools.singledispatchmethod
+    def visit(self, node: Node):
+        pass
+
+    @visit.register
+    def _(self, node: Func):
+        self.funcs.add(node.val)
 
 
 class TypeInferrer(NodeVisitor):

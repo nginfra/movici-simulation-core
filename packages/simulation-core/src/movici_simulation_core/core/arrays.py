@@ -60,6 +60,26 @@ class TrackedArray(np.ndarray):
             self._curr = np.array(self)
 
     @property
+    def is_untouched(self) -> bool:
+        """Whether this array has definitely not been written to since its last reset. Answering
+        this costs nothing, where `changed` compares every value against its previous one.
+        """
+        return self._curr is None
+
+    @property
+    def written(self) -> np.ndarray:
+        """A boolean array marking every value that differs from what it was at the last reset.
+
+        This is a superset of `changed`: it does not apply the comparison tolerance, so a value
+        overwritten with a marginally different one counts as written but not as changed.
+        Determining it is an order of magnitude cheaper than `changed`, which makes it the right
+        question to ask when the answer decides what to recalculate rather than what to publish.
+        """
+        if self._curr is None:
+            return np.zeros(self.shape, dtype=bool)
+        return np.not_equal(np.asarray(self), self._curr)
+
+    @property
     def changed(self):
         if self._changed is not None:
             return self._changed
@@ -189,6 +209,22 @@ class TrackedCSRArray:
         return rows_intersect(
             self.data, self.row_ptr, vals, self.get_comparator(to_scalar=True, equal_nan=equal_nan)
         )
+
+    @property
+    def is_untouched(self) -> bool:
+        """Whether this array has not been written to since its last reset. Unlike a
+        `TrackedArray` a csr array tracks its changes as they are made, so this only has to look
+        at the flags that are already there.
+        """
+        return not self.changed.any()
+
+    @property
+    def written(self) -> np.ndarray:
+        """A boolean array marking every row that was written to since the last reset. A csr array
+        records its changes as they are made, so unlike a `TrackedArray` there is nothing cheaper
+        to compute than `changed` itself.
+        """
+        return self.changed
 
     def reset(self):
         self.changed = np.zeros((self.size,), dtype=bool)
