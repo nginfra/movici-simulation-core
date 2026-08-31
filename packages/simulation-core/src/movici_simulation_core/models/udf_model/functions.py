@@ -7,16 +7,37 @@ from movici_simulation_core.core.data_format import is_undefined_csr, is_undefin
 from movici_simulation_core.core.data_type import NP_TYPES
 from movici_simulation_core.core.schema import infer_data_type_from_array
 from movici_simulation_core.csr import csr_binop, row_wise_max, row_wise_min, row_wise_sum
+from movici_simulation_core.models.udf_model.result_type import ResultType, combine
 
 functions = {}
 
+result_types: t.Dict[str, t.Callable[[t.List[ResultType]], ResultType]] = {}
+"""Type rules, keyed by function name. A rule maps the result types of a function's arguments onto
+the result type of the call. A function without a rule produces a result of unknown type, which
+makes the caller fall back on a default rather than fail.
+"""
 
-def func(name: str):
+
+def func(name: str, returns: t.Optional[t.Callable[[t.List[ResultType]], ResultType]] = None):
     def decorator(f):
         functions[name] = f
+        if returns is not None:
+            result_types[name] = returns
         return f
 
     return decorator
+
+
+def elementwise_result(py_type: t.Optional[t.Type] = None):
+    """Type rule for a function that operates elementwise on its arguments"""
+    return lambda args: combine(*args, py_type=py_type)
+
+
+def row_wise_result(args: t.List[ResultType]) -> ResultType:
+    """Type rule for a function that reduces the values of a single entity to one value"""
+    if len(args) == 1:
+        return args[0].reduced()
+    return combine(*args)
 
 
 def apply_unary(ufunc, value):
@@ -89,8 +110,10 @@ def logical_or(left, right):
     return apply_binary(np.logical_or, left, right)
 
 
-def _register_unary(name: str, ufunc, guard_non_finite: bool = False):
-    """Register an elementwise numpy ufunc as a udf function"""
+def _register_unary(name: str, ufunc, py_type=float, guard_non_finite: bool = False):
+    """Register an elementwise numpy ufunc as a udf function. `py_type` is the python type of the
+    result, or `None` when the ufunc preserves the type of its argument.
+    """
 
     def wrapped(value):
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -100,38 +123,41 @@ def _register_unary(name: str, ufunc, guard_non_finite: bool = False):
     wrapped.__name__ = name
     wrapped.__doc__ = f"Elementwise ``{name}``, may be applied to uniform and csr attributes"
     functions[name] = wrapped
+    result_types[name] = elementwise_result(py_type)
     return wrapped
 
 
-for _name, _ufunc in (
-    ("abs", np.absolute),
-    ("sqrt", np.sqrt),
-    ("exp", np.exp),
-    ("sin", np.sin),
-    ("cos", np.cos),
-    ("tan", np.tan),
-    ("floor", np.floor),
-    ("ceil", np.ceil),
-    ("round", np.round),
-    ("sign", np.sign),
+for _name, _ufunc, _py_type in (
+    # np.absolute and np.sign preserve the type of their argument, the others always produce
+    # floating point values
+    ("abs", np.absolute, None),
+    ("sign", np.sign, None),
+    ("sqrt", np.sqrt, float),
+    ("exp", np.exp, float),
+    ("sin", np.sin, float),
+    ("cos", np.cos, float),
+    ("tan", np.tan, float),
+    ("floor", np.floor, float),
+    ("ceil", np.ceil, float),
+    ("round", np.round, float),
 ):
-    _register_unary(_name, _ufunc)
+    _register_unary(_name, _ufunc, _py_type)
 
 # the logarithm of zero is -inf, which is turned into an undefined value
 for _name, _ufunc in (("log", np.log), ("log10", np.log10), ("log2", np.log2)):
-    _register_unary(_name, _ufunc, guard_non_finite=True)
+    _register_unary(_name, _ufunc, float, guard_non_finite=True)
 
 # `not` is an operator in the expression grammar, the parser lowers it onto this function
-_register_unary("not", np.logical_not)
+_register_unary("not", np.logical_not, bool)
 
 
-@func("clip")
+@func("clip", returns=elementwise_result())
 def clip_func(value, lower, upper):
     """Limit ``value`` to the range [``lower``, ``upper``]"""
     return apply_binary(np.minimum, apply_binary(np.maximum, value, lower), upper)
 
 
-@func("sum")
+@func("sum", returns=row_wise_result)
 def sum_func(arr):
     if isinstance(arr, TrackedCSRArray):
         return row_wise_sum(arr.data, arr.row_ptr)
@@ -140,7 +166,7 @@ def sum_func(arr):
     return np.sum(arr)
 
 
-@func("min")
+@func("min", returns=row_wise_result)
 def min_func(*arrays_or_values):
     """calculate row-wise minimum value of n arrays or values. Every array must have the same
     length in the first dimension. Values are broadcasted along the first axis
@@ -153,7 +179,7 @@ def min_func(*arrays_or_values):
     )
 
 
-@func("max")
+@func("max", returns=row_wise_result)
 def max_func(*arrays_or_values):
     """calculate row-wise maximum value of n arrays or values. Every array must have the same
     length in the first dimension. Values are broadcasted along the first axis
@@ -234,7 +260,7 @@ def _extreme_func_uniform(
     return apply_binary(extreme_func, array, other)
 
 
-@func("default")
+@func("default", returns=lambda args: combine(*args, py_type=args[0].py_type))
 def default_func(
     arr: t.Union[TrackedCSRArray, np.ndarray],
     default_val: t.Union[float, TrackedCSRArray, np.ndarray],
@@ -274,7 +300,9 @@ def default_func(
         return rv
 
 
-@func("if")
+# `if` takes its shape from the branches and its python type from the first branch, mirroring the
+# implementation below. It does not support csr values
+@func("if", returns=lambda args: combine(*args[1:], py_type=args[1].py_type))
 def if_func(*arrays_or_values):
     if len(arrays_or_values) != 3:
         raise TypeError("function 'if' requires 3 arguments: COND, IF_TRUE, IF_FALSE")

@@ -633,3 +633,72 @@ def test_csr_with_uniform_attribute_on_the_left(create_model_tester):
     assert result == {
         "some_dataset": {"some_entities": {"id": [1, 2, 3], "out_csr": [[10, 11], [40, 44], []]}}
     }
+
+
+class TestResultTypeInference:
+    """The data type of an output attribute that the attribute schema does not define follows from
+    the expression, rather than always being a float
+    """
+
+    @pytest.fixture
+    def make_model(self, global_schema):
+        def _make(expression, output, inputs=None):
+            model = UDFModel(
+                {
+                    "entity_group": ["some_dataset", "some_entities"],
+                    "inputs": inputs or {"a": "in_a", "b": "in_b", "csr": "in_csr"},
+                    "functions": [{"expression": expression, "output": output}],
+                }
+            )
+            state = TrackedState()
+            model.setup(state=state, schema=global_schema)
+            return model
+
+        return _make
+
+    @pytest.mark.parametrize(
+        "expression, expected",
+        [
+            ("a+b", DataType(float)),
+            ("a<b", DataType(bool)),
+            ("a<b and b<a", DataType(bool)),
+            ("csr+a", DataType(float, csr=True)),
+            ("sum(csr)", DataType(float)),
+        ],
+    )
+    def test_infers_the_output_data_type(self, expression, expected, make_model):
+        model = make_model(expression, "some_new_attribute")
+        assert model.udfs[0].output.data_type == expected
+
+    def test_attribute_schema_takes_precedence_over_inference(self, make_model):
+        """`out_csr` is a csr attribute in the schema, so it stays one"""
+        model = make_model("csr+a", "out_csr")
+        assert model.udfs[0].output.data_type == DataType(float, csr=True)
+
+    def test_rejects_a_csr_expression_written_to_a_uniform_attribute(self, make_model):
+        with pytest.raises(ValueError, match="variable number of values per entity"):
+            make_model("csr+a", "in_a")
+
+    def test_rejects_a_uniform_expression_written_to_a_csr_attribute(self, make_model):
+        with pytest.raises(ValueError, match="single value per entity"):
+            make_model("a+b", "out_csr")
+
+    def test_rejects_an_unknown_name(self, make_model):
+        with pytest.raises(NameError, match="'typo' is not one of the inputs"):
+            make_model("a+typo", "out")
+
+
+def test_boolean_expression_publishes_booleans(create_model_tester):
+    """without inference the output attribute would default to a float and publish 1.0/0.0"""
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a", "c": "in_c"},
+            "functions": [{"expression": "a<c", "output": "some_new_flag"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {"some_entities": {"id": [1, 2, 3], "some_new_flag": [True, True, False]}}
+    }

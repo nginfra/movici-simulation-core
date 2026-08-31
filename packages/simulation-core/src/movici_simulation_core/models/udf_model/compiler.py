@@ -39,6 +39,12 @@ import re
 import typing as t
 
 from movici_simulation_core.models.udf_model import functions
+from movici_simulation_core.models.udf_model.result_type import (
+    ResultType,
+    Shape,
+    combine,
+    combine_shape,
+)
 
 # The tokenizer tries these patterns in order and takes the first match, so longer operators must
 # be listed before the shorter ones they start with, and keywords before `name`
@@ -102,6 +108,16 @@ def get_vars(node: Node):
     vis = VariableNameCollector()
     node.accept(vis)
     return vis.vars
+
+
+def infer_result_type(node: Node, variables: t.Dict[str, ResultType]) -> ResultType:
+    """Determine the type and shape of the values an expression produces.
+
+    :param node: the root of the expression
+    :param variables: the result type of every name that may appear in the expression
+    :raises NameError: when the expression references a name that is not in `variables`
+    """
+    return node.accept_node(TypeInferrer(variables))
 
 
 def compile_func(node: Node):
@@ -340,6 +356,16 @@ BINARY_OPERATORS = {
 }
 
 
+BOOLEAN_OPERATORS = frozenset(COMPARISONS) | {"and", "or"}
+
+# operators whose result type does not follow from promoting their operands
+OPERATOR_RESULT_TYPES = {
+    **{op: bool for op in BOOLEAN_OPERATORS},
+    # numpy true division always produces floating point values
+    "/": float,
+}
+
+
 class NodeVisitor:
     def visit(self, node: Node):
         pass
@@ -356,6 +382,57 @@ class VariableNameCollector(NodeVisitor):
     @visit.register
     def _(self, node: Var):
         self.vars.add(node.val)
+
+
+class TypeInferrer(NodeVisitor):
+    """Walks an expression and determines the type and shape of its result. An unknown python type
+    propagates instead of raising, so that a function without a type rule only makes the result
+    less precise. A name that is not bound to an attribute is an error: it can never be evaluated.
+    """
+
+    def __init__(self, variables: t.Dict[str, ResultType]):
+        self.variables = variables
+
+    @functools.singledispatchmethod
+    def visit(self, node: Node) -> ResultType:
+        raise TypeError(f"Unsupported node of type {type(node)}")
+
+    @visit.register
+    def _(self, node: Num) -> ResultType:
+        # numeric literals are compiled as floats
+        return ResultType(float, Shape.SCALAR)
+
+    @visit.register
+    def _(self, node: Bool) -> ResultType:
+        return ResultType(bool, Shape.SCALAR)
+
+    @visit.register
+    def _(self, node: Var) -> ResultType:
+        try:
+            return self.variables[node.val]
+        except KeyError:
+            raise NameError(
+                f"'{node.val}' is not one of the inputs of this expression, "
+                f"expected one of {sorted(self.variables)}"
+            ) from None
+
+    @visit.register
+    def _(self, node: BinOp) -> ResultType:
+        if node.left is None or node.right is None:
+            raise ValueError("Invalid tree")
+        left = node.left.accept_node(self)
+        right = node.right.accept_node(self)
+        return combine(left, right, py_type=OPERATOR_RESULT_TYPES.get(node.val))
+
+    @visit.register
+    def _(self, node: Func) -> ResultType:
+        if node.val not in functions.functions:
+            raise NameError(f"{node.val} is not a valid function name")
+        args = [arg.accept_node(self) for arg in node.args]
+        rule = functions.result_types.get(node.val)
+        if rule is None or not args:
+            return ResultType(None, combine_shape(*(arg.shape for arg in args)))
+        return rule(args)
 
 
 class UDFCompiler(NodeVisitor):
