@@ -7,7 +7,7 @@ name = "movici-simulation-core"
 dynamic = ["version"]
 description = "Core package for running Movici geospatial temporal simulations"
 readme = "README.rst"
-requires-python = ">=3.10,<3.14"
+requires-python = ">=3.10,<3.15"
 license = { text = "Movici Public License" }
 authors = [{ name = "NGinfra Movici", email = "movici@nginfra.nl" }]
 maintainers = [{ name = "NGinfra - Movici", email = "movici@nginfra.nl" }]
@@ -24,6 +24,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Scientific/Engineering",
   "Topic :: Scientific/Engineering :: GIS",
 ]
@@ -43,17 +44,23 @@ dependencies = [
   "jsonschema",
   "pyproj",
   "netCDF4",
-  "Fiona>=1.9",
   "pyparsing",
 ]
 
 [project.optional-dependencies]
-models = ["shapely>=1.7.1", "pyproj>=3.0.1", "movici-geo-query>=1.1.1", "scipy"]
+models = [
+  "shapely>=1.7.1",
+  "pyproj>=3.0.1",
+  'movici-geo-query>=1.1.1; python_version < "3.14"',
+  'movici-geo-query>=1.5.0; python_version >= "3.14"',
+  "scipy",
+]
 sqlite = ["sqlalchemy>=1.4,<3.0"]
 all = [
   "shapely>=1.7.1",
   "pyproj>=3.0.1",
-  "movici-geo-query>=1.1.1",
+  'movici-geo-query>=1.1.1; python_version < "3.14"',
+  'movici-geo-query>=1.5.0; python_version >= "3.14"',
   "scipy",
   "sqlalchemy>=1.4,<3.0",
 ]
