@@ -111,6 +111,20 @@ def test_result_type_round_trips_a_data_type(data_type):
         ("default(n, 0)", UNIFORM_INT),
         ("if(flag, n, a)", UNIFORM_INT),
         ("clip(n, 0, 1)", UNIFORM_FLOAT),
+        # group reductions produce a single value for the whole entity group
+        ("total(a)", ResultType(float, Shape.SCALAR)),
+        ("total(n)", ResultType(int, Shape.SCALAR)),
+        # summing booleans counts them
+        ("total(flag)", ResultType(int, Shape.SCALAR)),
+        ("total(csr)", ResultType(float, Shape.SCALAR)),
+        ("mean(n)", ResultType(float, Shape.SCALAR)),
+        ("count(a)", ResultType(int, Shape.SCALAR)),
+        ("any(flag)", ResultType(bool, Shape.SCALAR)),
+        ("all(flag)", ResultType(bool, Shape.SCALAR)),
+        # a scalar is broadcast back over the entities
+        ("a/total(a)", UNIFORM_FLOAT),
+        ("a>mean(a)", UNIFORM_BOOL),
+        ("csr/total(csr)", CSR_FLOAT),
     ],
 )
 def test_infer_result_type(expression, expected, variables):

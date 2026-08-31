@@ -4,10 +4,15 @@ import numpy as np
 
 from movici_simulation_core.core.arrays import TrackedCSRArray
 from movici_simulation_core.core.data_format import is_undefined_csr, is_undefined_uniform
-from movici_simulation_core.core.data_type import NP_TYPES
+from movici_simulation_core.core.data_type import NP_TYPES, UNDEFINED
 from movici_simulation_core.core.schema import infer_data_type_from_array
 from movici_simulation_core.csr import csr_binop, row_wise_max, row_wise_min, row_wise_sum
-from movici_simulation_core.models.udf_model.result_type import ResultType, combine
+from movici_simulation_core.models.udf_model.result_type import (
+    ResultType,
+    Shape,
+    combine,
+    promote,
+)
 
 functions = {}
 
@@ -38,6 +43,15 @@ def row_wise_result(args: t.List[ResultType]) -> ResultType:
     if len(args) == 1:
         return args[0].reduced()
     return combine(*args)
+
+
+def group_result(py_type: t.Optional[t.Type] = None):
+    """Type rule for a function that reduces an entire entity group to a single value. Without a
+    `py_type` the result is at least an integer, since summing booleans produces a count.
+    """
+    return lambda args: ResultType(
+        py_type if py_type is not None else promote(args[0].py_type, int), Shape.SCALAR
+    )
 
 
 def apply_unary(ufunc, value):
@@ -155,6 +169,67 @@ _register_unary("not", np.logical_not, bool)
 def clip_func(value, lower, upper):
     """Limit ``value`` to the range [``lower``, ``upper``]"""
     return apply_binary(np.minimum, apply_binary(np.maximum, value, lower), upper)
+
+
+def defined_values(value) -> np.ndarray:
+    """All defined values of an attribute as a flat array. Undefined values are left out, so that
+    a single undefined entity does not make an entire group reduction undefined.
+    """
+    if isinstance(value, TrackedCSRArray):
+        data = value.data
+    elif isinstance(value, np.ndarray):
+        data = value
+    else:
+        data = np.asarray([value])
+    if data.size == 0:
+        return data.reshape(-1)
+    data_type = infer_data_type_from_array(data)
+    return np.asarray(data)[~data_type.is_undefined(data)]
+
+
+@func("total", returns=group_result())
+def total_func(value):
+    """The sum of every defined value in the entity group, as a single number.
+
+    Where ``sum`` reduces the values of each entity separately, ``total`` reduces the entire entity
+    group, so ``a / total(a)`` expresses each entity's share of the whole.
+    """
+    return np.sum(defined_values(value))
+
+
+@func("mean", returns=group_result(float))
+def mean_func(value):
+    """The average of every defined value in the entity group, as a single number. Undefined when
+    the entity group holds no defined values at all.
+    """
+    values = defined_values(value)
+    if values.size == 0:
+        return NP_TYPES[float].type(UNDEFINED[float])
+    return np.mean(values)
+
+
+@func("count", returns=group_result(int))
+def count_func(value):
+    """The number of defined values in the entity group, as a single number"""
+    return defined_values(value).size
+
+
+@func("any", returns=group_result(bool))
+def any_func(value):
+    """Whether any defined value in the entity group is true, as a single boolean"""
+    return bool(np.any(defined_values(value)))
+
+
+@func("all", returns=group_result(bool))
+def all_func(value):
+    """Whether every defined value in the entity group is true, as a single boolean"""
+    return bool(np.all(defined_values(value)))
+
+
+GROUP_REDUCERS = frozenset({"total", "mean", "count", "any", "all"})
+"""Functions whose result depends on every entity in the entity group, rather than only on the
+entity a value belongs to
+"""
 
 
 @func("sum", returns=row_wise_result)

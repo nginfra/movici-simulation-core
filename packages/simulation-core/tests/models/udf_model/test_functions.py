@@ -7,6 +7,7 @@ from movici_simulation_core.core.data_type import UNDEFINED, DataType
 from movici_simulation_core.models.udf_model.functions import (
     clip_func,
     default_func,
+    defined_values,
     divide,
     functions,
     if_func,
@@ -226,3 +227,49 @@ def test_extreme_func_accepts_csr_in_any_position(func):
     assert isinstance(uniform_first, TrackedCSRArray)
     np.testing.assert_array_equal(uniform_first.data, csr_first.data)
     np.testing.assert_array_equal(uniform_first.row_ptr, csr_first.row_ptr)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (np.array([1.0, 2.0, 3.0]), [1.0, 2.0, 3.0]),
+        # undefined values are left out, so that one undefined entity does not poison the group
+        (np.array([1.0, UNDEFINED[float], 3.0]), [1.0, 3.0]),
+        (np.array([1, UNDEFINED[int], 3], dtype="<i4"), [1, 3]),
+        (ensure_csr_data([[1.0, 2.0], [3.0], []]), [1.0, 2.0, 3.0]),
+        # a multidimensional attribute is flattened
+        (np.array([[1.0, 2.0], [3.0, 4.0]]), [1.0, 2.0, 3.0, 4.0]),
+        (np.array([], dtype=float), []),
+        (2.0, [2.0]),
+    ],
+)
+def test_defined_values(value, expected):
+    np.testing.assert_array_equal(defined_values(value), expected)
+
+
+@pytest.mark.parametrize(
+    "name, value, expected",
+    [
+        ("total", np.array([1.0, 2.0, 3.0]), 6.0),
+        ("total", np.array([1.0, UNDEFINED[float], 3.0]), 4.0),
+        ("total", ensure_csr_data([[1.0, 2.0], [3.0], []]), 6.0),
+        ("total", np.array([], dtype=float), 0.0),
+        ("mean", np.array([1.0, 2.0, 3.0]), 2.0),
+        ("mean", np.array([1.0, UNDEFINED[float], 3.0]), 2.0),
+        ("count", np.array([1.0, 2.0, 3.0]), 3),
+        ("count", np.array([1.0, UNDEFINED[float], 3.0]), 2),
+        ("count", np.array([], dtype=float), 0),
+        ("any", np.array([False, True]), True),
+        ("any", np.array([False, False]), False),
+        ("any", np.array([], dtype=bool), False),
+        ("all", np.array([True, True]), True),
+        ("all", np.array([True, False]), False),
+        ("all", np.array([], dtype=bool), True),
+    ],
+)
+def test_group_reducers(name, value, expected):
+    assert functions[name](value) == expected
+
+
+def test_mean_of_an_entity_group_without_defined_values_is_undefined():
+    assert np.isnan(functions["mean"](np.array([UNDEFINED[float]])))

@@ -24,6 +24,12 @@ in any combination. A scalar or uniform operand is broadcast along the rows of a
 ``csr * 2`` and ``2 * csr`` both scale every value, while ``csr * uniform`` multiplies each row by
 the value belonging to that entity.
 
+**Reductions.** ``sum``, ``min`` and ``max`` reduce the values of each entity separately, turning
+a csr attribute into a uniform one. ``total``, ``mean``, ``count``, ``any`` and ``all`` instead
+reduce the whole entity group to a single number, which is then broadcast back over the entities,
+so ``flow / total(flow)`` gives each entity its share of the whole. A group reduction skips
+undefined values rather than being poisoned by them.
+
 Undefined values propagate: an expression over an undefined input results in an undefined value.
 Arithmetic that cannot produce a finite number (division by zero, the logarithm of zero) also
 results in an undefined value, since a Movici dataset has no representation for infinity. Use the

@@ -702,3 +702,59 @@ def test_boolean_expression_publishes_booleans(create_model_tester):
     assert result == {
         "some_dataset": {"some_entities": {"id": [1, 2, 3], "some_new_flag": [True, True, False]}}
     }
+
+
+def test_group_reducer_gives_each_entity_its_share(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a"},
+            "functions": [{"expression": "a/total(a)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {
+        "some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [1 / 6, 2 / 6, 3 / 6]}}
+    }
+
+
+def test_group_reducer_broadcasts_a_scalar_over_the_entities(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a"},
+            "functions": [{"expression": "mean(a)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [2.0, 2.0, 2.0]}}}
+
+
+def test_group_reducer_skips_undefined_values(create_model_tester):
+    """`undef` has no data at all, `total` of it is 0 rather than undefined"""
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"a": "in_a", "undef": "undef"},
+            "optional": ["undef"],
+            "functions": [{"expression": "a+total(undef)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [1, 2, 3]}}}
+
+
+def test_group_reducer_over_a_csr_attribute(create_model_tester):
+    tester = create_model_tester(
+        {
+            "entity_group": ["some_dataset", "some_entities"],
+            "inputs": {"csr": "in_csr"},
+            "functions": [{"expression": "count(csr)", "output": "out"}],
+        }
+    )
+    tester.initialize()
+    result, _ = tester.update(0, None)
+    assert result == {"some_dataset": {"some_entities": {"id": [1, 2, 3], "out": [4, 4, 4]}}}
