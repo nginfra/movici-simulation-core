@@ -2,7 +2,14 @@ import pytest
 
 from movici_data_core.domain_model import DatasetType, ModelType, ScenarioDataset, ScenarioModel
 from movici_data_core.exceptions import MoviciValidationError
-from movici_data_core.validators import ModelConfigValidator
+from movici_data_core.serialization import dump_dict
+from movici_data_core.validators import ModelConfigValidator, ValidatingDatasetSerializer
+from movici_simulation_core import AttributeSchema, AttributeSpec, DataType, EntityInitDataFormat
+from movici_simulation_core.testing import (
+    assert_dataset_dicts_equal,
+    dataset_data_to_numpy,
+)
+from movici_simulation_core.types import FileType
 from movici_simulation_core.validate import MoviciDataRefInfo
 
 
@@ -71,3 +78,124 @@ def test_raises_on_invalid_config(config, path, validator):
         validator.process_model_configs([config])
     error_path = list(e.value.iter_messages())[0][0]
     assert error_path == path
+
+
+class TestValidatingDatasetSerializer:
+    @pytest.fixture
+    def dataset_data(self):
+        return {
+            "some_entities": {
+                "id": [1, 2, 3],
+                "attr": [10.0, 20.0, 30.0],
+            },
+            "more_entities": {
+                "id": [5, 6, 7],
+                "csr_attr": [[[1, 3]], [], [[4, 5], [6, 7]]],
+            },
+        }
+
+    @pytest.fixture
+    def serializer(self):
+        return ValidatingDatasetSerializer(
+            EntityInitDataFormat(
+                AttributeSchema(
+                    [
+                        AttributeSpec("id", DataType(int)),
+                        AttributeSpec("attr", DataType(float)),
+                        AttributeSpec("csr_attr", DataType(int, (2,), csr=True)),
+                    ]
+                )
+            )
+        )
+
+    @staticmethod
+    def _serialize_and_validate(dataset_data, serializer):
+        serialized = dump_dict({"data": dataset_data}, FileType.JSON)
+        result = serializer.loads(serialized, FileType.JSON)
+        return result["data"]
+
+    def test_succeeds_valid_dataset_data(self, dataset_data, serializer):
+        result = self._serialize_and_validate(dataset_data, serializer)
+        assert_dataset_dicts_equal(
+            result,
+            dataset_data_to_numpy(
+                {
+                    "some_entities": {
+                        "id": [1, 2, 3],
+                        "attr": [10.0, 20.0, 30.0],
+                    },
+                    "more_entities": {
+                        "id": [5, 6, 7],
+                        "csr_attr": {
+                            "data": [[1, 3], [4, 5], [6, 7]],
+                            "indptr": [0, 1, 1, 3],
+                        },
+                    },
+                }
+            ),
+        )
+
+    @pytest.mark.parametrize(
+        "dataset_data, error_messages",
+        [
+            (
+                {"some_entities": [1, 2, 3]},
+                [("", "Entity group data must be dict")],
+            ),
+            (
+                {"some_entities": {"attr": [1, 2, 3]}},
+                [("data.some_entities", "Entity group has no 'id' attribute")],
+            ),
+            (
+                {"some_entities": {"id": [-1, -2, 3]}},
+                [("data.some_entities.id", "Negative ids found")],
+            ),
+            (
+                {"some_entities": {"id": [1, 2, 3], "attr": [1, 2, 3, 4]}},
+                [("data.some_entities.attr", "Invalid attribute length, expected 3, got 4")],
+            ),
+            (
+                {
+                    "some_entities": {
+                        "id": [1, 2, 3],
+                        "csr_attr": [[[1, 3]], [[4, 5], [6, 7]]],
+                    }
+                },
+                [("data.some_entities.csr_attr", "Invalid attribute length, expected 3, got 2")],
+            ),
+            (
+                {"some_entities": {"id": [1, 2, 3], "attr": [1, 2, 3, 4]}},
+                [("data.some_entities.attr", "Invalid attribute length, expected 3, got 4")],
+            ),
+            (
+                {"some_entities": {"id": [1, 2, 3]}, "more_entities": {"id": [2, 3]}},
+                [("data.more_entities.id", "Duplicate entries detected: 2, 3")],
+            ),
+            (
+                {
+                    "some_entities": {"id": [-1, -2, 3], "attr": [1, 2, 3, 4]},
+                    "more_entities": {"id": [4, 4, 5]},
+                },
+                [
+                    ("data.some_entities.id", "Negative ids found"),
+                    ("data.some_entities.attr", "Invalid attribute length, expected 3, got 4"),
+                    ("data.more_entities.id", "Duplicate entries detected: 4"),
+                ],
+            ),
+        ],
+    )
+    def test_raises_validation_errors(self, dataset_data, error_messages, serializer):
+        with pytest.raises(MoviciValidationError) as e:
+            self._serialize_and_validate(dataset_data, serializer)
+        assert list(e.value.iter_messages()) == error_messages
+
+    def test_raises_validation_error_on_dataset_data_by_name(self, serializer):
+
+        serialized = dump_dict(
+            {"name": "my_dataset", "my_dataset": {"some_entities": {"id": [-1]}}}, FileType.JSON
+        )
+        with pytest.raises(MoviciValidationError) as e:
+            serializer.loads(serialized, FileType.JSON)
+        assert list(e.value.iter_messages()) == [
+            ("my_dataset.some_entities.id", "Negative ids found")
+        ]
