@@ -36,10 +36,12 @@ Goals
 Limitations
 -----------
 
-* Short-circuit results are produced per phase (shape ``(n, 3)``) but only **phase A** is
-  written back to Movici attributes (see :ref:`pgm-power-flow-vs-short-circuit`)
-* Only **symmetric** power-flow / state-estimation outputs are published; asymmetric
-  (per-phase) outputs are not surfaced as separate attributes
+* Per-phase results are reduced to a single value on the scalar attributes — the
+  **worst** phase (lowest voltage, highest current). Set ``per_phase_output`` to publish
+  all three phases alongside them (see :ref:`pgm-power-flow-vs-short-circuit`)
+* Asymmetric calculations and unbalanced faults require zero-sequence line/cable
+  parameters, which are optional attributes the dataset must supply
+  (see :ref:`pgm-zero-sequence`)
 * Time patterns are not part of the model. Values that change over time (e.g. a load
   profile) should be produced by another model, such as a tape player, and fed in through
   the ``SUB`` attributes
@@ -158,7 +160,17 @@ transformers and appliances meet. Nodes derive from ``PointEntity``. Their geome
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.voltage_angle``                   | PUB         | Voltage angle (rad)                                    |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.voltage``                         | PUB         | Absolute voltage magnitude (V)                         |
+| ``electrical.voltage``                         | PUB         | Absolute voltage magnitude (V). Line-to-line, on the   |
+|                                                |             | same base as ``rated_voltage``, for every calculation  |
+|                                                |             | type                                                   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_pu_per_phase``            | PUB         | Per-phase voltage magnitude in per-unit, shape (3,).   |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
+|                                                |             | and the result is per-phase                            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_angle_per_phase``         | PUB         | Per-phase voltage angle (rad), shape (3,)              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_per_phase``               | PUB         | Per-phase absolute voltage magnitude (V), shape (3,)   |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.active_power``                    | PUB         | Net active power injected at the node (W). Not         |
 |                                                |             | available in short-circuit results                     |
@@ -185,7 +197,17 @@ may not carry geometry. During network construction they are merged with the reg
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.voltage_angle``                   | PUB         | Voltage angle (rad)                                    |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.voltage``                         | PUB         | Absolute voltage magnitude (V)                         |
+| ``electrical.voltage``                         | PUB         | Absolute voltage magnitude (V). Line-to-line, on the   |
+|                                                |             | same base as ``rated_voltage``, for every calculation  |
+|                                                |             | type                                                   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_pu_per_phase``            | PUB         | Per-phase voltage magnitude in per-unit, shape (3,).   |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
+|                                                |             | and the result is per-phase                            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_angle_per_phase``         | PUB         | Per-phase voltage angle (rad), shape (3,)              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.voltage_per_phase``               | PUB         | Per-phase absolute voltage magnitude (V), shape (3,)   |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.active_power``                    | PUB         | Net active power injected (W)                          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -215,6 +237,17 @@ series impedance and shunt capacitance. Lines derive from ``LinkEntity``.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tan_delta``                       | INIT        | Loss tangent of the shunt capacitance (``tan1``)       |
 +------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_resistance``        | OPT         | Zero-sequence series resistance (:math:`\Omega`,       |
+|                                                |             | ``r0``). Required for asymmetric calculations and      |
+|                                                |             | unbalanced faults                                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_reactance``         | OPT         | Zero-sequence series reactance (:math:`\Omega`,        |
+|                                                |             | ``x0``)                                                |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_capacitance``       | OPT         | Zero-sequence shunt capacitance (F, ``c0``)            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_tan_delta``         | OPT         | Zero-sequence loss tangent (``tan0``)                  |
++------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.rated_current``                   | OPT         | Rated current (A, ``i_n``). Used to compute            |
 |                                                |             | ``loading``. When omitted, no current limit is applied |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -227,6 +260,12 @@ series impedance and shunt capacitance. Lines derive from ``LinkEntity``.
 | ``electrical.current_from``                    | PUB         | Current at the from end (A)                            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_to``                      | PUB         | Current at the to end (A)                              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_from_per_phase``          | PUB         | Per-phase current at the from end (A), shape (3,).     |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
+|                                                |             | and the result is per-phase                            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_to_per_phase``            | PUB         | Per-phase current at the to end (A), shape (3,)        |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.power_from``                      | PUB         | Active power at the from end (W). Not in short-circuit |
 |                                                |             | results                                                |
@@ -281,6 +320,12 @@ lines. Links derive from ``LinkEntity``.
 | ``electrical.current_from``                    | PUB         | Current at the from end (A)                            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_to``                      | PUB         | Current at the to end (A)                              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_from_per_phase``          | PUB         | Per-phase current at the from end (A), shape (3,).     |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
+|                                                |             | and the result is per-phase                            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_to_per_phase``            | PUB         | Per-phase current at the to end (A), shape (3,)        |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.power_from``                      | PUB         | Active power at the from end (W)                       |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -351,6 +396,12 @@ from the transformer's short-circuit test.
 | ``electrical.current_from``                    | PUB         | Current at the from side (A)                           |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_to``                      | PUB         | Current at the to side (A)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_from_per_phase``          | PUB         | Per-phase current at the from end (A), shape (3,).     |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
+|                                                |             | and the result is per-phase                            |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_to_per_phase``            | PUB         | Per-phase current at the to end (A), shape (3,)        |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.power_from``                      | PUB         | Active power at the from side (W). Not in short-       |
 |                                                |             | circuit results                                        |
@@ -455,6 +506,14 @@ from ``LinkEntity`` — it references its three nodes explicitly via
 | ``electrical.current_2``                       | PUB         | Current at winding 2 (A, ``i_2``)                      |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_3``                       | PUB         | Current at winding 3 (A, ``i_3``)                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_1_per_phase``             | PUB         | Per-phase current at winding 1 (A), shape (3,). Only   |
+|                                                |             | published when ``per_phase_output`` is enabled and the |
+|                                                |             | result is per-phase                                    |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_2_per_phase``             | PUB         | Per-phase current at winding 2 (A), shape (3,)         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_3_per_phase``             | PUB         | Per-phase current at winding 3 (A), shape (3,)         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.power_1``                         | PUB         | Active power at winding 1 (W). Not in short-circuit    |
 |                                                |             | results                                                |
@@ -657,7 +716,8 @@ determine whether the fault is balanced (three-phase) or unbalanced.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the fault is active (1) or not (0). Default: 1 |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.fault_phase``                     | OPT         | Affected phase(s) (enum). Default: 0 (abc)             |
+| ``electrical.fault_phase``                     | OPT         | Affected phase(s) (enum). Default: -1, which lets the  |
+|                                                |             | solver pick the phases matching ``fault_type``         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.fault_resistance``                | OPT         | Fault resistance (:math:`\Omega`, ``r_f``). Default: 0 |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -666,6 +726,9 @@ determine whether the fault is balanced (three-phase) or unbalanced.
 | ``electrical.fault_current``                   | PUB         | Resulting fault current magnitude (A, ``i_f``)         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.fault_current_angle``             | PUB         | Resulting fault current angle (rad)                    |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.fault_current_per_phase``         | PUB         | Per-phase fault current magnitude (A), shape (3,).     |
+|                                                |             | Only published when ``per_phase_output`` is enabled    |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
 Tap Regulators
@@ -757,7 +820,7 @@ protection-relay settings, circuit-breaker sizing and equipment ratings.
      - Non-linear power balance (Newton-Raphson) or a linear approximation
      - Linear solution of the sequence networks (symmetrical components)
    * - Symmetry
-     - Symmetric by default; asymmetric optional
+     - Symmetric by default; asymmetric optional (needs zero-sequence data)
      - Always solved per phase; shape ``(n, 3)``
    * - Key outputs
      - Voltages, branch P/Q, currents, ``loading``
@@ -766,13 +829,51 @@ protection-relay settings, circuit-breaker sizing and equipment ratings.
      - Source
      - Fault(s) and a source
 
-.. warning:: Short-Circuit Results Keep Phase A Only
+.. note:: How Per-Phase Results Are Reduced
 
    The power-grid-model always computes short-circuit results per phase (shape
-   ``(n, 3)``), even for a balanced three-phase fault. The Movici model writes back only
-   **phase A** (the first phase) to the per-entity attributes. For a balanced three-phase
-   fault this is exact; for unbalanced faults the published current/voltage is the phase-A
-   value only.
+   ``(n, 3)``), even for a balanced three-phase fault, and asymmetric power flow does the
+   same. The scalar attributes carry the **worst** phase: the lowest voltage and the
+   highest current, which is what determines equipment stress and relay pick-up.
+
+   Phase A is deliberately *not* used. For a two-phase fault phase A is the healthy
+   phase, and reporting it would show nominal voltage and zero fault current on a
+   genuinely faulted node.
+
+   ``electrical.voltage``, ``electrical.voltage_pu`` and ``electrical.voltage_angle`` are
+   always taken from the *same* phase, so together they describe one real phasor. The
+   invariant ``voltage == voltage_pu * rated_voltage`` holds for every calculation type.
+
+   Reduction discards information — notably the raised voltage on the healthy phase of a
+   two-phase-to-ground fault. Set ``per_phase_output`` in the model config to publish the
+   full ``(3,)`` triple alongside the scalars.
+
+.. _pgm-zero-sequence:
+
+Zero-Sequence Parameters
+------------------------
+
+Positive-sequence parameters alone describe a balanced network. Two cases need the
+**zero-sequence** network as well, and both require ``electrical.zero_sequence_*`` on
+every line and cable:
+
+* asymmetric calculations (``symmetric: false``)
+* unbalanced faults — ``single_phase_to_ground``, ``two_phase`` and
+  ``two_phase_to_ground``
+
+Balanced three-phase faults and symmetric power flow do not need them, so the attributes
+are optional. Links are zero-impedance and get near-zero zero-sequence values
+automatically; transformers derive theirs from the winding configuration and clock number.
+
+When the data is missing, the model reports it at initialization, naming the component,
+the field and the offending element ids::
+
+    Invalid power grid data for power_flow (symmetric=False):
+      MissingValueError: component=line field='r0' ids=[3]
+
+The requirement for a short-circuit calculation is derived from the configured fault
+types rather than from ``symmetric``, and it ignores fault status — an inactive fault can
+be activated at any timestamp, so its data must already be valid.
 
 .. note:: State Estimation
 
@@ -796,7 +897,12 @@ dataset).
 | ``algorithm``            | string    | Power-flow algorithm: ``newton_raphson`` (default),                 |
 |                          |           | ``iterative_current``, ``linear`` or ``linear_current``             |
 +--------------------------+-----------+---------------------------------------------------------------------+
-| ``symmetric``            | boolean   | Use the symmetric (balanced) calculation. Default: ``true``         |
+| ``symmetric``            | boolean   | Use the symmetric (balanced) calculation. Default: ``true``.        |
+|                          |           | ``false`` requires zero-sequence line/cable parameters              |
++--------------------------+-----------+---------------------------------------------------------------------+
+| ``per_phase_output``     | boolean   | Also publish the per-phase ``(3,)`` voltage and current attributes  |
+|                          |           | alongside the scalar worst-phase ones. Only populated by asymmetric |
+|                          |           | and short-circuit calculations. Default: ``false``                  |
 +--------------------------+-----------+---------------------------------------------------------------------+
 | ``tap_changing``         | string    | Automatic tap-changing strategy: ``disabled``, ``any_valid_tap``,   |
 |                          |           | ``min_voltage_tap``, ``max_voltage_tap`` or ``fast_any_tap``. When  |
@@ -928,7 +1034,14 @@ Units
 
 All quantities use SI units: V, A, W, VAr, VA, :math:`\Omega`, F, S and radians. Voltages
 expressed in per-unit (``voltage_pu``, ``reference_voltage``, ``short_circuit_voltage``,
-``no_load_current``) are relative to the relevant rated value. See
+``no_load_current``) are relative to the relevant rated value.
+
+Absolute node voltages (``electrical.voltage``, ``electrical.voltage_per_phase``) are
+**line-to-line**, on the same base as ``electrical.rated_voltage``, for every calculation
+type. The power-grid-model reports per-phase results line-to-neutral; the model scales
+them by :math:`\sqrt{3}` so a single attribute means the same thing everywhere.
+Active and reactive power are likewise three-phase totals, summed across phases for
+asymmetric results. See
 `power-grid-model: Components <https://power-grid-model.readthedocs.io/en/stable/user_manual/components.html>`_
 for the full description of each component field.
 
@@ -945,4 +1058,5 @@ PowerGridConfig
   | ``calculation_type``: ``string`` One of ``power_flow``, ``state_estimation``, ``short_circuit`` (default: ``power_flow``)
   | ``algorithm``: ``string`` One of ``newton_raphson``, ``iterative_current``, ``linear``, ``linear_current`` (default: ``newton_raphson``)
   | ``symmetric``: ``boolean`` Use the symmetric (balanced) calculation (default: ``true``)
+  | ``per_phase_output``: ``boolean`` Publish per-phase ``(3,)`` results alongside the scalars (default: ``false``)
   | ``tap_changing``: ``string`` One of ``disabled``, ``any_valid_tap``, ``min_voltage_tap``, ``max_voltage_tap``, ``fast_any_tap``
