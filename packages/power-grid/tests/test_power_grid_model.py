@@ -1047,3 +1047,109 @@ class TestCleanup:
 
             tester.close()
             assert inner.wrapper is None
+
+
+class TestResultUnitConsistency:
+    """``electrical.voltage`` and power results carry the same quantity in every
+    calculation type.
+
+    PGM reports node ``u`` as a line-to-line voltage in symmetric output but as
+    a per-phase (line-to-neutral) voltage in asymmetric and short-circuit
+    output, and reports ``p``/``q`` per phase rather than as a three-phase
+    total.  Both are normalised on the way into the entity groups.
+    """
+
+    @staticmethod
+    def _asym_transformer_network():
+        """Source -> Transformer -> Load.
+
+        Transformer-only, because asymmetric calculations need zero-sequence
+        parameters and lines/cables do not carry them (see ``r0``/``x0``).
+        """
+        return {
+            "electrical_node_entities": {
+                "id": [1, 2],
+                "geometry.x": [0.0, 1.0],
+                "geometry.y": [0.0, 0.0],
+                "electrical.rated_voltage": [150000.0, 10000.0],
+            },
+            "electrical_source_entities": {
+                "id": [10],
+                "connection.to_id": [1],
+                "electrical.reference_voltage": [1.0],
+            },
+            "electrical_load_entities": {
+                "id": [20],
+                "connection.to_id": [2],
+                "electrical.active_power_specified": [2000000.0],
+                "electrical.reactive_power_specified": [500000.0],
+            },
+            "electrical_transformer_entities": {
+                "id": [30],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "electrical.primary_voltage": [150000.0],
+                "electrical.secondary_voltage": [10000.0],
+                "electrical.rated_power": [30000000.0],
+                "electrical.short_circuit_voltage": [0.1],
+                "electrical.copper_loss": [30000.0],
+                "electrical.no_load_current": [0.005],
+                "electrical.no_load_loss": [10000.0],
+                "electrical.winding_from": [2],  # delta
+                "electrical.winding_to": [1],  # wye_n
+                "electrical.clock": [5],
+            },
+        }
+
+    @staticmethod
+    def _run(config, data, schema):
+        model = Model(config)
+        with ModelTester(model, schema=schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        return result[DATASET_NAME]
+
+    def test_short_circuit_voltage_is_line_to_line(self, model_config, global_schema):
+        """SC node voltage must satisfy ``voltage == voltage_pu * rated_voltage``.
+
+        PGM's short circuit output is per-phase, so an unscaled result would be
+        a factor sqrt(3) too low.
+        """
+        data = _simple_network_data()
+        data["electrical_fault_entities"] = {
+            "id": [60],
+            "connection.to_id": [2],
+            "electrical.fault_type": [0],  # three_phase
+        }
+        out = self._run({**model_config, "calculation_type": "short_circuit"}, data, global_schema)
+        nodes = out["electrical_node_entities"]
+        src_idx = nodes["id"].index(1)
+        assert nodes["electrical.voltage"][src_idx] == pytest.approx(
+            nodes["electrical.voltage_pu"][src_idx] * 10000.0, rel=1e-9
+        )
+        # Unfaulted node sits above nominal: IEC 60909 energises at c * u_rated
+        assert nodes["electrical.voltage"][src_idx] > 10000.0
+
+    def test_asymmetric_power_flow_matches_symmetric(self, model_config, global_schema):
+        """A balanced network gives the same node/branch results either way."""
+        data = self._asym_transformer_network()
+        sym = self._run(model_config, data, global_schema)
+        asym = self._run({**model_config, "symmetric": False}, data, global_schema)
+
+        for eg_name, fields in (
+            (
+                "electrical_node_entities",
+                ["electrical.voltage", "electrical.voltage_pu", "electrical.active_power"],
+            ),
+            (
+                "electrical_transformer_entities",
+                ["electrical.current_from", "electrical.power_from"],
+            ),
+        ):
+            for f in fields:
+                assert asym[eg_name][f] == pytest.approx(sym[eg_name][f], rel=1e-6), (
+                    f"{eg_name}.{f} differs between symmetric and asymmetric"
+                )

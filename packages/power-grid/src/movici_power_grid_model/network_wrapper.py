@@ -72,6 +72,34 @@ def _scalar(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _line_voltage(arr: np.ndarray) -> np.ndarray:
+    """Convert a PGM node voltage result to line-to-line RMS volts.
+
+    PGM reports ``u`` as the line-to-line voltage in symmetric output, but as
+    the per-phase (line-to-neutral) voltage in asymmetric and short circuit
+    output.  Scaling the latter by sqrt(3) keeps ``electrical.voltage`` the
+    same quantity for every calculation type, so that
+    ``voltage == voltage_pu * rated_voltage`` always holds.
+
+    Like :func:`_scalar` this reports phase A, so for an unbalanced fault the
+    result is the phase A voltage expressed on the line-to-line base, not the
+    true (unbalanced) line-to-line voltage.
+    """
+    if arr.ndim == 2:
+        return arr[:, 0] * np.sqrt(3.0)
+    return arr
+
+
+def _total(arr: np.ndarray) -> np.ndarray:
+    """Sum a per-phase power result ``(n, 3)`` into a three-phase total.
+
+    Symmetric results ``(n,)`` are already totals and are returned as-is.
+    """
+    if arr.ndim == 2:
+        return arr.sum(axis=1)
+    return arr
+
+
 def _get_optional_array(attr, default=0, dtype=np.float64) -> np.ndarray:
     """Get array from attribute, using default if not initialized."""
     if attr.is_initialized():
@@ -164,11 +192,11 @@ class NodeProcessor(PGMElementProcessor):
         eg = self.entity_group
         eg.voltage_pu[indices] = _scalar(comp_result["u_pu"])
         eg.voltage_angle[indices] = _scalar(comp_result["u_angle"])
-        eg.voltage[indices] = _scalar(comp_result["u"])
+        eg.voltage[indices] = _line_voltage(comp_result["u"])
         # p, q are not available in short circuit results
         if "p" in comp_result.dtype.names:
-            eg.active_power[indices] = comp_result["p"]
-            eg.reactive_power[indices] = comp_result["q"]
+            eg.active_power[indices] = _total(comp_result["p"])
+            eg.reactive_power[indices] = _total(comp_result["q"])
 
 
 # =========================================================================
@@ -209,10 +237,10 @@ class LineProcessor(PGMElementProcessor):
         eg.current_to[indices] = _scalar(comp_result["i_to"])
         # p, q, loading are not available in short circuit results
         if "p_from" in comp_result.dtype.names:
-            eg.power_from[indices] = comp_result["p_from"]
-            eg.power_to[indices] = comp_result["p_to"]
-            eg.reactive_power_from[indices] = comp_result["q_from"]
-            eg.reactive_power_to[indices] = comp_result["q_to"]
+            eg.power_from[indices] = _total(comp_result["p_from"])
+            eg.power_to[indices] = _total(comp_result["p_to"])
+            eg.reactive_power_from[indices] = _total(comp_result["q_from"])
+            eg.reactive_power_to[indices] = _total(comp_result["q_to"])
             eg.loading[indices] = comp_result["loading"]
 
 
@@ -290,10 +318,10 @@ class TransformerProcessor(PGMElementProcessor):
         eg.current_from[indices] = _scalar(comp_result["i_from"])
         eg.current_to[indices] = _scalar(comp_result["i_to"])
         if "p_from" in comp_result.dtype.names:
-            eg.power_from[indices] = comp_result["p_from"]
-            eg.power_to[indices] = comp_result["p_to"]
-            eg.reactive_power_from[indices] = comp_result["q_from"]
-            eg.reactive_power_to[indices] = comp_result["q_to"]
+            eg.power_from[indices] = _total(comp_result["p_from"])
+            eg.power_to[indices] = _total(comp_result["p_to"])
+            eg.reactive_power_from[indices] = _total(comp_result["q_from"])
+            eg.reactive_power_to[indices] = _total(comp_result["q_to"])
             eg.loading[indices] = comp_result["loading"]
 
 
@@ -351,12 +379,12 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         eg.current_2[indices] = _scalar(t3w_result["i_2"])
         eg.current_3[indices] = _scalar(t3w_result["i_3"])
         if "p_1" in t3w_result.dtype.names:
-            eg.power_1[indices] = t3w_result["p_1"]
-            eg.power_2[indices] = t3w_result["p_2"]
-            eg.power_3[indices] = t3w_result["p_3"]
-            eg.reactive_power_1[indices] = t3w_result["q_1"]
-            eg.reactive_power_2[indices] = t3w_result["q_2"]
-            eg.reactive_power_3[indices] = t3w_result["q_3"]
+            eg.power_1[indices] = _total(t3w_result["p_1"])
+            eg.power_2[indices] = _total(t3w_result["p_2"])
+            eg.power_3[indices] = _total(t3w_result["p_3"])
+            eg.reactive_power_1[indices] = _total(t3w_result["q_1"])
+            eg.reactive_power_2[indices] = _total(t3w_result["q_2"])
+            eg.reactive_power_3[indices] = _total(t3w_result["q_3"])
             eg.loading[indices] = t3w_result["loading"]
 
 
