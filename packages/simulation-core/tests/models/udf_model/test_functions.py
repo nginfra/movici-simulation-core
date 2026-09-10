@@ -195,6 +195,39 @@ def test_elementwise_functions(name, arg, expected):
     np.testing.assert_allclose(functions[name](arg), expected)
 
 
+@pytest.mark.parametrize(
+    "func, value, expected",
+    [
+        # a csr array with a unit shape reduces over both its rows and its unit shape
+        (sum_func, [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], [10.0, 11.0]),
+        (min_func, [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], [1.0, 5.0]),
+        (max_func, [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], [4.0, 6.0]),
+    ],
+)
+def test_reducing_a_csr_array_with_a_unit_shape(func, value, expected):
+    csr = TrackedCSRArray(np.array(value), np.array([0, 2, 3]))
+    np.testing.assert_array_equal(func(csr), expected)
+
+
+@pytest.mark.parametrize(
+    "func, args, expected",
+    [
+        # with several arguments the extremes are elementwise, and a csr argument decides the
+        # shape of the result wherever it appears
+        (min_func, ("csr", np.array([2.0, 2.0])), [1.0, 2.0, 2.0]),
+        (min_func, (np.array([2.0, 2.0]), "csr"), [1.0, 2.0, 2.0]),
+        (min_func, ("csr", 2.0), [1.0, 2.0, 2.0]),
+        (max_func, ("csr", np.array([2.0, 2.0])), [2.0, 2.0, 3.0]),
+        (max_func, (np.array([2.0, 2.0]), "csr"), [2.0, 2.0, 3.0]),
+    ],
+)
+def test_extreme_functions_over_mixed_shapes(func, args, expected):
+    csr = TrackedCSRArray(np.array([1.0, 2.0, 3.0]), np.array([0, 2, 3]))
+    result = func(*(csr if isinstance(arg, str) else arg for arg in args))
+    assert isinstance(result, TrackedCSRArray)
+    np.testing.assert_array_equal(result.data, expected)
+
+
 @pytest.mark.parametrize("name", ["abs", "sqrt", "floor", "not", "log"])
 def test_elementwise_functions_preserve_csr_structure(name):
     arr = ensure_csr_data([[1.0, 4.0], [9.0], []])
@@ -271,6 +304,39 @@ def test_defined_values(value, expected):
 )
 def test_group_reducers(name, value, expected):
     assert functions[name](value) == expected
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        # a scalar is an entity group of one, and an undefined scalar one of none
+        ("total", 2.0),
+        ("mean", 2.0),
+        ("count", 1),
+        ("any", True),
+        ("all", True),
+    ],
+)
+def test_group_reducers_of_a_scalar(name, expected):
+    assert functions[name](2.0) == expected
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("total", 0.0),
+        ("count", 0),
+        ("any", False),
+        # nothing in an empty group is false, so everything in it is true
+        ("all", True),
+    ],
+)
+def test_group_reducers_of_an_undefined_scalar(name, expected):
+    assert functions[name](UNDEFINED[float]) == expected
+
+
+def test_mean_of_an_undefined_scalar_is_undefined():
+    assert np.isnan(functions["mean"](UNDEFINED[float]))
 
 
 def test_if_does_not_truncate_the_branch_it_does_not_take_its_type_from():

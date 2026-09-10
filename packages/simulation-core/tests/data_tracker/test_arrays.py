@@ -434,15 +434,24 @@ class TestCheapChangeDetection:
         arr[0] = 3.0
         assert not arr.is_untouched
 
-    def test_reading_does_not_count_as_touching(self):
+    def test_reading_counts_as_touching(self):
+        """a TrackedArray takes its snapshot on first access rather than on first write, so
+        reading is enough to make it look touched. `is_untouched` is therefore conservative: it
+        can say an array may have changed when nothing was written, never the other way around
+        """
         arr = TrackedArray([1.0, 2.0])
-        assert arr.is_untouched
         assert arr[0] == 1.0
+
+        assert not arr.is_untouched
+        np.testing.assert_array_equal(arr.written, [False, False])
 
     def test_a_reset_array_is_untouched_again(self):
         arr = TrackedArray([1.0, 2.0])
         arr[0] = 3.0
+        assert not arr.is_untouched
+
         arr.reset()
+
         assert arr.is_untouched
 
     def test_written_marks_the_written_values(self):
@@ -462,7 +471,10 @@ class TestCheapChangeDetection:
         np.testing.assert_array_equal(arr.changed, [False, False])
         np.testing.assert_array_equal(arr.written, [True, False])
 
-    def test_written_reduces_a_multidimensional_array(self):
+    def test_written_of_a_multidimensional_array_is_elementwise(self):
+        """an array reports every value it wrote; only an attribute reduces that to one flag per
+        entity, see `test_attribute.TestCheapChangeDetection`
+        """
         arr = TrackedArray([[1.0, 2.0], [3.0, 4.0]])
         arr[0, 1] = 5.0
         np.testing.assert_array_equal(arr.written, [[False, True], [False, False]])

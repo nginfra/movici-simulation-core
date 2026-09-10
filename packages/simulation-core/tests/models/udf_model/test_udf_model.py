@@ -849,10 +849,34 @@ class TestIncrementalEvaluation:
         assert model.udfs[0].input_names == ("a", "b")
         assert len(model.udfs[0].get_changed_indices(model.inputs)) == 0
 
-    def test_evaluates_the_whole_entity_group_when_too_much_changed(self, settled):
+    @pytest.mark.parametrize(
+        "n_changed, incremental",
+        [
+            (0, True),
+            (1, True),
+            # the entity group holds ten entities and the threshold is three tenths of it, so
+            # three entities is the most that is still worth selecting
+            (2, True),
+            (3, True),
+            (4, False),
+            (10, False),
+        ],
+    )
+    def test_switches_to_the_whole_entity_group_at_the_threshold(
+        self, n_changed, incremental, settled
+    ):
         udf, inputs = settled
-        inputs["a"][np.arange(8)] = np.arange(8, dtype=float) + 100
-        assert udf.get_changed_indices(inputs) is None
+        assert udf.incremental_threshold == 0.3
+        assert len(udf.output) == 10
+
+        indices = np.arange(n_changed)
+        inputs["a"][indices] = indices + 100.0
+
+        changed = udf.get_changed_indices(inputs)
+        if incremental:
+            np.testing.assert_array_equal(changed, indices)
+        else:
+            assert changed is None
 
     def test_evaluates_the_whole_entity_group_when_it_grew(self, settled):
         udf, inputs = settled
