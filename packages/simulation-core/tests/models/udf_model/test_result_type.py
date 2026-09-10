@@ -109,7 +109,9 @@ def test_result_type_round_trips_a_data_type(data_type):
         ("abs(n)", UNIFORM_INT),
         ("sign(n)", UNIFORM_INT),
         ("default(n, 0)", UNIFORM_INT),
-        ("if(flag, n, a)", UNIFORM_INT),
+        # `if` takes its type from both branches, so that it does not truncate either of them
+        ("if(flag, n, a)", UNIFORM_FLOAT),
+        ("if(flag, n, n)", UNIFORM_INT),
         ("clip(n, 0, 1)", UNIFORM_FLOAT),
         # group reductions produce a single value for the whole entity group
         ("total(a)", ResultType(float, Shape.SCALAR)),

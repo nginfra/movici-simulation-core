@@ -45,6 +45,11 @@ def row_wise_result(args: t.List[ResultType]) -> ResultType:
     return combine(*args)
 
 
+def sum_result(args: t.List[ResultType]) -> ResultType:
+    """Type rule for ``sum``. Summing booleans counts them, so the result is at least an integer"""
+    return args[0].reduced(py_type=promote(args[0].py_type, int))
+
+
 def group_result(py_type: t.Optional[t.Type] = None):
     """Type rule for a function that reduces an entire entity group to a single value. Without a
     `py_type` the result is at least an integer, since summing booleans produces a count.
@@ -232,10 +237,15 @@ entity a value belongs to
 """
 
 
-@func("sum", returns=row_wise_result)
+@func("sum", returns=sum_result)
 def sum_func(arr):
     if isinstance(arr, TrackedCSRArray):
-        return row_wise_sum(arr.data, arr.row_ptr)
+        data = arr.data
+        if infer_data_type_from_array(data).py_type is bool:
+            # the row wise sum is calculated in the dtype of the data, and a count does not fit in
+            # a boolean. numpy widens booleans by itself, the csr reduction does not
+            data = data.astype(NP_TYPES[int])
+        return row_wise_sum(data, arr.row_ptr)
     if isinstance(arr, np.ndarray):
         return np.sum(arr, axis=tuple(range(1, arr.ndim)))
     return np.sum(arr)
@@ -375,9 +385,9 @@ def default_func(
         return rv
 
 
-# `if` takes its shape from the branches and its python type from the first branch, mirroring the
+# `if` takes both its shape and its python type from the two branches, mirroring the
 # implementation below. It does not support csr values
-@func("if", returns=lambda args: combine(*args[1:], py_type=args[1].py_type))
+@func("if", returns=lambda args: combine(*args[1:]))
 def if_func(*arrays_or_values):
     if len(arrays_or_values) != 3:
         raise TypeError("function 'if' requires 3 arguments: COND, IF_TRUE, IF_FALSE")
@@ -386,12 +396,21 @@ def if_func(*arrays_or_values):
     if isinstance(if_true, TrackedCSRArray) or isinstance(if_false, TrackedCSRArray):
         raise TypeError("function 'if' does not support csr attributes (yet)")
 
+    # both branches determine the result type. Taking it from one branch alone would silently
+    # truncate the other, and would make the type of an expression depend on which branch the
+    # condition happens to select
+    dtype = np.result_type(if_true, if_false)
+
     if isinstance(cond, bool):
-        return if_true if cond else if_false
+        chosen = if_true if cond else if_false
+        return (
+            chosen.astype(dtype, copy=False)
+            if isinstance(chosen, np.ndarray)
+            else dtype.type(chosen)
+        )
 
     if isinstance(cond, np.ndarray) and cond.dtype in [bool, NP_TYPES[bool], NP_TYPES[int]]:
         cond = np.asarray(cond, dtype=bool)
-        dtype = if_true.dtype if isinstance(if_true, np.ndarray) else type(if_true)
         rv = np.empty_like(cond, dtype=dtype)
         rv[cond] = if_true[cond] if isinstance(if_true, np.ndarray) else if_true
         rv[~cond] = if_false[~cond] if isinstance(if_false, np.ndarray) else if_false

@@ -109,13 +109,15 @@ def test_default_csr(input_arr, default, exp):
 @pytest.mark.parametrize(
     "inputs, exp, dtype",
     [
-        ((True, 1, 2.0), 1, int),
+        # both branches determine the result type, also when the condition selects only one
+        ((True, 1, 2.0), 1, float),
         ((False, 1, 2.0), 2.0, float),
         ((np.array([True, False]), 2, 1), [2, 1], int),
         ((np.array([True, False]), np.array([1, 2]), np.array([3, 4])), [1, 4], int),
         ((np.array([True, False]), np.array([1, 2]), 3), [1, 3], int),
         ((np.array([True, False]), np.array([1.0, 2.0]), 3), [1, 3], float),
-        ((np.array([True, False]), 3, np.array([1.0, 2.0])), [3, 2], int),
+        ((np.array([True, False]), 3, np.array([1.0, 2.0])), [3, 2], float),
+        ((np.array([True, False]), True, False), [True, False], bool),
     ],
 )
 def test_if_func(inputs, exp, dtype):
@@ -269,6 +271,18 @@ def test_defined_values(value, expected):
 )
 def test_group_reducers(name, value, expected):
     assert functions[name](value) == expected
+
+
+def test_if_does_not_truncate_the_branch_it_does_not_take_its_type_from():
+    """taking the result type from the first branch alone silently truncated the second"""
+    result = if_func(np.array([True, False]), np.array([1, 2]), np.array([1.5, 2.5]))
+    np.testing.assert_array_equal(result, [1.0, 2.5])
+
+
+def test_sum_of_a_boolean_csr_attribute_counts():
+    """the row wise sum is calculated in the dtype of the data, which cannot hold a count"""
+    result = sum_func(ensure_csr_data([[True, True, True], [True], []]))
+    np.testing.assert_array_equal(result, [3, 1, 0])
 
 
 def test_mean_of_an_entity_group_without_defined_values_is_undefined():
