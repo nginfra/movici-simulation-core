@@ -1242,3 +1242,93 @@ class TestZeroSequenceAndValidation:
             global_schema,
         )
         assert out["electrical_fault_entities"]["electrical.fault_current"][0] > 0
+
+
+class TestPerPhaseResults:
+    """Worst-phase reduction on the scalar attributes, plus optional per-phase output.
+
+    Phase A is not a safe representative of an unbalanced fault: for a
+    two-phase fault it is the *healthy* phase, reporting nominal voltage and
+    zero fault current.
+    """
+
+    LINE_ZERO_SEQUENCE = {
+        "electrical.zero_sequence_resistance": [0.3],
+        "electrical.zero_sequence_reactance": [0.15],
+        "electrical.zero_sequence_capacitance": [0.0],
+        "electrical.zero_sequence_tan_delta": [0.0],
+    }
+
+    @classmethod
+    def _network(cls, fault_type):
+        data = _simple_network_data()
+        data["electrical_line_entities"].update(cls.LINE_ZERO_SEQUENCE)
+        data["electrical_fault_entities"] = {
+            "id": [60],
+            "connection.to_id": [2],
+            "electrical.fault_type": [fault_type],
+        }
+        return data
+
+    @staticmethod
+    def _run(config, data, schema):
+        model = Model(config)
+        with ModelTester(model, schema=schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        return result[DATASET_NAME]
+
+    @pytest.fixture
+    def sc_config(self, model_config):
+        return {**model_config, "calculation_type": "short_circuit"}
+
+    def test_two_phase_fault_reports_collapsed_phase(self, sc_config, global_schema):
+        """Voltage must come from the collapsed phase, not the healthy one."""
+        out = self._run(sc_config, self._network(2), global_schema)  # two_phase
+        nodes = out["electrical_node_entities"]
+        faulted = nodes["id"].index(2)
+        # Phases are roughly [1.1, 0.55, 0.55] pu; phase A alone would report 1.1
+        assert nodes["electrical.voltage_pu"][faulted] < 0.6
+
+    def test_two_phase_fault_reports_nonzero_fault_current(self, sc_config, global_schema):
+        """Fault current must come from a faulted phase; phase A carries none."""
+        out = self._run(sc_config, self._network(2), global_schema)  # two_phase
+        assert out["electrical_fault_entities"]["electrical.fault_current"][0] > 0
+
+    def test_voltage_attributes_stay_coherent(self, sc_config, global_schema):
+        """voltage, voltage_pu and voltage_angle must describe the same phase."""
+        out = self._run(sc_config, self._network(1), global_schema)  # 1ph-to-ground
+        nodes = out["electrical_node_entities"]
+        for i in range(len(nodes["id"])):
+            assert nodes["electrical.voltage"][i] == pytest.approx(
+                nodes["electrical.voltage_pu"][i] * 10000.0, rel=1e-9
+            )
+
+    def test_per_phase_output_disabled_by_default(self, sc_config, global_schema):
+        """Per-phase attributes are not published unless asked for."""
+        out = self._run(sc_config, self._network(2), global_schema)
+        assert "electrical.voltage_per_phase" not in out["electrical_node_entities"]
+
+    def test_per_phase_output_publishes_all_three_phases(self, sc_config, global_schema):
+        """With the flag on, the full phase triple is published."""
+        out = self._run({**sc_config, "per_phase_output": True}, self._network(2), global_schema)
+        nodes = out["electrical_node_entities"]
+        per_phase = nodes["electrical.voltage_pu_per_phase"]
+        faulted = nodes["id"].index(2)
+        phases = per_phase[faulted]
+        assert len(phases) == 3
+        # The healthy phase the scalar attribute discards is visible here
+        assert max(phases) > 1.0
+        assert nodes["electrical.voltage_pu"][faulted] == pytest.approx(min(phases))
+        faults = out["electrical_fault_entities"]
+        assert len(faults["electrical.fault_current_per_phase"][0]) == 3
+
+    def test_per_phase_output_absent_for_symmetric_power_flow(self, model_config, global_schema):
+        """Symmetric power flow has no per-phase results to publish."""
+        data = _simple_network_data()
+        data["electrical_line_entities"].update(self.LINE_ZERO_SEQUENCE)
+        out = self._run({**model_config, "per_phase_output": True}, data, global_schema)
+        assert "electrical.voltage_per_phase" not in out["electrical_node_entities"]

@@ -61,6 +61,7 @@ from .network_wrapper import (
     CalculationMethod,
     CalculationType,
     PowerGridWrapper,
+    _worst_phase,
 )
 
 _PACKAGE_DIR = pathlib.Path(__file__).parent
@@ -68,17 +69,6 @@ _PACKAGE_DIR = pathlib.Path(__file__).parent
 FROM_SIDE = 0
 TO_SIDE = 1
 _NA_INT8 = -128  # power-grid-model sentinel for "no change" in update arrays
-
-
-def _worst_phase(arr: np.ndarray) -> np.ndarray:
-    """Reduce a per-phase result array ``(n, 3)`` to the worst (maximum) phase.
-
-    Used for trip decisions: a relay picks up on the highest phase current.
-    Symmetric results ``(n,)`` are returned as-is.
-    """
-    if arr.ndim == 2:
-        return np.max(arr, axis=1)
-    return arr
 
 
 # =========================================================================
@@ -178,6 +168,7 @@ class Model(TrackedModel, name="power_grid_cascade"):
             CalculationMethod.NEWTON_RAPHSON,
         )
         self.symmetric = self.config.get("symmetric", True)
+        self.per_phase_output = self.config.get("per_phase_output", False)
         self.max_iterations = self.config.get("max_cascade_iterations", 20)
         tap_str = self.config.get("tap_changing")
         self.tap_changing_strategy = _TAP_CHANGING_STRATEGIES.get(tap_str) if tap_str else None
@@ -265,6 +256,7 @@ class Model(TrackedModel, name="power_grid_cascade"):
             ),
         )
         self.wrapper = PowerGridWrapper()
+        self.wrapper.per_phase_output = self.per_phase_output
 
     def initialize(self, state: TrackedState):
         self._ensure_pub_attributes_initialized()

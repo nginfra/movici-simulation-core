@@ -27,14 +27,20 @@ from .attributes import (
     Electrical_CopperLoss13,
     Electrical_CopperLoss23,
     Electrical_Current1,
+    Electrical_Current1PerPhase,
     Electrical_Current2,
+    Electrical_Current2PerPhase,
     Electrical_Current3,
+    Electrical_Current3PerPhase,
     Electrical_CurrentAngleSigma,
     Electrical_CurrentFrom,
+    Electrical_CurrentFromPerPhase,
     Electrical_CurrentSigma,
     Electrical_CurrentTo,
+    Electrical_CurrentToPerPhase,
     Electrical_FaultCurrent,
     Electrical_FaultCurrentAngle,
+    Electrical_FaultCurrentPerPhase,
     Electrical_FaultPhase,
     Electrical_FaultReactance,
     Electrical_FaultResistance,
@@ -103,8 +109,11 @@ from .attributes import (
     Electrical_ToStatus,
     Electrical_Voltage,
     Electrical_VoltageAngle,
+    Electrical_VoltageAnglePerPhase,
     Electrical_VoltageBand,
+    Electrical_VoltagePerPhase,
     Electrical_VoltagePU,
+    Electrical_VoltagePUPerPhase,
     Electrical_VoltageSetpoint,
     Electrical_VoltageSigma,
     Electrical_Winding1,
@@ -136,6 +145,9 @@ class ElectricalNodeEntity(PointEntity):
     voltage_pu = field(Electrical_VoltagePU, flags=PUB)
     voltage_angle = field(Electrical_VoltageAngle, flags=PUB)
     voltage = field(Electrical_Voltage, flags=PUB)
+    voltage_pu_per_phase = field(Electrical_VoltagePUPerPhase, flags=PUB)
+    voltage_angle_per_phase = field(Electrical_VoltageAnglePerPhase, flags=PUB)
+    voltage_per_phase = field(Electrical_VoltagePerPhase, flags=PUB)
     active_power = field(Electrical_ActivePower, flags=PUB)
     reactive_power = field(Electrical_ReactivePower, flags=PUB)
 
@@ -160,6 +172,9 @@ class ElectricalVirtualNodeEntity(EntityGroup):
     voltage_pu = field(Electrical_VoltagePU, flags=PUB)
     voltage_angle = field(Electrical_VoltageAngle, flags=PUB)
     voltage = field(Electrical_Voltage, flags=PUB)
+    voltage_pu_per_phase = field(Electrical_VoltagePUPerPhase, flags=PUB)
+    voltage_angle_per_phase = field(Electrical_VoltageAnglePerPhase, flags=PUB)
+    voltage_per_phase = field(Electrical_VoltagePerPhase, flags=PUB)
     active_power = field(Electrical_ActivePower, flags=PUB)
     reactive_power = field(Electrical_ReactivePower, flags=PUB)
 
@@ -191,6 +206,8 @@ class ElectricalLineEntity(LinkEntity):
     # Output attributes
     current_from = field(Electrical_CurrentFrom, flags=PUB)
     current_to = field(Electrical_CurrentTo, flags=PUB)
+    current_from_per_phase = field(Electrical_CurrentFromPerPhase, flags=PUB)
+    current_to_per_phase = field(Electrical_CurrentToPerPhase, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
     power_to = field(Electrical_PowerTo, flags=PUB)
     reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
@@ -225,6 +242,8 @@ class ElectricalCableEntity(LinkEntity):
     # Output attributes
     current_from = field(Electrical_CurrentFrom, flags=PUB)
     current_to = field(Electrical_CurrentTo, flags=PUB)
+    current_from_per_phase = field(Electrical_CurrentFromPerPhase, flags=PUB)
+    current_to_per_phase = field(Electrical_CurrentToPerPhase, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
     power_to = field(Electrical_PowerTo, flags=PUB)
     reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
@@ -252,6 +271,8 @@ class ElectricalLinkEntity(LinkEntity):
     # Output attributes (same as lines)
     current_from = field(Electrical_CurrentFrom, flags=PUB)
     current_to = field(Electrical_CurrentTo, flags=PUB)
+    current_from_per_phase = field(Electrical_CurrentFromPerPhase, flags=PUB)
+    current_to_per_phase = field(Electrical_CurrentToPerPhase, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
     power_to = field(Electrical_PowerTo, flags=PUB)
     reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
@@ -292,6 +313,8 @@ class ElectricalTransformerEntity(LinkEntity):
     # Output attributes
     current_from = field(Electrical_CurrentFrom, flags=PUB)
     current_to = field(Electrical_CurrentTo, flags=PUB)
+    current_from_per_phase = field(Electrical_CurrentFromPerPhase, flags=PUB)
+    current_to_per_phase = field(Electrical_CurrentToPerPhase, flags=PUB)
     power_from = field(Electrical_PowerFrom, flags=PUB)
     power_to = field(Electrical_PowerTo, flags=PUB)
     reactive_power_from = field(Electrical_ReactivePowerFrom, flags=PUB)
@@ -443,6 +466,7 @@ class ElectricalFaultEntity(EntityGroup):
 
     # Output attributes (short-circuit results)
     fault_current = field(Electrical_FaultCurrent, flags=PUB)
+    fault_current_per_phase = field(Electrical_FaultCurrentPerPhase, flags=PUB)
     fault_current_angle = field(Electrical_FaultCurrentAngle, flags=PUB)
 
 
@@ -508,6 +532,9 @@ class ElectricalThreeWindingTransformerEntity(EntityGroup):
     current_1 = field(Electrical_Current1, flags=PUB)
     current_2 = field(Electrical_Current2, flags=PUB)
     current_3 = field(Electrical_Current3, flags=PUB)
+    current_1_per_phase = field(Electrical_Current1PerPhase, flags=PUB)
+    current_2_per_phase = field(Electrical_Current2PerPhase, flags=PUB)
+    current_3_per_phase = field(Electrical_Current3PerPhase, flags=PUB)
     power_1 = field(Electrical_Power1, flags=PUB)
     power_2 = field(Electrical_Power2, flags=PUB)
     power_3 = field(Electrical_Power3, flags=PUB)

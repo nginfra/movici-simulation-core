@@ -79,6 +79,7 @@ class Model(TrackedModel, name="power_grid_calculation"):
             CalculationMethod.NEWTON_RAPHSON,
         )
         self.symmetric = self.config.get("symmetric", True)
+        self.per_phase_output = self.config.get("per_phase_output", False)
         tap_str = self.config.get("tap_changing")
         # None means auto-detect (wrapper enables any_valid_tap when regulators present)
         self.tap_changing_strategy = _TAP_CHANGING_STRATEGIES.get(tap_str) if tap_str else None
@@ -160,6 +161,7 @@ class Model(TrackedModel, name="power_grid_calculation"):
             ),
         )
         self.wrapper = PowerGridWrapper()
+        self.wrapper.per_phase_output = self.per_phase_output
 
     def initialize(self, state: TrackedState):
         self._ensure_pub_attributes_initialized()

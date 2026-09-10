@@ -2,7 +2,9 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "/power_grid_calculation/1.0.0",
   "type": "object",
-  "required": ["dataset"],
+  "required": [
+    "dataset"
+  ],
   "properties": {
     "dataset": {
       "type": "string",
@@ -13,13 +15,22 @@
     "calculation_type": {
       "type": "string",
       "description": "Type of calculation to perform",
-      "enum": ["power_flow", "state_estimation", "short_circuit"],
+      "enum": [
+        "power_flow",
+        "state_estimation",
+        "short_circuit"
+      ],
       "default": "power_flow"
     },
     "algorithm": {
       "type": "string",
       "description": "Power flow calculation algorithm",
-      "enum": ["newton_raphson", "iterative_current", "linear", "linear_current"],
+      "enum": [
+        "newton_raphson",
+        "iterative_current",
+        "linear",
+        "linear_current"
+      ],
       "default": "newton_raphson"
     },
     "symmetric": {
@@ -30,8 +41,19 @@
     "tap_changing": {
       "type": "string",
       "description": "Automatic tap changing strategy",
-      "enum": ["disabled", "any_valid_tap", "min_voltage_tap", "max_voltage_tap", "fast_any_tap"],
+      "enum": [
+        "disabled",
+        "any_valid_tap",
+        "min_voltage_tap",
+        "max_voltage_tap",
+        "fast_any_tap"
+      ],
       "default": "disabled"
+    },
+    "per_phase_output": {
+      "type": "boolean",
+      "description": "Publish per-phase (a, b, c) voltage and current results alongside the scalar worst-phase results. Only populated by asymmetric and short circuit calculations.",
+      "default": false
     }
   },
   "additionalProperties": false

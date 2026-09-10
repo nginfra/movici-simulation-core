@@ -80,6 +80,41 @@ def _scalar(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _worst_phase(arr: np.ndarray) -> np.ndarray:
+    """Reduce a per-phase result ``(n, 3)`` to the worst (maximum) phase.
+
+    Used for currents, where the largest phase is the one that stresses the
+    equipment and picks up the relay.  Symmetric results ``(n,)`` are returned
+    as-is.
+    """
+    if arr.ndim == 2:
+        return np.max(arr, axis=1)
+    return arr
+
+
+def _worst_phase_index(u_pu: np.ndarray) -> t.Optional[np.ndarray]:
+    """Index of the most-depressed phase per node, or ``None`` if symmetric.
+
+    Voltage results are reduced by *minimum*: the collapsed phase is the one
+    that matters for a fault study.
+    """
+    if u_pu.ndim != 2:
+        return None
+    return np.argmin(u_pu, axis=1)
+
+
+def _take_phase(arr: np.ndarray, index: t.Optional[np.ndarray]) -> np.ndarray:
+    """Select one phase per element, keeping magnitude and angle coherent.
+
+    All three node voltage attributes are reduced with the *same* index, so
+    they describe one physical phase rather than a mix of phases (which would
+    not correspond to any real phasor).
+    """
+    if index is None:
+        return arr
+    return arr[np.arange(len(index)), index]
+
+
 def _line_voltage(arr: np.ndarray) -> np.ndarray:
     """Convert a PGM node voltage result to line-to-line RMS volts.
 
@@ -89,12 +124,12 @@ def _line_voltage(arr: np.ndarray) -> np.ndarray:
     same quantity for every calculation type, so that
     ``voltage == voltage_pu * rated_voltage`` always holds.
 
-    Like :func:`_scalar` this reports phase A, so for an unbalanced fault the
-    result is the phase A voltage expressed on the line-to-line base, not the
-    true (unbalanced) line-to-line voltage.
+    For an unbalanced fault the result is the selected phase's voltage
+    expressed on the line-to-line base, not the true (unbalanced) line-to-line
+    voltage; ``electrical.voltage_per_phase`` carries all three phases.
     """
     if arr.ndim == 2:
-        return arr[:, 0] * np.sqrt(3.0)
+        return arr * np.sqrt(3.0)
     return arr
 
 
@@ -198,9 +233,17 @@ class NodeProcessor(PGMElementProcessor):
             return
         comp_result, indices = sliced
         eg = self.entity_group
-        eg.voltage_pu[indices] = _scalar(comp_result["u_pu"])
-        eg.voltage_angle[indices] = _scalar(comp_result["u_angle"])
-        eg.voltage[indices] = _line_voltage(comp_result["u"])
+        u_pu, u_angle, u = comp_result["u_pu"], comp_result["u_angle"], comp_result["u"]
+        phase = _worst_phase_index(u_pu)
+        eg.voltage_pu[indices] = _take_phase(u_pu, phase)
+        eg.voltage_angle[indices] = _take_phase(u_angle, phase)
+        # Scale to line-to-line before selecting: _line_voltage keys off the
+        # per-phase shape, which _take_phase has already collapsed.
+        eg.voltage[indices] = _take_phase(_line_voltage(u), phase)
+        if self.wrapper.per_phase_output and phase is not None:
+            eg.voltage_pu_per_phase[indices] = u_pu
+            eg.voltage_angle_per_phase[indices] = u_angle
+            eg.voltage_per_phase[indices] = _line_voltage(u)
         # p, q are not available in short circuit results
         if "p" in comp_result.dtype.names:
             eg.active_power[indices] = _total(comp_result["p"])
@@ -248,8 +291,11 @@ class LineProcessor(PGMElementProcessor):
             return
         comp_result, indices = sliced
         eg = self.entity_group
-        eg.current_from[indices] = _scalar(comp_result["i_from"])
-        eg.current_to[indices] = _scalar(comp_result["i_to"])
+        eg.current_from[indices] = _worst_phase(comp_result["i_from"])
+        eg.current_to[indices] = _worst_phase(comp_result["i_to"])
+        if self.wrapper.per_phase_output and comp_result["i_from"].ndim == 2:
+            eg.current_from_per_phase[indices] = comp_result["i_from"]
+            eg.current_to_per_phase[indices] = comp_result["i_to"]
         # p, q, loading are not available in short circuit results
         if "p_from" in comp_result.dtype.names:
             eg.power_from[indices] = _total(comp_result["p_from"])
@@ -334,8 +380,11 @@ class TransformerProcessor(PGMElementProcessor):
             return
         comp_result, indices = sliced
         eg = self.entity_group
-        eg.current_from[indices] = _scalar(comp_result["i_from"])
-        eg.current_to[indices] = _scalar(comp_result["i_to"])
+        eg.current_from[indices] = _worst_phase(comp_result["i_from"])
+        eg.current_to[indices] = _worst_phase(comp_result["i_to"])
+        if self.wrapper.per_phase_output and comp_result["i_from"].ndim == 2:
+            eg.current_from_per_phase[indices] = comp_result["i_from"]
+            eg.current_to_per_phase[indices] = comp_result["i_to"]
         if "p_from" in comp_result.dtype.names:
             eg.power_from[indices] = _total(comp_result["p_from"])
             eg.power_to[indices] = _total(comp_result["p_to"])
@@ -394,9 +443,13 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         if t3w_result is None:
             return
         indices = eg.get_indices(t3w_result["id"])
-        eg.current_1[indices] = _scalar(t3w_result["i_1"])
-        eg.current_2[indices] = _scalar(t3w_result["i_2"])
-        eg.current_3[indices] = _scalar(t3w_result["i_3"])
+        eg.current_1[indices] = _worst_phase(t3w_result["i_1"])
+        eg.current_2[indices] = _worst_phase(t3w_result["i_2"])
+        eg.current_3[indices] = _worst_phase(t3w_result["i_3"])
+        if self.wrapper.per_phase_output and t3w_result["i_1"].ndim == 2:
+            eg.current_1_per_phase[indices] = t3w_result["i_1"]
+            eg.current_2_per_phase[indices] = t3w_result["i_2"]
+            eg.current_3_per_phase[indices] = t3w_result["i_3"]
         if "p_1" in t3w_result.dtype.names:
             eg.power_1[indices] = _total(t3w_result["p_1"])
             eg.power_2[indices] = _total(t3w_result["p_2"])
@@ -644,8 +697,15 @@ class FaultProcessor(PGMElementProcessor):
         if "i_f" not in fault_result.dtype.names:
             return
         indices = eg.get_indices(fault_result["id"])
-        eg.fault_current[indices] = _scalar(fault_result["i_f"])
-        eg.fault_current_angle[indices] = _scalar(fault_result["i_f_angle"])
+        i_f, i_f_angle = fault_result["i_f"], fault_result["i_f_angle"]
+        # Faulted phases carry the current; the healthy phase carries none, so
+        # the maximum is the fault current and its angle must come from the
+        # same phase.
+        phase = np.argmax(i_f, axis=1) if i_f.ndim == 2 else None
+        eg.fault_current[indices] = _take_phase(i_f, phase)
+        eg.fault_current_angle[indices] = _take_phase(i_f_angle, phase)
+        if self.wrapper.per_phase_output and phase is not None:
+            eg.fault_current_per_phase[indices] = i_f
 
 
 # =========================================================================
@@ -700,6 +760,7 @@ class PowerGridWrapper:
         self.model: t.Optional[pgm.PowerGridModel] = None
         self.input_data: dict[str, np.ndarray] = {}
         self.processors: list[PGMElementProcessor] = []
+        self.per_phase_output: bool = False
 
     def initialize(self, dataset: PowerGridNetwork):
         """Build the PGM model from a PowerGridNetwork.

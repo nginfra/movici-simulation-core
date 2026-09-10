@@ -17,6 +17,16 @@ Electrical_Status = AttributeSpec("electrical.status", DataType(int))  # 0=off, 
 Electrical_VoltagePU = AttributeSpec("electrical.voltage_pu", DataType(float))  # per-unit
 Electrical_VoltageAngle = AttributeSpec("electrical.voltage_angle", DataType(float))  # rad
 Electrical_Voltage = AttributeSpec("electrical.voltage", DataType(float))  # V (absolute)
+
+# Per-phase results (phase a, b, c), published when `per_phase_output` is on.
+# Asymmetric and short circuit calculations solve each phase separately; the
+# scalar attributes above carry the worst phase, these carry all three.
+_PHASE = DataType(float, (3,))
+Electrical_VoltagePUPerPhase = AttributeSpec("electrical.voltage_pu_per_phase", _PHASE)
+Electrical_VoltageAnglePerPhase = AttributeSpec(
+    "electrical.voltage_angle_per_phase", _PHASE
+)  # rad
+Electrical_VoltagePerPhase = AttributeSpec("electrical.voltage_per_phase", _PHASE)  # V
 Electrical_ActivePower = AttributeSpec("electrical.active_power", DataType(float))  # W
 Electrical_ReactivePower = AttributeSpec("electrical.reactive_power", DataType(float))  # VAr
 
@@ -52,6 +62,8 @@ Electrical_ToStatus = AttributeSpec("electrical.to_status", DataType(int))
 # Output attributes (PUB)
 Electrical_CurrentFrom = AttributeSpec("electrical.current_from", DataType(float))  # A
 Electrical_CurrentTo = AttributeSpec("electrical.current_to", DataType(float))  # A
+Electrical_CurrentFromPerPhase = AttributeSpec("electrical.current_from_per_phase", _PHASE)  # A
+Electrical_CurrentToPerPhase = AttributeSpec("electrical.current_to_per_phase", _PHASE)  # A
 Electrical_PowerFrom = AttributeSpec("electrical.power_from", DataType(float))  # W
 Electrical_PowerTo = AttributeSpec("electrical.power_to", DataType(float))  # W
 Electrical_ReactivePowerFrom = AttributeSpec(
@@ -210,6 +222,9 @@ Electrical_Clock13 = AttributeSpec("electrical.clock_13", DataType(int))  # 0-12
 Electrical_Current1 = AttributeSpec("electrical.current_1", DataType(float))  # A (i_1)
 Electrical_Current2 = AttributeSpec("electrical.current_2", DataType(float))  # A (i_2)
 Electrical_Current3 = AttributeSpec("electrical.current_3", DataType(float))  # A (i_3)
+Electrical_Current1PerPhase = AttributeSpec("electrical.current_1_per_phase", _PHASE)  # A
+Electrical_Current2PerPhase = AttributeSpec("electrical.current_2_per_phase", _PHASE)  # A
+Electrical_Current3PerPhase = AttributeSpec("electrical.current_3_per_phase", _PHASE)  # A
 Electrical_Power1 = AttributeSpec("electrical.power_1", DataType(float))  # W (p_1)
 Electrical_Power2 = AttributeSpec("electrical.power_2", DataType(float))  # W (p_2)
 Electrical_Power3 = AttributeSpec("electrical.power_3", DataType(float))  # W (p_3)
@@ -254,6 +269,7 @@ Electrical_FaultReactance = AttributeSpec("electrical.fault_reactance", DataType
 
 # Fault output attributes (short-circuit results)
 Electrical_FaultCurrent = AttributeSpec("electrical.fault_current", DataType(float))  # A (i_f)
+Electrical_FaultCurrentPerPhase = AttributeSpec("electrical.fault_current_per_phase", _PHASE)  # A
 Electrical_FaultCurrentAngle = AttributeSpec(
     "electrical.fault_current_angle", DataType(float)
 )  # rad (i_f_angle)
