@@ -112,6 +112,10 @@ from .attributes import (
     Electrical_Winding3,
     Electrical_WindingFrom,
     Electrical_WindingTo,
+    Electrical_ZeroSequenceCapacitance,
+    Electrical_ZeroSequenceReactance,
+    Electrical_ZeroSequenceResistance,
+    Electrical_ZeroSequenceTanDelta,
 )
 
 
@@ -175,6 +179,11 @@ class ElectricalLineEntity(LinkEntity):
     reactance = field(Electrical_Reactance, flags=INIT)
     capacitance = field(Electrical_Capacitance, flags=INIT)
     tan_delta = field(Electrical_TanDelta, flags=INIT)
+    # Zero-sequence: only needed for asymmetric calculations and unbalanced faults
+    zero_sequence_resistance = field(Electrical_ZeroSequenceResistance, flags=OPT)
+    zero_sequence_reactance = field(Electrical_ZeroSequenceReactance, flags=OPT)
+    zero_sequence_capacitance = field(Electrical_ZeroSequenceCapacitance, flags=OPT)
+    zero_sequence_tan_delta = field(Electrical_ZeroSequenceTanDelta, flags=OPT)
     rated_current = field(Electrical_RatedCurrent, flags=OPT)
     from_status = field(Electrical_FromStatus, flags=OPT)
     to_status = field(Electrical_ToStatus, flags=OPT)
@@ -204,6 +213,11 @@ class ElectricalCableEntity(LinkEntity):
     reactance = field(Electrical_Reactance, flags=INIT)
     capacitance = field(Electrical_Capacitance, flags=INIT)
     tan_delta = field(Electrical_TanDelta, flags=INIT)
+    # Zero-sequence: only needed for asymmetric calculations and unbalanced faults
+    zero_sequence_resistance = field(Electrical_ZeroSequenceResistance, flags=OPT)
+    zero_sequence_reactance = field(Electrical_ZeroSequenceReactance, flags=OPT)
+    zero_sequence_capacitance = field(Electrical_ZeroSequenceCapacitance, flags=OPT)
+    zero_sequence_tan_delta = field(Electrical_ZeroSequenceTanDelta, flags=OPT)
     rated_current = field(Electrical_RatedCurrent, flags=OPT)
     from_status = field(Electrical_FromStatus, flags=OPT)
     to_status = field(Electrical_ToStatus, flags=OPT)

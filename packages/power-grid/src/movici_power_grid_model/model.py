@@ -164,6 +164,7 @@ class Model(TrackedModel, name="power_grid_calculation"):
     def initialize(self, state: TrackedState):
         self._ensure_pub_attributes_initialized()
         self.wrapper.initialize(self.dataset)
+        self.wrapper.validate(self.calc_type, self.symmetric)
         self.logger.info(f"Power grid network built with {len(self.dataset.nodes)} nodes")
 
     def update(self, state: TrackedState, moment: Moment) -> t.Optional[Moment]:

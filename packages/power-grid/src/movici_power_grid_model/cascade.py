@@ -56,7 +56,12 @@ from .attributes import (
 )
 from .dataset import PowerGridNetwork
 from .model import _CALC_METHOD_MAP
-from .network_wrapper import _TAP_CHANGING_STRATEGIES, CalculationMethod, PowerGridWrapper
+from .network_wrapper import (
+    _TAP_CHANGING_STRATEGIES,
+    CalculationMethod,
+    CalculationType,
+    PowerGridWrapper,
+)
 
 _PACKAGE_DIR = pathlib.Path(__file__).parent
 
@@ -264,6 +269,9 @@ class Model(TrackedModel, name="power_grid_cascade"):
     def initialize(self, state: TrackedState):
         self._ensure_pub_attributes_initialized()
         self.wrapper.initialize(self.dataset)
+        # The cascade runs both calculations every timestamp, so both must hold
+        self.wrapper.validate(CalculationType.SHORT_CIRCUIT)
+        self.wrapper.validate(CalculationType.POWER_FLOW, self.symmetric)
 
         n_relays = len(self.protection)
         self._tripped = np.zeros(n_relays, dtype=bool)

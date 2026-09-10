@@ -29,6 +29,22 @@ Electrical_Resistance = AttributeSpec("electrical.resistance", DataType(float)) 
 Electrical_Reactance = AttributeSpec("electrical.reactance", DataType(float))  # Ohm (x1)
 Electrical_Capacitance = AttributeSpec("electrical.capacitance", DataType(float))  # F (c1)
 Electrical_TanDelta = AttributeSpec("electrical.tan_delta", DataType(float))  # tan1
+
+# Zero-sequence parameters, required for asymmetric calculations and for
+# unbalanced (non three-phase) faults. Optional: symmetric calculations and
+# three-phase faults only need the positive-sequence values above.
+Electrical_ZeroSequenceResistance = AttributeSpec(
+    "electrical.zero_sequence_resistance", DataType(float)
+)  # Ohm (r0)
+Electrical_ZeroSequenceReactance = AttributeSpec(
+    "electrical.zero_sequence_reactance", DataType(float)
+)  # Ohm (x0)
+Electrical_ZeroSequenceCapacitance = AttributeSpec(
+    "electrical.zero_sequence_capacitance", DataType(float)
+)  # F (c0)
+Electrical_ZeroSequenceTanDelta = AttributeSpec(
+    "electrical.zero_sequence_tan_delta", DataType(float)
+)  # tan0
 Electrical_RatedCurrent = AttributeSpec("electrical.rated_current", DataType(float))  # A (i_n)
 Electrical_FromStatus = AttributeSpec("electrical.from_status", DataType(int))
 Electrical_ToStatus = AttributeSpec("electrical.to_status", DataType(int))

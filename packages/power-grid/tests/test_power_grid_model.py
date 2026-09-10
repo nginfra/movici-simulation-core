@@ -1153,3 +1153,92 @@ class TestResultUnitConsistency:
                 assert asym[eg_name][f] == pytest.approx(sym[eg_name][f], rel=1e-6), (
                     f"{eg_name}.{f} differs between symmetric and asymmetric"
                 )
+
+
+class TestZeroSequenceAndValidation:
+    """Zero-sequence parameters unlock asymmetric calculations and unbalanced faults.
+
+    Without them PGM's solver fails with an opaque ``SparseMatrixError``; the
+    model validates up front instead and names the missing fields.
+    """
+
+    @staticmethod
+    def _network(zero_sequence=False, fault_type=None):
+        data = _simple_network_data()
+        if zero_sequence:
+            data["electrical_line_entities"].update(
+                {
+                    "electrical.zero_sequence_resistance": [0.3],
+                    "electrical.zero_sequence_reactance": [0.15],
+                    "electrical.zero_sequence_capacitance": [0.0],
+                    "electrical.zero_sequence_tan_delta": [0.0],
+                }
+            )
+        if fault_type is not None:
+            data["electrical_fault_entities"] = {
+                "id": [60],
+                "connection.to_id": [2],
+                "electrical.fault_type": [fault_type],
+            }
+        return data
+
+    @staticmethod
+    def _run(config, data, schema):
+        model = Model(config)
+        with ModelTester(model, schema=schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        return result[DATASET_NAME]
+
+    def test_asymmetric_power_flow_with_zero_sequence(self, model_config, global_schema):
+        """Lines carrying zero-sequence data support asymmetric power flow."""
+        out = self._run(
+            {**model_config, "symmetric": False}, self._network(zero_sequence=True), global_schema
+        )
+        nodes = out["electrical_node_entities"]
+        assert all(np.isfinite(v) for v in nodes["electrical.voltage"])
+        assert all(np.isfinite(p) for p in nodes["electrical.active_power"])
+
+    def test_unbalanced_fault_with_zero_sequence(self, model_config, global_schema):
+        """A single-phase-to-ground fault needs the zero-sequence network."""
+        out = self._run(
+            {**model_config, "calculation_type": "short_circuit"},
+            self._network(zero_sequence=True, fault_type=1),  # single_phase_to_ground
+            global_schema,
+        )
+        faults = out["electrical_fault_entities"]
+        assert faults["electrical.fault_current"][0] > 0
+
+    def test_missing_zero_sequence_asymmetric_raises_clear_error(
+        self, model_config, global_schema
+    ):
+        """Asymmetric power flow without zero-sequence data names the missing fields."""
+        with pytest.raises(ValueError) as exc:
+            self._run({**model_config, "symmetric": False}, self._network(), global_schema)
+        message = str(exc.value)
+        assert "r0" in message and "x0" in message
+        assert "line" in message
+
+    def test_missing_zero_sequence_unbalanced_fault_raises_clear_error(
+        self, model_config, global_schema
+    ):
+        """An unbalanced fault without zero-sequence data is rejected up front."""
+        with pytest.raises(ValueError) as exc:
+            self._run(
+                {**model_config, "calculation_type": "short_circuit"},
+                self._network(fault_type=2),  # two_phase
+                global_schema,
+            )
+        assert "r0" in str(exc.value)
+
+    def test_balanced_fault_needs_no_zero_sequence(self, model_config, global_schema):
+        """A three-phase fault must keep working without zero-sequence data."""
+        out = self._run(
+            {**model_config, "calculation_type": "short_circuit"},
+            self._network(fault_type=0),  # three_phase
+            global_schema,
+        )
+        assert out["electrical_fault_entities"]["electrical.fault_current"][0] > 0

@@ -15,6 +15,7 @@ from enum import IntEnum
 
 import numpy as np
 import power_grid_model as pgm
+from power_grid_model.validation import errors_to_string, validate_input_data
 
 if t.TYPE_CHECKING:
     from .dataset import PowerGridNetwork
@@ -36,6 +37,13 @@ class CalculationMethod(IntEnum):
     LINEAR = 1
     LINEAR_CURRENT = 2
     ITERATIVE_CURRENT = 3
+
+
+_PGM_CALC_TYPES = {
+    CalculationType.POWER_FLOW: pgm.CalculationType.power_flow,
+    CalculationType.STATE_ESTIMATION: pgm.CalculationType.state_estimation,
+    CalculationType.SHORT_CIRCUIT: pgm.CalculationType.short_circuit,
+}
 
 
 _PGM_CALC_METHODS = {
@@ -221,6 +229,13 @@ class LineProcessor(PGMElementProcessor):
         arr["x1"] = eg.reactance.array
         arr["c1"] = eg.capacitance.array
         arr["tan1"] = eg.tan_delta.array
+        # Zero-sequence stays NaN when not supplied; PGM only requires it for
+        # asymmetric calculations and unbalanced faults, and validate() reports
+        # precisely which elements are missing it.
+        arr["r0"] = _get_optional_array(eg.zero_sequence_resistance, default=np.nan)
+        arr["x0"] = _get_optional_array(eg.zero_sequence_reactance, default=np.nan)
+        arr["c0"] = _get_optional_array(eg.zero_sequence_capacitance, default=np.nan)
+        arr["tan0"] = _get_optional_array(eg.zero_sequence_tan_delta, default=np.nan)
         i_n = _get_optional_array(eg.rated_current, default=np.inf)
         arr["i_n"] = np.where(np.isinf(i_n), np.nan, i_n)
         return arr
@@ -257,6 +272,10 @@ class LinkProcessor(LineProcessor):
             "x1": np.full(n, 1e-6),
             "c1": np.full(n, 1e-12),
             "tan1": np.zeros(n),
+            "r0": np.full(n, 1e-6),
+            "x0": np.full(n, 1e-6),
+            "c0": np.full(n, 1e-12),
+            "tan0": np.zeros(n),
             "i_n": np.full(n, np.nan),
         }
 
@@ -590,7 +609,11 @@ class FaultProcessor(PGMElementProcessor):
         arr["id"] = eg.index.ids
         arr["status"] = _get_status_array(eg.status)
         arr["fault_type"] = eg.fault_type.array
-        arr["fault_phase"] = _get_optional_array(eg.fault_phase, default=0, dtype=np.int8)
+        # default_value (-1) lets PGM pick the phases that match each fault type;
+        # a hardcoded "abc" is only valid for balanced three-phase faults.
+        arr["fault_phase"] = _get_optional_array(
+            eg.fault_phase, default=int(pgm.FaultPhase.default_value), dtype=np.int8
+        )
         arr["fault_object"] = eg.fault_object_id.array
         arr["r_f"] = _get_optional_array(eg.fault_resistance, default=0.0)
         arr["x_f"] = _get_optional_array(eg.fault_reactance, default=0.0)
@@ -722,6 +745,48 @@ class PowerGridWrapper:
                     self.input_data[comp] = arr
 
         self.model = pgm.PowerGridModel(self.input_data)
+
+    def validate(self, calculation_type: CalculationType, symmetric: bool = True):
+        """Check the built input data against PGM's own validation rules.
+
+        The solver reports missing or inconsistent data as an opaque
+        ``SparseMatrixError``; PGM's validator instead names the component,
+        the field and the offending element ids.
+
+        Short circuit calculations are internally asymmetric, but only
+        unbalanced fault types actually draw on the zero-sequence network, so
+        the zero-sequence requirement is derived from the configured faults
+        rather than from ``symmetric``.
+
+        :raises ValueError: If the input data is not valid for this
+            calculation type.
+        """
+        if not self.input_data:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if calculation_type == CalculationType.SHORT_CIRCUIT:
+            symmetric = self.faults_are_balanced()
+        errors = validate_input_data(
+            self.input_data,
+            calculation_type=_PGM_CALC_TYPES[calculation_type],
+            symmetric=symmetric,
+        )
+        if errors:
+            raise ValueError(
+                f"Invalid power grid data for {calculation_type.name.lower()} "
+                f"(symmetric={symmetric}):\n{errors_to_string(errors)}"
+            )
+
+    def faults_are_balanced(self) -> bool:
+        """Whether every configured fault is a balanced three-phase fault.
+
+        Unbalanced faults need the zero-sequence network, balanced ones do
+        not.  Fault status is deliberately ignored: an inactive fault can be
+        activated at any timestamp, and its data must be valid by then.
+        """
+        faults = self.input_data.get("fault")
+        if faults is None or not len(faults):
+            return True
+        return bool(np.all(faults["fault_type"] == pgm.FaultType.three_phase))
 
     def process_changes(self):
         """Apply dynamic changes from processors with SUB attributes."""
