@@ -126,6 +126,16 @@ class EntityInitDataFormat(ExternalSerializationStrategy):
             for key, val in dataset.items()
         }
 
+    def data_keys(
+        self, dataset: dict, non_data_dict_keys: t.Sequence[str] | None = None
+    ) -> t.Iterable[str]:
+        return data_keys(
+            dataset,
+            ignore_keys=(
+                non_data_dict_keys if non_data_dict_keys is not None else self.non_data_dict_keys
+            ),
+        )
+
 
 def load_from_json(
     data,

@@ -114,33 +114,35 @@ class MoviciValidationError(MoviciDataError):
             error = {"": [error]}
         self.messages: dict[str, list[str]] = error or {}
 
+    def with_path(self, path):
+        return MoviciValidationError(self.messages, self.path)
+
     @classmethod
     def from_errors(
         cls,
-        errors: t.Sequence[JSONSchemaValidationError | MoviciValidationError]
-        | JSONSchemaValidationError
-        | MoviciValidationError,
+        errors: t.Iterable[ValidationLikeError] | ValidationLikeError,
         path="",
     ):
         result = MoviciValidationError(path=path)
         result.consume(errors)
         return result
 
-    def consume(
-        self,
-        errors: t.Sequence[JSONSchemaValidationError | MoviciValidationError]
-        | JSONSchemaValidationError
-        | MoviciValidationError,
-    ):
-        if isinstance(errors, (JSONSchemaValidationError, MoviciValidationError)):
+    def consume(self, errors: t.Iterable[ValidationLikeError] | ValidationLikeError):
+        if isinstance(errors, Exception):
             return self.consume([errors])
         for error in errors:
             if isinstance(error, JSONSchemaValidationError):
                 path = ".".join(str(p) for p in error.path)
-                messages = self.messages.setdefault(path, [])
-                messages.append(error.message)
+                self.add_message(error.message, path)
             if isinstance(error, MoviciValidationError):
                 self.messages.update(error.as_dict())
+            if isinstance(error, (TypeError, ValueError)):
+                self.add_message(str(error))
+
+    def add_message(self, message: str, path: str | t.Iterable[str] = ""):
+        if not isinstance(path, str):
+            path = ".".join(path)
+        self.messages.setdefault(path, []).append(message)
 
     def as_dict(self):
         result = {}
@@ -158,6 +160,9 @@ class MoviciValidationError(MoviciDataError):
             for message in messages:
                 yield path, message
 
+    def has_errors(self):
+        return bool(self.messages)
+
     def __str__(self):
         return "\n".join(f"{p}: {msg}" for p, msg in self.iter_messages())
 
@@ -165,6 +170,9 @@ class MoviciValidationError(MoviciDataError):
         return {
             "messages": self.as_dict(),
         }
+
+
+ValidationLikeError = JSONSchemaValidationError | MoviciValidationError | ValueError | TypeError
 
 
 class ResourceDoesNotExist(InvalidResource):

@@ -272,12 +272,12 @@ class TestSchemaInvalidation:
     async def test_caches_schema_between_backends(self, initialized_db: SQLAlchemyServer):
         async with initialized_db.get_backend() as backend:
             schema = initialized_db.schema
-            assert backend.serializer.schema is schema  # type: ignore
+            assert backend.serializer.serializer.schema is schema  # type: ignore
             assert schema is not None
 
         async with initialized_db.get_backend() as backend:
             assert initialized_db.schema is schema
-            assert backend.serializer.schema is schema  # type: ignore
+            assert backend.serializer.serializer.schema is schema  # type: ignore
 
     async def test_invalidates_schema_when_attribute_types_change(
         self, initialized_db: SQLAlchemyServer
