@@ -13,14 +13,18 @@ from movici_simulation_core.core import (
     TrackedState,
 )
 from movici_simulation_core.models.common.attributes import CommonAttributes
+from movici_simulation_core.types import DatasetData
 
 
-def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]):
-    if isinstance(data, dict):
-        if "data" in data:
-            return {k: np.asanyarray(v) for k, v in data.items()}
-        return {key: dataset_data_to_numpy(val) for key, val in data.items()}
-    return {"data": np.asarray(data)}
+def dataset_data_to_numpy(data: t.Union[dict, np.ndarray, list]) -> DatasetData:
+    def _helper(data):
+        if isinstance(data, dict):
+            if "data" in data:
+                return {k: np.asanyarray(v) for k, v in data.items()}
+            return {key: _helper(val) for key, val in data.items()}
+        return {"data": np.asarray(data)}
+
+    return t.cast(DatasetData, _helper(data))
 
 
 def get_attribute(name="attr", **kwargs):
@@ -114,15 +118,14 @@ def _dataset_dicts_equal_helper(
             )
 
     elif isinstance(a, (np.ndarray, list)) and isinstance(b, (np.ndarray, list)):
-        if np.issubdtype(
-            getattr(a, "dtype", None) or getattr(b, "dtype", None), float
-        ) and not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
-            current_errors[current_path] = f"{a} not equal to {b}"
+        if np.issubdtype(getattr(a, "dtype", None) or getattr(b, "dtype", None), float):
+            if not np.allclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
+                current_errors[current_path] = f"{a} not equal to {b}"
 
-        if not np.array_equal(a, b):
+        elif not np.array_equal(a, b):
             current_errors[current_path] = f"{a} not equal to {b}"
     elif a is not None and b is not None and (isinstance(a, float) or isinstance(b, float)):
-        if not np.isclose(a, b, rtol=rtol, atol=atol):
+        if not np.isclose(a, b, rtol=rtol, atol=atol, equal_nan=True):
             current_errors[current_path] = f"{a} not close to {b}"
     else:
         if not a == b:

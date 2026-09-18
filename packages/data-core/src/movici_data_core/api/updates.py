@@ -2,9 +2,11 @@ import os
 import typing as t
 from uuid import UUID
 
+import fastapi
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, Request
 from fastapi.responses import FileResponse
 
+from movici_data_core.database.model import to_domain_or_none
 from movici_data_core.exceptions import ResourceDoesNotExist
 from movici_data_core.file_helpers import (
     get_mimetype,
@@ -12,6 +14,7 @@ from movici_data_core.file_helpers import (
     store_request_stream_to_disk,
 )
 from movici_data_core.marshalling import (
+    DatasetFilterIn,
     OperationSuccess,
     UpdateListOut,
     UpdateWithDataOut,
@@ -65,10 +68,13 @@ async def get_update(
     update_id: UUID,
     backend: DepBackend,
     background_tasks: BackgroundTasks,
+    dataset_filter: t.Annotated[DatasetFilterIn, fastapi.Query()] | None = None,
 ) -> UpdateWithDataOut:
     response_filetype = FileType.JSON
     path = await backend.updates.get_update_as_file(
-        update_id=update_id, filetype=response_filetype
+        update_id=update_id,
+        filetype=response_filetype,
+        dataset_filter=to_domain_or_none(dataset_filter),
     )
     if path is None:
         raise ResourceDoesNotExist("update", id=update_id)
