@@ -22,6 +22,7 @@ from .schema import (
     model_type_router,
 )
 from .updates import update_router
+from .views import view_router
 from .workspaces import workspace_router
 
 DEFAULT_ROUTERS = (
@@ -30,9 +31,10 @@ DEFAULT_ROUTERS = (
     dataset_type_router,
     entity_type_router,
     model_type_router,
-    workspace_router,
     update_router,
     scenario_router,
+    view_router,
+    workspace_router,
 )
 
 logger = logging.getLogger(__name__)
