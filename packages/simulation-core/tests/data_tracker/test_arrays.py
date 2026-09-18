@@ -289,6 +289,53 @@ def test_csr_bin_ops(a, b, op, expected):
 
 
 @pytest.mark.parametrize(
+    "a, b, op, expected",
+    [
+        (1, ensure_csr_data([[1, 2], [3], []]), operator.add, [[2, 3], [4], []]),
+        (2, ensure_csr_data([[1, 2], [3], []]), operator.mul, [[2, 4], [6], []]),
+        (10, ensure_csr_data([[1, 2], [5], []]), operator.sub, [[9, 8], [5], []]),
+        (12, ensure_csr_data([[1, 2], [3], []]), operator.truediv, [[12, 6], [4], []]),
+        (2, ensure_csr_data([[1, 2], [3], []]), operator.pow, [[2, 4], [8], []]),
+        (7, ensure_csr_data([[2, 3], [4], []]), operator.mod, [[1, 1], [3], []]),
+        # a per-row operand is broadcast along the rows, also from the left
+        (
+            np.array([10, 20, 30]),
+            ensure_csr_data([[1, 2], [3], []]),
+            operator.sub,
+            [[9, 8], [17], []],
+        ),
+    ],
+)
+def test_csr_reflected_bin_ops(a, b, op, expected):
+    expected = ensure_csr_data(expected)
+    result = op(a, b)
+    np.testing.assert_allclose(expected.data, result.data)
+    np.testing.assert_allclose(expected.row_ptr, result.row_ptr)
+
+
+@pytest.mark.parametrize("op, expected", [(operator.neg, [-1, -2, -3]), (operator.pos, [1, 2, 3])])
+def test_csr_unary_ops(op, expected):
+    result = op(ensure_csr_data([[1, 2], [3], []]))
+    np.testing.assert_allclose(result.data, expected)
+    np.testing.assert_allclose(result.row_ptr, [0, 2, 3, 3])
+
+
+@pytest.mark.parametrize(
+    "op, expected",
+    [
+        (operator.lt, [False, True, False]),
+        (operator.eq, [True, False, False]),
+        (operator.ge, [True, False, True]),
+    ],
+)
+def test_csr_comparison_with_row_operand_yields_booleans(op, expected):
+    """the result dtype must follow from the operator, not from the data being compared"""
+    result = op(ensure_csr_data([[1], [2], [3]]), np.array([1, 3, 2]))
+    assert result.data.dtype == bool
+    np.testing.assert_array_equal(result.data, expected)
+
+
+@pytest.mark.parametrize(
     "array, matrix",
     [
         (
@@ -376,3 +423,57 @@ def test_update_csr_from_matrix(array, matrix, exp_change, exp_data, exp_rowptr)
     np.testing.assert_array_equal(array.changed, exp_change)
     np.testing.assert_array_equal(array.data, exp_data)
     np.testing.assert_array_equal(array.row_ptr, exp_rowptr)
+
+
+class TestCheapChangeDetection:
+    def test_a_fresh_array_is_untouched(self):
+        assert TrackedArray([1.0, 2.0]).is_untouched
+
+    def test_a_written_array_is_touched(self):
+        arr = TrackedArray([1.0, 2.0])
+        arr[0] = 3.0
+        assert not arr.is_untouched
+
+    def test_reading_does_not_count_as_touching(self):
+        arr = TrackedArray([1.0, 2.0])
+        assert arr.is_untouched
+        assert arr[0] == 1.0
+
+    def test_a_reset_array_is_untouched_again(self):
+        arr = TrackedArray([1.0, 2.0])
+        arr[0] = 3.0
+        arr.reset()
+        assert arr.is_untouched
+
+    def test_written_marks_the_written_values(self):
+        arr = TrackedArray([1.0, 2.0, 3.0])
+        arr[1] = 4.0
+        np.testing.assert_array_equal(arr.written, [False, True, False])
+
+    def test_written_of_an_untouched_array_is_all_false(self):
+        np.testing.assert_array_equal(TrackedArray([1.0, 2.0]).written, [False, False])
+
+    def test_written_is_a_superset_of_changed(self):
+        """`written` does not apply the comparison tolerance, so a value written with a
+        marginally different one counts as written but not as changed
+        """
+        arr = TrackedArray([1.0, 2.0], rtol=1e-2, atol=1e-2)
+        arr[0] = 1.001
+        np.testing.assert_array_equal(arr.changed, [False, False])
+        np.testing.assert_array_equal(arr.written, [True, False])
+
+    def test_written_reduces_a_multidimensional_array(self):
+        arr = TrackedArray([[1.0, 2.0], [3.0, 4.0]])
+        arr[0, 1] = 5.0
+        np.testing.assert_array_equal(arr.written, [[False, True], [False, False]])
+
+    def test_csr_array_is_untouched(self):
+        csr = ensure_csr_data([[1, 2], [3], []])
+        assert csr.is_untouched
+        csr.update(ensure_csr_data([[9]]), np.array([1]))
+        assert not csr.is_untouched
+
+    def test_csr_written_marks_the_written_rows(self):
+        csr = ensure_csr_data([[1, 2], [3], []])
+        csr.update(ensure_csr_data([[9]]), np.array([1]))
+        np.testing.assert_array_equal(csr.written, [False, True, False])
