@@ -129,4 +129,4 @@ async def update_scenario_status(
     scenario_id: UUID, status: SimulationStatusIn, backend: DepBackend
 ):
     await backend.for_scenario(scenario_id).scenarios.update_simulation_status(status.to_domain())
-    return OperationSuccess.for_path_operation("scenario", scenario_id, "status updated")
+    return OperationSuccess.for_path_operation("scenario", "status updated", id=scenario_id)

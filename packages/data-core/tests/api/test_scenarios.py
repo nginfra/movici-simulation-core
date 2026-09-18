@@ -216,7 +216,6 @@ async def test_get_summary_by_dataset_id(
     assert result == expected
 
 
-@pytest.mark.usefixtures("a_dataset_with_data")
 async def test_get_full_scenario_state(repository, get_json, a_scenario, a_dataset, create_update):
     await repository.dataset_data.create(
         a_dataset.id,

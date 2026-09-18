@@ -164,6 +164,43 @@ class ScenarioRepository(SQLResourceRepository):
                 insert(db.SimulationStatusInfo).values(scenario_id=id, status=status)
             )
 
+    async def get_state(self, state_filter: ScenarioStateFilter) -> NumpyDatasetData:
+        id = self._ensure_scenario_id()
+        dataset_id = await self.session.scalar(
+            select(db.Dataset.id)
+            .join(db.ScenarioDataset)
+            .where(db.ScenarioDataset.scenario_id == id)
+            .where(db.Dataset.name == state_filter.dataset)
+        )
+        if dataset_id is None:
+            raise ResourceDoesNotExist(
+                "dataset",
+                name=state_filter.dataset,
+                message="dataset does not exist for this scenario",
+            )
+
+        aggregator = DatasetStateAggregator()
+        self._add_attributes_to_aggregator(
+            aggregator,
+            await self._get_dataset_attributes(dataset_id, state_filter),
+            is_initial=True,
+        )
+        current_update = None
+        current_attributes: list[db.Attribute] = []
+        update_attributes = await self._get_update_attributes(dataset_id, id, state_filter)
+        for update_id, attribute in update_attributes:
+            if current_update is None:
+                current_update = update_id
+            if update_id == current_update:
+                current_attributes.append(attribute)
+                continue
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
+            current_update = update_id
+            current_attributes = [attribute]
+        if current_attributes:
+            self._add_attributes_to_aggregator(aggregator, current_attributes, is_initial=False)
+        return aggregator.state
+
     async def _get_bounding_box(self, scenario_id: UUID):
         bboxs_from_datasets = await self.session.scalars(
             select(db.Dataset.bounding_box)
