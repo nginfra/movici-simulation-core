@@ -3,12 +3,10 @@ from uuid import UUID
 
 from movici_data_core.database.repository import SQLAlchemyRepository
 from movici_data_core.database.repository.views import ViewRepository
-from movici_data_core.domain_model import Scenario, View
-from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
-from movici_data_core.services.common import GenericService
-from movici_data_core.domain_model import Scenario, ScenarioStateFilter
+from movici_data_core.domain_model import Scenario, ScenarioStateFilter, View
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist, UnsupportedFileType
 from movici_data_core.file_helpers import tempfile_delete_on_error
+from movici_data_core.services.common import GenericService
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
