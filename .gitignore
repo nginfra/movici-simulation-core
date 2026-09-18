@@ -41,3 +41,7 @@ ae_project
 
 # examples temporary files
 **/.movici-benchmark.db*
+
+# movici_data_dir autocreated files
+**/*.db
+**/tmp/

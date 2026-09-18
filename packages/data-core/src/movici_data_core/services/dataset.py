@@ -16,12 +16,11 @@ from movici_data_core.exceptions import (
     ResourceDoesNotExist,
     UnsupportedFileType,
 )
-from movici_data_core.schema import DatasetWithDataIn, DatasetWithDataOut
+from movici_data_core.file_helpers import tempfile_delete_on_error
+from movici_data_core.marshalling import DatasetWithDataIn, DatasetWithDataOut
 from movici_data_core.serialization import dump_dict
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
-
-from .common import tempfile_delete_on_error
 
 
 class DatasetService:
@@ -59,10 +58,15 @@ class DatasetService:
     async def update(self, dataset_id: UUID, dataset: Dataset):
         return await self.repository.datasets.update(dataset_id, dataset)
 
-    async def get_dataset_as_file(self, dataset_id: UUID, filetype: FileType = FileType.JSON):
+    async def delete(self, dataset_id: UUID):
+        return await self.repository.datasets.delete(dataset_id)
+
+    async def get_dataset_as_file(
+        self, dataset_id: UUID, filetype: FileType = FileType.JSON
+    ) -> pathlib.Path | None:
         existing = await self.repository.datasets.get_by_id(dataset_id)
         if existing is None:
-            raise ResourceDoesNotExist("dataset", id=dataset_id)
+            return None
 
         with tempfile_delete_on_error(
             suffix=filetype.default_extension,
@@ -147,6 +151,12 @@ class DatasetService:
                 )
 
         assert False, "should not get here"
+
+    async def prune(self, dataset_id: UUID):
+        return await self.repository.dataset_data.delete(dataset_id)
+
+    async def get_summary(self, dataset_id: UUID):
+        return await self.repository.datasets.get_summary(dataset_id)
 
     async def _update_entity_based_dataset_from_file(
         self, dataset_id: UUID, dataset_type: DatasetType, path: pathlib.Path

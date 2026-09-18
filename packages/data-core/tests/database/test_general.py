@@ -5,9 +5,9 @@ from movici_data_core.database.model import DatabaseMode
 
 
 @pytest.fixture
-def initialized_db(database_server):
-    """Override initialized_db fixture to be a noop"""
-    return database_server
+async def db(base_db):
+    """These tests should all run against an uninitialized db"""
+    return base_db
 
 
 async def test_initialize_db_sets_default_version(session):

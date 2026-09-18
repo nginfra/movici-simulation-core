@@ -77,7 +77,13 @@ def skip_outmodel_base(app, obj_type, name, obj, skip, options):
     only lets sphinx autodoc generate it once"""
 
     if (
-        getattr(obj, "__module__", "") == "movici_data_core.schema"
+        getattr(obj, "__module__", "") == "movici_data_core.marshalling"
+        and "InModel" in name
+        and name != "InModel"
+    ):
+        return True
+    if (
+        getattr(obj, "__module__", "") == "movici_data_core.marshalling"
         and "OutModel" in name
         and name != "OutModel"
     ):
