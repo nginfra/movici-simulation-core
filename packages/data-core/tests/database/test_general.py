@@ -2,6 +2,7 @@ import pytest
 
 from movici_data_core.database.general import get_options, get_version, initialize_database
 from movici_data_core.database.model import DatabaseMode
+from movici_data_core.database.repository import AttributeTypeRepository
 
 
 @pytest.fixture
