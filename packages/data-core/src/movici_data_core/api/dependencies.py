@@ -51,10 +51,10 @@ async def get_scenario_backend(
     return backend.for_scenario(scenario.id)
 
 
-def allow_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
+def available_in_modes(operation: str, modes: t.Sequence[DatabaseMode]):
     def _disallow(backend: DepBackend):
         if backend.options.mode not in modes:
-            raise InvalidAction(f"{operation} is not allowed in this mode")
+            raise InvalidAction(f"{operation} is not available in this mode")
 
     return Depends(_disallow)
 
