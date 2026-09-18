@@ -33,11 +33,14 @@ from movici_data_core.exceptions import (
 )
 from movici_data_core.state_aggregator import DatasetStateAggregator
 from movici_data_core.validators import ModelConfigValidator
-from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
-from movici_simulation_core.types import NumpyAttributeData
 
-from .common import SQLResourceRepository, dataset_filter_to_where_clause, validated_payload_dict
+from .common import (
+    SQLResourceRepository,
+    combine_attributes,
+    dataset_filter_to_where_clause,
+    validated_payload_dict,
+)
 
 
 @dataclasses.dataclass
@@ -252,28 +255,8 @@ class ScenarioRepository(SQLResourceRepository):
         attributes: t.Iterable[db.Attribute],
         is_initial: bool,
     ):
-        dataset_data = self._combine_attributes(attributes)
+        dataset_data = combine_attributes(attributes)
         aggregator.add_dataset_data(dataset_data, is_initial=is_initial)
-
-    @staticmethod
-    def _combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
-        result: NumpyDatasetData = {}
-        for attribute in attributes:
-            attribute_name = attribute.attribute_type.name
-            entity_group_name = attribute.entity_type.name
-            entity_group_data = result.setdefault(entity_group_name, {})
-            if attribute_name in entity_group_data:
-                raise ValueError(
-                    f"Duplicate attribute '{attribute_name}' found in"
-                    f" entity group '{entity_group_name}'"
-                )
-
-            data = attribute.data.to_numpy()
-            attr_data: NumpyAttributeData = {"data": data}
-            if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
-            entity_group_data[attribute_name] = attr_data
-        return result
 
     @map_errors(
         (ForeignKeyConstraintFailed, lambda: InvalidAction("Cannot delete default scenario"))

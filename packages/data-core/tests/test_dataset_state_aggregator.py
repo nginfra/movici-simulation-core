@@ -3,38 +3,11 @@ import typing as t
 import numpy as np
 import pytest
 
-from movici_data_core.database import model as db
-from movici_data_core.state_aggregator import (
-    DatasetStateAggregator,
-    strip_undefined,
-)
+from movici_data_core.state_aggregator import DatasetStateAggregator, strip_undefined
 from movici_simulation_core import NP_TYPES, UNDEFINED
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.testing import assert_dataset_dicts_equal, dataset_data_to_numpy
 from movici_simulation_core.types import NumpyAttributeData
-
-
-def create_attribute(entity_group, attribute_name, data, rowptr=None):
-    return db.Attribute(
-        entity_type=db.EntityType(name=entity_group),
-        attribute_type=db.AttributeType(name=attribute_name),
-        data=db.DataArray(
-            dtype=data.dtype.str,
-            shape=data.shape,
-            data=data.tobytes(),
-        ),
-        rowptr=db.RowptrArray(data=rowptr.tobytes()) if rowptr is not None else None,
-    )
-
-
-def data_to_attributes(data: dict):
-    return [
-        create_attribute(
-            entity_group, attribute_name, attr_data["data"], rowptr=attr_data.get("rowptr")
-        )
-        for entity_group, attrs in data.items()
-        for attribute_name, attr_data in attrs.items()
-    ]
 
 
 def test_empty_state():
@@ -229,7 +202,7 @@ def test_raises_if_id_is_from_other_entity_group():
     aggregator.add_dataset_data(
         dataset_data_to_numpy({"roads": {"id": [1]}, "others": {"id": [2]}}), is_initial=True
     )
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="id 2 already exists in entity group 'others'"):
         aggregator.add_dataset_data(dataset_data_to_numpy({"roads": {"id": [2], "attr": [5]}}))
 
 
@@ -314,13 +287,13 @@ def test_raises_on_new_entity_group_if_not_allowed():
 def test_strip_undefined(attribute, indices, expected_attribute, expected_indices):
     attribute = t.cast(NumpyAttributeData, dataset_data_to_numpy(attribute))
     indices = np.asarray(indices)
-    new_indices, new_attribute = strip_undefined(indices, attribute)
+    new_attribute, new_indices = strip_undefined(attribute, indices)
     assert new_indices.tolist() == expected_indices
     assert_dataset_dicts_equal(new_attribute, dataset_data_to_numpy(expected_attribute))
 
 
 def test_undefined_are_holes_and_are_ignored_for_uniform_attributes():
-    aggregator = DatasetStateAggregator(allow_new_entities=True)
+    aggregator = DatasetStateAggregator()
     aggregator.add_dataset_data(
         dataset_data_to_numpy(
             {
@@ -346,7 +319,7 @@ def test_undefined_are_holes_and_are_ignored_for_uniform_attributes():
 
 
 def test_undefined_are_holes_and_are_ignored_for_csr_attributes():
-    aggregator = DatasetStateAggregator(allow_new_entities=True)
+    aggregator = DatasetStateAggregator()
     aggregator.add_dataset_data(
         dataset_data_to_numpy(
             {
@@ -388,4 +361,205 @@ def test_undefined_are_holes_and_are_ignored_for_csr_attributes():
                 },
             }
         ),
+    )
+
+
+def test_undefined_unset_an_attribute_if_overwrite_for_uniform_attributes():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {"id": [1, 2, 3], "attr": [10, 20, 30]},
+            }
+        ),
+        is_initial=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2],
+                    "attr": [UNDEFINED[int], 21],
+                }
+            }
+        ),
+        undefined_values_overwrite=True,
+    )
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "attr": [UNDEFINED[int], 21, 30]}}),
+    )
+
+
+def test_undefined_unset_an_attribute_if_overwrite_for_csr_attributes():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "csr": {
+                        "data": [10, 20, 21, 22],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 4, 4],
+                    },
+                },
+            }
+        ),
+        is_initial=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [2, 3],
+                    "csr": {
+                        "data": [UNDEFINED[int], 31],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 2],
+                    },
+                },
+            }
+        ),
+        undefined_values_overwrite=True,
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "csr": {
+                        "data": [10, UNDEFINED[int], 31],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 2, 3],
+                    },
+                },
+            }
+        ),
+    )
+
+
+def test_deletes_attribute_if_all_undefined_in_initial_data():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {"roads": {"id": [1, 2, 3], "attr": [UNDEFINED[int], UNDEFINED[int], UNDEFINED[int]]}}
+        ),
+        is_initial=True,
+    )
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3]}}),
+    )
+
+
+def test_deletes_attribute_if_all_undefined_in_update_data():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "attr": [5, 5, 5]}}), is_initial=True
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy({"roads": {"id": [1], "attr": [UNDEFINED[int]]}}),
+        undefined_values_overwrite=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy({"roads": {"id": [2, 3], "attr": [UNDEFINED[int], UNDEFINED[int]]}}),
+        undefined_values_overwrite=True,
+    )
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3]}}),
+    )
+
+
+def test_deletes_entities_from_uniform_array():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "attr": [15, 25, 35]}}), is_initial=True
+    )
+
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {"roads": {"id": [1, 3], "deleted": np.array([True, False], dtype=np.int8)}}
+        )
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [2, 3], "attr": [25, 35]}}),
+    )
+
+
+def test_deletes_entities_from_csr_array():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "csr": {
+                        "data": [10, 20, 21, 22],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 4, 4],
+                    },
+                },
+            }
+        ),
+        is_initial=True,
+    )
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {"roads": {"id": [2, 3], "deleted": np.array([True, False], dtype=np.int8)}}
+        )
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 3],
+                    "csr": {
+                        "data": [10],
+                        DEFAULT_ROWPTR_KEY: [0, 1, 1],
+                    },
+                },
+            }
+        ),
+    )
+
+
+def test_skips_deleted_entities_in_new_entity_group():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2, 3],
+                    "deleted": np.array([UNDEFINED[bool], True, False], dtype=np.int8),
+                }
+            }
+        ),
+        is_initial=True,
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"roads": {"id": [1, 3]}}),
+    )
+
+
+def test_deleting_all_entities_removes_entity_group():
+    aggregator = DatasetStateAggregator()
+    aggregator.add_dataset_data(
+        dataset_data_to_numpy(
+            {
+                "roads": {"id": [1, 2, 3], "deleted": np.array([True, True, True], dtype=np.int8)},
+                "others": {"id": [4, 5, 6]},
+            }
+        ),
+        is_initial=True,
+    )
+
+    assert_dataset_dicts_equal(
+        aggregator.state,
+        dataset_data_to_numpy({"others": {"id": [4, 5, 6]}}),
     )

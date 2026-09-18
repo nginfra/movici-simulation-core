@@ -5,13 +5,14 @@ import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend
 from movici_data_core.domain_model import (
+    BoundingBox,
     Dataset,
     DatasetFormat,
     DatasetSummary,
 )
 from movici_data_core.exceptions import InvalidResource
 from movici_data_core.serialization import dump_dict, load_dict
-from movici_simulation_core.testing import dataset_data_to_numpy
+from movici_simulation_core.testing import assert_dataset_dicts_equal, dataset_data_to_numpy
 from movici_simulation_core.types import FileType
 
 
@@ -40,11 +41,14 @@ class TestDatasetService:
     @pytest.fixture
     def store_dataset(self, tmp_path):
         def _store(dataset_data, name: str | None = None, filetype: FileType = FileType.JSON):
-            if isinstance(dataset_data, dict):
+            if name is None:
+                if not isinstance(dataset_data, dict):
+                    raise ValueError("provide a name when dataset_data is not a dict")
                 name = dataset_data["name"]
+
+            if isinstance(dataset_data, dict):
                 dataset_data = dump_dict(dataset_data, filetype=filetype)
-            else:
-                assert name is not None
+
             file_path = (tmp_path / name).with_suffix(filetype.default_extension)
             file_path.write_bytes(dataset_data)
             return file_path
@@ -341,3 +345,76 @@ class TestDatasetService:
         await backend.datasets.update_from_file(a_dataset.id, dataset_path)
         summary = await backend.datasets.get_summary(a_dataset.id)
         assert isinstance(summary, DatasetSummary)
+
+    async def test_patch_dataset_with_holes(
+        self, dataset_path, backend: SQLAlchemyBackend, a_dataset, store_dataset
+    ):
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        current = await backend.datasets.get(id=a_dataset.id)
+        assert current is not None
+        assert current.bounding_box == BoundingBox(1.0, 2.0, 2.0, 3.0)
+
+        patch_file = store_dataset(
+            {
+                "data": {
+                    "transport_nodes": {
+                        "id": [1, 2],
+                        "geometry.x": [0.0, None],
+                        "geometry.y": [None, 0.0],
+                    }
+                }
+            },
+            name="dataset_patch",
+        )
+        await backend.datasets.patch_from_file(a_dataset.id, patch_file)
+        new_data = await backend.datasets.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(
+            new_data,
+            dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2],
+                        "geometry.x": [0.0, 2.0],
+                        "geometry.y": [2.0, 0.0],
+                    }
+                }
+            ),
+        )
+
+    async def test_patch_dataset_updates_bounding_box(
+        self, dataset_path, backend: SQLAlchemyBackend, a_dataset, store_dataset
+    ):
+        await backend.datasets.update_from_file(a_dataset.id, dataset_path)
+        current = await backend.datasets.get(id=a_dataset.id)
+        assert current is not None
+        assert current.bounding_box == BoundingBox(1.0, 2.0, 2.0, 3.0)
+
+        patch_file = store_dataset(
+            {
+                "data": {
+                    "transport_nodes": {
+                        "id": [1],
+                        "geometry.x": [0.0],
+                        "geometry.y": [4.0],
+                    }
+                }
+            },
+            name="dataset_patch",
+        )
+        await backend.datasets.patch_from_file(a_dataset.id, patch_file)
+        new_data = await backend.datasets.get_entity_data(a_dataset.id)
+        assert_dataset_dicts_equal(
+            new_data,
+            dataset_data_to_numpy(
+                {
+                    "transport_nodes": {
+                        "id": [1, 2],
+                        "geometry.x": [0.0, 2.0],
+                        "geometry.y": [4.0, 3.0],
+                    }
+                }
+            ),
+        )
+        result = await backend.datasets.get(id=a_dataset.id)
+        assert result is not None
+        assert result.bounding_box == BoundingBox(0.0, 3.0, 2.0, 4.0)
