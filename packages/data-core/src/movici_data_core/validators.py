@@ -12,7 +12,7 @@ from movici_data_core.domain_model import (
     ScenarioModel,
 )
 from movici_data_core.exceptions import MoviciValidationError
-from movici_simulation_core import AttributeSchema, Index
+from movici_simulation_core import UNDEFINED, AttributeSchema, Index
 from movici_simulation_core.core import get_rowptr
 from movici_simulation_core.types import (
     DatasetData,
@@ -132,9 +132,13 @@ class ModelConfigValidator:
 @dataclasses.dataclass
 class ValidatingDatasetSerializer(ExternalSerializationStrategy):
     serializer: ExternalSerializationStrategy
+    allow_undefined_ids: bool = False
 
     def with_schema(self, schema: AttributeSchema) -> ExternalSerializationStrategy:
         return dataclasses.replace(self, serializer=self.serializer.with_schema(schema))
+
+    def with_allow_undefined_ids(self, allow_undefined_ids=True):
+        return dataclasses.replace(self, allow_undefined_ids=allow_undefined_ids)
 
     def dumps(
         self, data: dict, filetype: FileType, non_data_dict_keys: t.Sequence[str] | None = None
@@ -181,6 +185,12 @@ class ValidatingDatasetSerializer(ExternalSerializationStrategy):
                 error.add_message("Entity group has no 'id' attribute", path=entity_group)
             else:
                 ids = entity_data["id"]["data"]
+                entity_count = len(entity_data["id"]["data"])
+
+                undefineds = ids == UNDEFINED[int]
+                ids = ids[~undefineds]
+                if not self.allow_undefined_ids and np.any(undefineds):
+                    error.add_message("Undefined ids found", path=(entity_group, "id"))
 
                 # validate ids are non-negative
                 negative_ids = ids < 0
@@ -194,11 +204,10 @@ class ValidatingDatasetSerializer(ExternalSerializationStrategy):
                     error.add_message(str(e), path=(entity_group, "id"))
 
                 # validate attribute lengths are all equal
-                expected_length = len(entity_data["id"]["data"])
                 for attr, attr_data in entity_data.items():
-                    if (length := self._get_attribute_length(attr_data)) != expected_length:
+                    if (length := self._get_attribute_length(attr_data)) != entity_count:
                         error.add_message(
-                            f"Invalid attribute length, expected {expected_length}, got {length}",
+                            f"Invalid attribute length, expected {entity_count}, got {length}",
                             path=(entity_group, attr),
                         )
 

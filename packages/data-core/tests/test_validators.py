@@ -1,10 +1,17 @@
+import numpy as np
 import pytest
 
 from movici_data_core.domain_model import DatasetType, ModelType, ScenarioDataset, ScenarioModel
 from movici_data_core.exceptions import MoviciValidationError
 from movici_data_core.serialization import dump_dict
 from movici_data_core.validators import ModelConfigValidator, ValidatingDatasetSerializer
-from movici_simulation_core import AttributeSchema, AttributeSpec, DataType, EntityInitDataFormat
+from movici_simulation_core import (
+    UNDEFINED,
+    AttributeSchema,
+    AttributeSpec,
+    DataType,
+    EntityInitDataFormat,
+)
 from movici_simulation_core.testing import (
     assert_dataset_dicts_equal,
     dataset_data_to_numpy,
@@ -135,6 +142,24 @@ class TestValidatingDatasetSerializer:
             ),
         )
 
+    def test_allow_undefined_ids_when_configured(
+        self, dataset_data, serializer: ValidatingDatasetSerializer
+    ):
+        dataset_data = {
+            "some_entities": {"id": [None, None]},
+        }
+        result = self._serialize_and_validate(dataset_data, serializer.with_allow_undefined_ids())
+        assert_dataset_dicts_equal(
+            result,
+            dataset_data_to_numpy(
+                {
+                    "some_entities": {
+                        "id": np.array([UNDEFINED[int], UNDEFINED[int]]),
+                    },
+                }
+            ),
+        )
+
     @pytest.mark.parametrize(
         "dataset_data, error_messages",
         [
@@ -149,6 +174,10 @@ class TestValidatingDatasetSerializer:
             (
                 {"some_entities": {"id": [-1, -2, 3]}},
                 [("data.some_entities.id", "Negative ids found")],
+            ),
+            (
+                {"some_entities": {"id": [None, None]}},
+                [("data.some_entities.id", "Undefined ids found")],
             ),
             (
                 {"some_entities": {"id": [1, 2, 3], "attr": [1, 2, 3, 4]}},
