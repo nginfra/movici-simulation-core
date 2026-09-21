@@ -85,6 +85,7 @@ class FileType(enum.Enum):
     MSGPACK = (".msgpack",)
     CSV = (".csv",)
     NETCDF = (".nc",)
+    TIFF = (".tiff", ".geotiff")
     OTHER = (".dat",)
 
     @property

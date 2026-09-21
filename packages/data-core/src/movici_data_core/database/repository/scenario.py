@@ -157,12 +157,12 @@ class ScenarioRepository(SQLResourceRepository):
             select(db.Dataset.id)
             .join(db.ScenarioDataset)
             .where(db.ScenarioDataset.scenario_id == id)
-            .where(db.Dataset.name == state_filter.dataset)
+            .where(db.Dataset.id == state_filter.dataset_id)
         )
         if dataset_id is None:
             raise ResourceDoesNotExist(
                 "dataset",
-                name=state_filter.dataset,
+                id=state_filter.dataset_id,
                 message="dataset does not exist for this scenario",
             )
 
@@ -242,9 +242,11 @@ class ScenarioRepository(SQLResourceRepository):
             .join(db.AttributeType)
             .where(db.Update.scenario_id == scenario_id)
             .where(db.Update.dataset_id == dataset_id)
-            .where(db.Update.timestamp <= state_filter.timestamp)
             .order_by(db.Update.timestamp.asc(), db.Update.iteration.asc(), db.EntityType.id)
         )
+        if state_filter.timestamp is not None:
+            query = query.where(db.Update.timestamp <= state_filter.timestamp)
+
         if not state_filter.is_empty():
             query = query.where(dataset_filter_to_where_clause(state_filter))
         return (await self.session.execute(query)).all()

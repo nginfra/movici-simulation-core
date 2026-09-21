@@ -210,14 +210,14 @@ class SimulationInfo:
     """
 
     duration: int
-    reference: float
+    reference_time: float
     time_scale: float = 1
     start_time: int = 0
     mode: t.Literal["time_oriented"] = "time_oriented"
 
     @classmethod
     def default(cls):
-        return cls(reference=0, duration=1)
+        return cls(reference_time=0, duration=1)
 
 
 @dataclasses.dataclass
@@ -473,6 +473,7 @@ class View:
     name: str
     config: dict
     id: UUID | None = None
+    scenario_id: UUID | None = None
 
 
 @dataclasses.dataclass
@@ -491,9 +492,9 @@ class DatasetFilter:
 
 @dataclasses.dataclass
 class ScenarioStateFilter(DatasetFilter):
-    dataset: str
-    timestamp: int = 0
+    dataset_id: UUID
+    timestamp: int | None = None
 
     @classmethod
-    def all_attributes(cls, dataset: str, timestamp: int = 0):
-        return ScenarioStateFilter(attributes=[], dataset=dataset, timestamp=timestamp)
+    def all_attributes(cls, dataset_id: UUID, timestamp: int = 0):
+        return ScenarioStateFilter(attributes=[], dataset_id=dataset_id, timestamp=timestamp)

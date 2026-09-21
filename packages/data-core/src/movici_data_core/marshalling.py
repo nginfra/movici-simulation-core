@@ -183,7 +183,7 @@ class ScenarioIn(InModel[Scenario]):
 
 class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     duration: int
-    reference: float
+    reference_time: float
     time_scale: float
     start_time: int
     mode: t.Literal["time_oriented"] = "time_oriented"
@@ -191,7 +191,7 @@ class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     def to_domain(self):
         return SimulationInfo(
             duration=self.duration,
-            reference=self.reference,
+            reference_time=self.reference_time,
             time_scale=self.time_scale,
             start_time=self.start_time,
             mode=self.mode,
@@ -693,6 +693,7 @@ class AttributeSummaryOut(OutModel[AttributeSummary]):
 
 class ViewOut(OutModel[View]):
     id: UUID
+    scenario_id: UUID
     name: str
     config: t.Any  # t.Any skips any pydantic validation
 
@@ -777,13 +778,13 @@ class DatasetFilterIn(BaseModel):
 
 
 class ScenarioStateFilterIn(BaseModel):
-    dataset: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
+    dataset_id: UUID
     attributes: DatasetFilterAttributeList = []
-    timestamp: t.Annotated[int, Field(ge=0)]
+    timestamp: t.Annotated[int, Field(ge=0)] | None = None
 
     def to_domain(self) -> domain_model.ScenarioStateFilter:
         return domain_model.ScenarioStateFilter(
             attributes=DatasetFilterIn.parse_attributes(self.attributes),
             timestamp=self.timestamp,
-            dataset=self.dataset,
+            dataset_id=self.dataset_id,
         )
