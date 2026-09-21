@@ -72,7 +72,7 @@ class ScenarioService:
 
         with tempfile_delete_on_error(
             suffix=filetype.default_extension,
-            prefix=f"scenario-state-{state_filter.dataset}",
+            prefix=f"scenario-state-{state_filter.dataset_id}",
             dir=self.tmpfile_dir,
         ) as outfile:
             if filetype not in self.serializer.supported_file_types():

@@ -1600,7 +1600,7 @@ class TestScenarioRepository:
             data={"transport_nodes": {"id": [2], "transport.capacity": [200.0]}},
         )
         result = await repository.scenarios.for_id(a_scenario.id).get_state(
-            ScenarioStateFilter.all_attributes(dataset=a_dataset.name, timestamp=0)
+            ScenarioStateFilter.all_attributes(dataset_id=a_dataset.id, timestamp=0)
         )
         assert dataset_dicts_equal(
             result,
@@ -1655,7 +1655,7 @@ class TestScenarioRepository:
                 attributes=[
                     DatasetFilterAttribute("transport_nodes", "transport.capacity"),
                 ],
-                dataset=a_dataset.name,
+                dataset_id=a_dataset.id,
                 timestamp=0,
             )
         )
@@ -2427,16 +2427,16 @@ class TestViewRepository:
     def repository(self, repository: SQLAlchemyRepository, a_scenario):
         return repository.for_scenario(a_scenario.id)
 
-    async def test_create_and_get_view_by_id(self, repository: SQLAlchemyRepository):
-        view = View(name="a_view", config={"a": "config"})
+    async def test_create_and_get_view_by_id(self, repository: SQLAlchemyRepository, a_scenario):
+        view = View(name="a_view", config={"a": "config"}, scenario_id=a_scenario.id)
         view_id = await repository.views.create(view)
         result = await repository.views.get_by_id(view_id)
         assert result is not None
         assert result.id is not None
         assert dataclasses.replace(result, id=None) == view
 
-    async def test_create_and_get_view_by_name(self, repository: SQLAlchemyRepository):
-        view = View(name="a_view", config={"a": "config"})
+    async def test_create_and_get_view_by_name(self, repository: SQLAlchemyRepository, a_scenario):
+        view = View(name="a_view", config={"a": "config"}, scenario_id=a_scenario.id)
         await repository.views.create(view)
         result = await repository.views.get_by_name(view.name)
 
@@ -2453,9 +2453,9 @@ class TestViewRepository:
         assert len(result) == 3
         assert all(isinstance(v, View) for v in result)
 
-    async def test_update_view(self, repository: SQLAlchemyRepository, create_view):
+    async def test_update_view(self, repository: SQLAlchemyRepository, create_view, a_scenario):
         view_id = await create_view(name="a_view", config={"some": "config"})
-        payload = View("new_name", config={"new": "config"})
+        payload = View("new_name", config={"new": "config"}, scenario_id=a_scenario.id)
         await repository.views.update(view_id, payload)
         result = await repository.views.get_by_id(view_id)
         assert result == dataclasses.replace(payload, id=view_id)

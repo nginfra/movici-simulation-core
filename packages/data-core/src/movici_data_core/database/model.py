@@ -336,6 +336,7 @@ class DataArray(Base):
 
 
 class RowptrArray(Base):
+    NP_DTYPE = np.uint32
     __tablename__ = "rowptr_array"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -352,7 +353,11 @@ class RowptrArray(Base):
         :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
             you should make a copy by calling ``array.copy()``
         """
-        return np.frombuffer(self.data, dtype=int)
+        return np.frombuffer(self.data, dtype=self.NP_DTYPE)
+
+    @classmethod
+    def prepare_buffer(cls, arr: np.ndarray):
+        return arr.astype(cls.NP_DTYPE).tobytes()
 
 
 class Attribute(Base):
@@ -610,4 +615,6 @@ class VisualizationView(Base):
     scenario: Mapped[Scenario] = relationship()
 
     def to_domain(self) -> domain_model.View:
-        return domain_model.View(name=self.name, config=self.config, id=self.id)
+        return domain_model.View(
+            name=self.name, config=self.config, id=self.id, scenario_id=self.scenario_id
+        )
