@@ -9,6 +9,7 @@ Model Library
    data_collector
    drinking_water_model
    netcdf_player
+   power_grid_model
    rules_model
    traffic_assignment
    urban_drainage_model
