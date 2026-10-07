@@ -21,6 +21,7 @@ from movici_data_core.file_helpers import tempfile_delete_on_error
 from movici_data_core.marshalling import DatasetPatchIn, DatasetWithDataIn, DatasetWithDataOut
 from movici_data_core.serialization import dump_dict
 from movici_data_core.state_aggregator import DatasetStateAggregator
+from movici_data_core.validators import ValidatingDatasetSerializer
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy, FileType
 
@@ -177,7 +178,12 @@ class DatasetService:
         if dataset_type.format != DatasetFormat.ENTITY_BASED:
             raise InvalidAction(f"Cannot patch dataset with format '{dataset_type.format.value}'")
 
-        patch = DatasetPatchIn.read_from_file(path, self.serializer)
+        serializer = (
+            self.serializer.with_allow_undefined_ids()
+            if isinstance(self.serializer, ValidatingDatasetSerializer)
+            else self.serializer
+        )
+        patch = DatasetPatchIn.read_from_file(path, serializer)
         current_data = await self.repository.dataset_data.get_entity_data(dataset_id)
         aggregator = DatasetStateAggregator(allow_new_entities=True)
         aggregator.add_dataset_data(current_data, is_initial=True)
