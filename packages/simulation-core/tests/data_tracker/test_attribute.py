@@ -576,3 +576,67 @@ class TestEnum:
             attribute.get_enum_value("x")
         with pytest.raises(ValueError, match="No enumeration"):
             attribute.get_enum_string(0)
+
+
+class TestCheapChangeDetection:
+    """`may_have_changes` and `written` answer, more cheaply than `changed`, what has to be
+    recalculated. See `test_arrays.TestCheapChangeDetection` for the array level behaviour
+    """
+
+    @pytest.fixture
+    def attribute(self):
+        return UniformAttribute([1.0, 2.0, 3.0], data_type=DataType(float))
+
+    @pytest.fixture
+    def multidimensional(self):
+        return UniformAttribute([[1.0, 2.0], [3.0, 4.0]], data_type=DataType(float, (2,)))
+
+    @pytest.fixture
+    def csr_attribute(self):
+        return CSRAttribute([[1.0, 2.0], [3.0], []], data_type=DataType(float, csr=True))
+
+    def test_an_attribute_without_data_may_not_have_changes(self):
+        assert not UniformAttribute(None, data_type=DataType(float)).may_have_changes()
+
+    def test_an_untouched_attribute_may_not_have_changes(self, attribute):
+        assert not attribute.may_have_changes()
+
+    def test_a_written_attribute_may_have_changes(self, attribute):
+        attribute[np.array([1])] = 9.0
+        assert attribute.may_have_changes()
+
+    def test_an_untouched_csr_attribute_may_not_have_changes(self, csr_attribute):
+        assert not csr_attribute.may_have_changes()
+
+    def test_a_written_csr_attribute_may_have_changes(self, csr_attribute):
+        csr_attribute.update(ensure_csr_data([[9.0]]), np.array([1]))
+        assert csr_attribute.may_have_changes()
+
+    def test_written_marks_the_entities_that_were_written_to(self, attribute):
+        attribute[np.array([1])] = 9.0
+        np.testing.assert_array_equal(attribute.written, [False, True, False])
+
+    def test_written_reduces_a_multidimensional_attribute_to_one_flag_per_entity(
+        self, multidimensional
+    ):
+        """where the underlying array reports every value it wrote, an attribute reports which
+        entities were written to
+        """
+        multidimensional[np.array([0])] = [1.0, 9.0]
+        np.testing.assert_array_equal(multidimensional.written, [True, False])
+
+    def test_written_of_a_csr_attribute_marks_the_rows_that_were_written_to(self, csr_attribute):
+        csr_attribute.update(ensure_csr_data([[9.0]]), np.array([1]))
+        np.testing.assert_array_equal(csr_attribute.written, [False, True, False])
+
+    def test_written_is_a_superset_of_changed(self):
+        """`written` does not apply the comparison tolerance, so an entity written with a
+        marginally different value counts as written but not as changed
+        """
+        # the tolerances have to be on the array itself: an attribute only applies its own when
+        # it allocates the array, not when it is handed one
+        array = TrackedArray([1.0, 2.0], rtol=1e-2, atol=1e-2)
+        attribute = UniformAttribute(array, data_type=DataType(float))
+        attribute[np.array([0])] = 1.001
+        np.testing.assert_array_equal(attribute.changed, [False, False])
+        np.testing.assert_array_equal(attribute.written, [True, False])

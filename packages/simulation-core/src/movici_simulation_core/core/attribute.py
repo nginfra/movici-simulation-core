@@ -193,6 +193,23 @@ class Attribute(abc.ABC):
     def has_changes(self) -> bool:
         return np.any(self.changed)
 
+    def may_have_changes(self) -> bool:
+        """Whether this attribute may have changes, without comparing any values. A `False` result
+        means there are definitely no changes; a `True` result means `changed` has to be consulted
+        to find out. Use this to avoid paying for change detection on an attribute that has not
+        received any data at all.
+        """
+        return self.has_data() and not self._data.is_untouched
+
+    @property
+    def written(self) -> np.ndarray:
+        """A boolean array marking every entity that was written to since the last reset. See
+        `TrackedArray.written`: this is a cheaper, conservative version of `changed`.
+        """
+        self.has_data_or_raise()
+        written = self._data.written
+        return np.maximum.reduce(written, axis=tuple(range(1, len(written.shape))))
+
     @property
     def changed(self):
         self.has_data_or_raise()
