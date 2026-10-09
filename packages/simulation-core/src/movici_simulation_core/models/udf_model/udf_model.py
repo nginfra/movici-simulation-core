@@ -125,6 +125,7 @@ class UDFInfo:
             compiler.compile_func(node),
             output_attr,
             input_names=sorted(compiler.get_vars(node)),
+            operations=compiler.count_operations(node),
             # a group reduction reads every entity, so a change anywhere changes its result
             incremental=not (compiler.get_funcs(node) & functions.GROUP_REDUCERS),
         )
@@ -162,15 +163,24 @@ class UDF:
     Nothing is evaluated at all when none of the inputs received data, which is decided without
     comparing any values and therefore costs nothing. The entity group is evaluated as a whole
     when there is nothing to compare against yet, when the entity group has grown, when so many
-    entities changed that selecting them costs more than it saves, or when the expression contains
-    a group reduction and therefore depends on every entity.
+    entities changed that selecting them costs more than it saves, when a full evaluation is too
+    little work for selecting to pay for itself, or when the expression contains a group reduction
+    and therefore depends on every entity.
     """
 
-    incremental_threshold = 0.3
+    incremental_threshold = 0.2
     """The fraction of changed entities above which evaluating the entire entity group is cheaper
-    than selecting the changed entities, evaluating those and writing them back. Measured on a
-    200.000 entity group, the two are worth about the same somewhere between a third and a half of
-    the entities changing, the exact point depending on how much work the expression itself is.
+    than selecting the changed entities, evaluating those and writing them back. Selecting reads
+    and writes scattered positions, which costs several times what reading an array end to end
+    does, so the two are worth about the same well before half the entity group changes.
+    """
+
+    incremental_minimum_work = 20_000
+    """How much work a full evaluation has to be, in entities times operations, before selecting
+    the entities to evaluate pays for itself. Deciding what to select costs about the same as one
+    operation over the entity group however few entities changed, so on a small entity group, or
+    one behind a very simple expression, there is nothing to win. Measured across expressions of
+    one, four and nine operations, the two are worth about the same at twenty thousand.
     """
 
     def __init__(
@@ -178,11 +188,13 @@ class UDF:
         func,
         output_attr,
         input_names: t.Sequence[str] = (),
+        operations: int = 0,
         incremental: bool = True,
     ):
         self.func = func
         self.output = output_attr
         self.input_names = tuple(input_names)
+        self.operations = operations
         self.incremental = incremental
         self.evaluated_size: t.Optional[int] = None
 
@@ -207,7 +219,7 @@ class UDF:
         touched = [inputs[name] for name in self.input_names if inputs[name].may_have_changes()]
         if not touched:
             return np.empty(0, dtype=int)
-        if not self.incremental:
+        if not self.incremental or size * self.operations < self.incremental_minimum_work:
             return None
 
         # `written` rather than `changed`: recalculating an entity whose input was overwritten

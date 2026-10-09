@@ -130,6 +130,16 @@ def get_funcs(node: Node):
     return vis.funcs
 
 
+def count_operations(node: Node) -> int:
+    """How many operations evaluating an expression performs, counting an operator and a function
+    call alike. Each one walks its operands end to end, so this says how much work evaluating the
+    expression for an entity group costs relative to reading the group once.
+    """
+    vis = OperationCounter()
+    node.accept(vis)
+    return vis.operations
+
+
 def infer_result_type(node: Node, variables: t.Dict[str, ResultType]) -> ResultType:
     """Determine the type and shape of the values an expression produces.
 
@@ -180,7 +190,6 @@ class Node:
         self.accept_children(visitor)
         if not top_down:
             visitor.visit(self)
-        self.accept_node(visitor)
 
     def accept_children(self, visitor):
         """Branch nodes should override this to let the visitor visit the node's children"""
@@ -415,6 +424,23 @@ class VariableNameCollector(NodeVisitor):
     @visit.register
     def _(self, node: Var):
         self.vars.add(node.val)
+
+
+class OperationCounter(NodeVisitor):
+    def __init__(self):
+        self.operations = 0
+
+    @functools.singledispatchmethod
+    def visit(self, node: Node):
+        pass
+
+    @visit.register
+    def _(self, node: BinOp):
+        self.operations += 1
+
+    @visit.register
+    def _(self, node: Func):
+        self.operations += 1
 
 
 class FunctionNameCollector(NodeVisitor):

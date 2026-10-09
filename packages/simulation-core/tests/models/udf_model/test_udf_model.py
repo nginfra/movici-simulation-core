@@ -819,11 +819,19 @@ class TestIncrementalEvaluation:
             }
         }
 
+    @staticmethod
+    def allow_selecting(udf):
+        """A ten entity group is far too little work for selecting entities to pay off, so these
+        tests switch that guard off to get at the behaviour behind it
+        """
+        udf.incremental_minimum_work = 0
+        return udf
+
     @pytest.fixture
     def fresh(self, create_model_and_tester):
         model, tester = create_model_and_tester(self.CONFIG)
         tester.initialize()
-        return model.udfs[0], model.inputs
+        return self.allow_selecting(model.udfs[0]), model.inputs
 
     @pytest.fixture
     def settled(self, create_model_and_tester):
@@ -831,7 +839,7 @@ class TestIncrementalEvaluation:
         model, tester = create_model_and_tester(self.CONFIG)
         tester.initialize()
         tester.update(0, None)
-        return model.udfs[0], model.inputs
+        return self.allow_selecting(model.udfs[0]), model.inputs
 
     def test_evaluates_the_whole_entity_group_the_first_time(self, fresh):
         udf, inputs = fresh
@@ -863,11 +871,10 @@ class TestIncrementalEvaluation:
         [
             (0, True),
             (1, True),
-            # the entity group holds ten entities and the threshold is three tenths of it, so
-            # three entities is the most that is still worth selecting
+            # the entity group holds ten entities and the threshold is a fifth of it, so two
+            # entities is the most that is still worth selecting
             (2, True),
-            (3, True),
-            (4, False),
+            (3, False),
             (10, False),
         ],
     )
@@ -875,7 +882,7 @@ class TestIncrementalEvaluation:
         self, n_changed, incremental, settled
     ):
         udf, inputs = settled
-        assert udf.incremental_threshold == 0.3
+        assert udf.incremental_threshold == 0.2
         assert len(udf.output) == 10
 
         indices = np.arange(n_changed)
@@ -886,6 +893,42 @@ class TestIncrementalEvaluation:
             np.testing.assert_array_equal(changed, indices)
         else:
             assert changed is None
+
+    @pytest.mark.parametrize(
+        "operations, minimum_work, incremental",
+        [(1, 20_000, False), (1, 10, True), (2_000, 20_000, True)],
+    )
+    def test_selects_entities_only_when_a_full_evaluation_is_enough_work(
+        self, operations, minimum_work, incremental, settled
+    ):
+        """evaluating ten entities is cheaper than working out which two of them to evaluate"""
+        udf, inputs = settled
+        udf.operations = operations
+        udf.incremental_minimum_work = minimum_work
+
+        inputs["a"][np.array([1])] = 9.0
+
+        assert (udf.get_changed_indices(inputs) is not None) is incremental
+
+    def test_does_nothing_when_no_input_was_written_to_however_little_work_it_is(self, settled):
+        """the guard on how much work a full evaluation is must not stop a udf from skipping an
+        update that brought it nothing, which is free to detect and the largest saving there is
+        """
+        udf, inputs = settled
+        udf.incremental_minimum_work = 20_000
+
+        assert len(udf.get_changed_indices(inputs)) == 0
+
+    def test_counts_the_operations_of_its_expression(self, create_model_and_tester):
+        model, tester = create_model_and_tester(
+            {
+                "entity_group": ["some_dataset", "some_entities"],
+                "inputs": {"a": "in_a", "b": "in_b"},
+                "functions": [{"expression": "sqrt(a*b)+a/b", "output": "out"}],
+            }
+        )
+        tester.initialize()
+        assert model.udfs[0].operations == 4
 
     def test_evaluates_the_whole_entity_group_when_it_grew(self, settled):
         udf, inputs = settled
@@ -932,6 +975,7 @@ class TestIncrementalEvaluation:
         model, tester = create_model_and_tester(self.CONFIG)
         tester.initialize()
         for udf in model.udfs:
+            self.allow_selecting(udf)
             udf.incremental = incremental
 
         first, _ = tester.update(0, None)
