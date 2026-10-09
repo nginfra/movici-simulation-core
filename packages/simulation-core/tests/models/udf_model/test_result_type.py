@@ -236,6 +236,12 @@ def test_unknown_name_is_an_error(variables):
         infer_result_type(parse(tokenize("a+typo")), variables)
 
 
+def test_a_string_attribute_is_an_error(variables):
+    variables["label"] = ResultType(str, Shape.UNIFORM)
+    with pytest.raises(TypeError, match="'label' is a string attribute"):
+        infer_result_type(parse(tokenize("a+label")), variables)
+
+
 def test_unknown_function_is_an_error(variables):
     with pytest.raises(NameError, match="nope is not a valid function name"):
         infer_result_type(parse(tokenize("nope(a)")), variables)

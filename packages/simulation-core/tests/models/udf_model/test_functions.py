@@ -196,6 +196,36 @@ def test_elementwise_functions(name, arg, expected):
 
 
 @pytest.mark.parametrize(
+    "lower, upper, expected",
+    [
+        # np.clip cannot broadcast a per entity bound along the rows of a csr array
+        (2.0, 3.0, [2.0, 2.0, 3.0]),
+        # rows [1.0, 2.0] and [4.0] get their own bounds: [2.0, 3.0] and [0.0, 3.5]
+        (np.array([2.0, 0.0]), np.array([3.0, 3.5]), [2.0, 2.0, 3.5]),
+    ],
+)
+def test_clip_a_csr_array(lower, upper, expected):
+    csr = TrackedCSRArray(np.array([1.0, 2.0, 4.0]), np.array([0, 2, 3]))
+    result = clip_func(csr, lower, upper)
+    assert isinstance(result, TrackedCSRArray)
+    np.testing.assert_array_equal(result.data, expected)
+
+
+def test_undefined_on_non_finite_does_not_modify_a_csr_argument():
+    csr = TrackedCSRArray(np.array([1.0, np.inf]), np.array([0, 2]))
+
+    result = undefined_on_non_finite(csr)
+
+    np.testing.assert_array_equal(csr.data, [1.0, np.inf])
+    np.testing.assert_array_equal(result.data, [1.0, np.nan])
+
+
+def test_exp_that_overflows_yields_an_undefined_value():
+    """an overflow has no representation in a dataset any more than a division by zero does"""
+    np.testing.assert_array_equal(functions["exp"](np.array([1.0, 1e9])), [np.e, np.nan])
+
+
+@pytest.mark.parametrize(
     "func, value, expected",
     [
         # a csr array with a unit shape reduces over both its rows and its unit shape

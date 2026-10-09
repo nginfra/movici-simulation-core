@@ -36,6 +36,7 @@ def additional_attributes():
         AttributeSpec("out_csr", DataType(float, csr=True)),
         AttributeSpec("in_2d", DataType(float, (2,))),
         AttributeSpec("out_bool", DataType(bool)),
+        AttributeSpec("in_str", DataType(str)),
     ]
 
 
@@ -687,6 +688,14 @@ class TestResultTypeInference:
     def test_rejects_an_unknown_name(self, make_model):
         with pytest.raises(NameError, match="'typo' is not one of the inputs"):
             make_model("a+typo", "out")
+
+    def test_rejects_a_string_input_attribute(self, make_model):
+        with pytest.raises(TypeError, match="'label' is a string attribute"):
+            make_model("label", "out", inputs={"label": "in_str"})
+
+    def test_rejects_a_string_output_attribute(self, make_model):
+        with pytest.raises(TypeError, match="'in_str' is a string attribute"):
+            make_model("a+b", "in_str")
 
 
 def test_boolean_expression_publishes_booleans(create_model_tester):

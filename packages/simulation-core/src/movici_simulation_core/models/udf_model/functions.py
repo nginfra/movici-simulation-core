@@ -84,12 +84,9 @@ def undefined_on_non_finite(value):
     no representation for infinity, so an expression that cannot produce a finite number produces
     an undefined value instead. This keeps the result detectable downstream, eg. by ``default``.
 
-    A csr operand is updated to hold the corrected data, so only call this on freshly calculated
-    results.
     """
     if isinstance(value, TrackedCSRArray):
-        value.data = undefined_on_non_finite(value.data)
-        return value
+        return TrackedCSRArray(undefined_on_non_finite(value.data), row_ptr=value.row_ptr.copy())
     if isinstance(value, np.ndarray):
         if not np.issubdtype(value.dtype, np.floating):
             return value
@@ -99,24 +96,29 @@ def undefined_on_non_finite(value):
     return value
 
 
+IGNORE_FLOATING_POINT_ERRORS = dict(divide="ignore", invalid="ignore", over="ignore")
+"""Dividing by zero and overflowing are not errors in an expression, they produce an undefined
+value. Entering a `np.errstate` costs more than a small array operation does, so it is entered once
+around a whole expression rather than once per operation, see
+:func:`~movici_simulation_core.models.udf_model.compiler.compile_func`.
+"""
+
+
 def divide(numerator, denominator):
     """Division as used by the ``/`` operator. Division by zero yields an undefined value rather
     than an infinity, and undefined operands propagate into the result.
     """
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return undefined_on_non_finite(apply_binary(np.divide, numerator, denominator))
+    return undefined_on_non_finite(apply_binary(np.divide, numerator, denominator))
 
 
 def power(base, exponent):
     """Exponentiation as used by the ``**`` operator"""
-    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        return undefined_on_non_finite(apply_binary(np.power, base, exponent))
+    return undefined_on_non_finite(apply_binary(np.power, base, exponent))
 
 
 def modulo(value, divisor):
     """Remainder as used by the ``%`` operator"""
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return undefined_on_non_finite(apply_binary(np.mod, value, divisor))
+    return undefined_on_non_finite(apply_binary(np.mod, value, divisor))
 
 
 def logical_and(left, right):
@@ -129,15 +131,13 @@ def logical_or(left, right):
     return apply_binary(np.logical_or, left, right)
 
 
-def _register_unary(name: str, ufunc, py_type=float, guard_non_finite: bool = False):
+def _register_unary(name: str, ufunc, py_type=float):
     """Register an elementwise numpy ufunc as a udf function. `py_type` is the python type of the
     result, or `None` when the ufunc preserves the type of its argument.
     """
 
     def wrapped(value):
-        with np.errstate(divide="ignore", invalid="ignore"):
-            result = apply_unary(ufunc, value)
-        return undefined_on_non_finite(result) if guard_non_finite else result
+        return undefined_on_non_finite(apply_unary(ufunc, value))
 
     wrapped.__name__ = name
     wrapped.__doc__ = f"Elementwise ``{name}``, may be applied to uniform and csr attributes"
@@ -162,9 +162,8 @@ for _name, _ufunc, _py_type in (
 ):
     _register_unary(_name, _ufunc, _py_type)
 
-# the logarithm of zero is -inf, which is turned into an undefined value
 for _name, _ufunc in (("log", np.log), ("log10", np.log10), ("log2", np.log2)):
-    _register_unary(_name, _ufunc, float, guard_non_finite=True)
+    _register_unary(_name, _ufunc, float)
 
 # `not` is an operator in the expression grammar, the parser lowers it onto this function
 _register_unary("not", np.logical_not, bool)
@@ -173,7 +172,11 @@ _register_unary("not", np.logical_not, bool)
 @func("clip", returns=elementwise_result())
 def clip_func(value, lower, upper):
     """Limit ``value`` to the range [``lower``, ``upper``]"""
-    return apply_binary(np.minimum, apply_binary(np.maximum, value, lower), upper)
+    if any(isinstance(arg, TrackedCSRArray) for arg in (value, lower, upper)):
+        # np.clip cannot broadcast a bound that holds one value per entity along the rows of a csr
+        # array, where applying the two bounds in turn can
+        return apply_binary(np.minimum, apply_binary(np.maximum, value, lower), upper)
+    return np.clip(value, lower, upper)
 
 
 def defined_values(value) -> np.ndarray:
@@ -209,7 +212,7 @@ def mean_func(value):
     """
     values = defined_values(value)
     if values.size == 0:
-        return NP_TYPES[float].type(UNDEFINED[float])
+        return UNDEFINED[float]
     return np.mean(values)
 
 
@@ -221,13 +224,13 @@ def count_func(value):
 
 @func("any", returns=group_result(bool))
 def any_func(value):
-    """Whether any defined value in the entity group is true, as a single boolean"""
+    """Whether any defined value in the entity group is truthy, as a single boolean"""
     return bool(np.any(defined_values(value)))
 
 
 @func("all", returns=group_result(bool))
 def all_func(value):
-    """Whether every defined value in the entity group is true, as a single boolean"""
+    """Whether every defined value in the entity group is truthy, as a single boolean"""
     return bool(np.all(defined_values(value)))
 
 

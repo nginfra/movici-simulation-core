@@ -130,6 +130,12 @@ class UDFInfo:
         )
 
     def check_output_attribute(self, result_type: ResultType, output_attr: AttributeObject):
+        if output_attr.data_type.py_type is str:
+            raise TypeError(
+                f"'{self.output_attribute}' is a string attribute, which an expression cannot "
+                "produce a value for"
+            )
+
         produces_csr = result_type.shape is Shape.CSR
         if produces_csr == output_attr.data_type.csr:
             return
@@ -167,8 +173,6 @@ class UDF:
     the entities changing, the exact point depending on how much work the expression itself is.
     """
 
-    NOTHING_TO_DO: t.ClassVar[np.ndarray] = np.empty(0, dtype=int)
-
     def __init__(
         self,
         func,
@@ -202,7 +206,7 @@ class UDF:
         # brings this model no data at all is common enough to be worth checking for first
         touched = [inputs[name] for name in self.input_names if inputs[name].may_have_changes()]
         if not touched:
-            return self.NOTHING_TO_DO
+            return np.empty(0, dtype=int)
         if not self.incremental:
             return None
 

@@ -24,6 +24,11 @@ in any combination. A scalar or uniform operand is broadcast along the rows of a
 ``csr * 2`` and ``2 * csr`` both scale every value, while ``csr * uniform`` multiplies each row by
 the value belonging to that entity.
 
+A csr operand therefore decides the shape of a result whichever side of an operator it is on:
+``uniform / csr`` is a csr value just as ``csr / uniform`` is, since there is no meaningful way to
+reduce the one to a single value per entity. Reducing a csr attribute is what the reductions below
+are for. String attributes cannot be calculated with at all.
+
 **Reductions.** ``sum``, ``min`` and ``max`` reduce the values of each entity separately, turning
 a csr attribute into a uniform one. ``total``, ``mean``, ``count``, ``any`` and ``all`` instead
 reduce the whole entity group to a single number, which is then broadcast back over the entities,
@@ -43,6 +48,8 @@ import functools
 import operator
 import re
 import typing as t
+
+import numpy as np
 
 from movici_simulation_core.models.udf_model import functions
 from movici_simulation_core.models.udf_model.result_type import (
@@ -134,7 +141,20 @@ def infer_result_type(node: Node, variables: t.Dict[str, ResultType]) -> ResultT
 
 
 def compile_func(node: Node):
-    return node.accept_node(UDFCompiler())
+    """Compile an expression into a function of the variables it reads.
+
+    Dividing by zero and overflowing produce an undefined value rather than an error, so numpy's
+    floating point errors are silenced for the duration of an evaluation. Entering a `np.errstate`
+    costs more than an operation on a small array does, so it is entered once here rather than
+    once per operation.
+    """
+    evaluate = node.accept_node(UDFCompiler())
+
+    def evaluate_expression(variables):
+        with np.errstate(**functions.IGNORE_FLOATING_POINT_ERRORS):
+            return evaluate(variables)
+
+    return evaluate_expression
 
 
 @dataclasses.dataclass
@@ -435,12 +455,17 @@ class TypeInferrer(NodeVisitor):
     @visit.register
     def _(self, node: Var) -> ResultType:
         try:
-            return self.variables[node.val]
+            result_type = self.variables[node.val]
         except KeyError:
             raise NameError(
                 f"'{node.val}' is not one of the inputs of this expression, "
                 f"expected one of {sorted(self.variables)}"
             ) from None
+        if result_type.py_type is str:
+            raise TypeError(
+                f"'{node.val}' is a string attribute, which an expression cannot calculate with"
+            )
+        return result_type
 
     @visit.register
     def _(self, node: BinOp) -> ResultType:
