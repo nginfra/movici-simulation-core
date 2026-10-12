@@ -1,6 +1,7 @@
 import datetime
 import pathlib
 import uuid
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -270,7 +271,7 @@ class TestScenarioInOut:
                 "start_time": 12,
                 "duration": 42,
                 "time_scale": 1.5,
-                "reference": 9000.1,
+                "reference_time": 9000.1,
             },
             "models": [
                 {"name": "model1", "type": "model_a", "dataset": "a_dataset"},
@@ -286,7 +287,11 @@ class TestScenarioInOut:
             description="lalala description",
             epsg_code=1234,
             simulation_info=SimulationInfo(
-                start_time=12, duration=42, time_scale=1.5, reference=9000.1, mode="time_oriented"
+                start_time=12,
+                duration=42,
+                time_scale=1.5,
+                reference_time=9000.1,
+                mode="time_oriented",
             ),
             models=[
                 ScenarioModel(
@@ -328,7 +333,7 @@ class TestScenarioInOut:
                         start_time=12,
                         duration=42,
                         time_scale=1.5,
-                        reference=9000.1,
+                        reference_time=9000.1,
                         mode="time_oriented",
                     ),
                     created_at=now,
@@ -391,7 +396,7 @@ class TestScenarioInOut:
                 "simulation_info": {
                     "mode": "time_oriented",
                     "duration": 1,
-                    "reference": 0,
+                    "reference_time": 0,
                     "time_scale": 1,
                     "start_time": 1,
                 },
@@ -495,48 +500,48 @@ def test_invalid_dataset_filter(filter):
     "kwargs, expected_domain_object",
     [
         (
-            {"dataset": "a_dataset", "attributes": ["a:b", "c:d"], "timestamp": 12},
+            {"dataset_id": UUID(int=0), "attributes": ["a:b", "c:d"], "timestamp": 12},
             ScenarioStateFilter(
-                dataset="a_dataset",
+                dataset_id=UUID(int=0),
                 attributes=[DatasetFilterAttribute("a", "b"), DatasetFilterAttribute("c", "d")],
                 timestamp=12,
             ),
         ),
         (
-            {"dataset": "a_dataset", "attribute": ["a:b", "c:d"], "timestamp": 12},
+            {"dataset_id": UUID(int=0), "attribute": ["a:b", "c:d"], "timestamp": 12},
             ScenarioStateFilter(
-                dataset="a_dataset",
+                dataset_id=UUID(int=0),
                 attributes=[DatasetFilterAttribute("a", "b"), DatasetFilterAttribute("c", "d")],
                 timestamp=12,
             ),
         ),
         (
-            {"dataset": "a_dataset", "attributes": "a:b", "timestamp": 12},
+            {"dataset_id": UUID(int=0), "attributes": "a:b", "timestamp": 12},
             ScenarioStateFilter(
-                dataset="a_dataset",
+                dataset_id=UUID(int=0),
                 attributes=[DatasetFilterAttribute("a", "b")],
                 timestamp=12,
             ),
         ),
         (
-            {"dataset": "a_dataset", "attribute": "a:b", "timestamp": 12},
+            {"dataset_id": UUID(int=0), "attribute": "a:b", "timestamp": 12},
             ScenarioStateFilter(
-                dataset="a_dataset",
+                dataset_id=UUID(int=0),
                 attributes=[DatasetFilterAttribute("a", "b")],
                 timestamp=12,
             ),
         ),
         (
-            {"dataset": "a_dataset", "attributes": ["a:b", "c:d"], "timestamp": 0},
+            {"dataset_id": UUID(int=0), "attributes": ["a:b", "c:d"], "timestamp": 0},
             ScenarioStateFilter(
-                dataset="a_dataset",
+                dataset_id=UUID(int=0),
                 attributes=[DatasetFilterAttribute("a", "b"), DatasetFilterAttribute("c", "d")],
                 timestamp=0,
             ),
         ),
         (
-            {"dataset": "a_dataset", "attributes": [], "timestamp": 0},
-            ScenarioStateFilter.all_attributes(dataset="a_dataset", timestamp=0),
+            {"dataset_id": UUID(int=0), "attributes": [], "timestamp": 0},
+            ScenarioStateFilter.all_attributes(dataset_id=UUID(int=0), timestamp=0),
         ),
     ],
 )
@@ -547,10 +552,10 @@ def test_scenario_state_filter_in(kwargs, expected_domain_object):
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"attribute": ["a"], "dataset": "a_dataset", "timestamp": 0},
-        {"attribute": ["a:b"], "dataset": "a_dataset", "timestamp": -1},
-        {"attribute": ["Aa:bB"], "dataset": "a_dataset", "timestamp": 0},
-        {"attribute": ["a:b"], "dataset": "a" * 51, "timestamp": 0},
+        {"attribute": ["a"], "dataset_id": UUID(int=0), "timestamp": 0},
+        {"attribute": ["a:b"], "dataset_id": UUID(int=0), "timestamp": -1},
+        {"attribute": ["Aa:bB"], "dataset_id": UUID(int=0), "timestamp": 0},
+        {"attribute": ["a:b"], "dataset_id": "a" * 51, "timestamp": 0},
     ],
 )
 def test_invalid_scenario_state_filter(kwargs):

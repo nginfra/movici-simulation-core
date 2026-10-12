@@ -328,7 +328,9 @@ class EntityDataProcessor:
 
     async def _store_rowptr_array(self, arr: np.ndarray, attribute_id: UUID):
         await self.session.execute(
-            insert(db.RowptrArray).values(data=arr.tobytes(), attribute_id=attribute_id)
+            insert(db.RowptrArray).values(
+                data=db.RowptrArray.prepare_buffer(arr), attribute_id=attribute_id
+            )
         )
 
 
