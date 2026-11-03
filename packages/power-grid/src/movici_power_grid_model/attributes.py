@@ -320,6 +320,12 @@ Electrical_ProtectedLine = AttributeSpec("electrical.protected_line", DataType(i
 Electrical_ProtectedSide = AttributeSpec(
     "electrical.protected_side", DataType(int)
 )  # enum branch_side: 0=from_side, 1=to_side
+# Remote node relays open a branch when a monitored node is short-circuited
+Electrical_ProtectedNode = AttributeSpec("electrical.protected_node", DataType(int))  # node id
+# Appliance relays disconnect a source / shunt / load / generator on overcurrent
+Electrical_ProtectedAppliance = AttributeSpec(
+    "electrical.protected_appliance", DataType(int)
+)  # appliance id
 
 # Cascade output attributes
 Electrical_Tripped = AttributeSpec("electrical.tripped", DataType(int))  # 0/1 relay operated

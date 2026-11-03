@@ -34,14 +34,18 @@ Goals
 Limitations
 -----------
 
-* Protection is modelled as **definite-time overcurrent** only: a relay compares the
-  short-circuit current at its side of a branch against a fixed pick-up current. Distance,
-  differential and inverse-time characteristics are not modelled
+* Protection is modelled as **definite-time** relays only: branch and appliance relays
+  compare a short-circuit current against a fixed pick-up current, remote node relays react
+  to a short-circuited node. Distance, differential and inverse-time characteristics are
+  not modelled
 * Relays are **latching**. A tripped relay stays tripped for the rest of the simulation;
   there is no auto-reclose and no repair
 * Fault activation is likewise latching — a short circuit persists until repaired
 * Only lines, cables, links and two-winding transformers can be protected. A relay on a
   three-winding transformer has no effect
+* Loads and generators carry no short-circuit current in power-grid-model, so an appliance
+  relay on one of them never operates; appliance protection is effective on sources and
+  shunts
 * The whole cascade resolves inside a single timestamp; ``pick_up_time`` orders relays
   relative to one another but does not advance simulation time (see
   :ref:`below <pgm-cascade-timing>`)
@@ -96,12 +100,16 @@ On every update:
 2. If no fault has ``electrical.status == 1``, the short-circuit stage is skipped
    entirely and the model proceeds straight to the power flow.
 3. Otherwise a **short circuit** is calculated on the current topology.
-4. Every untripped relay whose branch current exceeds its ``pick_up_current`` becomes a
-   trip candidate. Among the candidates, only those with the **lowest** ``pick_up_time``
-   actually operate — the selectivity rule.
-5. Those relays open their protected branch side. The change is applied to the live
-   network, published to the branch status attributes and recorded in the relay
-   bookkeeping.
+4. Every untripped relay that sees its trigger becomes a trip candidate: a **branch**
+   relay when the current at its side of the branch exceeds its ``pick_up_current``, a
+   **remote node** relay when its monitored node has an active fault and is still
+   energized, an **appliance** relay when the current through its appliance exceeds its
+   ``pick_up_current``. Among all candidates, of any kind, only those with the **lowest**
+   ``pick_up_time`` actually operate — the selectivity rule.
+5. Those relays act: a branch relay opens its protected branch side, a remote node relay
+   opens both sides of its branch, an appliance relay switches the appliance off. The
+   change is applied to the live network, published to the status attributes and recorded
+   in the relay bookkeeping.
 6. Steps 3-5 repeat until no further relay trips, or until ``max_cascade_iterations`` is
    reached (which logs a warning).
 7. A **power flow** is run on the remaining, partially de-energised grid. Its results
@@ -127,13 +135,16 @@ page for nodes, lines, cables, links, transformers, loads, generators, sources a
 
 Three differences apply.
 
-Additional Entity Group: Branch Protection
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Additional Entity Groups: Protection Relays
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Three kinds of relay, each an optional entity group: without any relays the model still
+runs, it simply never isolates anything. They share ``pick_up_time`` (selectivity) and
+the published ``tripped`` flag.
 
 ``electrical_branch_protection_entities``
 
-A relay monitoring one side of one branch. Optional: without any relays the model still
-runs, it simply never isolates anything.
+A relay monitoring one side of one branch, opening that side on overcurrent.
 
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | Attribute                                      | Flags       | Description                                            |
@@ -148,6 +159,47 @@ runs, it simply never isolates anything.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.pick_up_time``                    | OPT         | Relative operating time (s) used for selectivity: the  |
 |                                                |             | lowest value among candidates trips first. Default: 0  |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.tripped``                         | PUB         | Whether this relay has operated (0/1). Latching        |
++------------------------------------------------+-------------+--------------------------------------------------------+
+
+``electrical_remote_node_protection_entities``
+
+A relay that opens **both** sides of a branch when a monitored node is short-circuited
+(an active fault on a node that is still energized), regardless of the current. The
+typical case is a transformer that must be disconnected on a fault at its secondary
+busbar. A fault on an already isolated island does not trigger it.
+
++------------------------------------------------+-------------+--------------------------------------------------------+
+| Attribute                                      | Flags       | Description                                            |
++================================================+=============+========================================================+
+| ``electrical.protected_node``                  | INIT        | Id of the node this relay monitors                     |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.protected_line``                  | INIT        | Id of the branch this relay opens (line, cable,        |
+|                                                |             | link or two-winding transformer)                       |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.pick_up_time``                    | OPT         | Relative operating time (s) used for selectivity.      |
+|                                                |             | Default: 0                                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.tripped``                         | PUB         | Whether this relay has operated (0/1). Latching        |
++------------------------------------------------+-------------+--------------------------------------------------------+
+
+``electrical_appliance_protection_entities``
+
+A relay that switches a source, shunt, load or generator off when the short-circuit
+current through it exceeds its pick-up current. Disconnecting the only source blacks out
+the grid. The appliance's ``electrical.status`` is published as 0.
+
++------------------------------------------------+-------------+--------------------------------------------------------+
+| Attribute                                      | Flags       | Description                                            |
++================================================+=============+========================================================+
+| ``electrical.protected_appliance``             | INIT        | Id of the source, shunt, load or generator this        |
+|                                                |             | relay protects                                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.pick_up_current``                 | INIT        | Current above which the relay operates (A)             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.pick_up_time``                    | OPT         | Relative operating time (s) used for selectivity.      |
+|                                                |             | Default: 0                                             |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tripped``                         | PUB         | Whether this relay has operated (0/1). Latching        |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -168,7 +220,7 @@ published attribute:
 Changed Attribute Flags
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-Three attributes carry different flags than in the power grid calculation model, because
+Some attributes carry different flags than in the power grid calculation model, because
 the cascade both reads and writes them:
 
 +------------------------------------------------+---------------------+----------------------------------------------+
@@ -177,6 +229,9 @@ the cascade both reads and writes them:
 | ``electrical.from_status``                     | ``OPT`` → ``OPT``   | The model publishes breaker positions after  |
 | ``electrical.to_status``                       | ``| PUB``           | a trip, on lines, cables, links and          |
 | (on branches)                                  |                     | two-winding transformers                     |
++------------------------------------------------+---------------------+----------------------------------------------+
+| ``electrical.status``                          | ``OPT`` → ``OPT``   | Appliance protection publishes the switched- |
+| (on sources, shunts, loads, generators)        | ``| PUB``           | off state                                    |
 +------------------------------------------------+---------------------+----------------------------------------------+
 | ``electrical.status``                          | ``OPT`` → ``SUB``   | Fault status is driven by an external model  |
 | (on faults)                                    |                     | and is required before the cascade can run   |

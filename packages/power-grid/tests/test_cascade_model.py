@@ -416,3 +416,136 @@ class TestEndToEndChain:
         nodes = result[DATASET_NAME]["electrical_node_entities"]
         energized_by_id = dict(zip(nodes["id"], nodes["electrical.energized"]))
         assert energized_by_id[3] == 0
+
+
+def _energized(result):
+    """Published energized flags; unchanged nodes are absent (empty if none)."""
+    nodes = result[DATASET_NAME].get("electrical_node_entities", {})
+    return dict(zip(nodes.get("id", []), nodes.get("electrical.energized", [])))
+
+
+def _tripped(result, group):
+    prot = result[DATASET_NAME].get(group, {})
+    return dict(zip(prot.get("id", []), prot.get("electrical.tripped", [])))
+
+
+def _run_with_protection(cascade_config, cascade_data, global_schema, **protection):
+    """Replace the branch relays of the test network by the given groups."""
+    data = dict(cascade_data)
+    data.pop("electrical_branch_protection_entities")
+    data.update(protection)
+    model = CascadeModel(cascade_config)
+    with ModelTester(model, schema=global_schema) as tester:
+        tester.add_init_data(DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data))
+        tester.initialize()
+        tester.update(0, None)
+        result, _ = _activate_fault(tester)
+    return result
+
+
+class TestRemoteNodeProtection:
+    REMOTE = {
+        "electrical_remote_node_protection_entities": {
+            "id": [61],
+            "electrical.protected_node": [3],
+            "electrical.protected_line": [31],
+            "electrical.pick_up_time": [0.0],
+        }
+    }
+
+    def test_fault_on_monitored_node_opens_branch_both_sides(
+        self, cascade_config, cascade_data, global_schema
+    ):
+        """Fault at n3 -> relay on L1 (monitoring n3) opens L1: n2 and n3 dead."""
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **self.REMOTE)
+        assert _tripped(result, "electrical_remote_node_protection_entities") == {61: 1}
+        energized = _energized(result)
+        assert energized[2] == 0 and energized[3] == 0
+        lines = result[DATASET_NAME]["electrical_line_entities"]
+        status = dict(
+            zip(lines["id"], zip(lines["electrical.from_status"], lines["electrical.to_status"]))
+        )
+        assert status[31] == (0, 0)
+
+    def test_fault_elsewhere_does_not_trigger(self, cascade_config, cascade_data, global_schema):
+        """A relay monitoring n2 ignores a fault at n3 (nothing else trips)."""
+        remote = {
+            "electrical_remote_node_protection_entities": {
+                "id": [61],
+                "electrical.protected_node": [2],
+                "electrical.protected_line": [31],
+            }
+        }
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **remote)
+        assert "electrical_remote_node_protection_entities" not in result[DATASET_NAME]
+        assert _energized(result).get(3) != 0
+
+    def test_selectivity_across_kinds(self, cascade_config, cascade_data, global_schema):
+        """The instantaneous branch relay R2 clears the fault; the slower remote
+        node relay on L1 never operates because n3 is isolated by then."""
+        remote = {
+            "electrical_remote_node_protection_entities": {
+                "id": [61],
+                "electrical.protected_node": [3],
+                "electrical.protected_line": [31],
+                "electrical.pick_up_time": [0.5],
+            },
+            "electrical_branch_protection_entities": cascade_data[
+                "electrical_branch_protection_entities"
+            ],
+        }
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **remote)
+        assert _tripped(result, "electrical_branch_protection_entities") == {52: 1}
+        assert "electrical_remote_node_protection_entities" not in result[DATASET_NAME]
+        energized = _energized(result)
+        assert energized[3] == 0 and energized.get(2) != 0
+
+
+class TestApplianceProtection:
+    def test_source_relay_blacks_out_the_grid(self, cascade_config, cascade_data, global_schema):
+        """Without branch relays, the source's own overcurrent relay operates
+        and every node goes dark; the source status is published as 0."""
+        appliance = {
+            "electrical_appliance_protection_entities": {
+                "id": [71],
+                "electrical.protected_appliance": [10],
+                "electrical.pick_up_current": [1000.0],
+                "electrical.pick_up_time": [2.0],
+            }
+        }
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **appliance)
+        assert _tripped(result, "electrical_appliance_protection_entities") == {71: 1}
+        assert all(e == 0 for e in _energized(result).values())
+        sources = result[DATASET_NAME]["electrical_source_entities"]
+        assert dict(zip(sources["id"], sources["electrical.status"])) == {10: 0}
+
+    def test_source_relay_is_backup_to_branch_relay(
+        self, cascade_config, cascade_data, global_schema
+    ):
+        """With the branch relays present, R2 (0 s) clears the fault before the
+        source relay (2 s) sees sustained overcurrent."""
+        appliance = {
+            "electrical_appliance_protection_entities": {
+                "id": [71],
+                "electrical.protected_appliance": [10],
+                "electrical.pick_up_current": [1000.0],
+                "electrical.pick_up_time": [2.0],
+            },
+            "electrical_branch_protection_entities": cascade_data[
+                "electrical_branch_protection_entities"
+            ],
+        }
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **appliance)
+        assert "electrical_appliance_protection_entities" not in result[DATASET_NAME]
+        assert _energized(result).get(1) != 0
+
+    def test_relay_below_pick_up_does_not_trip(self, cascade_config, cascade_data, global_schema):
+        appliance = {
+            "electrical_appliance_protection_entities": {
+                "id": [71],
+                "electrical.protected_appliance": [10],
+                "electrical.pick_up_current": [1e6],
+            }
+        }
+        result = _run_with_protection(cascade_config, cascade_data, global_schema, **appliance)
+        assert "electrical_appliance_protection_entities" not in result[DATASET_NAME]
