@@ -126,6 +126,16 @@ class Model(TrackedModel, name="power_grid_calculation"):
                 name,
                 ds.ElectricalGeneratorEntity(name="electrical_generator_entities", optional=True),
             ),
+            asym_loads=state.register_entity_group(
+                name,
+                ds.ElectricalAsymLoadEntity(name="electrical_asym_load_entities", optional=True),
+            ),
+            asym_generators=state.register_entity_group(
+                name,
+                ds.ElectricalAsymGeneratorEntity(
+                    name="electrical_asym_generator_entities", optional=True
+                ),
+            ),
             sources=state.register_entity_group(
                 name, ds.ElectricalSourceEntity(name="electrical_source_entities", optional=True)
             ),

@@ -87,6 +87,14 @@ Electrical_LoadType = AttributeSpec(
     "electrical.load_type", DataType(int)
 )  # enum: 0=const_power, 1=const_impedance, 2=const_current
 
+# Per-phase (a, b, c) setpoints for unbalanced loads and generators
+Electrical_ActivePowerSpecifiedPerPhase = AttributeSpec(
+    "electrical.active_power_specified_per_phase", _PHASE
+)  # W
+Electrical_ReactivePowerSpecifiedPerPhase = AttributeSpec(
+    "electrical.reactive_power_specified_per_phase", _PHASE
+)  # VAr
+
 # =============================================================================
 # Transformer Attributes
 # =============================================================================
@@ -140,6 +148,13 @@ Electrical_RXRatio = AttributeSpec("electrical.rx_ratio", DataType(float))  # rx
 
 Electrical_Conductance = AttributeSpec("electrical.conductance", DataType(float))  # S (g1)
 Electrical_Susceptance = AttributeSpec("electrical.susceptance", DataType(float))  # S (b1)
+# Zero-sequence admittance, required for asymmetric calculations
+Electrical_ZeroSequenceConductance = AttributeSpec(
+    "electrical.zero_sequence_conductance", DataType(float)
+)  # S (g0)
+Electrical_ZeroSequenceSusceptance = AttributeSpec(
+    "electrical.zero_sequence_susceptance", DataType(float)
+)  # S (b0)
 
 # =============================================================================
 # Sensor Attributes (for State Estimation)

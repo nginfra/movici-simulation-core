@@ -16,6 +16,7 @@ from movici_simulation_core.models.common.entity_groups import LinkEntity, Point
 from .attributes import (
     Electrical_ActivePower,
     Electrical_ActivePowerSpecified,
+    Electrical_ActivePowerSpecifiedPerPhase,
     Electrical_AngleMeasurementType,
     Electrical_Capacitance,
     Electrical_Clock,
@@ -81,6 +82,7 @@ from .attributes import (
     Electrical_ReactivePower3,
     Electrical_ReactivePowerFrom,
     Electrical_ReactivePowerSpecified,
+    Electrical_ReactivePowerSpecifiedPerPhase,
     Electrical_ReactivePowerTo,
     Electrical_ReferenceAngle,
     Electrical_ReferenceVoltage,
@@ -122,8 +124,10 @@ from .attributes import (
     Electrical_WindingFrom,
     Electrical_WindingTo,
     Electrical_ZeroSequenceCapacitance,
+    Electrical_ZeroSequenceConductance,
     Electrical_ZeroSequenceReactance,
     Electrical_ZeroSequenceResistance,
+    Electrical_ZeroSequenceSusceptance,
     Electrical_ZeroSequenceTanDelta,
 )
 
@@ -363,6 +367,46 @@ class ElectricalGeneratorEntity(EntityGroup):
     q_specified = field(Electrical_ReactivePowerSpecified, flags=SUB)
 
 
+class ElectricalAsymLoadEntity(EntityGroup):
+    """Unbalanced electrical load (consumer).
+
+    Like :class:`ElectricalLoadEntity`, but with a separate active and
+    reactive power setpoint for each phase (a, b, c). In a symmetric
+    calculation the three phases are summed; in an asymmetric calculation
+    each phase is solved separately. PGM component: ``asym_load``.
+    """
+
+    __entity_name__ = "electrical_asym_load_entities"
+
+    # Input attributes
+    node_id = field(Connection_ToId, flags=INIT)
+    status = field(Electrical_Status, flags=OPT)
+    load_type = field(Electrical_LoadType, flags=OPT)
+
+    # Subscribable attributes (dynamic updates), shape (3,)
+    p_specified = field(Electrical_ActivePowerSpecifiedPerPhase, flags=SUB)
+    q_specified = field(Electrical_ReactivePowerSpecifiedPerPhase, flags=SUB)
+
+
+class ElectricalAsymGeneratorEntity(EntityGroup):
+    """Unbalanced electrical generator.
+
+    Like :class:`ElectricalGeneratorEntity`, but with per-phase (a, b, c)
+    setpoints. PGM component: ``asym_gen``.
+    """
+
+    __entity_name__ = "electrical_asym_generator_entities"
+
+    # Input attributes
+    node_id = field(Connection_ToId, flags=INIT)
+    status = field(Electrical_Status, flags=OPT)
+    load_type = field(Electrical_LoadType, flags=OPT)
+
+    # Subscribable attributes (dynamic updates), shape (3,)
+    p_specified = field(Electrical_ActivePowerSpecifiedPerPhase, flags=SUB)
+    q_specified = field(Electrical_ReactivePowerSpecifiedPerPhase, flags=SUB)
+
+
 class ElectricalSourceEntity(EntityGroup):
     """External grid connection (slack bus).
 
@@ -394,6 +438,9 @@ class ElectricalShuntEntity(EntityGroup):
     status = field(Electrical_Status, flags=OPT)
     conductance = field(Electrical_Conductance, flags=INIT)
     susceptance = field(Electrical_Susceptance, flags=INIT)
+    # Zero-sequence: only needed for asymmetric calculations
+    zero_sequence_conductance = field(Electrical_ZeroSequenceConductance, flags=OPT)
+    zero_sequence_susceptance = field(Electrical_ZeroSequenceSusceptance, flags=OPT)
 
 
 class ElectricalVoltageSensorEntity(EntityGroup):
@@ -582,6 +629,8 @@ class PowerGridNetwork:
     three_winding_transformers: ElectricalThreeWindingTransformerEntity
     loads: ElectricalLoadEntity
     generators: ElectricalGeneratorEntity
+    asym_loads: ElectricalAsymLoadEntity
+    asym_generators: ElectricalAsymGeneratorEntity
     sources: ElectricalSourceEntity
     shunts: ElectricalShuntEntity
     voltage_sensors: ElectricalVoltageSensorEntity

@@ -569,6 +569,21 @@ class GeneratorProcessor(ApplianceProcessor):
     PGM_COMPONENT = "sym_gen"
 
 
+class AsymLoadProcessor(ApplianceProcessor):
+    """Per-phase load: the same fields as ``sym_load`` with shape ``(n, 3)``.
+
+    ``ApplianceProcessor`` assigns the ``(n, 3)`` attribute arrays straight
+    into the ``(n, 3)`` PGM fields, and ``_changed_update`` reduces the
+    per-phase change mask to one flag per element, so nothing else differs.
+    """
+
+    PGM_COMPONENT = "asym_load"
+
+
+class AsymGeneratorProcessor(ApplianceProcessor):
+    PGM_COMPONENT = "asym_gen"
+
+
 class SourceProcessor(PGMElementProcessor):
     PGM_COMPONENT = "source"
 
@@ -606,6 +621,10 @@ class ShuntProcessor(PGMElementProcessor):
         arr["status"] = _get_status_array(eg.status)
         arr["g1"] = eg.conductance.array
         arr["b1"] = eg.susceptance.array
+        # Zero-sequence stays NaN when not supplied; only asymmetric
+        # calculations need it and validate() reports what is missing.
+        arr["g0"] = _get_optional_array(eg.zero_sequence_conductance, default=np.nan)
+        arr["b0"] = _get_optional_array(eg.zero_sequence_susceptance, default=np.nan)
         return arr
 
     def build_update_array(self):
@@ -850,6 +869,8 @@ class PowerGridWrapper:
             ThreeWindingTransformerProcessor(self, dataset.three_winding_transformers),
             LoadProcessor(self, dataset.loads),
             GeneratorProcessor(self, dataset.generators),
+            AsymLoadProcessor(self, dataset.asym_loads),
+            AsymGeneratorProcessor(self, dataset.asym_generators),
             SourceProcessor(self, dataset.sources),
             ShuntProcessor(self, dataset.shunts),
             VoltageSensorProcessor(self, dataset.voltage_sensors),

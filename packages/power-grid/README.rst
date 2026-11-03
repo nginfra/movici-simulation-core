@@ -10,7 +10,8 @@ Features
 - Power flow analysis (Newton-Raphson, linear, iterative current)
 - State estimation with voltage, power, and current sensors
 - Short circuit analysis
-- Support for nodes, lines, cables, transformers, loads, generators, sources, shunts
+- Support for nodes, lines, cables, transformers, loads, generators (balanced or per-phase),
+  sources, shunts
 - Automatic tap changer regulation
 
 Installation

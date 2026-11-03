@@ -39,9 +39,9 @@ Limitations
 * Per-phase results are reduced to a single value on the scalar attributes — the
   **worst** phase (lowest voltage, highest current). Set ``per_phase_output`` to publish
   all three phases alongside them (see :ref:`pgm-power-flow-vs-short-circuit`)
-* Asymmetric calculations and unbalanced faults require zero-sequence line/cable
-  parameters, which are optional attributes the dataset must supply
-  (see :ref:`pgm-zero-sequence`)
+* Asymmetric calculations and unbalanced faults require zero-sequence line/cable (and,
+  for asymmetric calculations, shunt) parameters, which are optional attributes the
+  dataset must supply (see :ref:`pgm-zero-sequence`)
 * Time patterns are not part of the model. Values that change over time (e.g. a load
   profile) should be produced by another model, such as a tape player, and fed in through
   the ``SUB`` attributes
@@ -609,6 +609,37 @@ subscribable for dynamic updates.
 | ``electrical.reactive_power_specified``        | SUB         | Specified reactive power generation (VAr)              |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
+Per-Phase Loads and Generators
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``electrical_asym_load_entities``, ``electrical_asym_generator_entities``
+
+Unbalanced consumers and producers (PGM components ``asym_load`` and ``asym_gen``), for
+low-voltage networks where single-phase connections make the phases differ. They mirror
+the load and generator entities, but the setpoints are ``(3,)`` arrays with one value per
+phase (a, b, c). In a symmetric calculation the three phases are summed and the element
+behaves like a balanced load of that total; in an asymmetric calculation
+(``symmetric: false``) each phase is solved separately, so the per-phase node voltages and
+branch currents (see ``per_phase_output``) show the imbalance.
+
++------------------------------------------------+-------------+--------------------------------------------------------+
+| Attribute                                      | Flags       | Description                                            |
++================================================+=============+========================================================+
+| ``connection.to_id``                           | INIT        | Id of the node the element is connected to             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.status``                          | OPT         | Whether the element is on (1) or off (0). Default: 1   |
+|                                                |             | Can be switched during the simulation                  |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.load_type``                       | OPT         | Load behaviour (enum: 0=const power, 1=const           |
+|                                                |             | impedance, 2=const current). Default: 0                |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power_specified_``         | SUB         | Specified active power per phase (W, shape ``(3,)``)   |
+| ``per_phase``                                  |             |                                                        |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power_specified_``       | SUB         | Specified reactive power per phase (VAr, shape         |
+| ``per_phase``                                  |             | ``(3,)``)                                              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+
 Sources
 ^^^^^^^
 
@@ -653,6 +684,12 @@ reactor bank), described by its admittance.
 | ``electrical.conductance``                     | INIT        | Shunt conductance (S, ``g1``)                          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.susceptance``                     | INIT        | Shunt susceptance (S, ``b1``)                          |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_conductance``       | OPT         | Zero-sequence conductance (S, ``g0``). Only needed for |
+|                                                |             | asymmetric calculations                                |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.zero_sequence_susceptance``       | OPT         | Zero-sequence susceptance (S, ``b0``). Only needed for |
+|                                                |             | asymmetric calculations                                |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the shunt is on (1) or off (0). Default: 1     |
 |                                                |             | Can be switched during the simulation                  |
@@ -874,13 +911,16 @@ Positive-sequence parameters alone describe a balanced network. Two cases need t
 **zero-sequence** network as well, and both require ``electrical.zero_sequence_*`` on
 every line and cable:
 
-* asymmetric calculations (``symmetric: false``)
+* asymmetric calculations (``symmetric: false``), which additionally need
+  ``electrical.zero_sequence_conductance`` / ``_susceptance`` on every shunt
 * unbalanced faults — ``single_phase_to_ground``, ``two_phase`` and
   ``two_phase_to_ground``
 
 Balanced three-phase faults and symmetric power flow do not need them, so the attributes
 are optional. Links are zero-impedance and get near-zero zero-sequence values
 automatically; transformers derive theirs from the winding configuration and clock number.
+Loads and generators have no zero-sequence data; an unbalanced network is described by
+per-phase loads (``electrical_asym_load_entities``) instead.
 
 When the data is missing, the model reports it at initialization, naming the component,
 the field and the offending element ids::

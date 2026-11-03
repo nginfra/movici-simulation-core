@@ -1552,3 +1552,157 @@ class TestSwitchingUpdates:
                 {"electrical_transformer_entities": {"id": [60], "electrical.tap_position": [0]}},
             )
             assert self._voltage(tester, 2) == pytest.approx(v_nom)
+
+
+def _load_node_voltage(result):
+    return result[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][1]
+
+
+class TestAsymmetricLoads:
+    """Per-phase loads and generators (PGM ``asym_load`` / ``asym_gen``)."""
+
+    @staticmethod
+    def _network(p_phases, q_phases=(0.0, 0.0, 0.0), shunt_zero_sequence=True):
+        """Simple network with the load replaced by a per-phase load, plus a
+        shunt, with zero-sequence data so the asymmetric solve validates."""
+        data = _simple_network_data()
+        data["electrical_line_entities"].update(
+            {
+                "electrical.zero_sequence_resistance": [0.3],
+                "electrical.zero_sequence_reactance": [0.15],
+                "electrical.zero_sequence_capacitance": [0.0],
+                "electrical.zero_sequence_tan_delta": [0.0],
+            }
+        )
+        del data["electrical_load_entities"]
+        data["electrical_asym_load_entities"] = {
+            "id": [21],
+            "connection.to_id": [2],
+            "electrical.active_power_specified_per_phase": [list(p_phases)],
+            "electrical.reactive_power_specified_per_phase": [list(q_phases)],
+        }
+        data["electrical_shunt_entities"] = {
+            "id": [70],
+            "connection.to_id": [2],
+            "electrical.conductance": [0.0],
+            "electrical.susceptance": [1e-5],
+        }
+        if shunt_zero_sequence:
+            data["electrical_shunt_entities"].update(
+                {
+                    "electrical.zero_sequence_conductance": [0.0],
+                    "electrical.zero_sequence_susceptance": [1e-5],
+                }
+            )
+        return data
+
+    @staticmethod
+    def _tester(config, data, schema):
+        model = Model(config)
+        tester = ModelTester(model, schema=schema)
+        tester.__enter__()
+        tester.add_init_data(DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data))
+        tester.initialize()
+        return tester
+
+    def test_single_phase_load_depresses_only_its_phase(self, model_config, global_schema):
+        config = {**model_config, "symmetric": False, "per_phase_output": True}
+        with self._tester(config, self._network([90000.0, 0.0, 0.0]), global_schema) as tester:
+            result, _ = tester.update(0, None)
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        u = nodes["electrical.voltage_pu_per_phase"][nodes["id"].index(2)]
+        assert u[0] < u[1] and u[0] < u[2]
+        assert u[0] < 0.9999
+        # the scalar attribute carries the worst phase
+        assert nodes["electrical.voltage_pu"][nodes["id"].index(2)] == pytest.approx(u[0])
+
+    def test_balanced_asym_load_matches_sym_load(self, model_config, global_schema):
+        """Three equal phases give the same solution as a sym_load of their sum."""
+        with self._tester(
+            model_config, self._network([30000.0, 30000.0, 30000.0]), global_schema
+        ) as tester:
+            result_asym, _ = tester.update(0, None)
+        data = _simple_network_data()
+        data["electrical_load_entities"]["electrical.active_power_specified"] = [90000.0]
+        data["electrical_shunt_entities"] = {
+            "id": [70],
+            "connection.to_id": [2],
+            "electrical.conductance": [0.0],
+            "electrical.susceptance": [1e-5],
+        }
+        with self._tester(model_config, data, global_schema) as tester:
+            result_sym, _ = tester.update(0, None)
+        assert _load_node_voltage(result_asym) == pytest.approx(
+            _load_node_voltage(result_sym), rel=1e-9
+        )
+
+    def test_symmetric_calculation_sums_phases(self, model_config, global_schema):
+        """An unbalanced load in a symmetric calculation acts as its phase sum."""
+        with self._tester(model_config, self._network([90000.0, 0.0, 0.0]), global_schema) as t1:
+            r1, _ = t1.update(0, None)
+        with self._tester(
+            model_config, self._network([30000.0, 30000.0, 30000.0]), global_schema
+        ) as t2:
+            r2, _ = t2.update(0, None)
+        assert _load_node_voltage(r1) == pytest.approx(_load_node_voltage(r2), rel=1e-9)
+
+    def test_per_phase_update(self, model_config, global_schema):
+        """Moving the load from phase a to phase b moves the voltage dip."""
+        config = {**model_config, "symmetric": False, "per_phase_output": True}
+        with self._tester(config, self._network([90000.0, 0.0, 0.0]), global_schema) as tester:
+            tester.update(0, None)
+            tester.new_time(1)
+            result, _ = tester.update(
+                1,
+                {
+                    DATASET_NAME: {
+                        "electrical_asym_load_entities": {
+                            "id": [21],
+                            "electrical.active_power_specified_per_phase": [[0.0, 90000.0, 0.0]],
+                        }
+                    }
+                },
+            )
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        u = nodes["electrical.voltage_pu_per_phase"][nodes["id"].index(2)]
+        assert u[1] < u[0] and u[1] < u[2]
+        assert u[1] < 0.9999
+
+    def test_asym_generator_raises_its_phase(self, model_config, global_schema):
+        config = {**model_config, "symmetric": False, "per_phase_output": True}
+        data = self._network([30000.0, 30000.0, 30000.0])
+        data["electrical_asym_generator_entities"] = {
+            "id": [22],
+            "connection.to_id": [2],
+            "electrical.active_power_specified_per_phase": [[0.0, 0.0, 30000.0]],
+            "electrical.reactive_power_specified_per_phase": [[0.0, 0.0, 0.0]],
+        }
+        with self._tester(config, data, global_schema) as tester:
+            result, _ = tester.update(0, None)
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        u = nodes["electrical.voltage_pu_per_phase"][nodes["id"].index(2)]
+        assert u[2] > u[0] and u[2] > u[1]
+
+    def test_missing_shunt_zero_sequence_raises_clear_error(self, model_config, global_schema):
+        config = {**model_config, "symmetric": False}
+        data = self._network([90000.0, 0.0, 0.0], shunt_zero_sequence=False)
+        with pytest.raises(ValueError, match="shunt"):
+            self._tester(config, data, global_schema)
+
+    def test_asym_load_in_cascade(self, global_schema):
+        """The cascade model registers the per-phase groups too."""
+        from movici_power_grid_model import CascadeModel
+
+        config = {"name": "c", "type": "power_grid_cascade", "dataset": DATASET_NAME}
+        model = CascadeModel(config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME,
+                get_dataset(
+                    DATASET_NAME, "electrical_network", self._network([90000.0, 0.0, 0.0])
+                ),
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        assert nodes["electrical.voltage_pu"][nodes["id"].index(2)] < 1.0
