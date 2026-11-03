@@ -157,6 +157,34 @@ def _get_status_array(attr, default: int = 1) -> np.ndarray:
     return np.full(len(attr), default, dtype=np.int8)
 
 
+def _changed_update(eg, component: str, fields: dict) -> t.Optional[np.ndarray]:
+    """Build a sparse PGM update array for the elements where a SUB attribute changed.
+
+    ``fields`` maps a PGM update field name to the Movici attribute that feeds
+    it. Only the fields that actually changed on a row are written; the others
+    keep the "no change" sentinel that ``initialize_array`` fills in, so a row
+    that only opened its to-side does not re-send its from-side as well.
+
+    Attributes that never received data (``OPT`` without init data and without
+    an update so far) are skipped: touching ``.changed`` on them would raise.
+
+    :returns: the update array, or ``None`` when nothing changed.
+    """
+    active = {f: a for f, a in fields.items() if a.has_data() and a.has_changes()}
+    if not active:
+        return None
+    changed = np.zeros(len(eg), dtype=bool)
+    for attr in active.values():
+        changed |= attr.changed
+    idx = np.flatnonzero(changed)
+    arr = pgm.initialize_array("update", component, len(idx))
+    arr["id"] = eg.index.ids[idx]
+    for field, attr in active.items():
+        rows = attr.changed[idx]
+        arr[field][rows] = attr.array[idx][rows]
+    return arr
+
+
 # =========================================================================
 # Base processor
 # =========================================================================
@@ -283,6 +311,14 @@ class LineProcessor(PGMElementProcessor):
         arr["i_n"] = np.where(np.isinf(i_n), np.nan, i_n)
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg, "line", {"from_status": eg.from_status, "to_status": eg.to_status}
+        )
+
     def write_results(self, result: dict):
         if not len(self.entity_group):
             return
@@ -372,6 +408,20 @@ class TransformerProcessor(PGMElementProcessor):
         arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg,
+            "transformer",
+            {
+                "from_status": eg.from_status,
+                "to_status": eg.to_status,
+                "tap_pos": eg.tap_position,
+            },
+        )
+
     def write_results(self, result: dict):
         if not len(self.entity_group):
             return
@@ -435,6 +485,21 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
         arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg,
+            "three_winding_transformer",
+            {
+                "status_1": eg.status_1,
+                "status_2": eg.status_2,
+                "status_3": eg.status_3,
+                "tap_pos": eg.tap_position,
+            },
+        )
+
     def write_results(self, result: dict):
         eg = self.entity_group
         if not len(eg):
@@ -485,20 +550,15 @@ class ApplianceProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        p_changed = eg.p_specified.has_changes()
-        q_changed = eg.q_specified.has_changes()
-        if not (p_changed or q_changed):
-            return None
-
-        changed = eg.p_specified.changed | eg.q_specified.changed
-        idx = np.flatnonzero(changed)
-        changed_ids = eg.index.ids[idx]
-
-        arr = pgm.initialize_array("update", self.PGM_COMPONENT, len(idx))
-        arr["id"] = changed_ids
-        arr["p_specified"] = eg.p_specified.array[idx]
-        arr["q_specified"] = eg.q_specified.array[idx]
-        return arr
+        return _changed_update(
+            eg,
+            self.PGM_COMPONENT,
+            {
+                "status": eg.status,
+                "p_specified": eg.p_specified,
+                "q_specified": eg.q_specified,
+            },
+        )
 
 
 class LoadProcessor(ApplianceProcessor):
@@ -526,6 +586,12 @@ class SourceProcessor(PGMElementProcessor):
         arr["rx_ratio"] = _get_optional_array(eg.rx_ratio, default=0.1)
         return arr
 
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(eg, "source", {"status": eg.status})
+
 
 class ShuntProcessor(PGMElementProcessor):
     PGM_COMPONENT = "shunt"
@@ -541,6 +607,12 @@ class ShuntProcessor(PGMElementProcessor):
         arr["g1"] = eg.conductance.array
         arr["b1"] = eg.susceptance.array
         return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(eg, "shunt", {"status": eg.status})
 
 
 # =========================================================================
@@ -676,15 +748,7 @@ class FaultProcessor(PGMElementProcessor):
         eg = self.entity_group
         if not len(eg):
             return None
-        status = eg.status
-        # status is OPT and may never receive data; guard before touching .changed
-        if not status.is_initialized() or not status.has_changes():
-            return None
-        idx = np.flatnonzero(status.changed)
-        arr = pgm.initialize_array("update", "fault", len(idx))
-        arr["id"] = eg.index.ids[idx]
-        arr["status"] = status.array[idx].astype(np.int8)
-        return arr
+        return _changed_update(eg, "fault", {"status": eg.status})
 
     def write_results(self, result: dict):
         eg = self.entity_group
@@ -850,7 +914,12 @@ class PowerGridWrapper:
         return bool(np.all(faults["fault_type"] == pgm.FaultType.three_phase))
 
     def process_changes(self):
-        """Apply dynamic changes from processors with SUB attributes."""
+        """Apply dynamic changes from processors with SUB attributes.
+
+        Covers load / generation / measurement values as well as switching
+        state: branch from/to status, transformer tap position and appliance
+        (load, generator, source, shunt, fault) status.
+        """
         update_data: dict[str, np.ndarray] = {}
         for proc in self.processors:
             arr = proc.build_update_array()

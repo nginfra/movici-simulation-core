@@ -45,8 +45,11 @@ Limitations
 * Time patterns are not part of the model. Values that change over time (e.g. a load
   profile) should be produced by another model, such as a tape player, and fed in through
   the ``SUB`` attributes
-* The network topology is fixed at initialization. Loads, generation and sensor
-  measurements can change between steps, but components cannot be added or removed
+* Components cannot be added or removed after initialization. The network can be
+  switched, though: branch from/to status, transformer tap positions and the on/off
+  status of loads, generators, sources, shunts and faults are optional (``OPT``)
+  attributes and, like all ``OPT``/``SUB`` attributes, are subscribed, so another model
+  or the scenario can change them between steps
 
 Calculation Types
 -----------------
@@ -87,12 +90,13 @@ with:
 
 | :math:`Y_{t_{n}}`: Model output state at :math:`t_{n}` (voltages, currents, power flows)
 | :math:`F`: The power-grid-model calculation
-| :math:`X_{t_{n}}`: Model input state at :math:`t_{n}` (loads, generation, measurements)
+| :math:`X_{t_{n}}`: Model input state at :math:`t_{n}` (loads, generation, measurements,
+  switching state)
 
 Because there is no internal time-dependent state, the model can recompute the full
-network solution on every update. Incoming changes (new load values, generation setpoints
-or sensor measurements) are applied to the live PGM model first, and then a fresh
-calculation is run.
+network solution on every update. Incoming changes (new load values, generation setpoints,
+sensor measurements, opened or closed branches, tap positions, switched appliances) are
+applied to the live PGM model first, and then a fresh calculation is run.
 
 .. note:: Source Required
 
@@ -111,8 +115,11 @@ How It Works
    the corresponding power-grid-model input array. The arrays are concatenated per PGM
    component type and a single ``PowerGridModel`` is constructed.
 3. On each ``update``, processors with subscribable attributes build sparse **update
-   arrays** for the elements whose load / generation / measurement values changed, and
-   these are applied to the live PGM model.
+   arrays** for the elements whose values changed, and these are applied to the live PGM
+   model. This covers load / generation / measurement values as well as switching state:
+   branch from/to status, transformer tap position and appliance status. Only the fields
+   that changed on an element are sent; the others carry PGM's "no change" sentinel, so
+   opening the to-side of a line leaves its from-side untouched.
 4. The configured calculation (power flow, state estimation or short circuit) is run.
 5. Results are written back to the ``PUB`` attributes of each entity group.
 
@@ -252,10 +259,10 @@ series impedance and shunt capacitance. Lines derive from ``LinkEntity``.
 |                                                |             | ``loading``. When omitted, no current limit is applied |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.from_status``                     | OPT         | Whether the from end is connected (1) or open (0).     |
-|                                                |             | Default: 1                                             |
+|                                                |             | Default: 1. Can be switched during the simulation      |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.to_status``                       | OPT         | Whether the to end is connected (1) or open (0).       |
-|                                                |             | Default: 1                                             |
+|                                                |             | Default: 1. Can be switched during the simulation      |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_from``                    | PUB         | Current at the from end (A)                            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -312,10 +319,10 @@ lines. Links derive from ``LinkEntity``.
 | ``topology.to_node_id``                        | INIT        | Node id on the to side (from ``LinkEntity``)           |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.from_status``                     | OPT         | Whether the from end is connected (1) or open (0).     |
-|                                                |             | Default: 1                                             |
+|                                                |             | Default: 1. Can be switched during the simulation      |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.to_status``                       | OPT         | Whether the to end is connected (1) or open (0).       |
-|                                                |             | Default: 1                                             |
+|                                                |             | Default: 1. Can be switched during the simulation      |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_from``                    | PUB         | Current at the from end (A)                            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -379,7 +386,8 @@ from the transformer's short-circuit test.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_side``                        | OPT         | Side the tap changer is on (0=from, 1=to). Default: 0  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.tap_position``                    | OPT         | Current tap position. Default: 0                       |
+| ``electrical.tap_position``                    | OPT         | Current tap position. Default: 0. Can be changed       |
+|                                                |             | during the simulation                                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_min``                         | OPT         | Tap position at minimum voltage. Default: 0            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -389,9 +397,11 @@ from the transformer's short-circuit test.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_size``                        | OPT         | Voltage step per tap position (V). Default: 0          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.from_status``                     | OPT         | From-side connection status. Default: 1                |
+| ``electrical.from_status``                     | OPT         | From-side connection status. Default: 1. Can be        |
+|                                                |             | switched during the simulation                         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.to_status``                       | OPT         | To-side connection status. Default: 1                  |
+| ``electrical.to_status``                       | OPT         | To-side connection status. Default: 1. Can be          |
+|                                                |             | switched during the simulation                         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.current_from``                    | PUB         | Current at the from side (A)                           |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -471,7 +481,8 @@ from ``LinkEntity`` — it references its three nodes explicitly via
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.no_load_loss``                    | INIT        | No-load loss (W, ``p0``)                               |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.status_1``                        | OPT         | Connection status of winding 1. Default: 1             |
+| ``electrical.status_1``                        | OPT         | Connection status of winding 1. Default: 1. Can be     |
+|                                                |             | switched during the simulation (also 2 and 3)          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status_2``                        | OPT         | Connection status of winding 2. Default: 1             |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -491,7 +502,8 @@ from ``LinkEntity`` — it references its three nodes explicitly via
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_side``                        | OPT         | Side the tap changer is on. Default: 0                 |
 +------------------------------------------------+-------------+--------------------------------------------------------+
-| ``electrical.tap_position``                    | OPT         | Current tap position. Default: 0                       |
+| ``electrical.tap_position``                    | OPT         | Current tap position. Default: 0. Can be changed       |
+|                                                |             | during the simulation                                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_min``                         | OPT         | Tap position at minimum voltage. Default: 0            |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -562,6 +574,7 @@ model during the simulation.
 | ``connection.to_id``                           | INIT        | Id of the node the load is connected to                |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the load is on (1) or off (0). Default: 1      |
+|                                                |             | Can be switched during the simulation                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.load_type``                       | OPT         | Load behaviour (enum: 0=const power, 1=const           |
 |                                                |             | impedance, 2=const current). Default: 0                |
@@ -586,6 +599,7 @@ subscribable for dynamic updates.
 | ``connection.to_id``                           | INIT        | Id of the node the generator is connected to           |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the generator is on (1) or off (0). Default: 1 |
+|                                                |             | Can be switched during the simulation                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.load_type``                       | OPT         | Generation behaviour (enum, reuses the load-type       |
 |                                                |             | enum). Default: 0                                      |
@@ -613,6 +627,7 @@ and R/X ratio.
 | ``electrical.reference_voltage``               | INIT        | Reference voltage magnitude (p.u., ``u_ref``)          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the source is on (1) or off (0). Default: 1    |
+|                                                |             | Can be switched during the simulation                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.reference_angle``                 | OPT         | Reference voltage angle (rad). Default: 0              |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -640,6 +655,7 @@ reactor bank), described by its admittance.
 | ``electrical.susceptance``                     | INIT        | Shunt susceptance (S, ``b1``)                          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the shunt is on (1) or off (0). Default: 1     |
+|                                                |             | Can be switched during the simulation                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
 Sensors (State Estimation)
@@ -715,6 +731,7 @@ determine whether the fault is balanced (three-phase) or unbalanced.
 | ``electrical.fault_type``                      | INIT        | Fault type (enum, see Enumerations)                    |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the fault is active (1) or not (0). Default: 1 |
+|                                                |             | Can be switched during the simulation                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.fault_phase``                     | OPT         | Affected phase(s) (enum). Default: -1, which lets the  |
 |                                                |             | solver pick the phases matching ``fault_type``         |

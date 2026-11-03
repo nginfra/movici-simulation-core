@@ -194,6 +194,75 @@ class TestCascadeTripping:
                 assert energized_by_id.get(3, 0) == 0
 
 
+class TestExternalSwitching:
+    """Branch status is OPT|PUB on the cascade model: trips are published,
+    and switching done by other models is still picked up."""
+
+    def test_externally_opened_line_is_respected(self, tester):
+        """Line L2 opened by an external update: n3 dead without any trip, and
+        a fault on the dead island afterwards draws no current."""
+        tester.update(0, None)
+        tester.new_time(1)
+        result, _ = tester.update(
+            1,
+            {
+                DATASET_NAME: {
+                    "electrical_line_entities": {"id": [32], "electrical.to_status": [0]}
+                }
+            },
+        )
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        assert dict(zip(nodes["id"], nodes["electrical.energized"]))[3] == 0
+        assert "electrical_branch_protection_entities" not in result[DATASET_NAME]
+
+        result, _ = _activate_fault(tester, timestamp=2)
+        faults = result[DATASET_NAME]["electrical_fault_entities"]
+        assert faults["electrical.fault_current"][0] == 0.0
+        assert "electrical_branch_protection_entities" not in result[DATASET_NAME]
+
+    def test_trip_survives_later_updates(self, tester):
+        """The breaker opened by a trip is not re-closed by a later, unrelated
+        update that makes the model re-apply its subscribed changes."""
+        tester.update(0, None)
+        _activate_fault(tester)
+        tester.new_time(2)
+        result, _ = tester.update(
+            2,
+            {
+                DATASET_NAME: {
+                    "electrical_load_entities": {
+                        "id": [20],
+                        "electrical.active_power_specified": [50000.0],
+                    }
+                }
+            },
+        )
+        # nothing changed for the nodes, so nothing is published: read the state
+        assert result is None or "electrical_node_entities" not in result[DATASET_NAME]
+        nodes = tester.model.dataset.nodes
+        energized = dict(zip(nodes.index.ids.tolist(), nodes.energized.array.tolist()))
+        assert energized == {1: 1, 2: 1, 3: 0}
+        lines = tester.model.dataset.lines
+        assert lines.from_status.array[lines.get_indices([32])][0] == 0
+
+    def test_external_reclose_after_trip(self, tester):
+        """Another model may close the breaker again (repair): n3 comes back."""
+        tester.update(0, None)
+        _activate_fault(tester)
+        tester.new_time(2)
+        result, _ = tester.update(
+            2,
+            {
+                DATASET_NAME: {
+                    "electrical_fault_entities": {"id": [41], "electrical.status": [0]},
+                    "electrical_line_entities": {"id": [32], "electrical.from_status": [1]},
+                }
+            },
+        )
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        assert dict(zip(nodes["id"], nodes["electrical.energized"]))[3] == 1
+
+
 class TestCascadeSelectivity:
     def test_backup_trips_when_primary_absent(self, cascade_config, cascade_data, global_schema):
         """Without R2, backup relay R1 trips and takes out the whole feeder."""

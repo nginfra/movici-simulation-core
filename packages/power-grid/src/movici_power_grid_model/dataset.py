@@ -189,7 +189,10 @@ class ElectricalLineEntity(LinkEntity):
     __entity_name__ = "electrical_line_entities"
     __exclude__ = ["_linestring2d", "_linestring3d", "reference"]
 
-    # Input attributes (topology inherited from LinkEntity)
+    # Input attributes (topology inherited from LinkEntity). The switching
+    # state (from/to status) is optional at init but, like every OPT
+    # attribute, subscribed: other models can open or close the branch
+    # during the simulation.
     resistance = field(Electrical_Resistance, flags=INIT)
     reactance = field(Electrical_Reactance, flags=INIT)
     capacitance = field(Electrical_Capacitance, flags=INIT)

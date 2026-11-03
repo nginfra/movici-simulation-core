@@ -76,9 +76,9 @@ _NA_INT8 = -128  # power-grid-model sentinel for "no change" in update arrays
 # =========================================================================
 #
 # The cascade model upgrades the branch status attributes from OPT to
-# OPT|PUB (it publishes breaker positions after trips), fault status from
-# OPT to SUB (it is driven by an external fault activation model) and adds
-# an energized flag to nodes.
+# OPT|PUB (it publishes breaker positions after trips; OPT already subscribes
+# to external switching), fault status from OPT to SUB (it is driven by an
+# external fault activation model) and adds an energized flag to nodes.
 
 
 class CascadeNodeEntity(ds.ElectricalNodeEntity):

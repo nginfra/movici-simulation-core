@@ -1332,3 +1332,223 @@ class TestPerPhaseResults:
         data["electrical_line_entities"].update(self.LINE_ZERO_SEQUENCE)
         out = self._run({**model_config, "per_phase_output": True}, data, global_schema)
         assert "electrical.voltage_per_phase" not in out["electrical_node_entities"]
+
+
+class TestSwitchingUpdates:
+    """Branch status, tap position and appliance status are OPT attributes:
+    optional at init, but subscribed, so other models (or the scenario) can
+    switch the grid during the simulation."""
+
+    @staticmethod
+    def _update(tester, timestamp, data):
+        tester.new_time(timestamp)
+        result, _ = tester.update(timestamp, {DATASET_NAME: data})
+        return result[DATASET_NAME]
+
+    @staticmethod
+    def _voltage(tester, node_id):
+        """Node voltage from the model state: only *changed* values are
+        published, so an unchanged node is absent from the update."""
+        nodes = tester.model.dataset.nodes
+        return float(nodes.voltage_pu.array[nodes.get_indices([node_id])][0])
+
+    def test_open_line_deenergizes_load_node(self, tester):
+        """Status absent at init; an update opening the to-side kills node 2."""
+        tester.update(0, None)
+        result = self._update(
+            tester, 1, {"electrical_line_entities": {"id": [30], "electrical.to_status": [0]}}
+        )
+        assert self._voltage(tester, 2) == 0.0
+        assert result["electrical_line_entities"]["electrical.current_from"][0] == 0.0
+
+    def test_reclose_line_restores_voltage(self, tester):
+        tester.update(0, None)
+        v0 = self._voltage(tester, 2)
+        self._update(
+            tester, 1, {"electrical_line_entities": {"id": [30], "electrical.to_status": [0]}}
+        )
+        self._update(
+            tester, 2, {"electrical_line_entities": {"id": [30], "electrical.to_status": [1]}}
+        )
+        assert self._voltage(tester, 2) == pytest.approx(v0)
+
+    def test_load_switched_off(self, tester):
+        tester.update(0, None)
+        result = self._update(
+            tester, 1, {"electrical_load_entities": {"id": [20], "electrical.status": [0]}}
+        )
+        assert self._voltage(tester, 2) == pytest.approx(1.0, abs=1e-6)
+        assert result["electrical_line_entities"]["electrical.current_from"][0] == pytest.approx(
+            0.0, abs=1e-6
+        )
+
+    def test_source_switched_off(self, tester):
+        tester.update(0, None)
+        self._update(
+            tester, 1, {"electrical_source_entities": {"id": [10], "electrical.status": [0]}}
+        )
+        assert self._voltage(tester, 1) == 0.0
+        assert self._voltage(tester, 2) == 0.0
+
+    def test_mixed_sides_in_one_update(self, model_config, global_schema):
+        """Two cables switched on different sides in the same update.
+
+        Both end up in one PGM ``line`` update array. The side that did not
+        change must keep PGM's "no change" sentinel; writing 0 there would
+        open the wrong side.
+        """
+        data = {
+            "electrical_node_entities": {
+                "id": [1, 2, 3],
+                "geometry.x": [0.0, 1.0, 2.0],
+                "geometry.y": [0.0, 0.0, 0.0],
+                "electrical.rated_voltage": [10000.0] * 3,
+            },
+            "electrical_source_entities": {
+                "id": [10],
+                "connection.to_id": [1],
+                "electrical.reference_voltage": [1.0],
+            },
+            "electrical_load_entities": {
+                "id": [20],
+                "connection.to_id": [3],
+                "electrical.active_power_specified": [50000.0],
+                "electrical.reactive_power_specified": [0.0],
+            },
+            "electrical_cable_entities": {
+                "id": [41, 42],
+                "topology.from_node_id": [1, 2],
+                "topology.to_node_id": [2, 3],
+                "electrical.from_status": [1, 1],
+                "electrical.to_status": [1, 1],
+                "electrical.resistance": [0.1, 0.1],
+                "electrical.reactance": [0.05, 0.05],
+                "electrical.capacitance": [0.0, 0.0],
+                "electrical.tan_delta": [0.0, 0.0],
+            },
+        }
+        model = Model(model_config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            tester.update(0, None)
+            # open 41 at its from-side and 42 at its to-side: nodes 2 and 3 dead
+            self._update(
+                tester,
+                1,
+                {
+                    "electrical_cable_entities": {
+                        "id": [41, 42],
+                        "electrical.from_status": [0, None],
+                        "electrical.to_status": [None, 0],
+                    }
+                },
+            )
+            assert self._voltage(tester, 2) == 0.0
+            assert self._voltage(tester, 3) == 0.0
+            # reclose 41 (from-side) and open 42 at its from-side too: node 2
+            # is live again, node 3 stays dead. 41's to-side must be untouched.
+            self._update(
+                tester,
+                2,
+                {
+                    "electrical_cable_entities": {
+                        "id": [41, 42],
+                        "electrical.from_status": [1, 0],
+                    }
+                },
+            )
+            assert self._voltage(tester, 2) == pytest.approx(1.0, abs=1e-6)
+            assert self._voltage(tester, 3) == 0.0
+
+    def test_shunt_switched(self, model_config, global_schema):
+        data = _simple_network_data()
+        data["electrical_shunt_entities"] = {
+            "id": [70],
+            "connection.to_id": [2],
+            "electrical.status": [1],
+            "electrical.conductance": [0.0],
+            "electrical.susceptance": [1e-4],
+        }
+        model = Model(model_config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            tester.update(0, None)
+            v_on = self._voltage(tester, 2)
+            self._update(
+                tester, 1, {"electrical_shunt_entities": {"id": [70], "electrical.status": [0]}}
+            )
+            v_off = self._voltage(tester, 2)
+            assert v_off < v_on  # capacitive support gone
+            self._update(
+                tester, 2, {"electrical_shunt_entities": {"id": [70], "electrical.status": [1]}}
+            )
+            assert self._voltage(tester, 2) == pytest.approx(v_on)
+
+    def test_transformer_tap_change(self, model_config, global_schema):
+        """Raising the tap on the from (HV) side lowers the LV-side voltage."""
+        data = {
+            "electrical_node_entities": {
+                "id": [1, 2],
+                "geometry.x": [0.0, 1.0],
+                "geometry.y": [0.0, 0.0],
+                "electrical.rated_voltage": [10000.0, 400.0],
+            },
+            "electrical_source_entities": {
+                "id": [10],
+                "connection.to_id": [1],
+                "electrical.reference_voltage": [1.0],
+            },
+            "electrical_load_entities": {
+                "id": [20],
+                "connection.to_id": [2],
+                "electrical.active_power_specified": [100000.0],
+                "electrical.reactive_power_specified": [20000.0],
+            },
+            "electrical_transformer_entities": {
+                "id": [60],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "electrical.primary_voltage": [10000.0],
+                "electrical.secondary_voltage": [400.0],
+                "electrical.rated_power": [400000.0],
+                "electrical.short_circuit_voltage": [0.04],
+                "electrical.copper_loss": [4000.0],
+                "electrical.no_load_current": [0.001],
+                "electrical.no_load_loss": [100.0],
+                "electrical.tap_side": [0],
+                "electrical.tap_position": [0],
+                "electrical.tap_min": [-5],
+                "electrical.tap_max": [5],
+                "electrical.tap_nom": [0],
+                "electrical.tap_size": [250.0],
+            },
+        }
+        model = Model(model_config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            tester.update(0, None)
+            v_nom = self._voltage(tester, 2)
+            self._update(
+                tester,
+                1,
+                {"electrical_transformer_entities": {"id": [60], "electrical.tap_position": [2]}},
+            )
+            v_up = self._voltage(tester, 2)
+            assert v_up < v_nom
+            # two steps of 2.5 % on the HV side: ratio 1.05 -> LV voltage ~ 1/1.05
+            assert v_up == pytest.approx(v_nom / 1.05, rel=2e-3)
+            self._update(
+                tester,
+                2,
+                {"electrical_transformer_entities": {"id": [60], "electrical.tap_position": [0]}},
+            )
+            assert self._voltage(tester, 2) == pytest.approx(v_nom)
