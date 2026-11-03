@@ -397,6 +397,16 @@ from the transformer's short-circuit test.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.tap_size``                        | OPT         | Voltage step per tap position (V). Default: 0          |
 +------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.short_circuit_voltage_min``       | OPT         | ``uk`` at ``tap_min`` (p.u., ``uk_min``). With the     |
+|                                                |             | three below, the short-circuit impedance follows the   |
+|                                                |             | tap position (linear from ``tap_nom`` to the ends)     |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.short_circuit_voltage_max``       | OPT         | ``uk`` at ``tap_max`` (p.u., ``uk_max``)               |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.copper_loss_min``                 | OPT         | ``pk`` at ``tap_min`` (W, ``pk_min``)                  |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.copper_loss_max``                 | OPT         | ``pk`` at ``tap_max`` (W, ``pk_max``)                  |
++------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.from_status``                     | OPT         | From-side connection status. Default: 1. Can be        |
 |                                                |             | switched during the simulation                         |
 +------------------------------------------------+-------------+--------------------------------------------------------+
@@ -566,7 +576,9 @@ Loads
 
 A load is a power consumer connected to a single node (PGM component ``sym_load``). Its
 active and reactive power are subscribable, so they can be driven dynamically by another
-model during the simulation.
+model during the simulation. The realised power, current and power factor are published
+(they differ from the setpoints for constant-impedance / constant-current loads and for
+de-energized loads).
 
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | Attribute                                      | Flags       | Description                                            |
@@ -582,6 +594,21 @@ model during the simulation.
 | ``electrical.active_power_specified``          | SUB         | Specified active power consumption (W)                 |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.reactive_power_specified``        | SUB         | Specified reactive power consumption (VAr)             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power``                    | PUB         | Resulting active power (W)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power``                  | PUB         | Resulting reactive power (VAr)                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.apparent_power``                  | PUB         | Resulting apparent power (VA), from the three-phase    |
+|                                                |             | totals                                                 |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.power_factor``                    | PUB         | ``active_power / apparent_power``                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current``                         | PUB         | Current (A); worst phase for asymmetric results. The   |
+|                                                |             | only appliance result of a short-circuit calculation   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_per_phase``               | PUB         | Per-phase current, shape ``(3,)``, with                |
+|                                                |             | ``per_phase_output``                                   |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
 Generators
@@ -607,6 +634,21 @@ subscribable for dynamic updates.
 | ``electrical.active_power_specified``          | SUB         | Specified active power generation (W)                  |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.reactive_power_specified``        | SUB         | Specified reactive power generation (VAr)              |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power``                    | PUB         | Resulting active power (W)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power``                  | PUB         | Resulting reactive power (VAr)                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.apparent_power``                  | PUB         | Resulting apparent power (VA), from the three-phase    |
+|                                                |             | totals                                                 |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.power_factor``                    | PUB         | ``active_power / apparent_power``                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current``                         | PUB         | Current (A); worst phase for asymmetric results. The   |
+|                                                |             | only appliance result of a short-circuit calculation   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_per_phase``               | PUB         | Per-phase current, shape ``(3,)``, with                |
+|                                                |             | ``per_phase_output``                                   |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
 Per-Phase Loads and Generators
@@ -639,6 +681,21 @@ branch currents (see ``per_phase_output``) show the imbalance.
 | ``electrical.reactive_power_specified_``       | SUB         | Specified reactive power per phase (VAr, shape         |
 | ``per_phase``                                  |             | ``(3,)``)                                              |
 +------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power``                    | PUB         | Resulting active power (W)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power``                  | PUB         | Resulting reactive power (VAr)                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.apparent_power``                  | PUB         | Resulting apparent power (VA), from the three-phase    |
+|                                                |             | totals                                                 |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.power_factor``                    | PUB         | ``active_power / apparent_power``                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current``                         | PUB         | Current (A); worst phase for asymmetric results. The   |
+|                                                |             | only appliance result of a short-circuit calculation   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_per_phase``               | PUB         | Per-phase current, shape ``(3,)``, with                |
+|                                                |             | ``per_phase_output``                                   |
++------------------------------------------------+-------------+--------------------------------------------------------+
 
 Sources
 ^^^^^^^
@@ -667,6 +724,21 @@ and R/X ratio.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.rx_ratio``                        | OPT         | R/X ratio of the external-grid impedance. Default: 0.1 |
 +------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power``                    | PUB         | Resulting active power (W)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power``                  | PUB         | Resulting reactive power (VAr)                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.apparent_power``                  | PUB         | Resulting apparent power (VA), from the three-phase    |
+|                                                |             | totals                                                 |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.power_factor``                    | PUB         | ``active_power / apparent_power``                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current``                         | PUB         | Current (A); worst phase for asymmetric results. The   |
+|                                                |             | only appliance result of a short-circuit calculation   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_per_phase``               | PUB         | Per-phase current, shape ``(3,)``, with                |
+|                                                |             | ``per_phase_output``                                   |
++------------------------------------------------+-------------+--------------------------------------------------------+
 
 Shunts
 ^^^^^^
@@ -693,6 +765,21 @@ reactor bank), described by its admittance.
 +------------------------------------------------+-------------+--------------------------------------------------------+
 | ``electrical.status``                          | OPT         | Whether the shunt is on (1) or off (0). Default: 1     |
 |                                                |             | Can be switched during the simulation                  |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.active_power``                    | PUB         | Resulting active power (W)                             |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.reactive_power``                  | PUB         | Resulting reactive power (VAr)                         |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.apparent_power``                  | PUB         | Resulting apparent power (VA), from the three-phase    |
+|                                                |             | totals                                                 |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.power_factor``                    | PUB         | ``active_power / apparent_power``                      |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current``                         | PUB         | Current (A); worst phase for asymmetric results. The   |
+|                                                |             | only appliance result of a short-circuit calculation   |
++------------------------------------------------+-------------+--------------------------------------------------------+
+| ``electrical.current_per_phase``               | PUB         | Per-phase current, shape ``(3,)``, with                |
+|                                                |             | ``per_phase_output``                                   |
 +------------------------------------------------+-------------+--------------------------------------------------------+
 
 Sensors (State Estimation)

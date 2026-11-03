@@ -18,6 +18,7 @@ from .attributes import (
     Electrical_ActivePowerSpecified,
     Electrical_ActivePowerSpecifiedPerPhase,
     Electrical_AngleMeasurementType,
+    Electrical_ApparentPower,
     Electrical_Capacitance,
     Electrical_Clock,
     Electrical_Clock12,
@@ -27,6 +28,9 @@ from .attributes import (
     Electrical_CopperLoss12,
     Electrical_CopperLoss13,
     Electrical_CopperLoss23,
+    Electrical_CopperLossMax,
+    Electrical_CopperLossMin,
+    Electrical_Current,
     Electrical_Current1,
     Electrical_Current1PerPhase,
     Electrical_Current2,
@@ -36,6 +40,7 @@ from .attributes import (
     Electrical_CurrentAngleSigma,
     Electrical_CurrentFrom,
     Electrical_CurrentFromPerPhase,
+    Electrical_CurrentPerPhase,
     Electrical_CurrentSigma,
     Electrical_CurrentTo,
     Electrical_CurrentToPerPhase,
@@ -65,6 +70,7 @@ from .attributes import (
     Electrical_Power1,
     Electrical_Power2,
     Electrical_Power3,
+    Electrical_PowerFactor,
     Electrical_PowerFrom,
     Electrical_PowerSigma,
     Electrical_PowerTo,
@@ -95,6 +101,8 @@ from .attributes import (
     Electrical_ShortCircuitVoltage12,
     Electrical_ShortCircuitVoltage13,
     Electrical_ShortCircuitVoltage23,
+    Electrical_ShortCircuitVoltageMax,
+    Electrical_ShortCircuitVoltageMin,
     Electrical_Status,
     Electrical_Status1,
     Electrical_Status2,
@@ -303,6 +311,11 @@ class ElectricalTransformerEntity(LinkEntity):
     rated_power = field(Electrical_RatedPower, flags=INIT)
     short_circuit_voltage = field(Electrical_ShortCircuitVoltage, flags=INIT)
     copper_loss = field(Electrical_CopperLoss, flags=INIT)
+    # Tap-dependent short-circuit impedance (optional, all four or none)
+    short_circuit_voltage_min = field(Electrical_ShortCircuitVoltageMin, flags=OPT)
+    short_circuit_voltage_max = field(Electrical_ShortCircuitVoltageMax, flags=OPT)
+    copper_loss_min = field(Electrical_CopperLossMin, flags=OPT)
+    copper_loss_max = field(Electrical_CopperLossMax, flags=OPT)
     no_load_current = field(Electrical_NoLoadCurrent, flags=INIT)
     no_load_loss = field(Electrical_NoLoadLoss, flags=INIT)
     winding_from = field(Electrical_WindingFrom, flags=OPT)
@@ -329,7 +342,24 @@ class ElectricalTransformerEntity(LinkEntity):
     loading = field(Electrical_Loading, flags=PUB)
 
 
-class ElectricalLoadEntity(EntityGroup):
+class ApplianceEntity(EntityGroup):
+    """Shared result attributes of node-connected appliances.
+
+    Loads, generators, sources and shunts all report the same quantities
+    after a calculation: realised power, apparent power, power factor and
+    current (per phase when ``per_phase_output`` is on). Short-circuit
+    results only carry the current.
+    """
+
+    active_power = field(Electrical_ActivePower, flags=PUB)
+    reactive_power = field(Electrical_ReactivePower, flags=PUB)
+    apparent_power = field(Electrical_ApparentPower, flags=PUB)
+    power_factor = field(Electrical_PowerFactor, flags=PUB)
+    current = field(Electrical_Current, flags=PUB)
+    current_per_phase = field(Electrical_CurrentPerPhase, flags=PUB)
+
+
+class ElectricalLoadEntity(ApplianceEntity):
     """Electrical load (consumer).
 
     Represents a power consumer connected to a node. Load values
@@ -348,7 +378,7 @@ class ElectricalLoadEntity(EntityGroup):
     q_specified = field(Electrical_ReactivePowerSpecified, flags=SUB)
 
 
-class ElectricalGeneratorEntity(EntityGroup):
+class ElectricalGeneratorEntity(ApplianceEntity):
     """Electrical generator.
 
     Represents a power generator connected to a node. Generation
@@ -367,7 +397,7 @@ class ElectricalGeneratorEntity(EntityGroup):
     q_specified = field(Electrical_ReactivePowerSpecified, flags=SUB)
 
 
-class ElectricalAsymLoadEntity(EntityGroup):
+class ElectricalAsymLoadEntity(ApplianceEntity):
     """Unbalanced electrical load (consumer).
 
     Like :class:`ElectricalLoadEntity`, but with a separate active and
@@ -388,7 +418,7 @@ class ElectricalAsymLoadEntity(EntityGroup):
     q_specified = field(Electrical_ReactivePowerSpecifiedPerPhase, flags=SUB)
 
 
-class ElectricalAsymGeneratorEntity(EntityGroup):
+class ElectricalAsymGeneratorEntity(ApplianceEntity):
     """Unbalanced electrical generator.
 
     Like :class:`ElectricalGeneratorEntity`, but with per-phase (a, b, c)
@@ -407,7 +437,7 @@ class ElectricalAsymGeneratorEntity(EntityGroup):
     q_specified = field(Electrical_ReactivePowerSpecifiedPerPhase, flags=SUB)
 
 
-class ElectricalSourceEntity(EntityGroup):
+class ElectricalSourceEntity(ApplianceEntity):
     """External grid connection (slack bus).
 
     Represents a connection to the external grid that provides
@@ -425,7 +455,7 @@ class ElectricalSourceEntity(EntityGroup):
     rx_ratio = field(Electrical_RXRatio, flags=OPT)
 
 
-class ElectricalShuntEntity(EntityGroup):
+class ElectricalShuntEntity(ApplianceEntity):
     """Shunt element (capacitor/reactor bank).
 
     Represents a shunt-connected element for reactive power compensation.

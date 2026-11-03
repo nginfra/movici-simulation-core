@@ -73,6 +73,16 @@ Electrical_ReactivePowerTo = AttributeSpec("electrical.reactive_power_to", DataT
 Electrical_Loading = AttributeSpec("electrical.loading", DataType(float))  # ratio (0-1+)
 
 # =============================================================================
+# Appliance Result Attributes (loads, generators, sources, shunts)
+# =============================================================================
+
+# Output attributes (PUB); active/reactive power reuse the node specs above
+Electrical_Current = AttributeSpec("electrical.current", DataType(float))  # A
+Electrical_CurrentPerPhase = AttributeSpec("electrical.current_per_phase", _PHASE)  # A
+Electrical_ApparentPower = AttributeSpec("electrical.apparent_power", DataType(float))  # VA
+Electrical_PowerFactor = AttributeSpec("electrical.power_factor", DataType(float))  # p/s
+
+# =============================================================================
 # Load/Generator Attributes
 # =============================================================================
 
@@ -109,6 +119,16 @@ Electrical_ShortCircuitVoltage = AttributeSpec(
     "electrical.short_circuit_voltage", DataType(float)
 )  # p.u. (uk)
 Electrical_CopperLoss = AttributeSpec("electrical.copper_loss", DataType(float))  # W (pk)
+# Tap-dependent short-circuit impedance: uk and pk at the minimum / maximum
+# tap position. PGM interpolates linearly between tap_nom and tap_min/tap_max.
+Electrical_ShortCircuitVoltageMin = AttributeSpec(
+    "electrical.short_circuit_voltage_min", DataType(float)
+)  # p.u. (uk_min)
+Electrical_ShortCircuitVoltageMax = AttributeSpec(
+    "electrical.short_circuit_voltage_max", DataType(float)
+)  # p.u. (uk_max)
+Electrical_CopperLossMin = AttributeSpec("electrical.copper_loss_min", DataType(float))  # W
+Electrical_CopperLossMax = AttributeSpec("electrical.copper_loss_max", DataType(float))  # W
 Electrical_NoLoadCurrent = AttributeSpec(
     "electrical.no_load_current", DataType(float)
 )  # p.u. (i0)

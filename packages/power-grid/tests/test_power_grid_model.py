@@ -1706,3 +1706,186 @@ class TestAsymmetricLoads:
             result, _ = tester.update(0, None)
         nodes = result[DATASET_NAME]["electrical_node_entities"]
         assert nodes["electrical.voltage_pu"][nodes["id"].index(2)] < 1.0
+
+
+class TestApplianceResults:
+    """Loads, generators, sources and shunts publish p, q, s, pf and current."""
+
+    def test_load_results(self, tester):
+        result, _ = tester.update(0, None)
+        loads = result[DATASET_NAME]["electrical_load_entities"]
+        lines = result[DATASET_NAME]["electrical_line_entities"]
+        assert loads["electrical.active_power"][0] == pytest.approx(100000.0)
+        assert loads["electrical.reactive_power"][0] == pytest.approx(0.0, abs=1e-6)
+        assert loads["electrical.apparent_power"][0] == pytest.approx(100000.0)
+        assert loads["electrical.power_factor"][0] == pytest.approx(1.0)
+        # the only element at node 2: it draws the line's receiving-end current
+        assert loads["electrical.current"][0] == pytest.approx(lines["electrical.current_to"][0])
+        assert "electrical.current_per_phase" not in loads
+
+    def test_source_results_match_node_injection(self, tester):
+        result, _ = tester.update(0, None)
+        sources = result[DATASET_NAME]["electrical_source_entities"]
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        lines = result[DATASET_NAME]["electrical_line_entities"]
+        src_node = nodes["id"].index(1)
+        assert sources["electrical.active_power"][0] == pytest.approx(
+            nodes["electrical.active_power"][src_node]
+        )
+        assert sources["electrical.active_power"][0] == pytest.approx(
+            lines["electrical.power_from"][0]
+        )
+        assert sources["electrical.current"][0] == pytest.approx(
+            lines["electrical.current_from"][0]
+        )
+        s = sources["electrical.apparent_power"][0]
+        assert sources["electrical.power_factor"][0] == pytest.approx(
+            sources["electrical.active_power"][0] / s
+        )
+
+    def test_shunt_and_generator_results(self, model_config, global_schema):
+        data = _simple_network_data()
+        data["electrical_shunt_entities"] = {
+            "id": [70],
+            "connection.to_id": [2],
+            "electrical.conductance": [0.0],
+            "electrical.susceptance": [1e-4],
+        }
+        data["electrical_generator_entities"] = {
+            "id": [80],
+            "connection.to_id": [2],
+            "electrical.active_power_specified": [40000.0],
+            "electrical.reactive_power_specified": [0.0],
+        }
+        model = Model(model_config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        shunts = result[DATASET_NAME]["electrical_shunt_entities"]
+        gens = result[DATASET_NAME]["electrical_generator_entities"]
+        assert shunts["electrical.current"][0] > 0
+        assert shunts["electrical.reactive_power"][0] < 0  # capacitive: generates vars
+        assert shunts["electrical.power_factor"][0] == pytest.approx(0.0, abs=1e-9)
+        assert gens["electrical.active_power"][0] == pytest.approx(40000.0)
+        assert gens["electrical.current"][0] > 0
+
+    def test_per_phase_load_currents(self, model_config, global_schema):
+        """Asymmetric run: a single-phase load carries current on one phase."""
+        data = TestAsymmetricLoads._network([90000.0, 0.0, 0.0])
+        config = {**model_config, "symmetric": False, "per_phase_output": True}
+        model = Model(config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        loads = result[DATASET_NAME]["electrical_asym_load_entities"]
+        i = loads["electrical.current_per_phase"][0]
+        assert i[0] > 0 and i[1] == pytest.approx(0.0) and i[2] == pytest.approx(0.0)
+        assert loads["electrical.current"][0] == pytest.approx(i[0])
+        assert loads["electrical.active_power"][0] == pytest.approx(90000.0)
+        sources = result[DATASET_NAME]["electrical_source_entities"]
+        assert len(sources["electrical.current_per_phase"][0]) == 3
+
+    def test_short_circuit_publishes_current_only(self, model_config, global_schema):
+        data = _simple_network_data()
+        data["electrical_fault_entities"] = {
+            "id": [60],
+            "connection.to_id": [2],
+            "electrical.fault_type": [0],
+        }
+        config = {**model_config, "calculation_type": "short_circuit"}
+        model = Model(config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        sources = result[DATASET_NAME]["electrical_source_entities"]
+        assert sources["electrical.current"][0] > 0
+        assert "electrical.active_power" not in sources
+
+
+class TestTapDependentImpedance:
+    """``uk_min/uk_max`` and ``pk_min/pk_max`` make the short-circuit impedance
+    follow the tap position (PGM interpolates from tap_nom to tap_min/max)."""
+
+    @staticmethod
+    def _network(tap_position, tap_dependent):
+        data = {
+            "electrical_node_entities": {
+                "id": [1, 2],
+                "geometry.x": [0.0, 1.0],
+                "geometry.y": [0.0, 0.0],
+                "electrical.rated_voltage": [10000.0, 400.0],
+            },
+            "electrical_source_entities": {
+                "id": [10],
+                "connection.to_id": [1],
+                "electrical.reference_voltage": [1.0],
+            },
+            "electrical_load_entities": {
+                "id": [20],
+                "connection.to_id": [2],
+                "electrical.active_power_specified": [200000.0],
+                "electrical.reactive_power_specified": [50000.0],
+            },
+            "electrical_transformer_entities": {
+                "id": [60],
+                "topology.from_node_id": [1],
+                "topology.to_node_id": [2],
+                "electrical.primary_voltage": [10000.0],
+                "electrical.secondary_voltage": [400.0],
+                "electrical.rated_power": [400000.0],
+                "electrical.short_circuit_voltage": [0.04],
+                "electrical.copper_loss": [4000.0],
+                "electrical.no_load_current": [0.001],
+                "electrical.no_load_loss": [100.0],
+                "electrical.tap_side": [0],
+                "electrical.tap_position": [tap_position],
+                "electrical.tap_min": [-5],
+                "electrical.tap_max": [5],
+                "electrical.tap_nom": [0],
+                "electrical.tap_size": [250.0],
+            },
+        }
+        if tap_dependent:
+            data["electrical_transformer_entities"].update(
+                {
+                    "electrical.short_circuit_voltage_min": [0.08],
+                    "electrical.short_circuit_voltage_max": [0.06],
+                    "electrical.copper_loss_min": [8000.0],
+                    "electrical.copper_loss_max": [6000.0],
+                }
+            )
+        return data
+
+    @staticmethod
+    def _lv_voltage(config, data, schema):
+        model = Model(config)
+        with ModelTester(model, schema=schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+        return result[DATASET_NAME]["electrical_node_entities"]["electrical.voltage_pu"][1]
+
+    def test_no_effect_at_nominal_tap(self, model_config, global_schema):
+        v_const = self._lv_voltage(model_config, self._network(0, False), global_schema)
+        v_dep = self._lv_voltage(model_config, self._network(0, True), global_schema)
+        assert v_dep == pytest.approx(v_const)
+
+    def test_higher_impedance_at_min_tap(self, model_config, global_schema):
+        """At tap_min, uk doubles (0.04 -> 0.08): the voltage drop grows."""
+        v_const = self._lv_voltage(model_config, self._network(-5, False), global_schema)
+        v_dep = self._lv_voltage(model_config, self._network(-5, True), global_schema)
+        assert v_dep < v_const
+        # tap -5 on the HV side lowers the ratio, so both are above nominal; the
+        # extra drop from the doubled impedance is in the order of uk * loading
+        assert (v_const - v_dep) > 0.005

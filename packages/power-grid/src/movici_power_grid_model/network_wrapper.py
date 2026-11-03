@@ -397,6 +397,11 @@ class TransformerProcessor(PGMElementProcessor):
         arr["pk"] = eg.copper_loss.array
         arr["i0"] = eg.no_load_current.array
         arr["p0"] = eg.no_load_loss.array
+        # NaN means "constant uk/pk over the tap range"
+        arr["uk_min"] = _get_optional_array(eg.short_circuit_voltage_min, default=np.nan)
+        arr["uk_max"] = _get_optional_array(eg.short_circuit_voltage_max, default=np.nan)
+        arr["pk_min"] = _get_optional_array(eg.copper_loss_min, default=np.nan)
+        arr["pk_max"] = _get_optional_array(eg.copper_loss_max, default=np.nan)
         arr["winding_from"] = _get_optional_array(eg.winding_from, default=1, dtype=np.int8)
         arr["winding_to"] = _get_optional_array(eg.winding_to, default=1, dtype=np.int8)
         arr["clock"] = _get_optional_array(eg.clock, default=0, dtype=np.int8)
@@ -530,7 +535,39 @@ class ThreeWindingTransformerProcessor(PGMElementProcessor):
 # =========================================================================
 
 
-class ApplianceProcessor(PGMElementProcessor):
+class ApplianceResultsMixin:
+    """Write PGM appliance results (loads, generators, sources, shunts).
+
+    Power flow and state estimation report ``p, q, i, s, pf``; short circuit
+    only ``i``. Per-phase results are reduced like elsewhere: powers summed,
+    current worst phase, and apparent power / power factor derived from the
+    three-phase totals so ``power_factor == active_power / apparent_power``.
+    """
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
+        i = comp_result["i"]
+        eg.current[indices] = _worst_phase(i)
+        if self.wrapper.per_phase_output and i.ndim == 2:
+            eg.current_per_phase[indices] = i
+        if "p" not in comp_result.dtype.names:
+            return
+        p = _total(comp_result["p"])
+        q = _total(comp_result["q"])
+        s = np.hypot(p, q)
+        eg.active_power[indices] = p
+        eg.reactive_power[indices] = q
+        eg.apparent_power[indices] = s
+        eg.power_factor[indices] = np.divide(p, s, out=np.zeros_like(s), where=s > 0)
+
+
+class ApplianceProcessor(ApplianceResultsMixin, PGMElementProcessor):
     """Shared base for sym_load and sym_gen processors."""
 
     def build_input_array(self):
@@ -584,7 +621,7 @@ class AsymGeneratorProcessor(ApplianceProcessor):
     PGM_COMPONENT = "asym_gen"
 
 
-class SourceProcessor(PGMElementProcessor):
+class SourceProcessor(ApplianceResultsMixin, PGMElementProcessor):
     PGM_COMPONENT = "source"
 
     def build_input_array(self):
@@ -608,7 +645,7 @@ class SourceProcessor(PGMElementProcessor):
         return _changed_update(eg, "source", {"status": eg.status})
 
 
-class ShuntProcessor(PGMElementProcessor):
+class ShuntProcessor(ApplianceResultsMixin, PGMElementProcessor):
     PGM_COMPONENT = "shunt"
 
     def build_input_array(self):
