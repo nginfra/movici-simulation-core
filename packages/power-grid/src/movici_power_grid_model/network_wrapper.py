@@ -92,15 +92,32 @@ def _worst_phase(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+# Phases whose value lies within this relative distance of the extreme are
+# considered tied; the first of them (phase a) is then selected.
+_PHASE_TIE_RTOL = 1e-9
+
+
+def _first_extreme_phase(arr: np.ndarray, largest: bool) -> np.ndarray:
+    """Index of the largest (or smallest) phase per row, ties going to phase a.
+
+    A balanced result has three phases equal up to solver noise. A plain
+    ``argmax`` would then pick a phase by that noise, and the angle published
+    with it would jump by 120 degrees between otherwise identical runs.
+    """
+    extreme = arr.max(axis=1, keepdims=True) if largest else arr.min(axis=1, keepdims=True)
+    tied = np.isclose(arr, extreme, rtol=_PHASE_TIE_RTOL, atol=0.0)
+    return np.argmax(tied, axis=1)
+
+
 def _worst_phase_index(u_pu: np.ndarray) -> t.Optional[np.ndarray]:
     """Index of the most-depressed phase per node, or ``None`` if symmetric.
 
     Voltage results are reduced by *minimum*: the collapsed phase is the one
-    that matters for a fault study.
+    that matters for a fault study. Ties go to phase a.
     """
     if u_pu.ndim != 2:
         return None
-    return np.argmin(u_pu, axis=1)
+    return _first_extreme_phase(u_pu, largest=False)
 
 
 def _take_phase(arr: np.ndarray, index: t.Optional[np.ndarray]) -> np.ndarray:
@@ -820,8 +837,8 @@ class FaultProcessor(PGMElementProcessor):
         i_f, i_f_angle = fault_result["i_f"], fault_result["i_f_angle"]
         # Faulted phases carry the current; the healthy phase carries none, so
         # the maximum is the fault current and its angle must come from the
-        # same phase.
-        phase = np.argmax(i_f, axis=1) if i_f.ndim == 2 else None
+        # same phase. Ties (balanced faults) go to phase a.
+        phase = _first_extreme_phase(i_f, largest=True) if i_f.ndim == 2 else None
         eg.fault_current[indices] = _take_phase(i_f, phase)
         eg.fault_current_angle[indices] = _take_phase(i_f_angle, phase)
         if self.wrapper.per_phase_output and phase is not None:

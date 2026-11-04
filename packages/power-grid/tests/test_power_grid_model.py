@@ -1307,6 +1307,29 @@ class TestPerPhaseResults:
                 nodes["electrical.voltage_pu"][i] * 10000.0, rel=1e-9
             )
 
+    def test_balanced_fault_reports_phase_a(self, sc_config, global_schema):
+        """A three-phase fault has three equal phases up to solver noise; the
+        published angle must come from phase a, not from whichever phase the
+        noise happens to favour."""
+        data = self._network(fault_type=0)
+        model = Model(sc_config)
+        with ModelTester(model, schema=global_schema) as tester:
+            tester.add_init_data(
+                DATASET_NAME, get_dataset(DATASET_NAME, "electrical_network", data)
+            )
+            tester.initialize()
+            result, _ = tester.update(0, None)
+            raw = tester.model.wrapper.calculate_short_circuit()
+        faults = result[DATASET_NAME]["electrical_fault_entities"]
+        nodes = result[DATASET_NAME]["electrical_node_entities"]
+        assert faults["electrical.fault_current_angle"][0] == pytest.approx(
+            raw["fault"]["i_f_angle"][0, 0]
+        )
+        fault_node = nodes["id"].index(2)
+        assert nodes["electrical.voltage_angle"][fault_node] == pytest.approx(
+            raw["node"]["u_angle"][1, 0]
+        )
+
     def test_per_phase_output_disabled_by_default(self, sc_config, global_schema):
         """Per-phase attributes are not published unless asked for."""
         out = self._run(sc_config, self._network(2), global_schema)
