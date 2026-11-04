@@ -1,0 +1,289 @@
+{
+  "version": 4,
+  "name": "lv_grid_simple_6",
+  "type": "electrical_network",
+  "display_name": "lv_grid_simple_6",
+  "epsg_code": 28992,
+  "general": {
+    "enum": {
+      "branch_side": [
+        "from_side",
+        "to_side"
+      ]
+    }
+  },
+  "data": {
+    "electrical_node_entities": {
+      "id": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "electrical.rated_voltage": [
+        400.0,
+        400.0,
+        400.0,
+        400.0,
+        400.0
+      ]
+    },
+    "electrical_cable_entities": {
+      "id": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "topology.from_node_id": [
+        0,
+        1,
+        2,
+        3,
+        0
+      ],
+      "topology.to_node_id": [
+        1,
+        2,
+        3,
+        4,
+        4
+      ],
+      "electrical.from_status": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.to_status": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.resistance": [
+        0.0258,
+        0.0258,
+        0.0258,
+        0.0258,
+        0.0258
+      ],
+      "electrical.reactance": [
+        0.014599999999999998,
+        0.014599999999999998,
+        0.014599999999999998,
+        0.014599999999999998,
+        0.014599999999999998
+      ],
+      "electrical.capacitance": [
+        1.56e-07,
+        1.56e-07,
+        1.56e-07,
+        1.56e-07,
+        1.56e-07
+      ],
+      "electrical.rated_current": [
+        365.0,
+        365.0,
+        365.0,
+        365.0,
+        365.0
+      ],
+      "electrical.zero_sequence_resistance": [
+        0.08,
+        0.08,
+        0.08,
+        0.08,
+        0.08
+      ],
+      "electrical.zero_sequence_reactance": [
+        0.03,
+        0.03,
+        0.03,
+        0.03,
+        0.03
+      ],
+      "electrical.zero_sequence_capacitance": [
+        9.199999999999999e-08,
+        9.199999999999999e-08,
+        9.199999999999999e-08,
+        9.199999999999999e-08,
+        9.199999999999999e-08
+      ],
+      "electrical.tan_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "electrical.zero_sequence_tan_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "electrical_source_entities": {
+      "id": [
+        10
+      ],
+      "connection.to_id": [
+        0
+      ],
+      "electrical.status": [
+        1
+      ],
+      "electrical.reference_voltage": [
+        1.05
+      ],
+      "electrical.short_circuit_power": [
+        100000000000000.0
+      ]
+    },
+    "electrical_asym_load_entities": {
+      "id": [
+        12,
+        13,
+        14,
+        15
+      ],
+      "connection.to_id": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "electrical.status": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.active_power_specified_per_phase": [
+        [
+          100000.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          100000.0,
+          0.0
+        ],
+        [
+          33333.333333333336,
+          33333.333333333336,
+          33333.333333333336
+        ],
+        [
+          0.0,
+          0.0,
+          100000.0
+        ]
+      ],
+      "electrical.reactive_power_specified_per_phase": [
+        [
+          32868.41,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          32868.41,
+          0.0
+        ],
+        [
+          10956.136666666667,
+          10956.136666666667,
+          10956.136666666667
+        ],
+        [
+          0.0,
+          0.0,
+          32868.41
+        ]
+      ]
+    },
+    "electrical_shunt_entities": {
+      "id": [
+        11
+      ],
+      "connection.to_id": [
+        2
+      ],
+      "electrical.status": [
+        1
+      ],
+      "electrical.conductance": [
+        0.0
+      ],
+      "electrical.susceptance": [
+        0.375
+      ],
+      "electrical.zero_sequence_conductance": [
+        0.0
+      ],
+      "electrical.zero_sequence_susceptance": [
+        0.375
+      ]
+    },
+    "electrical_branch_protection_entities": {
+      "id": [
+        16,
+        17
+      ],
+      "electrical.pick_up_time": [
+        0.6,
+        0.6
+      ],
+      "electrical.protected_line": [
+        5,
+        9
+      ],
+      "electrical.protected_side": [
+        0,
+        1
+      ],
+      "electrical.pick_up_current": [
+        547.5,
+        547.5
+      ]
+    },
+    "electrical_fault_entities": {
+      "id": [
+        2000,
+        2001,
+        2002,
+        2003,
+        2004
+      ],
+      "connection.to_id": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "electrical.status": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "electrical.fault_type": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  }
+}

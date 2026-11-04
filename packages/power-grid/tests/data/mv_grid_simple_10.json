@@ -1,0 +1,490 @@
+{
+  "version": 4,
+  "name": "mv_grid_simple_10",
+  "type": "electrical_network",
+  "display_name": "mv_grid_simple_10",
+  "epsg_code": 28992,
+  "general": {
+    "enum": {
+      "branch_side": [
+        "from_side",
+        "to_side"
+      ]
+    }
+  },
+  "data": {
+    "electrical_node_entities": {
+      "id": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "electrical.rated_voltage": [
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0,
+        10000.0
+      ]
+    },
+    "electrical_virtual_node_entities": {
+      "id": [
+        40
+      ],
+      "electrical.rated_voltage": [
+        10000.0
+      ]
+    },
+    "electrical_cable_entities": {
+      "id": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22
+      ],
+      "topology.from_node_id": [
+        0,
+        2,
+        0,
+        0,
+        4,
+        0,
+        6,
+        1,
+        6,
+        11
+      ],
+      "topology.to_node_id": [
+        2,
+        5,
+        3,
+        4,
+        7,
+        3,
+        1,
+        8,
+        11,
+        12
+      ],
+      "electrical.from_status": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.to_status": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.resistance": [
+        0.65,
+        0.65,
+        1.3,
+        0.65,
+        0.65,
+        1.3,
+        0.65,
+        0.65,
+        0.65,
+        0.65
+      ],
+      "electrical.reactance": [
+        0.37,
+        0.37,
+        0.74,
+        0.37,
+        0.37,
+        0.74,
+        0.37,
+        0.37,
+        0.37,
+        0.37
+      ],
+      "electrical.capacitance": [
+        2.4999999999999998e-06,
+        2.4999999999999998e-06,
+        4.9999999999999996e-06,
+        2.4999999999999998e-06,
+        2.4999999999999998e-06,
+        4.9999999999999996e-06,
+        2.4999999999999998e-06,
+        2.4999999999999998e-06,
+        2.4999999999999998e-06,
+        2.4999999999999998e-06
+      ],
+      "electrical.rated_current": [
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0,
+        320.0
+      ],
+      "electrical.tan_delta": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    "electrical_line_entities": {
+      "id": [
+        23
+      ],
+      "topology.from_node_id": [
+        0
+      ],
+      "topology.to_node_id": [
+        2
+      ],
+      "electrical.from_status": [
+        1
+      ],
+      "electrical.to_status": [
+        1
+      ],
+      "electrical.resistance": [
+        0.65
+      ],
+      "electrical.reactance": [
+        0.37
+      ],
+      "electrical.capacitance": [
+        0.0
+      ],
+      "electrical.rated_current": [
+        500.0
+      ],
+      "electrical.tan_delta": [
+        0.0
+      ]
+    },
+    "electrical_link_entities": {
+      "id": [
+        24,
+        25,
+        26,
+        41
+      ],
+      "topology.from_node_id": [
+        0,
+        0,
+        9,
+        0
+      ],
+      "topology.to_node_id": [
+        10,
+        9,
+        10,
+        40
+      ],
+      "electrical.from_status": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.to_status": [
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "electrical_transformer_entities": {
+      "id": [
+        27
+      ],
+      "topology.from_node_id": [
+        3
+      ],
+      "topology.to_node_id": [
+        6
+      ],
+      "electrical.from_status": [
+        1
+      ],
+      "electrical.to_status": [
+        1
+      ],
+      "electrical.primary_voltage": [
+        10000.0
+      ],
+      "electrical.secondary_voltage": [
+        10000.0
+      ],
+      "electrical.rated_power": [
+        23000000.0
+      ],
+      "electrical.short_circuit_voltage": [
+        0.0055000000000000005
+      ],
+      "electrical.copper_loss": [
+        18000.0
+      ],
+      "electrical.no_load_current": [
+        0.0
+      ],
+      "electrical.no_load_loss": [
+        0.0
+      ],
+      "electrical.tap_side": [
+        0
+      ],
+      "electrical.tap_position": [
+        -1
+      ],
+      "electrical.tap_min": [
+        -6
+      ],
+      "electrical.tap_max": [
+        6
+      ],
+      "electrical.tap_nom": [
+        0
+      ],
+      "electrical.tap_size": [
+        150.0
+      ],
+      "electrical.clock": [
+        5
+      ],
+      "electrical.winding_from": [
+        1
+      ],
+      "electrical.winding_to": [
+        2
+      ],
+      "electrical.short_circuit_voltage_min": [
+        0.006
+      ],
+      "electrical.short_circuit_voltage_max": [
+        0.0045000000000000005
+      ],
+      "electrical.copper_loss_min": [
+        17500.0
+      ],
+      "electrical.copper_loss_max": [
+        14000.0
+      ]
+    },
+    "electrical_source_entities": {
+      "id": [
+        28
+      ],
+      "connection.to_id": [
+        40
+      ],
+      "electrical.status": [
+        1
+      ],
+      "electrical.reference_voltage": [
+        1.05
+      ],
+      "electrical.short_circuit_power": [
+        100000000000000.0
+      ]
+    },
+    "electrical_load_entities": {
+      "id": [
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ],
+      "connection.to_id": [
+        1,
+        2,
+        4,
+        5,
+        8,
+        9,
+        10,
+        11
+      ],
+      "electrical.status": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "electrical.active_power_specified": [
+        1000000.0,
+        1000000.0,
+        1000000.0,
+        2000000.0,
+        2000000.0,
+        1000000.0,
+        1000000.0,
+        1000000.0
+      ],
+      "electrical.reactive_power_specified": [
+        328684.11,
+        328684.11,
+        328684.1,
+        657368.21,
+        657368.21,
+        328684.11,
+        328684.1,
+        328684.1
+      ]
+    },
+    "electrical_generator_entities": {
+      "id": [
+        29
+      ],
+      "connection.to_id": [
+        7
+      ],
+      "electrical.status": [
+        1
+      ],
+      "electrical.active_power_specified": [
+        500000.0
+      ],
+      "electrical.reactive_power_specified": [
+        309872.1692015512
+      ]
+    },
+    "electrical_shunt_entities": {
+      "id": [
+        38,
+        39
+      ],
+      "connection.to_id": [
+        7,
+        12
+      ],
+      "electrical.status": [
+        1,
+        0
+      ],
+      "electrical.conductance": [
+        0.0,
+        0.0
+      ],
+      "electrical.susceptance": [
+        0.0045351473922902496,
+        -0.00554016620498615
+      ]
+    },
+    "electrical_fault_entities": {
+      "id": [
+        2000,
+        2001,
+        2002,
+        2003,
+        2004,
+        2005,
+        2006,
+        2007,
+        2008,
+        2009,
+        2010,
+        2011,
+        2012
+      ],
+      "connection.to_id": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "electrical.status": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "electrical.fault_type": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  }
+}
