@@ -10,14 +10,25 @@ from uuid import UUID
 
 import numpy as np
 import orjson
+import sqlalchemy
 from sqlalchemy import Insert, Select, delete, exists, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from movici_data_core.database import model as db
 from movici_data_core.database.model import NamedResource, Options, to_domain_or_none
-from movici_data_core.domain_model import AttributeType, DatasetData, EntityType
-from movici_data_core.exceptions import ResourceDoesNotExist
+from movici_data_core.domain_model import (
+    AttributeType,
+    DatasetData,
+    DatasetFilter,
+    EntityType,
+)
+from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
+    InvalidAction,
+    ResourceDoesNotExist,
+    map_errors,
+)
 from movici_simulation_core.core import DataType, get_rowptr, infer_data_type_from_array
 from movici_simulation_core.core.schema import DEFAULT_ROWPTR_KEY
 from movici_simulation_core.types import DatasetData as NumpyDatasetData
@@ -41,6 +52,39 @@ class SQLResourceRepository:
         return bool(await self.session.scalar(select(exists().where(*where))))
 
 
+def validated_payload(
+    resource: t.Type[NamedResource[T_dom]], obj: T_dom, keys: t.Collection[str]
+) -> dict[str, t.Any]:
+    """Get an INSERT/UPDATE payload as a ``dict`` based on an object ``obj`` and its associated
+    database resource model ``resource``. Only ``keys`` are extracted from the ``obj`` object and
+    validation include checking for the maximum length certain ``str`` fields are allowed
+
+    :param resource: the database model (derived from) :class:`NamedResource`
+    :param obj: the domain object to extract the payload from
+    :param keys: the keys to extract from the object. If a key does not exist on the object, then
+        ``None`` is returned for that key.
+    :return: a dictionary containing the validated payload. Keys in the payload are only returned
+        if they exist as a field in the database NamedResource model.
+    """
+
+    payload = {key: getattr(obj, key, None) for key in keys}
+    return validated_payload_dict(resource, **payload)
+
+
+def validated_payload_dict(resource: t.Type[NamedResource], **payload) -> dict[str, t.Any]:
+    """Take an INSERT/UPDATE payload as a ``dict`` and validate its content to the given
+    :class:`NamedResource` database model. The payload is validated against the model and
+    validation include checking for the maximum length certain ``str`` fields are allowed
+
+    :param resource: the database model (derived from) :class:`NamedResource`
+    :param payload: a dictionoary (as keyword arguments) containing the INSERT/UPDATE payload
+    :return: a dictionary containing the validated payload. Keys in the payload are only returned
+        if they exist as a field in the database NamedResource model.
+    """
+    resource.validate_field_lengths(payload)
+    return payload
+
+
 def ensure_valid_id(method):
     """Decorator to ensure that a resource id exists, raises ResourceDoesNotExist if a non-existing
     id is given
@@ -53,6 +97,21 @@ def ensure_valid_id(method):
         if (await self.get_by_id(id)) is None:
             raise ResourceDoesNotExist(self.__resource_type_name__, id=id)
         return await method(self, id, *args, **kwargs)
+
+    return _wrapped
+
+
+def invalidates_schema(method):
+    """Decorator to invalidate the schema when a call to the decorated method succeeds
+
+    :param method: an async method from a GenericResourceRepository
+    """
+
+    @functools.wraps(method)
+    async def _wrapped(self: GenericResourceRepository, *args, **kwargs):
+        result = await method(self, *args, **kwargs)
+        self._invalidate_schema()
+        return result
 
     return _wrapped
 
@@ -75,6 +134,21 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
 
     __resource__: t.Type[NamedResource[T_dom]]
     __resource_type_name__: str
+    __invalidates_schema__: bool = False
+
+    def __init__(
+        self,
+        session: AsyncSession,
+        options: Options,
+        all_data: SQLAlchemyRepository,
+        invalidate_schema_callable: t.Callable,
+    ):
+        super().__init__(session, options, all_data)
+        self._invalidate_schema_callable = invalidate_schema_callable
+
+    def _invalidate_schema(self):
+        if self.__invalidates_schema__:
+            self._invalidate_schema_callable()
 
     async def list(self) -> list[T_dom]:
         result = await self.session.scalars(select(self.__resource__))
@@ -94,6 +168,16 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
         return to_domain_or_none(await self.session.get(self.__resource__, id))
 
     @ensure_valid_id
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda self, id: InvalidAction(
+                f"Cannot delete {self.__resource_type_name__} when it is still in use"
+            ),
+        ),
+        with_self=True,
+    )
+    @invalidates_schema
     async def delete(self, id: UUID):
         await self.session.execute(delete(self.__resource__).where(self.__resource__.id == id))
 
@@ -103,14 +187,62 @@ class GenericResourceRepository(SQLResourceRepository, t.Generic[T_dom]):
     async def update(self, id: UUID, obj: T_dom) -> None:
         raise NotImplementedError
 
+    def _validated_payload(self, obj: T_dom, keys: t.Collection[str]) -> dict[str, t.Any]:
+        return validated_payload(self.__resource__, obj, keys)
 
-class EntityDataSelector(t.Protocol):
+    def _validated_payload_dict(self, **payload) -> dict[str, t.Any]:
+        return validated_payload_dict(self.__resource__, **payload)
+
+
+class EntityDataSelector:
     """EntityDataSelector is a Protocol that EntityDataProcessor uses to retrieve SQLAlchemy
     queries for the resource it is operating on, ie Dataset or Update.
     """
 
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]: ...
-    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert: ...
+    def __init__(self, dataset_filter: DatasetFilter | None = None) -> None:
+        self.dataset_filter = dataset_filter
+
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
+        raise NotImplementedError
+
+    def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
+        raise NotImplementedError
+
+
+def dataset_filter_to_where_clause(dataset_filter: DatasetFilter):
+    attributes_per_entity_group: dict[str, set[str]] = {}
+    for attr in dataset_filter.attributes:
+        attributes_per_entity_group.setdefault(attr.entity_group, {"id"}).add(attr.attribute)
+
+    def _to_where_clause(entity_group: str, attributes: set[str]):
+        return (db.EntityType.name == entity_group) & (db.AttributeType.name.in_(attributes))
+
+    where_clause = sqlalchemy.sql.false()
+    for entity_group, attributes in attributes_per_entity_group.items():
+        where_clause |= _to_where_clause(entity_group, attributes)
+    return where_clause
+
+
+def combine_attributes(attributes: t.Iterable[db.Attribute]) -> NumpyDatasetData:
+    result: NumpyDatasetData = {}
+    for attribute in attributes:
+        attribute_name = attribute.attribute_type.name
+        entity_group_name = attribute.entity_type.name
+        entity_group_data = result.setdefault(entity_group_name, {})
+        if attribute_name in entity_group_data:
+            # under normal usage this shouldn't happen, but let's make it very clear that something
+            # is wrong if we get here
+            raise ValueError(
+                f"Duplicate attribute '{attribute_name}' found in"
+                f" entity group '{entity_group_name}'"
+            )
+
+        data = attribute.data.to_numpy()
+        attr_data: NumpyAttributeData = {"data": data}
+        if attribute.rowptr is not None:
+            attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
+        entity_group_data[attribute_name] = attr_data
+    return result
 
 
 class EntityDataProcessor:
@@ -125,30 +257,30 @@ class EntityDataProcessor:
         self.selector = selector
 
     async def get(self, id: UUID) -> NumpyDatasetData:
-        result: NumpyDatasetData = {}
-        for attribute in (
-            await self.session.scalars(
-                self.selector.select_linked_attribute(id).options(
-                    joinedload(db.Attribute.rowptr),
-                    joinedload(db.Attribute.data),
-                    joinedload(db.Attribute.entity_type),
-                    joinedload(db.Attribute.attribute_type),
-                )
+        subquery = self.selector.selector_subquery(id)
+        query = (
+            select(db.Attribute)
+            .where(db.Attribute.id.in_(subquery))
+            .options(
+                joinedload(db.Attribute.rowptr),
+                joinedload(db.Attribute.data),
+                joinedload(db.Attribute.entity_type),
+                joinedload(db.Attribute.attribute_type),
             )
-        ).all():
-            entity_group = result.setdefault(attribute.entity_type.name, {})
-            attr_data: NumpyAttributeData = {"data": attribute.data.to_numpy()}
-            if attribute.rowptr is not None:
-                attr_data[DEFAULT_ROWPTR_KEY] = attribute.rowptr.to_numpy()
-            entity_group[attribute.attribute_type.name] = attr_data
-        return result
+        )
+        attrs = (await self.session.scalars(query)).all()
+        return combine_attributes(attrs)
 
     async def store(self, id: UUID, data: NumpyDatasetData):
         """
         :param id: dataset UUID
         :param data: dataset data section in numpy format
         """
+
         for entity_group, attributes in data.items():
+            if "id" not in attributes:
+                raise InvalidAction(f"'id' array required for entity group '{entity_group}'")
+
             entity_type = await self.all_data.entity_types.ensure_entity_type(
                 EntityType(entity_group)
             )
@@ -196,7 +328,9 @@ class EntityDataProcessor:
 
     async def _store_rowptr_array(self, arr: np.ndarray, attribute_id: UUID):
         await self.session.execute(
-            insert(db.RowptrArray).values(data=arr.tobytes(), attribute_id=attribute_id)
+            insert(db.RowptrArray).values(
+                data=db.RowptrArray.prepare_buffer(arr), attribute_id=attribute_id
+            )
         )
 
 

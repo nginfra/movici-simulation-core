@@ -5,19 +5,29 @@ import pytest
 
 from movici_data_core.database.backend import SQLAlchemyBackend, SQLAlchemyServer
 from movici_data_core.database.model import DatabaseMode
-from movici_data_core.domain_model import Scenario, Workspace
+from movici_data_core.domain_model import AttributeType, Scenario, Workspace
 from movici_data_core.exceptions import InvalidAction, ResourceDoesNotExist
 from movici_data_core.validators import ModelConfigValidator
+from movici_simulation_core import DataType
 
 
 @pytest.fixture
-async def backend(initialized_db: SQLAlchemyServer):
-    async with initialized_db.get_backend() as backend:
-        yield backend
+def database_mode():
+    return DatabaseMode.MULTIPLE_WORKSPACES
+
+
+async def test_sqlalchemy_server_creates_temporary_directory(db: SQLAlchemyServer):
+    server = SQLAlchemyServer(db.dbapi_url)
+
+    async with server.begin():
+        tmpfile_dir = server.tmpfile_dir
+        assert tmpfile_dir.is_dir()
+
+    assert not tmpfile_dir.exists()
 
 
 @pytest.mark.parametrize(
-    # database_mode fixture is picked up in the initialized_db fixture in conftest
+    # database_mode fixture is picked up in the db fixture in conftest
     "database_mode, single_scenario_mode, single_workspace_mode",
     [
         (DatabaseMode.SINGLE_SCENARIO, True, True),
@@ -33,7 +43,7 @@ async def test_correct_backend(
 
 
 @pytest.mark.parametrize(
-    # database_mode fixture is picked up in the initialized_db fixture in conftest
+    # database_mode fixture is picked up in the db fixture in conftest
     "database_mode, flags",
     [
         (
@@ -43,6 +53,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": False,
                 "STRICT_ENTITY_TYPES": False,
                 "STRICT_MODEL_TYPES": False,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
         (
@@ -52,6 +63,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": False,
                 "STRICT_ENTITY_TYPES": False,
                 "STRICT_MODEL_TYPES": False,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
         (
@@ -61,6 +73,7 @@ async def test_correct_backend(
                 "STRICT_DATASET_TYPES": True,
                 "STRICT_ENTITY_TYPES": True,
                 "STRICT_MODEL_TYPES": True,
+                "IMMUTABLE_WORKSPACE_NAMES": False,
             },
         ),
     ],
@@ -100,7 +113,6 @@ async def test_change_mode(
     workspace_count,
     scenario_count,
     can_change,
-    initialized_db,
 ):
     if database_mode == DatabaseMode.MULTIPLE_WORKSPACES:
         for num in range(workspace_count):
@@ -146,14 +158,12 @@ async def test_change_mode(
         (DatabaseMode.MULTIPLE_WORKSPACES, DatabaseMode.MULTIPLE_WORKSPACES),
     ],
 )
-async def test_mode_persists_after_change(
-    initialized_db: SQLAlchemyServer, database_mode, new_mode
-):
-    async with initialized_db.get_backend() as backend:
+async def test_mode_persists_after_change(db, database_mode, new_mode):
+    async with db.get_backend() as backend:
         assert backend.options.mode == database_mode
         await backend.set_database_mode(new_mode)
 
-    async with initialized_db.get_backend() as backend:
+    async with db.get_backend() as backend:
         assert backend.options.mode == new_mode
 
 
@@ -224,10 +234,6 @@ class TestSingleWorkspaceBackend:
 
 
 class TestMultipleWorkspaceBackend:
-    @pytest.fixture
-    def database_mode(self):
-        return DatabaseMode.MULTIPLE_WORKSPACES
-
     def test_scenario_and_workspace_are_unset(self, backend: SQLAlchemyBackend):
         assert backend.workspace_id is None
         assert backend.scenario_id is None
@@ -247,9 +253,10 @@ class TestMultipleWorkspaceBackend:
         self, backend: SQLAlchemyBackend, model_config_validator, a_workspace
     ):
         backend = backend.for_workspace(a_workspace.id)
+        assert len(await backend.scenarios.list()) == 0
         scenario = await backend.scenarios.create(
             Scenario(
-                name="a_scenario",
+                name="some_scenario",
                 display_name="a scenario",
                 description="",
                 epsg_code=0,
@@ -259,3 +266,45 @@ class TestMultipleWorkspaceBackend:
         assert len(await backend.scenarios.list()) == 1
         await backend.for_scenario(scenario).scenarios.delete()
         assert len(await backend.scenarios.list()) == 0
+
+
+class TestSchemaInvalidation:
+    async def test_caches_schema_between_backends(self, initialized_db: SQLAlchemyServer):
+        async with initialized_db.get_backend() as backend:
+            schema = initialized_db.schema
+            assert backend.serializer.schema is schema  # type: ignore
+            assert schema is not None
+
+        async with initialized_db.get_backend() as backend:
+            assert initialized_db.schema is schema
+            assert backend.serializer.schema is schema  # type: ignore
+
+    async def test_invalidates_schema_when_attribute_types_change(
+        self, initialized_db: SQLAlchemyServer
+    ):
+
+        async with initialized_db.get_backend() as backend:
+            await backend.attribute_types.create(AttributeType("some.attribute", DataType(int)))
+            assert initialized_db.schema_dirty
+
+        async with initialized_db.get_backend() as backend:
+            new_schema = initialized_db.schema
+            assert not initialized_db.schema_dirty
+            assert new_schema is not None
+            assert "some.attribute" in new_schema.attributes
+
+    async def test_invalidates_schema_after_autocreating_new_attribute(
+        self, initialized_db: SQLAlchemyServer
+    ):
+
+        async with initialized_db.get_backend() as backend:
+            backend.set_options(strict_attribute_types=False)
+            await backend.repository.attribute_types.ensure_attribute_type(
+                AttributeType("new_attribute", DataType(float, (2,)))
+            )
+            assert initialized_db.schema_dirty
+
+        async with initialized_db.get_backend() as backend:
+            new_schema = initialized_db.schema
+            assert new_schema is not None
+            assert "new_attribute" in new_schema.attributes

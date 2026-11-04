@@ -31,6 +31,18 @@ class TestIndex:
     def test_index_length(self):
         assert len(Index()) == 0
 
+    @pytest.mark.parametrize(
+        "ids, expected",
+        [
+            ([1, 2, 7, 8, 9], 9),
+            ([], -1),
+            ([0], 0),
+        ],
+    )
+    def test_get_max_value(self, ids, expected):
+        index = Index(ids)
+        assert index.max() == expected
+
 
 class TestBlockIndex:
     @pytest.mark.parametrize(
@@ -62,6 +74,18 @@ class TestBlockIndex:
     def test_not_found(self, not_found):
         index = build_index([1, 2, 7, 8, 9])
         assert query_idx(index.block_from, index.block_to, index.block_offset, not_found) == -1
+
+    @pytest.mark.parametrize(
+        "ids, expected",
+        [
+            ([1, 2, 7, 8, 9], 9),
+            ([], -1),
+            ([0], 0),
+        ],
+    )
+    def test_get_max_value(self, ids, expected):
+        index = build_index(ids)
+        assert index.max() == expected
 
 
 @pytest.mark.parametrize("query", [[1], 1])

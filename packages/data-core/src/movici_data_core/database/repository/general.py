@@ -7,7 +7,6 @@ from sqlalchemy import insert, select, update
 
 from movici_data_core.database import model as db
 from movici_data_core.domain_model import (
-    AttributeDataType,
     AttributeType,
     DatasetFormat,
     DatasetType,
@@ -17,36 +16,54 @@ from movici_data_core.domain_model import (
 from movici_data_core.exceptions import (
     InvalidAction,
     InvalidResource,
+    ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
+    map_errors,
 )
 
-from .common import GenericResourceRepository, ensure_valid_id
+from .common import GenericResourceRepository, ensure_valid_id, invalidates_schema
 
 
 class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
     __resource__ = db.DatasetType
     __resource_type_name__ = "dataset_type"
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda obj: ResourceAlreadyExists("dataset_type", name=obj.name),
+        )
+    )
     async def create(self, obj: DatasetType) -> UUID:
-        """Store a :class:``DatasetType`` in the database. When storing a ``DatasetType``, its
-        ``format`` field may not be set to ``None``.
+        """Store a :class:`movici_data_core.domain_model.DatasetType` in the database. When
+        storing a ``DatasetType``, its ``format`` field may not be set to ``None``.
 
         :param obj: the ``DatasetType`` object
         :return: the UUID of the stored ``DatasetType``
         """
         if obj.format is None:
             raise InvalidAction("Must specify DatasetFormat when creating a DatasetType")
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            format=obj.format,
+            mimetype=obj.mimetype if obj.format == DatasetFormat.BINARY else None,
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.DatasetType)
-                .values(name=obj.name, format=obj.format, mimetype=obj.mimetype)
-                .returning(db.DatasetType.id)
+                insert(db.DatasetType).values(**payload).returning(db.DatasetType.id)
             ),
         )
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda id, obj: ResourceAlreadyExists("dataset_type", name=obj.name),
+        )
+    )
     async def update(self, id: UUID, obj: DatasetType):
-        """Update a :class:``DatasetType`` in the database
+        """Update a :class:`movici_data_core.domain_model.DatasetType` in the database
 
         Valid fields to update are: ``name``, ``mimetype``
 
@@ -59,12 +76,12 @@ class DatasetTypeRepository(GenericResourceRepository[DatasetType]):
         if current.format != obj.format:
             raise InvalidAction("Cannot update dataset type format")
 
-        mimetype = obj.mimetype if obj.format == DatasetFormat.BINARY else None
-
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            mimetype=obj.mimetype if obj.format == DatasetFormat.BINARY else None,
+        )
         await self.session.execute(
-            update(db.DatasetType)
-            .where(db.DatasetType.id == id)
-            .values(name=obj.name, mimetype=mimetype)
+            update(db.DatasetType).where(db.DatasetType.id == id).values(**payload)
         )
 
     async def ensure_dataset_type(self, dataset_type: DatasetType) -> DatasetType:
@@ -98,30 +115,44 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
     __resource__ = db.EntityType
     __resource_type_name__ = "entity_type"
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda obj: ResourceAlreadyExists("entity_type", name=obj.name),
+        )
+    )
     async def create(self, obj: EntityType) -> UUID:
-        """Store a :class:``EntityType`` in the database
+        """Store a :class:`EntityType` in the database
 
         :param obj: the ``EntityType`` object
         :return: the UUID of the stored ``EntityType``
         """
+        payload = self._validated_payload(obj, ("name",))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.EntityType).values(name=obj.name).returning(db.EntityType.id)
+                insert(db.EntityType).values(**payload).returning(db.EntityType.id)
             ),
         )
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda id, obj: ResourceAlreadyExists("entity_type", name=obj.name),
+        )
+    )
     @ensure_valid_id
     async def update(self, id: UUID, obj: EntityType):
-        """Update a :class:``EntityType`` in the database
+        """Update a :class:`EntityType` in the database
 
         Valid fields to update are: ``name``
 
         :param id: the UUID of the stored ``EntityType``
         :param obj: the ``EntityType`` object with the changes
         """
+        payload = self._validated_payload(obj, ("name",))
         await self.session.execute(
-            update(db.EntityType).where(db.EntityType.id == id).values(name=obj.name)
+            update(db.EntityType).where(db.EntityType.id == id).values(**payload)
         )
 
     async def ensure_entity_type(self, entity_type: EntityType) -> EntityType:
@@ -139,40 +170,47 @@ class EntityTypeRepository(GenericResourceRepository[EntityType]):
 class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
     __resource__ = db.AttributeType
     __resource_type_name__ = "attribute_type"
+    __invalidates_schema__ = True
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda obj: ResourceAlreadyExists("attribute_type", name=obj.name),
+        )
+    )
+    @invalidates_schema
     async def create(self, obj: AttributeType) -> UUID:
-        """Store a :class:``AttributeType`` in the database
+        """Store a :class:`AttributeType` in the database
 
         :param obj: the ``AttributeType`` object
         :return: the UUID of the stored ``AttributeType``
         """
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            has_rowptr=obj.data_type.csr,
+            unit_type=db.AttributeDataType.from_domain(obj.data_type.py_type),
+            unit_shape=obj.data_type.unit_shape,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
+            protected=obj.protected,
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.AttributeType)
-                .values(
-                    name=obj.name,
-                    has_rowptr=obj.data_type.csr,
-                    unit_type=self._db_unit_type(obj.data_type.py_type),
-                    unit_shape=obj.data_type.unit_shape,
-                    unit=obj.unit,
-                    description=obj.description,
-                    enum_name=obj.enum_name,
-                )
-                .returning(db.AttributeType.id)
+                insert(db.AttributeType).values(**payload).returning(db.AttributeType.id)
             ),
         )
 
-    def _db_unit_type(self, py_type: AttributeDataType):
-        return {
-            bool: db.AttributeDataType.BOOL,
-            int: db.AttributeDataType.INT,
-            float: db.AttributeDataType.FLOAT,
-            str: db.AttributeDataType.STR,
-        }[py_type]
-
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda id, obj: ResourceAlreadyExists("attribute_type", name=obj.name),
+        )
+    )
+    @invalidates_schema
     async def update(self, id: UUID, obj: AttributeType):
-        """Update a :class:``AttributeType`` in the database
+        """Update a :class:`AttributeType` in the database
 
         Valid fields to update are: ``name``, ``data_type``, ``unit``, ``description``,
         ``enum_name``
@@ -183,26 +221,43 @@ class AttributeTypeRepository(GenericResourceRepository[AttributeType]):
         current = await self.get_by_id(id)
         if current is None:
             raise ResourceDoesNotExist("attribute_type", id=id)
+
+        if current.protected and current.name != obj.name:
+            raise InvalidAction(f"Cannot rename protected attribute type '{current.name}'")
+
         in_use = await self.session.scalar(
             select(db.Attribute.id).where(db.Attribute.attribute_type_id == id).limit(1)
         )
 
-        if in_use and not current.data_type == obj.data_type:
-            raise InvalidAction("cannot change attribute data type when it is in use")
+        if current.data_type != obj.data_type:
+            if current.protected:
+                raise InvalidAction(
+                    f"Cannot data type of protected attribute type '{current.name}'"
+                )
+            if in_use:
+                raise InvalidAction("Cannot change attribute data type when it is in use")
 
-        await self.session.execute(
-            update(db.AttributeType)
-            .where(db.AttributeType.id == id)
-            .values(
-                name=obj.name,
-                has_rowptr=obj.data_type.csr,
-                unit_type=self._db_unit_type(obj.data_type.py_type),
-                unit_shape=obj.data_type.unit_shape,
-                unit=obj.unit,
-                description=obj.description,
-                enum_name=obj.enum_name,
-            )
+        payload = self._validated_payload_dict(
+            name=obj.name,
+            has_rowptr=obj.data_type.csr,
+            unit_type=db.AttributeDataType.from_domain(obj.data_type.py_type),
+            unit_shape=obj.data_type.unit_shape,
+            unit=obj.unit,
+            description=obj.description,
+            enum_name=obj.enum_name,
         )
+        await self.session.execute(
+            update(db.AttributeType).where(db.AttributeType.id == id).values(**payload)
+        )
+
+    async def delete(self, id: UUID):
+        current = await self.get_by_id(id)
+        if current is None:
+            raise ResourceDoesNotExist("attribute_type", id=id)
+
+        if current.protected:
+            raise InvalidAction(f"Cannot delete protected attribute type '{current.name}'")
+        return await super().delete(id)
 
     async def ensure_attribute_type(self, attribute_type: AttributeType) -> AttributeType:
         """Ensure that an attribute type exists in the database or raise an error. If the attribute
@@ -234,26 +289,37 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
     __resource__ = db.ModelType
     __resource_type_name__ = "model_type"
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda obj: ResourceAlreadyExists("model_type", name=obj.name),
+        )
+    )
     async def create(self, obj: ModelType) -> UUID:
-        """Store a :class:``ModelType`` in the database
+        """Store a :class:`ModelType` in the database
 
         :param obj: the ``ModelType`` object
         :return: the UUID of the stored ``ModelType``
         """
         if obj.jsonschema is None:
             raise InvalidAction("Cannot create ModelType without a jsonschema")
+        payload = self._validated_payload(obj, ("name", "jsonschema"))
         return t.cast(
             UUID,
             await self.session.scalar(
-                insert(db.ModelType)
-                .values(name=obj.name, jsonschema=obj.jsonschema)
-                .returning(db.ModelType.id)
+                insert(db.ModelType).values(**payload).returning(db.ModelType.id)
             ),
         )
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda id, obj: ResourceAlreadyExists("model_type", name=obj.name),
+        )
+    )
     @ensure_valid_id
     async def update(self, id: UUID, obj: ModelType):
-        """Update a :class:``ModelType`` in the database
+        """Update a :class:`movici_data_core.domain_model.ModelType` in the database
 
         Valid fields to update are: ``name``, ``jsonschema``
 
@@ -262,10 +328,10 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
         """
         if obj.jsonschema is None:
             raise InvalidAction("Cannot set ModelType.jsonschema to None")
+
+        payload = self._validated_payload(obj, ("name", "jsonschema"))
         await self.session.execute(
-            update(db.ModelType)
-            .where(db.ModelType.id == id)
-            .values(name=obj.name, jsonschema=obj.jsonschema)
+            update(db.ModelType).where(db.ModelType.id == id).values(**payload)
         )
 
     async def ensure_model_types(self, model_types: t.Sequence[ModelType]) -> list[ModelType]:
@@ -298,14 +364,18 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
             created = await self.session.scalars(
                 insert(db.ModelType).returning(db.ModelType),
                 [
-                    {
-                        "name": tp.name,
-                        "jsonschema": tp.jsonschema or self._default_jsonschema(tp.name),
-                    }
+                    # self._validated_payload_dict may raise MoviciValidationError. However, since
+                    # it is called inside a list comprehension, it is not possible to upgrade the
+                    # error with its (relative) path in the scenario object. Instead, we rely
+                    # on validation in the api layer to provide users with a rich validation error
+                    # The checks here are mainly a second line of defense
+                    self._validated_payload_dict(
+                        name=tp.name,
+                        jsonschema=tp.jsonschema or self._default_jsonschema(tp.name),
+                    )
                     for tp in to_create
                 ],
             )
-
             existing_model_types.update((tp.name, tp) for tp in created)
 
         return [existing_model_types[tp.name].to_domain() for tp in model_types]

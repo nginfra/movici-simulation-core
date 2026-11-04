@@ -2,43 +2,44 @@ from __future__ import annotations
 
 import datetime
 import enum
+import re
 import typing as t
 import uuid
 
 import numpy as np
-from sqlalchemy import (
-    JSON,
-    ForeignKey,
-    String,
-    Text,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import JSON, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from movici_data_core import domain_model
 from movici_data_core.domain_model import (
     BoundingBox,
     DatasetFormat,
-    ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
 )
+from movici_data_core.exceptions import MoviciValidationError
 from movici_simulation_core.core import DataType
 from movici_simulation_core.validate import MoviciDataRefInfo
 
-from .db_types import GUID, JSONTuple, TZDateTime
+from .db_types import GUID, JSONTuple, RegexMatchingString, TZDateTime
 
 T_dom = t.TypeVar("T_dom", covariant=True)
+snake_case_pattern = re.compile(r"^[a-z_][a-z0-9_.]*$")
 
 
-class NamedResource(t.Protocol[T_dom]):
-    id: Mapped[uuid.UUID]
-    name: Mapped[str]
-
+class IToDomain(t.Protocol[T_dom]):
     def to_domain(self) -> T_dom: ...
 
 
-def to_domain_or_none(obj: NamedResource[T_dom] | None) -> T_dom | None:
+class NamedResource(IToDomain[T_dom], t.Protocol[T_dom]):
+    id: Mapped[uuid.UUID]
+    name: Mapped[str]
+
+    @classmethod
+    def validate_field_lengths(cls, payload: dict[str, t.Any]) -> None: ...
+
+
+def to_domain_or_none(obj: IToDomain[T_dom] | None) -> T_dom | None:
     return obj.to_domain() if obj is not None else None
 
 
@@ -49,6 +50,27 @@ class Base(DeclarativeBase):
         tuple: JSONTuple,
         dict: JSON,
     }
+
+    @classmethod
+    def validate_field_lengths(cls, payload: dict[str, t.Any]):
+        all_columns = cls.__table__.columns
+        string_columns = {
+            k: v
+            for k, v in all_columns.items()
+            if isinstance(v.type, (String, RegexMatchingString))
+        }
+        keys = payload.keys() & string_columns.keys()
+        too_long = {
+            key
+            for key in keys
+            if (max_len := t.cast(String, string_columns[key].type).length) is not None
+            and isinstance(payload[key], str)
+            and max_len < len(payload[key])
+        }
+        if too_long:
+            raise MoviciValidationError(
+                {path: ["length exceeds maximum length"] for path in too_long}
+            )
 
 
 class DatabaseMode(enum.Enum):
@@ -73,6 +95,15 @@ class AttributeDataType(enum.Enum):
     FLOAT = "float"
     STR = "str"
 
+    @classmethod
+    def from_domain(cls, py_type: domain_model.AttributeDataType):
+        return {
+            bool: AttributeDataType.BOOL,
+            int: AttributeDataType.INT,
+            float: AttributeDataType.FLOAT,
+            str: AttributeDataType.STR,
+        }[py_type]
+
 
 DEFAULT_SCHEMA_VERSION = "v1"
 DEFAULT_WORKSPACE_NAME = "__default__"
@@ -83,8 +114,13 @@ DEFAULT_NAME_MAX_LENGTH = 50
 DEFAULT_DISPLAY_NAME_MAX_LENGTH = 50
 
 ATTRIBUTE_NAME_MAX_LENGTH = 100
+ATTRIBUTE_DESCRIPTION_MAX_LENGTH = 255
 ATTRIBUTE_UNIT_MAX_LENGTH = 20
 ATTRIBUTE_ENUM_NAME_MAX_LENGTH = 20
+
+DATASET_TYPE_MIMETYPE_MAX_LENGTH = 50
+
+SCENARIO_DESCRIPTION_MAX_LENGTH = 500
 
 
 class Metadata(Base):
@@ -134,6 +170,7 @@ class Options(Base):
     STRICT_ATTRIBUTE_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_MODEL_TYPES: Mapped[bool] = mapped_column(default=False)
     STRICT_SCENARIO_DATASETS: Mapped[bool] = mapped_column(default=False)
+    IMMUTABLE_WORKSPACE_NAMES: Mapped[bool] = mapped_column(default=False)
 
     default_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("workspace.id", ondelete="RESTRICT")
@@ -148,7 +185,10 @@ class Options(Base):
 class Workspace(Base):
     __tablename__ = "workspace"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
+        unique=True,
+    )
     display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
     datasets: Mapped[list[Dataset]] = relationship(back_populates="workspace")
     scenarios: Mapped[list[Scenario]] = relationship(back_populates="workspace")
@@ -160,9 +200,12 @@ class Workspace(Base):
 class DatasetType(Base):
     __tablename__ = "dataset_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
+        unique=True,
+    )
     format: Mapped[DatasetFormat]
-    mimetype: Mapped[str | None]
+    mimetype: Mapped[str | None] = mapped_column(String(DATASET_TYPE_MIMETYPE_MAX_LENGTH))
 
     def to_domain(self) -> domain_model.DatasetType:
         return domain_model.DatasetType(
@@ -177,7 +220,9 @@ class Dataset(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
     workspace: Mapped[Workspace] = relationship(back_populates="datasets")
 
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
     display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
 
     dataset_type_id: Mapped[uuid.UUID] = mapped_column(
@@ -215,7 +260,10 @@ class Dataset(Base):
 class EntityType(Base):
     __tablename__ = "entity_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
+        unique=True,
+    )
 
     def to_domain(self) -> domain_model.EntityType:
         return domain_model.EntityType(name=self.name, id=self.id)
@@ -224,13 +272,21 @@ class EntityType(Base):
 class AttributeType(Base):
     __tablename__ = "attribute_type"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(ATTRIBUTE_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=ATTRIBUTE_NAME_MAX_LENGTH),
+        unique=True,
+    )
     has_rowptr: Mapped[bool]
     unit_type: Mapped[AttributeDataType]
     unit_shape: Mapped[tuple[int, ...]] = mapped_column(JSONTuple)
     unit: Mapped[str] = mapped_column(String(ATTRIBUTE_UNIT_MAX_LENGTH))
-    description: Mapped[str]
-    enum_name: Mapped[str | None] = mapped_column(String(ATTRIBUTE_ENUM_NAME_MAX_LENGTH))
+    description: Mapped[str] = mapped_column(String(ATTRIBUTE_DESCRIPTION_MAX_LENGTH))
+    enum_name: Mapped[str | None] = mapped_column(
+        RegexMatchingString(pattern=r"[a-z][a-z_]*", length=ATTRIBUTE_ENUM_NAME_MAX_LENGTH)
+    )
+
+    # prevent attribute from being deleted or renamed
+    protected: Mapped[bool] = mapped_column(default=False)
 
     @property
     def data_type(self):
@@ -250,6 +306,7 @@ class AttributeType(Base):
             unit=self.unit,
             description=self.description,
             enum_name=self.enum_name,
+            protected=self.protected,
         )
 
 
@@ -264,32 +321,43 @@ class DataArray(Base):
     min_val: Mapped[float | None]
     max_val: Mapped[float | None]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="data")
 
     def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
-        :return: Reconstructed NumPy array
+        :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
+            you should make a copy by calling ``array.copy()``
         """
         return np.frombuffer(self.data, dtype=self.dtype).reshape(self.shape)
 
 
 class RowptrArray(Base):
+    NP_DTYPE = np.uint32
     __tablename__ = "rowptr_array"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     data: Mapped[bytes]
 
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
     attribute: Mapped[Attribute] = relationship(back_populates="rowptr")
 
     def to_numpy(self) -> np.ndarray:
         """Reconstruct numpy array from stored data.
 
-        :return: Reconstructed NumPy array
+        :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
+            you should make a copy by calling ``array.copy()``
         """
-        return np.frombuffer(self.data, dtype=int)
+        return np.frombuffer(self.data, dtype=self.NP_DTYPE)
+
+    @classmethod
+    def prepare_buffer(cls, arr: np.ndarray):
+        return arr.astype(cls.NP_DTYPE).tobytes()
 
 
 class Attribute(Base):
@@ -303,8 +371,8 @@ class Attribute(Base):
         ForeignKey("attribute_type.id", ondelete="RESTRICT")
     )
     length: Mapped[int]
-    entity_type: Mapped[EntityType] = relationship()
-    attribute_type: Mapped[AttributeType] = relationship()
+    entity_type: Mapped[EntityType] = relationship(lazy="joined", innerjoin=True)
+    attribute_type: Mapped[AttributeType] = relationship(lazy="joined", innerjoin=True)
     data: Mapped[DataArray] = relationship()
     rowptr: Mapped[RowptrArray | None] = relationship()
 
@@ -313,7 +381,9 @@ class DatasetAttribute(Base):
     __tablename__ = "dataset_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="CASCADE"))
+    dataset_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("dataset.id", ondelete="CASCADE"), index=True
+    )
     attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
 
     dataset: Mapped[Dataset] = relationship()
@@ -341,7 +411,10 @@ class ModelType(Base):
     __tablename__ = "model_type"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH), unique=True)
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH),
+        unique=True,
+    )
     jsonschema: Mapped[dict] = mapped_column(JSON)
 
     def to_domain(self) -> domain_model.ModelType:
@@ -356,10 +429,11 @@ class Scenario(Base):
     workspace_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"))
     workspace: Mapped[Workspace] = relationship(back_populates="scenarios")
 
-    name: Mapped[str]
-    display_name: Mapped[str]
-    description: Mapped[str] = mapped_column(Text)
-    status: Mapped[ScenarioStatus]
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
+    display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
+    description: Mapped[str] = mapped_column(Text(SCENARIO_DESCRIPTION_MAX_LENGTH))
 
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
@@ -370,24 +444,56 @@ class Scenario(Base):
 
     datasets: Mapped[list[ScenarioDataset]] = relationship()
     models: Mapped[list[ScenarioModel]] = relationship()
+    simulation_status_info: Mapped[SimulationStatusInfo | None] = relationship()
 
-    def to_domain(self) -> domain_model.Scenario:
+    def to_domain(
+        self,
+        has_updates: bool,
+        datasets: list[ScenarioDataset] | None = None,
+        models: list[ScenarioModel] | None = None,
+    ) -> domain_model.Scenario:
         return domain_model.Scenario(
             id=self.id,
             workspace=self.workspace.to_domain(),
             name=self.name,
             display_name=self.display_name,
             description=self.description,
+            simulation_status_info=(
+                self.simulation_status_info.to_domain()
+                if self.simulation_status_info is not None
+                else None
+            ),
             simulation_info=SimulationInfo(**self.simulation_info),
             epsg_code=self.epsg_code,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            datasets=[ds.to_domain() for ds in sorted(datasets or [], key=lambda ds: ds.sequence)],
+            models=[ds.to_domain() for ds in sorted(models or [], key=lambda ds: ds.sequence)],
+            has_updates=has_updates,
         )
+
+
+class SimulationStatusInfo(Base):
+    __tablename__ = "simulation_status_info"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenario.id", ondelete="CASCADE"), unique=True
+    )
+    status: Mapped[SimulationStatus]
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    def to_domain(self):
+
+        return domain_model.SimulationStatusInfo(status=self.status, timestamp=self.updated_at)
 
 
 class ScenarioDataset(Base):
     __tablename__ = "scenario_dataset"
-    __table_args__ = (UniqueConstraint("scenario_id", "sequence"),)
+    __table_args__ = (
+        UniqueConstraint("scenario_id", "sequence"),
+        UniqueConstraint("scenario_id", "dataset_id"),
+    )
     scenario_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("scenario.id", ondelete="CASCADE"), primary_key=True
     )
@@ -411,7 +517,9 @@ class ScenarioModel(Base):
         UniqueConstraint("scenario_id", "name"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     model_type_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("model_type.id", ondelete="RESTRICT")
@@ -478,7 +586,9 @@ class Update(Base):
     # changes to the scenario would recreate all ScenarioModels, which would break this link.
     # Instead, we denormalize model_name and store a copy directly in the Update
     # table
-    model_name: Mapped[str] = mapped_column(String(DEFAULT_NAME_MAX_LENGTH))
+    model_name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
 
     timestamp: Mapped[int]
     iteration: Mapped[int]
@@ -509,8 +619,29 @@ class UpdateAttribute(Base):
     __tablename__ = "update_attribute"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    update_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("update.id", ondelete="CASCADE"))
-    attribute_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("attribute.id", ondelete="CASCADE"))
+    update_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("update.id", ondelete="CASCADE"), index=True
+    )
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("attribute.id", ondelete="CASCADE"), index=True
+    )
 
     update: Mapped[Update] = relationship()
     attribute: Mapped[Attribute] = relationship()
+
+
+class VisualizationView(Base):
+    __tablename__ = "visualization_view"
+    __table_args__ = (UniqueConstraint("scenario_id", "name"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(
+        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
+    )
+    config: Mapped[dict]
+    scenario: Mapped[Scenario] = relationship()
+
+    def to_domain(self) -> domain_model.View:
+        return domain_model.View(
+            name=self.name, config=self.config, id=self.id, scenario_id=self.scenario_id
+        )

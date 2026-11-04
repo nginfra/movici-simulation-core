@@ -4,7 +4,6 @@ import dataclasses
 import typing as t
 from uuid import UUID
 
-import sqlalchemy.exc
 from sqlalchemy import (
     ColumnElement,
     Insert,
@@ -22,6 +21,7 @@ from movici_data_core.domain_model import (
     AttributeSummary,
     Dataset,
     DatasetData,
+    DatasetFilter,
     DatasetFormat,
     DatasetSummary,
     DatasetType,
@@ -29,11 +29,13 @@ from movici_data_core.domain_model import (
     ScenarioDataset,
 )
 from movici_data_core.exceptions import (
+    ForeignKeyConstraintFailed,
     InvalidAction,
     InvalidResource,
     MoviciValidationError,
     ResourceAlreadyExists,
     ResourceDoesNotExist,
+    UniqueConstraintFailed,
     map_errors,
 )
 
@@ -42,6 +44,9 @@ from .common import (
     EntityDataSelector,
     RawDataProcessor,
     SQLResourceRepository,
+    dataset_filter_to_where_clause,
+    validated_payload,
+    validated_payload_dict,
 )
 
 
@@ -56,15 +61,6 @@ class DatasetRepository(SQLResourceRepository):
 
     @property
     def selector(self):
-        workspace_id = self._ensure_workspace_id()
-        return (
-            select(db.Dataset)
-            .where(db.Dataset.workspace_id == workspace_id)
-            .options(joinedload(db.Dataset.workspace), joinedload(db.Dataset.dataset_type))
-        )
-
-    @property
-    def selector_with_has_data(self):
         return select(
             db.Dataset,
             exists().where(db.RawData.dataset_id == db.Dataset.id),
@@ -84,7 +80,7 @@ class DatasetRepository(SQLResourceRepository):
     async def list(self) -> list[Dataset]:
         workspace_id = self._ensure_workspace_id()
         rows = await self.session.execute(
-            self.selector_with_has_data.where(db.Dataset.workspace_id == workspace_id)
+            self.selector.where(db.Dataset.workspace_id == workspace_id)
         )
 
         return [
@@ -93,23 +89,29 @@ class DatasetRepository(SQLResourceRepository):
 
     async def get_by_name(self, name: str) -> Dataset | None:
         workspace_id = self._ensure_workspace_id()
-        return await self._get_one_with_has_data(
+        return await self._get_one(
             (db.Dataset.workspace_id == workspace_id) & (db.Dataset.name == name)
         )
 
     async def get_by_id(self, id: UUID) -> Dataset | None:
-        return await self._get_one_with_has_data(db.Dataset.id == id)
+        return await self._get_one(db.Dataset.id == id)
 
-    async def _get_one_with_has_data(self, where_clause: ColumnElement[bool]):
-        result = (
-            await self.session.execute(self.selector_with_has_data.where(where_clause).limit(1))
-        ).first()
+    async def _get_one(self, where_clause: ColumnElement[bool]):
+        result = (await self.session.execute(self.selector.where(where_clause).limit(1))).first()
 
         if result is None:
             return None
         ds, has_raw_data, has_attributes = result
         return ds.to_domain(has_raw_data, has_attributes)
 
+    @map_errors(
+        (
+            ForeignKeyConstraintFailed,
+            lambda id: InvalidAction(
+                "Cannot delete dataset when it is still in use by a scenario"
+            ),
+        )
+    )
     async def delete(self, id: UUID):
         await self.all_data.dataset_data.delete(id)
         await self.session.execute(delete(db.Dataset).where(db.Dataset.id == id))
@@ -143,7 +145,7 @@ class DatasetRepository(SQLResourceRepository):
             )
 
             if attribute.attribute_type.name == "id":
-                entity_group.count = max(entity_group.count, attribute.length)
+                entity_group.count = attribute.length
             entity_group.attributes.append(
                 AttributeSummary(
                     name=attribute_type.name,
@@ -171,29 +173,40 @@ class DatasetRepository(SQLResourceRepository):
         )
 
     @map_errors(
-        {
-            sqlalchemy.exc.IntegrityError: lambda obj: ResourceAlreadyExists(
-                "dataset", name=obj.name
-            )
-        }
+        (
+            UniqueConstraintFailed,
+            lambda self, obj: ResourceAlreadyExists("dataset", name=obj.name),
+        ),
+        (
+            ForeignKeyConstraintFailed,
+            lambda self, obj: ResourceDoesNotExist("workspace", id=self._ensure_workspace_id()),
+        ),
+        with_self=True,
     )
     async def create(self, obj: Dataset) -> UUID:
         workspace_id = self._ensure_workspace_id()
         dataset_type = await self.all_data.dataset_types.ensure_dataset_type(obj.dataset_type)
+        payload = validated_payload_dict(
+            db.Dataset,
+            name=obj.name,
+            display_name=obj.display_name,
+            dataset_type_id=t.cast(UUID, dataset_type.id),
+        )
         return t.cast(
             UUID,
             await self.session.scalar(
                 insert(db.Dataset)
-                .values(
-                    workspace_id=workspace_id,
-                    name=obj.name,
-                    display_name=obj.display_name,
-                    dataset_type_id=t.cast(UUID, dataset_type.id),
-                )
+                .values(workspace_id=workspace_id, **payload)
                 .returning(db.Dataset.id)
             ),
         )
 
+    @map_errors(
+        (
+            UniqueConstraintFailed,
+            lambda id, obj, chunk_size=0: ResourceAlreadyExists("dataset", name=obj.name),
+        )
+    )
     async def update(self, id: UUID, obj: Dataset, chunk_size=0):
         """Update a dataset. When not given ``obj.data``, only the ``name`` and ``display_name``
         are updated. Otherwise this method als processes the data and updates the ``general``,
@@ -209,10 +222,11 @@ class DatasetRepository(SQLResourceRepository):
         if current is None:
             raise ResourceDoesNotExist("dataset", id=id)
 
-        # TODO: accept changes to dataset type if the dataset does not have data and is not used
-        #  anywhere?
-        payload: dict[str, t.Any] = dict(name=obj.name, display_name=obj.display_name)
+        payload = validated_payload(db.Dataset, obj, ("name", "display_name"))
+
         if obj.data is not None:
+            # TODO: accept changes to dataset type if the dataset does not have data and is not
+            # used anywhere?
             if not current.dataset_type.is_equivalent(obj.dataset_type):
                 raise InvalidAction("Cannot change dataset type when updating data")
             payload.update(
@@ -223,7 +237,7 @@ class DatasetRepository(SQLResourceRepository):
                 )
             )
 
-            await self.all_data.dataset_data.delete(id, prune_dataset=False)
+            await self.all_data.dataset_data.delete(id)
             await self.all_data.dataset_data.create(
                 id,
                 data=obj.data,
@@ -232,6 +246,13 @@ class DatasetRepository(SQLResourceRepository):
             )
 
         await self.session.execute(update(db.Dataset).where(db.Dataset.id == id).values(**payload))
+
+    async def prune(self, id: UUID):
+        await self.session.execute(
+            update(db.Dataset)
+            .where(db.Dataset.id == id)
+            .values(general=None, epsg_code=None, bounding_box=None)
+        )
 
     async def ensure_scenario_datasets(
         self, datasets: t.Sequence[ScenarioDataset]
@@ -252,9 +273,10 @@ class DatasetRepository(SQLResourceRepository):
         existing_datasets = {
             ds.name: ScenarioDataset(ds.name, dataset_type=ds.dataset_type.to_domain(), id=ds.id)
             for ds in await self.session.scalars(
-                self.selector.where(
-                    db.Dataset.name.in_(ds.name for ds in datasets),
-                )
+                select(db.Dataset)
+                .where(db.Dataset.workspace_id == workspace_id)
+                .where(db.Dataset.name.in_(ds.name for ds in datasets))
+                .options(joinedload(db.Dataset.dataset_type))
             )
         }
         existing_types = None  # delay retrieving existing dataset types, we might not need them
@@ -332,14 +354,20 @@ class DatasetRepository(SQLResourceRepository):
             created_ids_and_names = await self.session.execute(
                 insert(db.Dataset).returning(db.Dataset.id, db.Dataset.name),
                 [
-                    {
-                        "name": ds.name,
-                        "display_name": ds.name,
-                        "dataset_type_id": existing_types[
+                    # validated_payload_dict may raise MoviciValidationError. However, since it
+                    # is called inside a list comprehension, it is not possible to upgrade the
+                    # error with its (relative) path in the scenario object. Instead, we rely
+                    # on validation in the api layer to provide users with a rich validation error
+                    # The checks here are mainly a second line of defense
+                    validated_payload_dict(
+                        db.Dataset,
+                        name=ds.name,
+                        display_name=ds.name,
+                        dataset_type_id=existing_types[
                             t.cast(DatasetType, ds.dataset_type).name
                         ].id,
-                        "workspace_id": workspace_id,
-                    }
+                        workspace_id=workspace_id,
+                    )
                     for ds in to_create
                 ],
             )
@@ -391,14 +419,16 @@ class DatasetDataRepository(SQLResourceRepository):
         """
         return await RawDataProcessor(self.session).get_dict(id)
 
-    async def get_entity_data(self, id: UUID):
+    async def get_entity_data(self, id: UUID, dataset_filter: DatasetFilter | None = None):
         """return the dataset data for an ``ENTITY_BASED`` dataset
 
         :param id: the dataset ``UUID``
+        :param dataset_filter: an optional DatasetFilter
+        :param copy: whether to copy the data or not. When not copying data, it becomes read-only
         :return: The entity based dataset data section
         """
         return await EntityDataProcessor(
-            self.session, all_data=self.all_data, selector=DatasetDataSelector()
+            self.session, all_data=self.all_data, selector=DatasetDataSelector(dataset_filter)
         ).get(id)
 
     async def create(self, id: UUID, data: DatasetData, format: DatasetFormat, chunk_size=0):
@@ -417,7 +447,7 @@ class DatasetDataRepository(SQLResourceRepository):
 
         if format == DatasetFormat.ENTITY_BASED:
             if not isinstance(data, dict):
-                raise ValueError("Entity based data must be provided as a dictionary")
+                raise InvalidResource("Entity based data must be provided as a dictionary")
             await EntityDataProcessor(
                 self.session, self.all_data, selector=DatasetDataSelector()
             ).store(id, data)
@@ -428,7 +458,7 @@ class DatasetDataRepository(SQLResourceRepository):
         if format == DatasetFormat.BINARY:
             await RawDataProcessor(self.session).store(id, data, chunk_size=chunk_size)
 
-    async def delete(self, id: UUID, prune_dataset=True):
+    async def delete(self, id: UUID):
         await self.session.execute(
             delete(db.Attribute).where(
                 db.Attribute.id.in_(
@@ -439,21 +469,22 @@ class DatasetDataRepository(SQLResourceRepository):
             )
         )
         await self.session.execute(delete(db.RawData).where(db.RawData.dataset_id == id))
-        if prune_dataset:
-            await self.session.execute(
-                update(db.Dataset)
-                .where(db.Dataset.id == id)
-                .values(general=None, epsg_code=None, bounding_box=None)
-            )
 
 
 class DatasetDataSelector(EntityDataSelector):
-    def select_linked_attribute(self, id: UUID) -> Select[tuple[db.Attribute]]:
-        return (
-            select(db.Attribute)
+    def selector_subquery(self, id: UUID) -> Select[tuple[UUID]]:
+        subquery = (
+            select(db.Attribute.id)
             .join(db.DatasetAttribute)
+            .join(db.EntityType)
+            .join(db.AttributeType)
             .where(db.DatasetAttribute.dataset_id == id)
         )
+
+        if self.dataset_filter is not None and not self.dataset_filter.is_empty():
+            subquery = subquery.where(dataset_filter_to_where_clause(self.dataset_filter))
+
+        return subquery
 
     def insert_linked_attribute(self, id: UUID, attribute_id: UUID) -> Insert:
         return insert(db.DatasetAttribute).values(dataset_id=id, attribute_id=attribute_id)

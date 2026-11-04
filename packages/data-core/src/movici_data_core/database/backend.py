@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import pathlib
+import tempfile
 import typing as t
 from uuid import UUID
 
@@ -19,10 +21,11 @@ from movici_data_core.services import (
     EntityTypeService,
     ModelTypeService,
     ScenarioService,
+    ViewService,
     WorkspaceService,
 )
 from movici_data_core.services.update import UpdateService
-from movici_simulation_core import EntityInitDataFormat
+from movici_simulation_core import AttributeSchema, EntityInitDataFormat
 from movici_simulation_core.core.data_format import NON_DATA_DICT_KEYS
 from movici_simulation_core.types import ExternalSerializationStrategy
 
@@ -45,16 +48,15 @@ class SQLAlchemyServer:
     :param dbapi_url: a DB API url string
     :param serializer: a class for instantiating an ``ExternalSerializationStrategy``. Default:
       ``EntityInitDataFormat``
-    :param tmpfile_dir: a path to a directory that may be used to store temporary files
+    :param tmpfile_dir: Optional. A path to a directory that may be used to store temporary files.
+        if not given, or ``None``, a temporary directory will be created in the
+        ``SQLAlchemyServer.begin`` context manager and removed when that context is exited
     """
 
     dbapi_url: str
-    tmpfile_dir: pathlib.Path
     serializer: ExternalSerializationStrategy
 
-    session_factory: async_sessionmaker[AsyncSession]
-    engine: AsyncEngine
-
+    schema: AttributeSchema | None
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
@@ -63,26 +65,63 @@ class SQLAlchemyServer:
     dataset_service_cls: t.Type[DatasetService] = DatasetService
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
+    view_service_cls: t.Type[ViewService] = ViewService
 
     def __init__(
         self,
         dbapi_url: str,
-        tmpfile_dir: pathlib.Path,
+        tmpfile_dir: pathlib.Path | None = None,
         serializer: ExternalSerializationStrategy | None = None,
     ):
 
         self.dbapi_url = dbapi_url
-        self.tmpfile_dir = tmpfile_dir
+        self._tmpfile_dir = tmpfile_dir
         self.serializer = serializer or EntityInitDataFormat(
             non_data_dict_keys=NON_DATA_DICT_KEYS + ("dataset",)
         )
+        self.schema = None
+        self.schema_dirty = False
+        self.schema_lock = asyncio.locks.Lock()
+        self._session_factory: async_sessionmaker[AsyncSession] | None = None
+        self._engine: AsyncEngine | None = None
+
+    @property
+    def tmpfile_dir(self) -> pathlib.Path:
+        if self._tmpfile_dir is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._tmpfile_dir
+
+    @property
+    def engine(self) -> AsyncEngine:
+        if self._engine is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._engine
+
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        if self._session_factory is None:
+            raise RuntimeError("Must be used inside a SQLAlchemyServer.begin context")
+        return self._session_factory
 
     @contextlib.asynccontextmanager
     async def begin(self, **engine_kwargs):
+        orig_tmpfile_dir = self._tmpfile_dir
+        if orig_tmpfile_dir is not None:
+            tmpdir_context = contextlib.nullcontext(enter_result=orig_tmpfile_dir)
+        else:
+            tmpdir_context = tempfile.TemporaryDirectory(prefix="movici_api_tmp_")
+
         async with get_engine(self.dbapi_url, **engine_kwargs) as engine:
-            self.engine = engine
-            self.session_factory = async_sessionmaker(engine)
-            yield self
+            with tmpdir_context as tmpfile_dir:
+                self._tmpfile_dir = pathlib.Path(tmpfile_dir)
+                self._engine = engine
+                self._session_factory = async_sessionmaker(engine)
+
+                yield self
+
+                self._tmpfile_dir = orig_tmpfile_dir
+                self._engine = None
+                self._session_factory = None
 
     @contextlib.asynccontextmanager
     async def get_session(self, **session_kwargs):
@@ -92,14 +131,17 @@ class SQLAlchemyServer:
     @contextlib.asynccontextmanager
     async def get_backend(self, session_kwargs: dict[str, t.Any] | None = None):
         async with self.get_session(**(session_kwargs or {})) as session:
-            options = await get_options(session)
             try:
-                yield await self._with_serializer(self._build_backend(session, options))
+                yield await self.get_backend_for_session(session)
             except Exception:
                 await session.rollback()
                 raise
             else:
                 await session.commit()
+
+    async def get_backend_for_session(self, session: AsyncSession):
+        options = await get_options(session)
+        return await self._with_serializer(self._build_backend(session, options))
 
     async def setup_db(self, mode: db.DatabaseMode = db.DatabaseMode.SINGLE_SCENARIO):
         async with self.engine.begin() as conn:
@@ -123,6 +165,8 @@ class SQLAlchemyServer:
             dataset_service_cls=self.dataset_service_cls,
             scenario_service_cls=self.scenario_service_cls,
             update_service_cls=self.update_service_cls,
+            invalidate_schema_callable=self.invalidate_schema,
+            view_service_cls=self.view_service_cls,
         )
         if options.mode == db.DatabaseMode.MULTIPLE_WORKSPACES:
             return backend
@@ -147,9 +191,20 @@ class SQLAlchemyServer:
 
         assert False, f"Unknown database mode {options.mode}"
 
+    async def _get_updated_schema(self, backend: SQLAlchemyBackend):
+        if self.schema is None or self.schema_dirty:
+            async with self.schema_lock:
+                if self.schema is None or self.schema_dirty:  # recheck since it may have changed
+                    self.schema = await backend.attribute_types.as_schema()
+                    self.schema_dirty = False
+        return self.schema
+
     async def _with_serializer(self, backend: SQLAlchemyBackend):
-        schema = await backend.attribute_types.as_schema()
+        schema = await self._get_updated_schema(backend)
         return dataclasses.replace(backend, serializer=self.serializer.with_schema(schema))
+
+    def invalidate_schema(self):
+        self.schema_dirty = True
 
 
 @dataclasses.dataclass
@@ -157,12 +212,12 @@ class SQLAlchemyBackend:
     session: AsyncSession
     options: db.Options
     serializer: ExternalSerializationStrategy
+    tmpfile_dir: pathlib.Path
     workspace_id: UUID | None = None
     scenario_id: UUID | None = None
     single_scenario_mode: bool = False
     single_workspace_mode: bool = False
 
-    tmpfile_dir: pathlib.Path | None = None
     workspace_service_cls: t.Type[WorkspaceService] = WorkspaceService
     dataset_type_service_cls: t.Type[DatasetTypeService] = DatasetTypeService
     entity_type_service_cls: t.Type[EntityTypeService] = EntityTypeService
@@ -171,11 +226,18 @@ class SQLAlchemyBackend:
     dataset_service_cls: t.Type[DatasetService] = DatasetService
     scenario_service_cls: t.Type[ScenarioService] = ScenarioService
     update_service_cls: t.Type[UpdateService] = UpdateService
+    view_service_cls: t.Type[ViewService] = ViewService
+
+    invalidate_schema_callable: t.Callable[[], None] | None = None
 
     @property
     def repository(self):
         return SQLAlchemyRepository(
-            self.session, self.options, self.workspace_id, self.scenario_id
+            self.session,
+            self.options,
+            self.workspace_id,
+            self.scenario_id,
+            invalidate_schema_callable=self.invalidate_schema_callable,
         )
 
     def for_workspace(self, workspace_id: UUID):
@@ -208,27 +270,26 @@ class SQLAlchemyBackend:
 
     @property
     def datasets(self):
-        if self.serializer is None:
-            raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        if self.tmpfile_dir is None:
-            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
         return self.dataset_service_cls(self.repository, self.serializer, self.tmpfile_dir)
 
     @property
     def scenarios(self):
         return self.scenario_service_cls(
-            self.repository, single_scenario_mode=self.single_scenario_mode
+            self.repository,
+            single_scenario_mode=self.single_scenario_mode,
+            serializer=self.serializer,
+            tmpfile_dir=self.tmpfile_dir,
         )
 
     @property
     def updates(self):
-        if self.serializer is None:
-            raise RuntimeError("SQLAlchemyBackend.serializer must be set")
-        if self.tmpfile_dir is None:
-            raise RuntimeError("SQLAlchemyBackend.tmpfile_dir must be set")
         return self.update_service_cls(
             self.repository, serializer=self.serializer, tmpfile_dir=self.tmpfile_dir
         )
+
+    @property
+    def views(self):
+        return self.view_service_cls(self.repository)
 
     async def set_database_mode(self, new_mode: db.DatabaseMode):
         """Change the mode of this database. Upgrading is always possible along the path
@@ -306,6 +367,7 @@ class SQLAlchemyBackend:
         strict_attribute_types: bool | None = None,
         strict_model_types: bool | None = None,
         strict_scenario_datasets: bool | None = None,
+        immutable_workspace_names: bool | None = None,
     ):
         """Set various database options for the database
 
@@ -324,6 +386,8 @@ class SQLAlchemyBackend:
         :param strict_scenario_datasets: set/unset the ``STRICT_SCENARIO_DATASETS`` option, which
           governs whether to automatically create stubs for non-existing datasets when they are
           encountered in an uploaded scenario config
+        :param immutable_workspace_names: set/unset the  ``IMMUTABLE_WORKSPACE_NAMES`` option,
+          which governes whether it is allowed to update a workspace name
         """
         if strict_dataset_types is not None:
             self.options.STRICT_DATASET_TYPES = strict_dataset_types
@@ -335,7 +399,5 @@ class SQLAlchemyBackend:
             self.options.STRICT_MODEL_TYPES = strict_model_types
         if strict_scenario_datasets is not None:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
-
-    async def update_schema(self):
-        schema = await self.attribute_types.as_schema()
-        self.serializer = self.serializer.with_schema(schema)
+        if immutable_workspace_names is not None:
+            self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
