@@ -574,12 +574,15 @@ class TestShunt:
         return [{"name": DATASET_NAME, "data": network_with_shunt}]
 
     def test_shunt_affects_reactive_power(self, tester):
-        """Shunt element should contribute reactive power at its node."""
+        """A capacitive shunt generates reactive power, which the source absorbs."""
         result, _ = tester.update(0, None)
-        nodes = result[DATASET_NAME]["electrical_node_entities"]
-        load_idx = nodes["id"].index(2)
-        # With a capacitive shunt, the reactive power at node 2 should be nonzero
-        assert nodes["electrical.reactive_power"][load_idx] != 0
+        shunt_q = result[DATASET_NAME]["electrical_shunt_entities"]["electrical.reactive_power"][0]
+        source_q = result[DATASET_NAME]["electrical_source_entities"]["electrical.reactive_power"][
+            0
+        ]
+        # 1e-4 S at 10 kV: Q = -B * U^2 = -10 kVAr (negative: generation)
+        assert shunt_q == pytest.approx(-1e4, rel=1e-3)
+        assert source_q == pytest.approx(shunt_q, abs=50)  # minus line losses
 
     def test_shunt_improves_voltage(self, model_config, global_schema):
         """Capacitive shunt at load bus should improve (raise) voltage."""
