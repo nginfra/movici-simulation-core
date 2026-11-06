@@ -29,7 +29,7 @@ classifiers = [
 dependencies = [
   "movici-simulation-core",
   "numpy",
-  "aequilibrae>=1",
+  "aequilibrae>=1, <1.7.0",
   "pyproj>=3.0.1",
 ]
 
