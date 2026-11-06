@@ -14,8 +14,8 @@ from movici_data_core import domain_model
 from movici_data_core.domain_model import (
     BoundingBox,
     DatasetFormat,
-    ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
 )
 from movici_data_core.exceptions import MoviciValidationError
 from movici_simulation_core.core import DataType
@@ -111,7 +111,7 @@ DEFAULT_SCENARIO_NAME = "default_scenario"
 
 
 DEFAULT_NAME_MAX_LENGTH = 50
-DEFAULT_DISPLAY_NAME_MAX_LENGTH = 50
+DEFAULT_DISPLAY_NAME_MAX_LENGTH = 100
 
 ATTRIBUTE_NAME_MAX_LENGTH = 100
 ATTRIBUTE_DESCRIPTION_MAX_LENGTH = 255
@@ -336,6 +336,7 @@ class DataArray(Base):
 
 
 class RowptrArray(Base):
+    NP_DTYPE = np.uint32
     __tablename__ = "rowptr_array"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -352,7 +353,11 @@ class RowptrArray(Base):
         :return: Reconstructed NumPy array. The array is read only, in case it needs to be modified
             you should make a copy by calling ``array.copy()``
         """
-        return np.frombuffer(self.data, dtype=int)
+        return np.frombuffer(self.data, dtype=self.NP_DTYPE)
+
+    @classmethod
+    def prepare_buffer(cls, arr: np.ndarray):
+        return arr.astype(cls.NP_DTYPE).tobytes()
 
 
 class Attribute(Base):
@@ -429,7 +434,6 @@ class Scenario(Base):
     )
     display_name: Mapped[str] = mapped_column(String(DEFAULT_DISPLAY_NAME_MAX_LENGTH))
     description: Mapped[str] = mapped_column(Text(SCENARIO_DESCRIPTION_MAX_LENGTH))
-    status: Mapped[ScenarioStatus]
 
     simulation_info: Mapped[dict] = mapped_column(JSON)
 
@@ -440,20 +444,48 @@ class Scenario(Base):
 
     datasets: Mapped[list[ScenarioDataset]] = relationship()
     models: Mapped[list[ScenarioModel]] = relationship()
+    simulation_status_info: Mapped[SimulationStatusInfo | None] = relationship()
 
-    def to_domain(self, has_updates: bool) -> domain_model.Scenario:
+    def to_domain(
+        self,
+        has_updates: bool,
+        datasets: list[ScenarioDataset] | None = None,
+        models: list[ScenarioModel] | None = None,
+    ) -> domain_model.Scenario:
         return domain_model.Scenario(
             id=self.id,
             workspace=self.workspace.to_domain(),
             name=self.name,
             display_name=self.display_name,
             description=self.description,
+            simulation_status_info=(
+                self.simulation_status_info.to_domain()
+                if self.simulation_status_info is not None
+                else None
+            ),
             simulation_info=SimulationInfo(**self.simulation_info),
             epsg_code=self.epsg_code,
             created_at=self.created_at,
             updated_at=self.updated_at,
+            datasets=[ds.to_domain() for ds in sorted(datasets or [], key=lambda ds: ds.sequence)],
+            models=[ds.to_domain() for ds in sorted(models or [], key=lambda ds: ds.sequence)],
             has_updates=has_updates,
         )
+
+
+class SimulationStatusInfo(Base):
+    __tablename__ = "simulation_status_info"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scenario.id", ondelete="CASCADE"), unique=True
+    )
+    status: Mapped[SimulationStatus]
+    updated_at: Mapped[datetime.datetime] = mapped_column(default=func.now(), onupdate=func.now())
+
+    def to_domain(self):
+
+        return domain_model.SimulationStatusInfo(status=self.status, timestamp=self.updated_at)
 
 
 class ScenarioDataset(Base):
@@ -546,7 +578,7 @@ class Update(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="RESTRICT"))
-    model_type_id: Mapped[uuid.UUID] = mapped_column(
+    model_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_type.id", ondelete="RESTRICT")
     )
 
@@ -554,7 +586,7 @@ class Update(Base):
     # changes to the scenario would recreate all ScenarioModels, which would break this link.
     # Instead, we denormalize model_name and store a copy directly in the Update
     # table
-    model_name: Mapped[str] = mapped_column(
+    model_name: Mapped[str | None] = mapped_column(
         RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
     )
 
@@ -567,15 +599,20 @@ class Update(Base):
 
     scenario: Mapped[Scenario] = relationship()
     dataset: Mapped[Dataset] = relationship()
-    model_type: Mapped[ModelType] = relationship()
+    model_type: Mapped[ModelType | None] = relationship()
 
     def to_domain(self) -> domain_model.Update:
+        update_model = None
+        if self.model_name is not None and self.model_type is not None:
+            update_model = domain_model.UpdateModel(
+                self.model_name, type=self.model_type.to_domain()
+            )
         return domain_model.Update(
             id=self.id,
             dataset=domain_model.ScenarioDataset(
                 self.dataset.name, self.dataset.dataset_type.to_domain(), id=self.dataset_id
             ),
-            model=domain_model.UpdateModel(self.model_name, type=self.model_type.to_domain()),
+            model=update_model,
             timestamp=self.timestamp,
             iteration=self.iteration,
             bounding_box=BoundingBox.from_tuple_or_none(self.bounding_box),
@@ -603,11 +640,11 @@ class VisualizationView(Base):
     __table_args__ = (UniqueConstraint("scenario_id", "name"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(
-        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
-    )
+    name: Mapped[str] = mapped_column(String(length=DEFAULT_NAME_MAX_LENGTH))
     config: Mapped[dict]
     scenario: Mapped[Scenario] = relationship()
 
     def to_domain(self) -> domain_model.View:
-        return domain_model.View(name=self.name, config=self.config, id=self.id)
+        return domain_model.View(
+            name=self.name, config=self.config, id=self.id, scenario_id=self.scenario_id
+        )

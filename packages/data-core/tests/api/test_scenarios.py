@@ -27,6 +27,12 @@ def test_list_scenarios(get_json, a_scenario, scenario_id):
     assert scenario_ids == {str(a_scenario.id), scenario_id}
 
 
+def test_list_scenarios_with_status(get_json, a_scenario, scenario_id):
+    result = get_json("/scenarios", params={"workspace": a_scenario.workspace.id})
+    scenario_status = {scenario["id"]: scenario["status"] for scenario in result["scenarios"]}
+    assert scenario_status == {str(a_scenario.id): "invalid", scenario_id: "ready"}
+
+
 def test_get_scenario(get_json, scenario_id):
     scenario = get_json(f"/scenarios/{scenario_id}")
     assert scenario.pop("created_at") is not None
@@ -41,7 +47,7 @@ def test_get_scenario(get_json, scenario_id):
         "status": "ready",
         "simulation_info": {
             "mode": "time_oriented",
-            "reference": 1,
+            "reference_time": 1,
             "start_time": 0,
             "duration": 12,
             "time_scale": 1.4,
@@ -63,7 +69,7 @@ def test_update_scenario(get_json, scenario_id):
             "description": "",
             "simulation_info": {
                 "mode": "time_oriented",
-                "reference": 1,
+                "reference_time": 1,
                 "start_time": 0,
                 "duration": 12,
                 "time_scale": 1.4,
@@ -234,9 +240,47 @@ async def test_get_full_scenario_state(repository, get_json, a_scenario, a_datas
     result = get_json(
         f"/scenarios/{a_scenario.id}/state",
         params={
-            "dataset": a_dataset.name,
+            "dataset_id": a_dataset.id,
             "timestamp": 1,
         },
+    )
+    assert result == {
+        "data": {
+            "roads": {
+                "id": [1, 2, 3],
+                "topology.from_node_id": [9, 10, 9],
+                "transport.capacity": [10.0, 20.0, None],
+            }
+        }
+    }
+
+
+async def test_get_scenario_state_with_no_timestamp_yields_final_state(
+    repository, get_json, a_scenario, a_dataset, create_update
+):
+    await repository.dataset_data.create(
+        a_dataset.id,
+        dataset_data_to_numpy({"roads": {"id": [1, 2, 3], "topology.from_node_id": [9, 9, 9]}}),
+        DatasetFormat.ENTITY_BASED,
+    )
+    await create_update(
+        timestamp=1,
+        iteration=0,
+        data=dataset_data_to_numpy(
+            {
+                "roads": {
+                    "id": [1, 2],
+                    "transport.capacity": [10.0, 20.0],
+                    "topology.from_node_id": [9, 10],
+                }
+            }
+        ),
+    )
+    await repository.session.commit()
+
+    result = get_json(
+        f"/scenarios/{a_scenario.id}/state",
+        params={"dataset_id": a_dataset.id},
     )
     assert result == {
         "data": {
@@ -267,7 +311,7 @@ async def test_get_filtered_scenario_state(
     result = get_json(
         f"/scenarios/{a_scenario.id}/state",
         params={
-            "dataset": a_dataset.name,
+            "dataset_id": a_dataset.id,
             "attribute": "roads:transport.capacity",
             "timestamp": 1,
         },
@@ -280,3 +324,28 @@ async def test_get_filtered_scenario_state(
             }
         }
     }
+
+
+def test_update_and_get_scenario_status(get_json, scenario_id):
+    url = f"/scenarios/{scenario_id}/status"
+    result = get_json(url, method="post", json={"status": "running"})
+    assert result == {
+        "result": "ok",
+        "id": scenario_id,
+        "message": "scenario status updated",
+    }
+
+    scenario = get_json(url)
+    assert scenario["status"] == "running"
+
+
+def test_simulation_status_gets_reflected_in_scenario(get_json, scenario_id):
+    get_json(
+        f"/scenarios/{scenario_id}/status",
+        method="post",
+        json={"status": "running"},
+        expected_status=200,
+    )
+
+    scenario = get_json(f"/scenarios/{scenario_id}")
+    assert scenario["status"] == "running"

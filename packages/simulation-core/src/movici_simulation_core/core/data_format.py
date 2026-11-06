@@ -26,7 +26,7 @@ from .schema import (
     infer_data_type_from_list,
 )
 
-NON_DATA_DICT_KEYS = ("general",)
+NON_DATA_DICT_KEYS = ("general", "type")
 
 
 @dataclasses.dataclass

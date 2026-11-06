@@ -45,7 +45,7 @@ def create_scenario_json():
             "display_name": "New Scenario",
             "simulation_info": {
                 "mode": "time_oriented",
-                "reference": 1,
+                "reference_time": 1,
                 "start_time": 0,
                 "duration": 12,
                 "time_scale": 1.4,

@@ -148,14 +148,16 @@ class TestWorkspaceRepository:
 
     async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
         with pytest.raises(MoviciValidationError) as e:
-            await repository.workspaces.create(Workspace(name="a" * 51, display_name="d" * 51))
+            await repository.workspaces.create(Workspace(name="a" * 51, display_name="d" * 101))
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
     async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
         id = await repository.workspaces.create(Workspace(name="a", display_name="d"))
         with pytest.raises(MoviciValidationError) as e:
-            await repository.workspaces.update(id, Workspace(name="a" * 51, display_name="d" * 51))
+            await repository.workspaces.update(
+                id, Workspace(name="a" * 51, display_name="d" * 101)
+            )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
@@ -956,7 +958,7 @@ class TestDatasetRepository:
                 [ScenarioDataset(name="a" * 51, dataset_type=a_dataset_type)]
             )
 
-        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
 
     async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):
         await repository.datasets.update(
@@ -1000,7 +1002,7 @@ class TestDatasetRepository:
     ):
         with pytest.raises(MoviciValidationError) as e:
             await repository.datasets.create(
-                Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+                Dataset(name="a" * 51, display_name="a" * 101, dataset_type=a_dataset_type)
             )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
@@ -1013,7 +1015,7 @@ class TestDatasetRepository:
         )
         with pytest.raises(MoviciValidationError) as e:
             await repository.datasets.update(
-                id, Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+                id, Dataset(name="a" * 51, display_name="a" * 101, dataset_type=a_dataset_type)
             )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
@@ -1544,7 +1546,6 @@ class TestScenarioRepository:
             id=None,
             created_at=None,
             updated_at=None,
-            datasets=[dataclasses.replace(result.datasets[0], id=None)],
             models=[],
         ) == dataclasses.replace(new_scenario, models=[])
 
@@ -1600,7 +1601,7 @@ class TestScenarioRepository:
             data={"transport_nodes": {"id": [2], "transport.capacity": [200.0]}},
         )
         result = await repository.scenarios.for_id(a_scenario.id).get_state(
-            ScenarioStateFilter.all_attributes(dataset=a_dataset.name, timestamp=0)
+            ScenarioStateFilter.all_attributes(dataset_id=a_dataset.id, timestamp=0)
         )
         assert dataset_dicts_equal(
             result,
@@ -1655,7 +1656,7 @@ class TestScenarioRepository:
                 attributes=[
                     DatasetFilterAttribute("transport_nodes", "transport.capacity"),
                 ],
-                dataset=a_dataset.name,
+                dataset_id=a_dataset.id,
                 timestamp=0,
             )
         )
@@ -2108,7 +2109,7 @@ class TestScenarioRepository:
         with pytest.raises(MoviciValidationError) as e:
             await repository.scenarios.create(
                 dataclasses.replace(
-                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                    new_scenario, name="a" * 51, display_name="a" * 101, description="a" * 501
                 ),
                 validator,
             )
@@ -2128,7 +2129,7 @@ class TestScenarioRepository:
         with pytest.raises(MoviciValidationError) as e:
             await repository.scenarios.for_id(scenario_id).update(
                 dataclasses.replace(
-                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                    new_scenario, name="a" * 51, display_name="a" * 101, description="a" * 501
                 ),
                 validator,
             )
@@ -2226,6 +2227,28 @@ class TestUpdateRepository:
         update3 = await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
         all_updates = await repository.updates.list()
         assert [upd.id for upd in all_updates] == [update1, update2, update3, update4]
+
+    async def test_create_update_without_model(
+        self, repository: SQLAlchemyRepository, a_dataset, an_entity_type, an_attribute_type
+    ):
+
+        update = Update(
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+            timestamp=0,
+            iteration=0,
+            data=dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": [0, 1],
+                        an_attribute_type.name: [10.0, 10.0],
+                    }
+                }
+            ),
+        )
+
+        await repository.updates.create(update)
+        result = (await repository.updates.list())[0]
+        assert result.model is None
 
     async def test_doesnt_return_updates_for_different_scenario(
         self,
@@ -2427,16 +2450,16 @@ class TestViewRepository:
     def repository(self, repository: SQLAlchemyRepository, a_scenario):
         return repository.for_scenario(a_scenario.id)
 
-    async def test_create_and_get_view_by_id(self, repository: SQLAlchemyRepository):
-        view = View(name="a_view", config={"a": "config"})
+    async def test_create_and_get_view_by_id(self, repository: SQLAlchemyRepository, a_scenario):
+        view = View(name="a_view", config={"a": "config"}, scenario_id=a_scenario.id)
         view_id = await repository.views.create(view)
         result = await repository.views.get_by_id(view_id)
         assert result is not None
         assert result.id is not None
         assert dataclasses.replace(result, id=None) == view
 
-    async def test_create_and_get_view_by_name(self, repository: SQLAlchemyRepository):
-        view = View(name="a_view", config={"a": "config"})
+    async def test_create_and_get_view_by_name(self, repository: SQLAlchemyRepository, a_scenario):
+        view = View(name="a_view", config={"a": "config"}, scenario_id=a_scenario.id)
         await repository.views.create(view)
         result = await repository.views.get_by_name(view.name)
 
@@ -2453,9 +2476,9 @@ class TestViewRepository:
         assert len(result) == 3
         assert all(isinstance(v, View) for v in result)
 
-    async def test_update_view(self, repository: SQLAlchemyRepository, create_view):
+    async def test_update_view(self, repository: SQLAlchemyRepository, create_view, a_scenario):
         view_id = await create_view(name="a_view", config={"some": "config"})
-        payload = View("new_name", config={"new": "config"})
+        payload = View("new_name", config={"new": "config"}, scenario_id=a_scenario.id)
         await repository.views.update(view_id, payload)
         result = await repository.views.get_by_id(view_id)
         assert result == dataclasses.replace(payload, id=view_id)

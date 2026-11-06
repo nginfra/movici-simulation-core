@@ -43,16 +43,17 @@ def test_create_view(view_created_result):
     }
 
 
-def test_get_view(get_json, view_id):
+def test_get_view(get_json, view_id, a_scenario):
     view = get_json(f"/views/{view_id}")
     assert view == {
         "name": "new_view",
         "id": view_id,
+        "scenario_id": str(a_scenario.id),
         "config": {"a": "config"},
     }
 
 
-def test_update_view(get_json, view_id):
+def test_update_view(get_json, view_id, a_scenario):
     result = get_json(
         f"/views/{view_id}",
         method="PUT",
@@ -67,6 +68,7 @@ def test_update_view(get_json, view_id):
     assert view == {
         "name": "updated_view",
         "id": view_id,
+        "scenario_id": str(a_scenario.id),
         "config": {"new": "config"},
     }
 

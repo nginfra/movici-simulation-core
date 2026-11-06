@@ -50,6 +50,7 @@ from movici_data_core.domain_model import (
     ScenarioModel,
     ScenarioStatus,
     SimulationInfo,
+    SimulationStatus,
     Update,
     UpdateModel,
     View,
@@ -183,7 +184,7 @@ class ScenarioIn(InModel[Scenario]):
 
 class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     duration: int
-    reference: float
+    reference_time: float
     time_scale: float
     start_time: int
     mode: t.Literal["time_oriented"] = "time_oriented"
@@ -191,7 +192,7 @@ class SimulationInfoInOut(InModel[SimulationInfo], OutModel[SimulationInfo]):
     def to_domain(self):
         return SimulationInfo(
             duration=self.duration,
-            reference=self.reference,
+            reference_time=self.reference_time,
             time_scale=self.time_scale,
             start_time=self.start_time,
             mode=self.mode,
@@ -256,6 +257,21 @@ class ScenarioOut(ShortScenarioOut):
     simulation_info: SimulationInfoInOut
     models: list[t.Annotated[ScenarioModelOut, BeforeValidator(ScenarioModelOut.from_domain)]]
     datasets: list[ScenarioDatasetOut]
+
+
+class SimulationStatusIn(InModel[SimulationStatus]):
+    status: SimulationStatus
+
+    def to_domain(self) -> SimulationStatus:
+        return self.status
+
+
+class ScenarioStatusOut(OutModel[ScenarioStatus]):
+    status: ScenarioStatus
+
+    @classmethod
+    def from_domain(cls, obj: ScenarioStatus) -> ScenarioStatusOut:
+        return ScenarioStatusOut(status=obj)
 
 
 class ScenarioListOut(OutModel[t.Sequence[Scenario]]):
@@ -380,7 +396,7 @@ class UpdateListOut(OutModel[t.Sequence[Update]]):
 class ShortUpdateOut(OutModel[Update]):
     id: UUID
     dataset: ScenarioDatasetOut
-    model: UpdateModelOut
+    model: UpdateModelOut | None
     timestamp: int
     iteration: int
     created_at: datetime.datetime
@@ -433,6 +449,9 @@ class UpdateWithDataOut(ShortUpdateOut):
             file.write(raw_data)
 
 
+UPDATE_NON_DATA_DICT_KEYS = NON_DATA_DICT_KEYS + ("dataset", "model")
+
+
 class UpdateIn(InModel[Update]):
     """Validator for incoming updates. The validator does not process the updates "data" key, this
     must be done separately. However, the ``read_from_file`` method, does process the "data" key
@@ -440,9 +459,9 @@ class UpdateIn(InModel[Update]):
     """
 
     dataset: ScenarioDatasetIn
-    model: UpdateModelIn
     timestamp: int
     iteration: int
+    model: UpdateModelIn | None = None
     created_at: datetime.datetime | None = None
 
     @classmethod
@@ -464,12 +483,15 @@ class UpdateIn(InModel[Update]):
 
         :return: An Update with the data section in Movici format
         """
-        non_data_dict_keys = NON_DATA_DICT_KEYS + ("dataset", "model")
         update_dict = load_dict_from_file(
-            path, serializer, filetype, non_data_dict_keys=non_data_dict_keys
+            path, serializer, filetype, non_data_dict_keys=UPDATE_NON_DATA_DICT_KEYS
         )
+        return cls.read_from_dict(update_dict)
 
-        all_data_keys = data_keys(update_dict, ignore_keys=non_data_dict_keys)
+    @classmethod
+    def read_from_dict(cls, update_dict: dict):
+
+        all_data_keys = data_keys(update_dict, ignore_keys=UPDATE_NON_DATA_DICT_KEYS)
 
         # Our data format in theory supports multiple datasets in updates. This is required because
         # models may need to send an update on multiple datasets in a single update. In that case
@@ -496,7 +518,7 @@ class UpdateIn(InModel[Update]):
             dataset=self.dataset.to_domain(),
             timestamp=self.timestamp,
             iteration=self.iteration,
-            model=self.model.to_domain(),
+            model=self.model.to_domain() if self.model is not None else None,
             created_at=self.created_at,
         )
 
@@ -693,6 +715,7 @@ class AttributeSummaryOut(OutModel[AttributeSummary]):
 
 class ViewOut(OutModel[View]):
     id: UUID
+    scenario_id: UUID
     name: str
     config: t.Any  # t.Any skips any pydantic validation
 
@@ -703,7 +726,7 @@ class ViewListOut(OutModel[t.Sequence[View]]):
 
 
 class ViewIn(InModel[View]):
-    name: NameStr
+    name: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
     config: dict
 
     def to_domain(self) -> View:
@@ -777,13 +800,13 @@ class DatasetFilterIn(BaseModel):
 
 
 class ScenarioStateFilterIn(BaseModel):
-    dataset: t.Annotated[str, Field(max_length=DEFAULT_NAME_MAX_LENGTH)]
+    dataset_id: UUID
     attributes: DatasetFilterAttributeList = []
-    timestamp: t.Annotated[int, Field(ge=0)]
+    timestamp: t.Annotated[int, Field(ge=0)] | None = None
 
     def to_domain(self) -> domain_model.ScenarioStateFilter:
         return domain_model.ScenarioStateFilter(
             attributes=DatasetFilterIn.parse_attributes(self.attributes),
             timestamp=self.timestamp,
-            dataset=self.dataset,
+            dataset_id=self.dataset_id,
         )

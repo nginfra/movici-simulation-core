@@ -402,3 +402,7 @@ class SQLAlchemyBackend:
             self.options.STRICT_SCENARIO_DATASETS = strict_scenario_datasets
         if immutable_workspace_names is not None:
             self.options.IMMUTABLE_WORKSPACE_NAMES = immutable_workspace_names
+
+    async def update_schema(self):
+        schema = await self.attribute_types.as_schema()
+        return dataclasses.replace(self, serializer=self.serializer.with_schema(schema))
