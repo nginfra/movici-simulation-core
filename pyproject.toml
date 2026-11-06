@@ -38,6 +38,9 @@ Documentation = "https://docs.movici.nl/en/latest/index.html"
 Repository = "https://github.com/nginfra/movici-simulation-core"
 Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
+[tool.uv]
+exclude-newer = "1 week"
+
 [tool.uv.sources]
 movici-simulation-core = { workspace = true }
 movici-data-core = { workspace = true }

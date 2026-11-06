@@ -35,7 +35,7 @@ dependencies = [
   "orjson>=3.11.7",
   "pydantic>=2.7",
   "python-multipart>=0.0.18", # from fastapi[standard]
-  "sqlalchemy",
+  "sqlalchemy[asyncio]",
 ]
 [project.optional-dependencies]
 standard = ["aiosqlite>=0.22.1", "fastapi-cli[standard-no-fastapi-cloud-cli]"]
