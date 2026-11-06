@@ -40,6 +40,9 @@ drinking_water_attributes = "movici_drinking_water_model.attributes:DrinkingWate
 [project.entry-points."movici.dataset_creator.source"]
 epanet = "movici_drinking_water_model.epanet_source:EPANETSource"
 
+[tool.hatch.build.targets.sdist]
+include = ["README.rst", "src/*"]
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 

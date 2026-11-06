@@ -97,6 +97,9 @@ netcdf = "movici_simulation_core.preprocessing.data_sources:NetCDFGridSource"
 [project.entry-points.pytest11]
 movici_testing = "movici_simulation_core.testing.fixtures"
 
+[tool.hatch.build.targets.sdist]
+include = ["README.rst", "src/*", "bin/*"]
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 

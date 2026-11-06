@@ -35,6 +35,9 @@ urban_drainage_attributes = "movici_urban_drainage_model.attributes:UrbanDrainag
 [project.entry-points."movici.dataset_creator.source"]
 swmm = "movici_urban_drainage_model.swmm_source:SWMMSource"
 
+[tool.hatch.build.targets.sdist]
+include = ["README.rst", "src/*"]
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 

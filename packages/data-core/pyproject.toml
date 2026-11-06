@@ -54,6 +54,9 @@ Documentation = "https://docs.movici.nl/en/latest/index.html"
 Repository = "https://github.com/nginfra/movici-simulation-core"
 Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
+[tool.hatch.build.targets.sdist]
+include = ["README.rst", "src/*"]
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 

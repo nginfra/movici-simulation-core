@@ -36,6 +36,9 @@ dependencies = [
 [project.entry-points."movici.plugins"]
 traffic_assignment_calculation = "movici_transport_assignment_model.traffic_assignment.model:Model"
 
+[tool.hatch.build.targets.sdist]
+include = ["README.rst", "src/*"]
+
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
 
