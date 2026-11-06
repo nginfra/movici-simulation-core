@@ -390,3 +390,16 @@ def test_error_when_patching_non_entity_dataset(get_json, create_dataset):
         f"/datasets/{dataset_id}/data", method="patch", json=patch, expected_status=400
     )
     assert result["message"] == "Cannot patch dataset with format 'unstructured'"
+
+
+def test_raises_validation_error_after_invalid_dataset(
+    get_json, a_dataset, upload_dataset_data, dataset_data
+):
+    dataset_data["data"]["roads"]["id"] = [-1, 2, 3]
+    response = upload_dataset_data(
+        a_dataset.id, orjson.dumps(dataset_data), mimetype="application/json"
+    )
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["type"] == "validation_error"
+    assert payload["messages"] == {"data.roads.id": ["Negative ids found"]}
