@@ -134,6 +134,10 @@ class ValidatingDatasetSerializer(ExternalSerializationStrategy):
     serializer: ExternalSerializationStrategy
     allow_undefined_ids: bool = False
 
+    @property
+    def schema(self) -> AttributeSchema:  # type: ignore
+        return self.serializer.schema
+
     def with_schema(self, schema: AttributeSchema) -> ExternalSerializationStrategy:
         return dataclasses.replace(self, serializer=self.serializer.with_schema(schema))
 

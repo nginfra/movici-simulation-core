@@ -101,6 +101,8 @@ class FileType(enum.Enum):
 
 
 class ExternalSerializationStrategy:
+    schema: AttributeSchema
+
     def with_schema(self, schema: AttributeSchema) -> ExternalSerializationStrategy:
         raise NotImplementedError
 
