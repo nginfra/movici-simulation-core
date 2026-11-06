@@ -1,0 +1,47 @@
+{
+  "electrical_cable_entities": {
+    "id": [
+      7
+    ],
+    "electrical.from_status": [
+      0
+    ],
+    "electrical.to_status": [
+      0
+    ]
+  },
+  "electrical_asym_load_entities": {
+    "id": [
+      14,
+      15
+    ],
+    "electrical.status": [
+      1,
+      0
+    ],
+    "electrical.active_power_specified_per_phase": [
+      [
+        0.0,
+        0.0,
+        100000.0
+      ],
+      [
+        0.0,
+        0.0,
+        100000.0
+      ]
+    ],
+    "electrical.reactive_power_specified_per_phase": [
+      [
+        0.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        32868.41
+      ]
+    ]
+  }
+}

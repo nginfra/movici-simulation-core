@@ -1,0 +1,1070 @@
+"""Power-grid-model integration with processor-based architecture.
+
+Each electrical entity type has a dedicated processor that handles:
+- Building PGM input arrays from Movici entity group data
+- Building sparse update arrays for changed elements
+- Writing PGM results back to entity group attributes
+
+The PowerGridWrapper orchestrates processors and manages the PGM model.
+"""
+
+from __future__ import annotations
+
+import typing as t
+from enum import IntEnum
+
+import numpy as np
+import power_grid_model as pgm
+from power_grid_model.validation import errors_to_string, validate_input_data
+
+if t.TYPE_CHECKING:
+    from .dataset import PowerGridNetwork
+
+
+# =========================================================================
+# Enums
+# =========================================================================
+
+
+class CalculationType(IntEnum):
+    POWER_FLOW = 0
+    STATE_ESTIMATION = 1
+    SHORT_CIRCUIT = 2
+
+
+class CalculationMethod(IntEnum):
+    NEWTON_RAPHSON = 0
+    LINEAR = 1
+    LINEAR_CURRENT = 2
+    ITERATIVE_CURRENT = 3
+
+
+_PGM_CALC_TYPES = {
+    CalculationType.POWER_FLOW: pgm.CalculationType.power_flow,
+    CalculationType.STATE_ESTIMATION: pgm.CalculationType.state_estimation,
+    CalculationType.SHORT_CIRCUIT: pgm.CalculationType.short_circuit,
+}
+
+
+_PGM_CALC_METHODS = {
+    CalculationMethod.NEWTON_RAPHSON: pgm.CalculationMethod.newton_raphson,
+    CalculationMethod.LINEAR: pgm.CalculationMethod.linear,
+    CalculationMethod.LINEAR_CURRENT: pgm.CalculationMethod.linear_current,
+    CalculationMethod.ITERATIVE_CURRENT: pgm.CalculationMethod.iterative_current,
+}
+
+# PGM TapChangingStrategy string -> enum
+_TAP_CHANGING_STRATEGIES = {
+    "disabled": pgm.TapChangingStrategy.disabled,
+    "any_valid_tap": pgm.TapChangingStrategy.any_valid_tap,
+    "min_voltage_tap": pgm.TapChangingStrategy.min_voltage_tap,
+    "max_voltage_tap": pgm.TapChangingStrategy.max_voltage_tap,
+    "fast_any_tap": pgm.TapChangingStrategy.fast_any_tap,
+}
+
+
+# =========================================================================
+# Helpers
+# =========================================================================
+
+
+def _scalar(arr: np.ndarray) -> np.ndarray:
+    """Extract scalar values from a potentially 3-phase result array.
+
+    Short circuit results have shape ``(n, 3)`` (one value per phase).
+    Power flow results have shape ``(n,)``.  This helper returns phase A
+    (index 0) when the array is 2-D, otherwise returns the array as-is.
+    """
+    if arr.ndim == 2:
+        return arr[:, 0]
+    return arr
+
+
+def _worst_phase(arr: np.ndarray) -> np.ndarray:
+    """Reduce a per-phase result ``(n, 3)`` to the worst (maximum) phase.
+
+    Used for currents, where the largest phase is the one that stresses the
+    equipment and picks up the relay.  Symmetric results ``(n,)`` are returned
+    as-is.
+    """
+    if arr.ndim == 2:
+        return np.max(arr, axis=1)
+    return arr
+
+
+# Phases whose value lies within this relative distance of the extreme are
+# considered tied; the first of them (phase a) is then selected.
+_PHASE_TIE_RTOL = 1e-9
+
+
+def _first_extreme_phase(arr: np.ndarray, largest: bool) -> np.ndarray:
+    """Index of the largest (or smallest) phase per row, ties going to phase a.
+
+    A balanced result has three phases equal up to solver noise. A plain
+    ``argmax`` would then pick a phase by that noise, and the angle published
+    with it would jump by 120 degrees between otherwise identical runs.
+    """
+    extreme = arr.max(axis=1, keepdims=True) if largest else arr.min(axis=1, keepdims=True)
+    tied = np.isclose(arr, extreme, rtol=_PHASE_TIE_RTOL, atol=0.0)
+    return np.argmax(tied, axis=1)
+
+
+def _worst_phase_index(u_pu: np.ndarray) -> t.Optional[np.ndarray]:
+    """Index of the most-depressed phase per node, or ``None`` if symmetric.
+
+    Voltage results are reduced by *minimum*: the collapsed phase is the one
+    that matters for a fault study. Ties go to phase a.
+    """
+    if u_pu.ndim != 2:
+        return None
+    return _first_extreme_phase(u_pu, largest=False)
+
+
+def _take_phase(arr: np.ndarray, index: t.Optional[np.ndarray]) -> np.ndarray:
+    """Select one phase per element, keeping magnitude and angle coherent.
+
+    All three node voltage attributes are reduced with the *same* index, so
+    they describe one physical phase rather than a mix of phases (which would
+    not correspond to any real phasor).
+    """
+    if index is None:
+        return arr
+    return arr[np.arange(len(index)), index]
+
+
+def _line_voltage(arr: np.ndarray) -> np.ndarray:
+    """Convert a PGM node voltage result to line-to-line RMS volts.
+
+    PGM reports ``u`` as the line-to-line voltage in symmetric output, but as
+    the per-phase (line-to-neutral) voltage in asymmetric and short circuit
+    output.  Scaling the latter by sqrt(3) keeps ``electrical.voltage`` the
+    same quantity for every calculation type, so that
+    ``voltage == voltage_pu * rated_voltage`` always holds.
+
+    For an unbalanced fault the result is the selected phase's voltage
+    expressed on the line-to-line base, not the true (unbalanced) line-to-line
+    voltage; ``electrical.voltage_per_phase`` carries all three phases.
+    """
+    if arr.ndim == 2:
+        return arr * np.sqrt(3.0)
+    return arr
+
+
+def _total(arr: np.ndarray) -> np.ndarray:
+    """Sum a per-phase power result ``(n, 3)`` into a three-phase total.
+
+    Symmetric results ``(n,)`` are already totals and are returned as-is.
+    """
+    if arr.ndim == 2:
+        return arr.sum(axis=1)
+    return arr
+
+
+def _get_optional_array(attr, default=0, dtype=np.float64) -> np.ndarray:
+    """Get array from attribute, using default if not initialized."""
+    if attr.is_initialized():
+        return attr.array
+    return np.full(len(attr), default, dtype=dtype)
+
+
+def _get_status_array(attr, default: int = 1) -> np.ndarray:
+    """Get status array with default value of 1 (enabled)."""
+    if attr.is_initialized():
+        return attr.array.astype(np.int8)
+    return np.full(len(attr), default, dtype=np.int8)
+
+
+def _changed_update(eg, component: str, fields: dict) -> t.Optional[np.ndarray]:
+    """Build a sparse PGM update array for the elements where a SUB attribute changed.
+
+    ``fields`` maps a PGM update field name to the Movici attribute that feeds
+    it. Only the fields that actually changed on a row are written; the others
+    keep the "no change" sentinel that ``initialize_array`` fills in, so a row
+    that only opened its to-side does not re-send its from-side as well.
+
+    Attributes that never received data (``OPT`` without init data and without
+    an update so far) are skipped: touching ``.changed`` on them would raise.
+
+    :returns: the update array, or ``None`` when nothing changed.
+    """
+    active = {f: a for f, a in fields.items() if a.has_data() and a.has_changes()}
+    if not active:
+        return None
+    changed = np.zeros(len(eg), dtype=bool)
+    for attr in active.values():
+        changed |= attr.changed
+    idx = np.flatnonzero(changed)
+    arr = pgm.initialize_array("update", component, len(idx))
+    arr["id"] = eg.index.ids[idx]
+    for field, attr in active.items():
+        rows = attr.changed[idx]
+        arr[field][rows] = attr.array[idx][rows]
+    return arr
+
+
+# =========================================================================
+# Base processor
+# =========================================================================
+
+
+class PGMElementProcessor:
+    """Base class for PGM element processors.
+
+    Each processor handles one Movici entity type and knows how to build
+    PGM input/update arrays and write results back to entity attributes.
+
+    Entity IDs from Movici are used directly as PGM component IDs, since
+    entity IDs are unique within a dataset.
+
+    Class attributes:
+        PGM_COMPONENT: PGM component type name (e.g. ``"node"``, ``"line"``).
+            Multiple processors can share the same PGM_COMPONENT; the wrapper
+            concatenates their arrays.
+    """
+
+    PGM_COMPONENT: str
+
+    def __init__(self, wrapper: PowerGridWrapper, entity_group):
+        self.wrapper = wrapper
+        self.entity_group = entity_group
+
+    def build_input_array(self) -> t.Optional[np.ndarray]:
+        raise NotImplementedError
+
+    def build_update_array(self) -> t.Optional[np.ndarray]:
+        return None
+
+    def write_results(self, result: dict):
+        pass
+
+    def _get_result_slice(self, result: dict) -> tuple[np.ndarray, np.ndarray] | None:
+        """Extract the result slice relevant to this processor's entity group.
+
+        :returns: ``(sliced_result, entity_indices)`` or ``None`` if no results
+            match this processor's entities.
+        """
+        comp_result = result.get(self.PGM_COMPONENT)
+        if comp_result is None:
+            return None
+        mask = np.isin(comp_result["id"], self.entity_group.index.ids)
+        if not np.any(mask):
+            return None
+        indices = self.entity_group.get_indices(comp_result["id"][mask])
+        return comp_result[mask], indices
+
+
+# =========================================================================
+# Node processors
+# =========================================================================
+
+
+class NodeProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "node"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "node", len(eg))
+        arr["id"] = eg.index.ids
+        arr["u_rated"] = eg.rated_voltage.array
+        return arr
+
+    def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
+        eg = self.entity_group
+        u_pu, u_angle, u = comp_result["u_pu"], comp_result["u_angle"], comp_result["u"]
+        phase = _worst_phase_index(u_pu)
+        eg.voltage_pu[indices] = _take_phase(u_pu, phase)
+        eg.voltage_angle[indices] = _take_phase(u_angle, phase)
+        # Scale to line-to-line before selecting: _line_voltage keys off the
+        # per-phase shape, which _take_phase has already collapsed.
+        eg.voltage[indices] = _take_phase(_line_voltage(u), phase)
+        if self.wrapper.per_phase_output and phase is not None:
+            eg.voltage_pu_per_phase[indices] = u_pu
+            eg.voltage_angle_per_phase[indices] = u_angle
+            eg.voltage_per_phase[indices] = _line_voltage(u)
+        # p, q are not available in short circuit results
+        if "p" in comp_result.dtype.names:
+            eg.active_power[indices] = _total(comp_result["p"])
+            eg.reactive_power[indices] = _total(comp_result["q"])
+
+
+# =========================================================================
+# Line/branch processors
+# =========================================================================
+
+
+class LineProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "line"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "line", len(eg))
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        arr["r1"] = eg.resistance.array
+        arr["x1"] = eg.reactance.array
+        arr["c1"] = eg.capacitance.array
+        arr["tan1"] = eg.tan_delta.array
+        # Zero-sequence stays NaN when not supplied; PGM only requires it for
+        # asymmetric calculations and unbalanced faults, and validate() reports
+        # precisely which elements are missing it.
+        arr["r0"] = _get_optional_array(eg.zero_sequence_resistance, default=np.nan)
+        arr["x0"] = _get_optional_array(eg.zero_sequence_reactance, default=np.nan)
+        arr["c0"] = _get_optional_array(eg.zero_sequence_capacitance, default=np.nan)
+        arr["tan0"] = _get_optional_array(eg.zero_sequence_tan_delta, default=np.nan)
+        i_n = _get_optional_array(eg.rated_current, default=np.inf)
+        arr["i_n"] = np.where(np.isinf(i_n), np.nan, i_n)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg, "line", {"from_status": eg.from_status, "to_status": eg.to_status}
+        )
+
+    def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
+        eg = self.entity_group
+        eg.current_from[indices] = _worst_phase(comp_result["i_from"])
+        eg.current_to[indices] = _worst_phase(comp_result["i_to"])
+        if self.wrapper.per_phase_output and comp_result["i_from"].ndim == 2:
+            eg.current_from_per_phase[indices] = comp_result["i_from"]
+            eg.current_to_per_phase[indices] = comp_result["i_to"]
+        # p, q, loading are not available in short circuit results
+        if "p_from" in comp_result.dtype.names:
+            eg.power_from[indices] = _total(comp_result["p_from"])
+            eg.power_to[indices] = _total(comp_result["p_to"])
+            eg.reactive_power_from[indices] = _total(comp_result["q_from"])
+            eg.reactive_power_to[indices] = _total(comp_result["q_to"])
+            eg.loading[indices] = comp_result["loading"]
+
+
+class LinkProcessor(LineProcessor):
+    """Converts zero-impedance links to minimal-impedance PGM lines.
+
+    Links have no electrical parameters, so we override the impedance
+    fields with near-zero values after the parent builds the base array.
+    """
+
+    def _get_impedance_fields(self, n: int) -> dict:
+        return {
+            "r1": np.full(n, 1e-6),
+            "x1": np.full(n, 1e-6),
+            "c1": np.full(n, 1e-12),
+            "tan1": np.zeros(n),
+            "r0": np.full(n, 1e-6),
+            "x0": np.full(n, 1e-6),
+            "c0": np.full(n, 1e-12),
+            "tan0": np.zeros(n),
+            "i_n": np.full(n, np.nan),
+        }
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        n = len(eg)
+        arr = pgm.initialize_array("input", "line", n)
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        for field, values in self._get_impedance_fields(n).items():
+            arr[field] = values
+        return arr
+
+
+class TransformerProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "transformer"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "transformer", len(eg))
+        arr["id"] = eg.index.ids
+        arr["from_node"] = eg.from_node_id.array
+        arr["to_node"] = eg.to_node_id.array
+        arr["from_status"] = _get_status_array(eg.from_status)
+        arr["to_status"] = _get_status_array(eg.to_status)
+        arr["u1"] = eg.primary_voltage.array
+        arr["u2"] = eg.secondary_voltage.array
+        arr["sn"] = eg.rated_power.array
+        arr["uk"] = eg.short_circuit_voltage.array
+        arr["pk"] = eg.copper_loss.array
+        arr["i0"] = eg.no_load_current.array
+        arr["p0"] = eg.no_load_loss.array
+        # NaN means "constant uk/pk over the tap range"
+        arr["uk_min"] = _get_optional_array(eg.short_circuit_voltage_min, default=np.nan)
+        arr["uk_max"] = _get_optional_array(eg.short_circuit_voltage_max, default=np.nan)
+        arr["pk_min"] = _get_optional_array(eg.copper_loss_min, default=np.nan)
+        arr["pk_max"] = _get_optional_array(eg.copper_loss_max, default=np.nan)
+        arr["winding_from"] = _get_optional_array(eg.winding_from, default=1, dtype=np.int8)
+        arr["winding_to"] = _get_optional_array(eg.winding_to, default=1, dtype=np.int8)
+        arr["clock"] = _get_optional_array(eg.clock, default=0, dtype=np.int8)
+        arr["tap_side"] = _get_optional_array(eg.tap_side, default=0, dtype=np.int8)
+        arr["tap_pos"] = _get_optional_array(eg.tap_position, default=0, dtype=np.int8)
+        arr["tap_min"] = _get_optional_array(eg.tap_min, default=0, dtype=np.int8)
+        arr["tap_max"] = _get_optional_array(eg.tap_max, default=0, dtype=np.int8)
+        arr["tap_nom"] = _get_optional_array(eg.tap_nom, default=0, dtype=np.int8)
+        arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg,
+            "transformer",
+            {
+                "from_status": eg.from_status,
+                "to_status": eg.to_status,
+                "tap_pos": eg.tap_position,
+            },
+        )
+
+    def write_results(self, result: dict):
+        if not len(self.entity_group):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
+        eg = self.entity_group
+        eg.current_from[indices] = _worst_phase(comp_result["i_from"])
+        eg.current_to[indices] = _worst_phase(comp_result["i_to"])
+        if self.wrapper.per_phase_output and comp_result["i_from"].ndim == 2:
+            eg.current_from_per_phase[indices] = comp_result["i_from"]
+            eg.current_to_per_phase[indices] = comp_result["i_to"]
+        if "p_from" in comp_result.dtype.names:
+            eg.power_from[indices] = _total(comp_result["p_from"])
+            eg.power_to[indices] = _total(comp_result["p_to"])
+            eg.reactive_power_from[indices] = _total(comp_result["q_from"])
+            eg.reactive_power_to[indices] = _total(comp_result["q_to"])
+            eg.loading[indices] = comp_result["loading"]
+
+
+class ThreeWindingTransformerProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "three_winding_transformer"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "three_winding_transformer", len(eg))
+        arr["id"] = eg.index.ids
+        arr["node_1"] = eg.node_1_id.array
+        arr["node_2"] = eg.node_2_id.array
+        arr["node_3"] = eg.node_3_id.array
+        arr["status_1"] = _get_status_array(eg.status_1)
+        arr["status_2"] = _get_status_array(eg.status_2)
+        arr["status_3"] = _get_status_array(eg.status_3)
+        arr["u1"] = eg.primary_voltage.array
+        arr["u2"] = eg.secondary_voltage.array
+        arr["u3"] = eg.tertiary_voltage.array
+        arr["sn_1"] = eg.rated_power_1.array
+        arr["sn_2"] = eg.rated_power_2.array
+        arr["sn_3"] = eg.rated_power_3.array
+        arr["uk_12"] = eg.short_circuit_voltage_12.array
+        arr["uk_13"] = eg.short_circuit_voltage_13.array
+        arr["uk_23"] = eg.short_circuit_voltage_23.array
+        arr["pk_12"] = eg.copper_loss_12.array
+        arr["pk_13"] = eg.copper_loss_13.array
+        arr["pk_23"] = eg.copper_loss_23.array
+        arr["i0"] = eg.no_load_current.array
+        arr["p0"] = eg.no_load_loss.array
+        arr["winding_1"] = _get_optional_array(eg.winding_1, default=1, dtype=np.int8)
+        arr["winding_2"] = _get_optional_array(eg.winding_2, default=1, dtype=np.int8)
+        arr["winding_3"] = _get_optional_array(eg.winding_3, default=1, dtype=np.int8)
+        arr["clock_12"] = _get_optional_array(eg.clock_12, default=0, dtype=np.int8)
+        arr["clock_13"] = _get_optional_array(eg.clock_13, default=0, dtype=np.int8)
+        arr["tap_side"] = _get_optional_array(eg.tap_side, default=0, dtype=np.int8)
+        arr["tap_pos"] = _get_optional_array(eg.tap_position, default=0, dtype=np.int8)
+        arr["tap_min"] = _get_optional_array(eg.tap_min, default=0, dtype=np.int8)
+        arr["tap_max"] = _get_optional_array(eg.tap_max, default=0, dtype=np.int8)
+        arr["tap_nom"] = _get_optional_array(eg.tap_nom, default=0, dtype=np.int8)
+        arr["tap_size"] = _get_optional_array(eg.tap_size, default=0.0)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg,
+            "three_winding_transformer",
+            {
+                "status_1": eg.status_1,
+                "status_2": eg.status_2,
+                "status_3": eg.status_3,
+                "tap_pos": eg.tap_position,
+            },
+        )
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        t3w_result = result.get("three_winding_transformer")
+        if t3w_result is None:
+            return
+        indices = eg.get_indices(t3w_result["id"])
+        eg.current_1[indices] = _worst_phase(t3w_result["i_1"])
+        eg.current_2[indices] = _worst_phase(t3w_result["i_2"])
+        eg.current_3[indices] = _worst_phase(t3w_result["i_3"])
+        if self.wrapper.per_phase_output and t3w_result["i_1"].ndim == 2:
+            eg.current_1_per_phase[indices] = t3w_result["i_1"]
+            eg.current_2_per_phase[indices] = t3w_result["i_2"]
+            eg.current_3_per_phase[indices] = t3w_result["i_3"]
+        if "p_1" in t3w_result.dtype.names:
+            eg.power_1[indices] = _total(t3w_result["p_1"])
+            eg.power_2[indices] = _total(t3w_result["p_2"])
+            eg.power_3[indices] = _total(t3w_result["p_3"])
+            eg.reactive_power_1[indices] = _total(t3w_result["q_1"])
+            eg.reactive_power_2[indices] = _total(t3w_result["q_2"])
+            eg.reactive_power_3[indices] = _total(t3w_result["q_3"])
+            eg.loading[indices] = t3w_result["loading"]
+
+
+# =========================================================================
+# Appliance processors
+# =========================================================================
+
+
+class ApplianceResultsMixin:
+    """Write PGM appliance results (loads, generators, sources, shunts).
+
+    Power flow and state estimation report ``p, q, i, s, pf``; short circuit
+    only ``i``. Per-phase results are reduced like elsewhere: powers summed,
+    current worst phase, and apparent power / power factor derived from the
+    three-phase totals so ``power_factor == active_power / apparent_power``.
+    """
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        sliced = self._get_result_slice(result)
+        if sliced is None:
+            return
+        comp_result, indices = sliced
+        i = comp_result["i"]
+        eg.current[indices] = _worst_phase(i)
+        if self.wrapper.per_phase_output and i.ndim == 2:
+            eg.current_per_phase[indices] = i
+        if "p" not in comp_result.dtype.names:
+            return
+        p = _total(comp_result["p"])
+        q = _total(comp_result["q"])
+        s = np.hypot(p, q)
+        eg.active_power[indices] = p
+        eg.reactive_power[indices] = q
+        eg.apparent_power[indices] = s
+        eg.power_factor[indices] = np.divide(p, s, out=np.zeros_like(s), where=s > 0)
+
+
+class ApplianceProcessor(ApplianceResultsMixin, PGMElementProcessor):
+    """Shared base for sym_load and sym_gen processors."""
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", self.PGM_COMPONENT, len(eg))
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
+        arr["status"] = _get_status_array(eg.status)
+        arr["type"] = _get_optional_array(eg.load_type, default=0, dtype=np.int8)
+        arr["p_specified"] = eg.p_specified.array
+        arr["q_specified"] = eg.q_specified.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(
+            eg,
+            self.PGM_COMPONENT,
+            {
+                "status": eg.status,
+                "p_specified": eg.p_specified,
+                "q_specified": eg.q_specified,
+            },
+        )
+
+
+class LoadProcessor(ApplianceProcessor):
+    PGM_COMPONENT = "sym_load"
+
+
+class GeneratorProcessor(ApplianceProcessor):
+    PGM_COMPONENT = "sym_gen"
+
+
+class AsymLoadProcessor(ApplianceProcessor):
+    """Per-phase load: the same fields as ``sym_load`` with shape ``(n, 3)``.
+
+    ``ApplianceProcessor`` assigns the ``(n, 3)`` attribute arrays straight
+    into the ``(n, 3)`` PGM fields, and ``_changed_update`` reduces the
+    per-phase change mask to one flag per element, so nothing else differs.
+    """
+
+    PGM_COMPONENT = "asym_load"
+
+
+class AsymGeneratorProcessor(ApplianceProcessor):
+    PGM_COMPONENT = "asym_gen"
+
+
+class SourceProcessor(ApplianceResultsMixin, PGMElementProcessor):
+    PGM_COMPONENT = "source"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "source", len(eg))
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
+        arr["status"] = _get_status_array(eg.status)
+        arr["u_ref"] = eg.reference_voltage.array
+        arr["u_ref_angle"] = _get_optional_array(eg.reference_angle, default=0.0)
+        arr["sk"] = _get_optional_array(eg.short_circuit_power, default=1e10)
+        arr["rx_ratio"] = _get_optional_array(eg.rx_ratio, default=0.1)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(eg, "source", {"status": eg.status})
+
+
+class ShuntProcessor(ApplianceResultsMixin, PGMElementProcessor):
+    PGM_COMPONENT = "shunt"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "shunt", len(eg))
+        arr["id"] = eg.index.ids
+        arr["node"] = eg.node_id.array
+        arr["status"] = _get_status_array(eg.status)
+        arr["g1"] = eg.conductance.array
+        arr["b1"] = eg.susceptance.array
+        # Zero-sequence stays NaN when not supplied; only asymmetric
+        # calculations need it and validate() reports what is missing.
+        arr["g0"] = _get_optional_array(eg.zero_sequence_conductance, default=np.nan)
+        arr["b0"] = _get_optional_array(eg.zero_sequence_susceptance, default=np.nan)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(eg, "shunt", {"status": eg.status})
+
+
+# =========================================================================
+# Sensor processors (state estimation)
+# =========================================================================
+
+
+class VoltageSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_voltage_sensor"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "sym_voltage_sensor", len(eg))
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.node_id.array
+        arr["u_measured"] = eg.measured_voltage.array
+        arr["u_sigma"] = eg.voltage_sigma.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        if not eg.measured_voltage.has_changes():
+            return None
+        idx = np.flatnonzero(eg.measured_voltage.changed)
+        changed_ids = eg.index.ids[idx]
+        arr = pgm.initialize_array("update", "sym_voltage_sensor", len(idx))
+        arr["id"] = changed_ids
+        arr["u_measured"] = eg.measured_voltage.array[idx]
+        return arr
+
+
+class PowerSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_power_sensor"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "sym_power_sensor", len(eg))
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.measured_object_id.array
+        arr["measured_terminal_type"] = eg.measured_terminal_type.array
+        arr["p_measured"] = eg.measured_active_power.array
+        arr["q_measured"] = eg.measured_reactive_power.array
+        arr["power_sigma"] = eg.power_sigma.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        p_changed = eg.measured_active_power.has_changes()
+        q_changed = eg.measured_reactive_power.has_changes()
+        if not (p_changed or q_changed):
+            return None
+        changed = eg.measured_active_power.changed | eg.measured_reactive_power.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
+        arr = pgm.initialize_array("update", "sym_power_sensor", len(idx))
+        arr["id"] = changed_ids
+        arr["p_measured"] = eg.measured_active_power.array[idx]
+        arr["q_measured"] = eg.measured_reactive_power.array[idx]
+        return arr
+
+
+class CurrentSensorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "sym_current_sensor"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "sym_current_sensor", len(eg))
+        arr["id"] = eg.index.ids
+        arr["measured_object"] = eg.measured_object_id.array
+        arr["measured_terminal_type"] = eg.measured_terminal_type.array
+        arr["i_measured"] = eg.measured_current.array
+        arr["i_sigma"] = eg.current_sigma.array
+        arr["angle_measurement_type"] = eg.angle_measurement_type.array
+        arr["i_angle_measured"] = eg.measured_current_angle.array
+        arr["i_angle_sigma"] = eg.current_angle_sigma.array
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        i_changed = eg.measured_current.has_changes()
+        a_changed = eg.measured_current_angle.has_changes()
+        if not (i_changed or a_changed):
+            return None
+        changed = eg.measured_current.changed | eg.measured_current_angle.changed
+        idx = np.flatnonzero(changed)
+        changed_ids = eg.index.ids[idx]
+        arr = pgm.initialize_array("update", "sym_current_sensor", len(idx))
+        arr["id"] = changed_ids
+        arr["i_measured"] = eg.measured_current.array[idx]
+        arr["i_angle_measured"] = eg.measured_current_angle.array[idx]
+        return arr
+
+
+# =========================================================================
+# Fault processor (short circuit)
+# =========================================================================
+
+
+class FaultProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "fault"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "fault", len(eg))
+        arr["id"] = eg.index.ids
+        arr["status"] = _get_status_array(eg.status)
+        arr["fault_type"] = eg.fault_type.array
+        # default_value (-1) lets PGM pick the phases that match each fault type;
+        # a hardcoded "abc" is only valid for balanced three-phase faults.
+        arr["fault_phase"] = _get_optional_array(
+            eg.fault_phase, default=int(pgm.FaultPhase.default_value), dtype=np.int8
+        )
+        arr["fault_object"] = eg.fault_object_id.array
+        arr["r_f"] = _get_optional_array(eg.fault_resistance, default=0.0)
+        arr["x_f"] = _get_optional_array(eg.fault_reactance, default=0.0)
+        return arr
+
+    def build_update_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        return _changed_update(eg, "fault", {"status": eg.status})
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        fault_result = result.get("fault")
+        if fault_result is None:
+            return
+        # i_f and i_f_angle are only in short-circuit results
+        if "i_f" not in fault_result.dtype.names:
+            return
+        indices = eg.get_indices(fault_result["id"])
+        i_f, i_f_angle = fault_result["i_f"], fault_result["i_f_angle"]
+        # Faulted phases carry the current; the healthy phase carries none, so
+        # the maximum is the fault current and its angle must come from the
+        # same phase. Ties (balanced faults) go to phase a.
+        phase = _first_extreme_phase(i_f, largest=True) if i_f.ndim == 2 else None
+        eg.fault_current[indices] = _take_phase(i_f, phase)
+        eg.fault_current_angle[indices] = _take_phase(i_f_angle, phase)
+        if self.wrapper.per_phase_output and phase is not None:
+            eg.fault_current_per_phase[indices] = i_f
+
+
+# =========================================================================
+# Regulator processor
+# =========================================================================
+
+
+class TapRegulatorProcessor(PGMElementProcessor):
+    PGM_COMPONENT = "transformer_tap_regulator"
+
+    def build_input_array(self):
+        eg = self.entity_group
+        if not len(eg):
+            return None
+        arr = pgm.initialize_array("input", "transformer_tap_regulator", len(eg))
+        arr["id"] = eg.index.ids
+        arr["regulated_object"] = eg.regulated_object_id.array
+        arr["status"] = _get_status_array(eg.status)
+        arr["control_side"] = eg.control_side.array.astype(np.int8)
+        arr["u_set"] = eg.voltage_setpoint.array
+        arr["u_band"] = eg.voltage_band.array
+        arr["line_drop_compensation_r"] = _get_optional_array(
+            eg.line_drop_compensation_r, default=0.0
+        )
+        arr["line_drop_compensation_x"] = _get_optional_array(
+            eg.line_drop_compensation_x, default=0.0
+        )
+        return arr
+
+    def write_results(self, result: dict):
+        eg = self.entity_group
+        if not len(eg):
+            return
+        reg_result = result.get("transformer_tap_regulator")
+        if reg_result is None:
+            return
+        if "tap_pos" not in reg_result.dtype.names:
+            return
+        indices = eg.get_indices(reg_result["id"])
+        eg.tap_position[indices] = reg_result["tap_pos"]
+
+
+# =========================================================================
+# Wrapper
+# =========================================================================
+
+
+class PowerGridWrapper:
+    """Orchestrates PGM processors and manages the PowerGridModel."""
+
+    def __init__(self):
+        self.model: t.Optional[pgm.PowerGridModel] = None
+        self.input_data: dict[str, np.ndarray] = {}
+        self.processors: list[PGMElementProcessor] = []
+        self.per_phase_output: bool = False
+
+    def initialize(self, dataset: PowerGridNetwork):
+        """Build the PGM model from a PowerGridNetwork.
+
+        :param dataset: PowerGridNetwork with entity groups loaded with init data.
+        :raises ValueError: If no source entities are defined.
+        """
+        if not len(dataset.sources):
+            raise ValueError(
+                "At least one source (slack bus) is required for power grid calculations"
+            )
+
+        self.input_data = {}
+        self.processors = []
+
+        processor_specs = [
+            NodeProcessor(self, dataset.nodes),
+            NodeProcessor(self, dataset.virtual_nodes),
+            LineProcessor(self, dataset.lines),
+            LineProcessor(self, dataset.cables),
+            LinkProcessor(self, dataset.links),
+            TransformerProcessor(self, dataset.transformers),
+            ThreeWindingTransformerProcessor(self, dataset.three_winding_transformers),
+            LoadProcessor(self, dataset.loads),
+            GeneratorProcessor(self, dataset.generators),
+            AsymLoadProcessor(self, dataset.asym_loads),
+            AsymGeneratorProcessor(self, dataset.asym_generators),
+            SourceProcessor(self, dataset.sources),
+            ShuntProcessor(self, dataset.shunts),
+            VoltageSensorProcessor(self, dataset.voltage_sensors),
+            PowerSensorProcessor(self, dataset.power_sensors),
+            CurrentSensorProcessor(self, dataset.current_sensors),
+            FaultProcessor(self, dataset.faults),
+            TapRegulatorProcessor(self, dataset.tap_regulators),
+        ]
+
+        for proc in processor_specs:
+            arr = proc.build_input_array()
+            if arr is not None and len(arr) > 0:
+                self.processors.append(proc)
+                comp = proc.PGM_COMPONENT
+                if comp in self.input_data:
+                    self.input_data[comp] = np.concatenate([self.input_data[comp], arr])
+                else:
+                    self.input_data[comp] = arr
+
+        self.model = pgm.PowerGridModel(self.input_data)
+
+    def validate(self, calculation_type: CalculationType, symmetric: bool = True):
+        """Check the built input data against PGM's own validation rules.
+
+        The solver reports missing or inconsistent data as an opaque
+        ``SparseMatrixError``; PGM's validator instead names the component,
+        the field and the offending element ids.
+
+        Short circuit calculations are internally asymmetric, but only
+        unbalanced fault types actually draw on the zero-sequence network, so
+        the zero-sequence requirement is derived from the configured faults
+        rather than from ``symmetric``.
+
+        :raises ValueError: If the input data is not valid for this
+            calculation type.
+        """
+        if not self.input_data:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if calculation_type == CalculationType.SHORT_CIRCUIT:
+            symmetric = self.faults_are_balanced()
+        errors = validate_input_data(
+            self.input_data,
+            calculation_type=_PGM_CALC_TYPES[calculation_type],
+            symmetric=symmetric,
+        )
+        if errors:
+            raise ValueError(
+                f"Invalid power grid data for {calculation_type.name.lower()} "
+                f"(symmetric={symmetric}):\n{errors_to_string(errors)}"
+            )
+
+    def faults_are_balanced(self) -> bool:
+        """Whether every configured fault is a balanced three-phase fault.
+
+        Unbalanced faults need the zero-sequence network, balanced ones do
+        not.  Fault status is deliberately ignored: an inactive fault can be
+        activated at any timestamp, and its data must be valid by then.
+        """
+        faults = self.input_data.get("fault")
+        if faults is None or not len(faults):
+            return True
+        return bool(np.all(faults["fault_type"] == pgm.FaultType.three_phase))
+
+    def process_changes(self):
+        """Apply dynamic changes from processors with SUB attributes.
+
+        Covers load / generation / measurement values as well as switching
+        state: branch from/to status, transformer tap position and appliance
+        (load, generator, source, shunt, fault) status.
+        """
+        update_data: dict[str, np.ndarray] = {}
+        for proc in self.processors:
+            arr = proc.build_update_array()
+            if arr is not None and len(arr) > 0:
+                comp = proc.PGM_COMPONENT
+                if comp in update_data:
+                    update_data[comp] = np.concatenate([update_data[comp], arr])
+                else:
+                    update_data[comp] = arr
+        if update_data:
+            self.model.update(update_data=update_data)
+
+    def calculate_power_flow(
+        self,
+        method: CalculationMethod = CalculationMethod.NEWTON_RAPHSON,
+        symmetric: bool = True,
+        tap_changing_strategy: t.Optional[pgm.TapChangingStrategy] = None,
+    ) -> dict:
+        """Run power flow calculation.
+
+        :param tap_changing_strategy: Strategy for automatic tap changing.
+            When ``None`` (default), uses ``any_valid_tap`` if regulators are
+            present, otherwise ``disabled``.
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        calc_method = _PGM_CALC_METHODS.get(method, pgm.CalculationMethod.newton_raphson)
+        if tap_changing_strategy is None and "transformer_tap_regulator" in self.input_data:
+            tap_changing_strategy = pgm.TapChangingStrategy.any_valid_tap
+        kwargs: dict[str, t.Any] = {
+            "symmetric": symmetric,
+            "calculation_method": calc_method,
+        }
+        if tap_changing_strategy is not None:
+            kwargs["tap_changing_strategy"] = tap_changing_strategy
+        return self.model.calculate_power_flow(**kwargs)
+
+    def calculate_state_estimation(self, symmetric: bool = True) -> dict:
+        """Run state estimation calculation.
+
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if not any(
+            s in self.input_data
+            for s in ("sym_voltage_sensor", "sym_power_sensor", "sym_current_sensor")
+        ):
+            raise RuntimeError("No sensors defined.")
+        return self.model.calculate_state_estimation(symmetric=symmetric)
+
+    def calculate_short_circuit(self) -> dict:
+        """Run short circuit calculation.
+
+        :returns: Raw PGM result dictionary.
+        """
+        if self.model is None:
+            raise RuntimeError("Network not built. Call initialize first.")
+        if "fault" not in self.input_data:
+            raise RuntimeError("No faults defined.")
+        return self.model.calculate_short_circuit()
+
+    def write_results(self, result: dict):
+        """Write PGM results back to entity groups via processors."""
+        for proc in self.processors:
+            proc.write_results(result)
+
+    def close(self):
+        """Clean up resources."""
+        self.model = None
+        self.input_data.clear()
+        self.processors.clear()

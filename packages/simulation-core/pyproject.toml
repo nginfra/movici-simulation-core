@@ -63,9 +63,6 @@ Documentation = "https://docs.movici.nl/en/latest/index.html"
 Repository = "https://github.com/nginfra/movici-simulation-core"
 Issues = "https://github.com/nginfra/movici-simulation-core/issues"
 
-[project.scripts]
-movici-simulation = "movici_simulation_core.cli:main"
-
 [project.entry-points."movici.plugins"]
 orchestrator = "movici_simulation_core.services.orchestrator.service:Orchestrator"
 update_data_service = "movici_simulation_core.services.update_data.service:UpdateDataService"

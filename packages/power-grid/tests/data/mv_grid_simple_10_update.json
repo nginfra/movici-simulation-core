@@ -1,0 +1,31 @@
+{
+  "electrical_cable_entities": {
+    "id": [
+      20
+    ],
+    "electrical.to_status": [
+      0
+    ],
+    "electrical.from_status": [
+      1
+    ]
+  },
+  "electrical_transformer_entities": {
+    "id": [
+      27
+    ],
+    "electrical.tap_position": [
+      -4
+    ]
+  },
+  "electrical_shunt_entities": {
+    "id": [
+      38,
+      39
+    ],
+    "electrical.status": [
+      0,
+      1
+    ]
+  }
+}
