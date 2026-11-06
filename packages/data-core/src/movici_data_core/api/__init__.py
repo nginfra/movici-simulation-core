@@ -11,6 +11,7 @@ from fastapi import APIRouter, FastAPI, Request
 
 from movici_data_core.api.dependencies import SQLALCHEMY_SERVER_KEY
 from movici_data_core.database.backend import SQLAlchemyServer
+from movici_data_core.database.model import DatabaseMode
 from movici_data_core.exceptions import MoviciDataError
 
 from .datasets import dataset_router
@@ -43,7 +44,9 @@ DEFAULT_ROUTERS = (
 logger = logging.getLogger(__name__)
 
 
-async def ensure_sqlite_db_exists(server: SQLAlchemyServer):
+async def ensure_sqlite_db_exists(
+    server: SQLAlchemyServer, mode: DatabaseMode = DatabaseMode.SINGLE_SCENARIO
+):
     """if the ``server`` argument is configured against a sqlite database, ensure that this
     database exists and is propertly initialized. If it is not configured against a sqlite database
     or if the database already exists, this function does nothing. This method must be called with
@@ -60,7 +63,7 @@ async def ensure_sqlite_db_exists(server: SQLAlchemyServer):
         return
     path = pathlib.Path(urlsplit_result.path.removeprefix("/"))
     if not path.exists():
-        await server.setup_db()
+        await server.setup_db(mode=mode)
 
 
 def make_app(

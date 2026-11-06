@@ -12,6 +12,7 @@ from movici_data_core.domain_model import (
     ScenarioDataset,
     ScenarioStatus,
     SimulationStatus,
+    Workspace,
 )
 from movici_data_core.validators import ModelConfigValidator
 from movici_simulation_core.testing import dataset_data_to_numpy
@@ -101,3 +102,17 @@ async def test_updated_simulation_status_gets_reflected_in_scenario(backend: SQL
     assert t.cast(Scenario, await backend.scenarios.get()).status == ScenarioStatus.READY
     await backend.scenarios.update_simulation_status(SimulationStatus.RUNNING)
     assert t.cast(Scenario, await backend.scenarios.get()).status == ScenarioStatus.RUNNING
+
+
+@pytest.mark.parametrize(
+    "database_mode",
+    [
+        DatabaseMode.SINGLE_SCENARIO,
+        DatabaseMode.SINGLE_WORKSPACE,
+        DatabaseMode.MULTIPLE_WORKSPACES,
+    ],
+)
+async def test_get_workspace_for_scenario(backend: SQLAlchemyBackend, a_scenario, database_mode):
+    assert isinstance(
+        await backend.for_scenario(a_scenario.id).scenarios.get_workspace(), Workspace
+    )

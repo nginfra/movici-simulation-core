@@ -22,6 +22,7 @@ from movici_data_core.domain_model import (
     ScenarioStateFilter,
     ScenarioStatus,
     SimulationStatus,
+    Workspace,
 )
 from movici_data_core.exceptions import (
     ForeignKeyConstraintFailed,
@@ -148,10 +149,22 @@ class ScenarioRepository(SQLResourceRepository):
         id = self._ensure_scenario_id()
         return await self._get_one_full_scenario(db.Scenario.id == id)
 
-    async def update_simulation_status(self, status: SimulationStatus):
+    async def get_workspace(self) -> Workspace | None:
+        id = self._ensure_scenario_id()
+        result = await self.session.scalar(
+            select(db.Workspace).join(db.Scenario).where(db.Scenario.id == id).limit(1)
+        )
+        return db.to_domain_or_none(result)
+
+    async def update_simulation_status(self, status: SimulationStatus | None):
         id = self._ensure_scenario_id()
         if not await self.exists():
             raise ResourceDoesNotExist("scenario", id=id)
+        if status is None:
+            await self.session.execute(
+                delete(db.SimulationStatusInfo).where(db.SimulationStatusInfo.scenario_id == id)
+            )
+            return
 
         if await self._exists(db.SimulationStatusInfo.scenario_id == id):
             await self.session.execute(

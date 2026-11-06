@@ -45,7 +45,6 @@ from movici_data_core.marshalling import (
     ShortDatasetIn,
     UpdateIn,
     UpdateModelIn,
-    ViewIn,
     WorkspaceIn,
 )
 from movici_data_core.serialization import dump_dict
@@ -449,7 +448,6 @@ class TestScenarioInOut:
             {"enum_name": "Aa"},
         ),
         (ModelTypeIn, {"name": "a", "jsonschema": {}}, {"name": "A"}),
-        (ViewIn, {"name": "a", "config": {}}, {"name": "A"}),
     ],
 )
 def test_snake_case(cls, base_payload, error_payload):
