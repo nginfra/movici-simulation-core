@@ -167,6 +167,15 @@ async def test_mode_persists_after_change(db, database_mode, new_mode):
         assert backend.options.mode == new_mode
 
 
+async def test_update_schema_after_new_attributes(backend: SQLAlchemyBackend):
+    await backend.attribute_types.create(
+        AttributeType("a_new_attribute", data_type=DataType(float))
+    )
+    assert backend.serializer.schema.get("a_new_attribute") is None
+    backend = await backend.update_schema()
+    assert backend.serializer.schema.get("a_new_attribute") is not None
+
+
 class TestSingleScenarioBackend:
     @pytest.fixture
     def database_mode(self):

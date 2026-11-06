@@ -9,9 +9,11 @@ from movici_simulation_core.types import FileType
 
 
 @pytest.fixture
-def scenario_id(create_scenario_through_api, a_dataset, default_model_types):
+def scenario_id(create_scenario_through_api, a_dataset_with_data, default_model_types):
     result = create_scenario_through_api(
-        datasets=[{"name": a_dataset.name, "type": a_dataset.dataset_type.name}],
+        datasets=[
+            {"name": a_dataset_with_data.name, "type": a_dataset_with_data.dataset_type.name}
+        ],
         models=[{"name": "model_a", "type": default_model_types[0].name}],
     )
     return result["id"]
@@ -46,7 +48,7 @@ def create_update_through_api(scenario_id, get_json, a_dataset, an_entity_type, 
     return _create_update
 
 
-@pytest.mark.parametrize("filetype", [FileType.MSGPACK])
+@pytest.mark.parametrize("filetype", [FileType.JSON, FileType.MSGPACK])
 def test_create_update(
     client, a_dataset, scenario_id, an_entity_type, an_attribute_type, filetype
 ):
@@ -69,6 +71,29 @@ def test_create_update(
         headers={"content-type": get_mimetype(filetype)},
         content=serialized,
     ).json()
+    update_id = result.pop("id")
+    assert update_id is not None
+    assert result == {
+        "result": "ok",
+        "message": "update created",
+    }
+
+
+def test_create_update_without_model(
+    client, a_dataset, scenario_id, an_entity_type, an_attribute_type
+):
+    update = {
+        "dataset": {"name": a_dataset.name},
+        "timestamp": 0,
+        "iteration": 0,
+        "data": {
+            an_entity_type.name: {
+                "id": [1, 2, 3],
+                an_attribute_type.name: [4, 5, 6],
+            }
+        },
+    }
+    result = client.post(url="/updates", params={"scenario": str(scenario_id)}, json=update).json()
     update_id = result.pop("id")
     assert update_id is not None
     assert result == {
@@ -163,6 +188,15 @@ def test_delete_updates(get_json, scenario_id, create_update_through_api):
         "message": "updates deleted",
     }
     assert _get_update_count() == 0
+
+
+def test_delete_updates_resets_scenario(get_json, scenario_id):
+    get_json(f"/scenarios/{scenario_id}/status", method="POST", json={"status": "succeeded"})
+    assert get_json(f"/scenarios/{scenario_id}")["status"] == "succeeded"
+
+    get_json("/updates/", params={"scenario": scenario_id}, method="DELETE")
+
+    assert get_json(f"/scenarios/{scenario_id}")["status"] == "ready"
 
 
 def test_clean_up_temporary_file_after_uploading_update(

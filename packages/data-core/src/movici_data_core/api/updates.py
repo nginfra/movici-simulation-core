@@ -46,8 +46,9 @@ async def create_update(
 
 @update_router.delete("")
 async def delete_updates(backend: DepScenarioBackend) -> OperationSuccess:
-    await backend.updates.delete_all()
     assert backend.scenario_id is not None
+    await backend.scenarios.reset()
+
     return OperationSuccess.for_path_operation(
         resource="updates", id=backend.scenario_id, verb="deleted"
     )

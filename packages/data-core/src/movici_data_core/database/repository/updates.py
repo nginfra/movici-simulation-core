@@ -112,18 +112,23 @@ class UpdateRepository(SQLResourceRepository):
         scenario_id = self._ensure_scenario_id()
         if not isinstance(obj.data, dict):
             raise InvalidAction("update data must be a numpy dataset dict")
-        model_type_id = await self.session.scalar(
-            select(db.ModelType.id)
-            .join(db.ScenarioModel)
-            .where(db.ScenarioModel.scenario_id == scenario_id)
-            .where(db.ScenarioModel.name == obj.model.name)
-        )
-        if model_type_id is None:
-            if not (await self._exists(db.Scenario.id == scenario_id)):
-                raise ResourceDoesNotExist("scenario", id=scenario_id)
-            raise MoviciValidationError(
-                f"{obj.model.name} is not a valid model for this scenario", "model.name"
+        if obj.model is not None:
+            model_type_id = await self.session.scalar(
+                select(db.ModelType.id)
+                .join(db.ScenarioModel)
+                .where(db.ScenarioModel.scenario_id == scenario_id)
+                .where(db.ScenarioModel.name == obj.model.name)
             )
+            if model_type_id is None:
+                if not (await self._exists(db.Scenario.id == scenario_id)):
+                    raise ResourceDoesNotExist("scenario", id=scenario_id)
+                raise MoviciValidationError(
+                    f"{obj.model.name} is not a valid model for this scenario", "model.name"
+                )
+            model_name = obj.model.name
+        else:
+            model_type_id = None
+            model_name = None
         dataset = await self.session.scalar(
             select(db.Dataset)
             .options(joinedload(db.Dataset.dataset_type))
@@ -147,7 +152,7 @@ class UpdateRepository(SQLResourceRepository):
                     timestamp=obj.timestamp,
                     iteration=obj.iteration,
                     model_type_id=model_type_id,
-                    model_name=obj.model.name,
+                    model_name=model_name,
                     bounding_box=obj.bounding_box.as_tuple_or_none(),
                     dataset_id=dataset.id,
                 )

@@ -148,14 +148,16 @@ class TestWorkspaceRepository:
 
     async def test_create_validates_max_lengths(self, repository: SQLAlchemyRepository):
         with pytest.raises(MoviciValidationError) as e:
-            await repository.workspaces.create(Workspace(name="a" * 51, display_name="d" * 51))
+            await repository.workspaces.create(Workspace(name="a" * 51, display_name="d" * 101))
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
     async def test_update_validates_max_lengths(self, repository: SQLAlchemyRepository):
         id = await repository.workspaces.create(Workspace(name="a", display_name="d"))
         with pytest.raises(MoviciValidationError) as e:
-            await repository.workspaces.update(id, Workspace(name="a" * 51, display_name="d" * 51))
+            await repository.workspaces.update(
+                id, Workspace(name="a" * 51, display_name="d" * 101)
+            )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
 
@@ -956,7 +958,7 @@ class TestDatasetRepository:
                 [ScenarioDataset(name="a" * 51, dataset_type=a_dataset_type)]
             )
 
-        assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
+        assert set(m[0] for m in e.value.iter_messages()) == {"name"}
 
     async def test_update_with_data(self, repository: SQLAlchemyRepository, a_dataset):
         await repository.datasets.update(
@@ -1000,7 +1002,7 @@ class TestDatasetRepository:
     ):
         with pytest.raises(MoviciValidationError) as e:
             await repository.datasets.create(
-                Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+                Dataset(name="a" * 51, display_name="a" * 101, dataset_type=a_dataset_type)
             )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
@@ -1013,7 +1015,7 @@ class TestDatasetRepository:
         )
         with pytest.raises(MoviciValidationError) as e:
             await repository.datasets.update(
-                id, Dataset(name="a" * 51, display_name="a" * 51, dataset_type=a_dataset_type)
+                id, Dataset(name="a" * 51, display_name="a" * 101, dataset_type=a_dataset_type)
             )
 
         assert set(m[0] for m in e.value.iter_messages()) == {"name", "display_name"}
@@ -2107,7 +2109,7 @@ class TestScenarioRepository:
         with pytest.raises(MoviciValidationError) as e:
             await repository.scenarios.create(
                 dataclasses.replace(
-                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                    new_scenario, name="a" * 51, display_name="a" * 101, description="a" * 501
                 ),
                 validator,
             )
@@ -2127,7 +2129,7 @@ class TestScenarioRepository:
         with pytest.raises(MoviciValidationError) as e:
             await repository.scenarios.for_id(scenario_id).update(
                 dataclasses.replace(
-                    new_scenario, name="a" * 51, display_name="a" * 51, description="a" * 501
+                    new_scenario, name="a" * 51, display_name="a" * 101, description="a" * 501
                 ),
                 validator,
             )
@@ -2225,6 +2227,28 @@ class TestUpdateRepository:
         update3 = await create_update(timestamp=2, iteration=2, ids=[0, 1], array=[2.0, 3.0])
         all_updates = await repository.updates.list()
         assert [upd.id for upd in all_updates] == [update1, update2, update3, update4]
+
+    async def test_create_update_without_model(
+        self, repository: SQLAlchemyRepository, a_dataset, an_entity_type, an_attribute_type
+    ):
+
+        update = Update(
+            dataset=ScenarioDataset(a_dataset.name, a_dataset.dataset_type),
+            timestamp=0,
+            iteration=0,
+            data=dataset_data_to_numpy(
+                {
+                    an_entity_type.name: {
+                        "id": [0, 1],
+                        an_attribute_type.name: [10.0, 10.0],
+                    }
+                }
+            ),
+        )
+
+        await repository.updates.create(update)
+        result = (await repository.updates.list())[0]
+        assert result.model is None
 
     async def test_doesnt_return_updates_for_different_scenario(
         self,

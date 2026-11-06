@@ -41,11 +41,20 @@ def load_dict_from_file(
     **kwargs,
 ):
     filetype = filetype or FileType.from_extension(path.suffix)
+    return load_dict_from_bytes(path.read_bytes(), serializer, filetype, **kwargs)
+
+
+def load_dict_from_bytes(
+    raw_data: bytes,
+    serializer: ExternalSerializationStrategy,
+    filetype: FileType,
+    **kwargs,
+):
     if filetype not in serializer.supported_file_types():
         raise UnsupportedFileType(filetype)
 
     try:
-        return serializer.loads(path.read_bytes(), filetype, **kwargs)
+        return serializer.loads(raw_data, filetype, **kwargs)
     except (TypeError, ValueError) as e:
         # TODO: better error message from serializer.loads
         raise DeserializationError from e

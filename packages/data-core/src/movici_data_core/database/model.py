@@ -111,7 +111,7 @@ DEFAULT_SCENARIO_NAME = "default_scenario"
 
 
 DEFAULT_NAME_MAX_LENGTH = 50
-DEFAULT_DISPLAY_NAME_MAX_LENGTH = 50
+DEFAULT_DISPLAY_NAME_MAX_LENGTH = 100
 
 ATTRIBUTE_NAME_MAX_LENGTH = 100
 ATTRIBUTE_DESCRIPTION_MAX_LENGTH = 255
@@ -578,7 +578,7 @@ class Update(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
     dataset_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("dataset.id", ondelete="RESTRICT"))
-    model_type_id: Mapped[uuid.UUID] = mapped_column(
+    model_type_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("model_type.id", ondelete="RESTRICT")
     )
 
@@ -586,7 +586,7 @@ class Update(Base):
     # changes to the scenario would recreate all ScenarioModels, which would break this link.
     # Instead, we denormalize model_name and store a copy directly in the Update
     # table
-    model_name: Mapped[str] = mapped_column(
+    model_name: Mapped[str | None] = mapped_column(
         RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
     )
 
@@ -599,15 +599,20 @@ class Update(Base):
 
     scenario: Mapped[Scenario] = relationship()
     dataset: Mapped[Dataset] = relationship()
-    model_type: Mapped[ModelType] = relationship()
+    model_type: Mapped[ModelType | None] = relationship()
 
     def to_domain(self) -> domain_model.Update:
+        update_model = None
+        if self.model_name is not None and self.model_type is not None:
+            update_model = domain_model.UpdateModel(
+                self.model_name, type=self.model_type.to_domain()
+            )
         return domain_model.Update(
             id=self.id,
             dataset=domain_model.ScenarioDataset(
                 self.dataset.name, self.dataset.dataset_type.to_domain(), id=self.dataset_id
             ),
-            model=domain_model.UpdateModel(self.model_name, type=self.model_type.to_domain()),
+            model=update_model,
             timestamp=self.timestamp,
             iteration=self.iteration,
             bounding_box=BoundingBox.from_tuple_or_none(self.bounding_box),
@@ -635,9 +640,7 @@ class VisualizationView(Base):
     __table_args__ = (UniqueConstraint("scenario_id", "name"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     scenario_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("scenario.id", ondelete="CASCADE"))
-    name: Mapped[str] = mapped_column(
-        RegexMatchingString(pattern=snake_case_pattern, length=DEFAULT_NAME_MAX_LENGTH)
-    )
+    name: Mapped[str] = mapped_column(String(length=DEFAULT_NAME_MAX_LENGTH))
     config: Mapped[dict]
     scenario: Mapped[Scenario] = relationship()
 

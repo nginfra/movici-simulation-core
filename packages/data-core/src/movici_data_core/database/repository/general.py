@@ -352,12 +352,12 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
                 )
             )
         }
-        to_create: list[ModelType] = []
+        to_create: dict[str, ModelType] = {}
         for model_type in model_types:
             if model_type.name not in existing_model_types:
                 if self.options.STRICT_MODEL_TYPES:
                     raise ResourceDoesNotExist("model_type", name=model_type.name)
-                to_create.append(model_type)
+                to_create[model_type.name] = model_type
                 continue
 
         if to_create:
@@ -373,7 +373,7 @@ class ModelTypeRepository(GenericResourceRepository[ModelType]):
                         name=tp.name,
                         jsonschema=tp.jsonschema or self._default_jsonschema(tp.name),
                     )
-                    for tp in to_create
+                    for tp in to_create.values()
                 ],
             )
             existing_model_types.update((tp.name, tp) for tp in created)

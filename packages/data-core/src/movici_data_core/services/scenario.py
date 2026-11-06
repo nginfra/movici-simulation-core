@@ -72,6 +72,9 @@ class ScenarioService:
         assert scenario_dataset.id is not None
         return await self.repository.scenarios.get_summary(scenario_dataset.id)
 
+    async def get_workspace(self):
+        return await self.repository.scenarios.get_workspace()
+
     async def get_state_as_file(
         self, state_filter: ScenarioStateFilter, filetype=FileType.JSON
     ) -> pathlib.Path | None:
@@ -99,6 +102,11 @@ class ScenarioService:
 
     async def update_simulation_status(self, status: SimulationStatus):
         await self.repository.scenarios.update_simulation_status(status)
+
+    async def reset(self):
+        # TODO: gracefully handle if current simulation status is RUNNING. perhaps disallow reset?
+        await self.repository.updates.delete_all()
+        await self.repository.scenarios.update_simulation_status(None)
 
     async def _datasets_have_data(self, workspace: Workspace | None = None) -> dict[UUID, bool]:
         """

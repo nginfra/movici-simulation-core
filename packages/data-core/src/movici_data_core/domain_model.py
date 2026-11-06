@@ -332,11 +332,7 @@ class ScenarioDataset:
 
     @classmethod
     def from_dataset(cls, dataset: Dataset):
-        return ScenarioDataset(
-            name=dataset.name,
-            dataset_type=dataset.dataset_type,
-            id=dataset.id,
-        )
+        return ScenarioDataset(name=dataset.name, dataset_type=dataset.dataset_type, id=dataset.id)
 
 
 @dataclasses.dataclass
@@ -460,7 +456,7 @@ class Update:
     timestamp: int
     iteration: int
 
-    model: UpdateModel
+    model: UpdateModel | None = None
     bounding_box: BoundingBox = dataclasses.field(default_factory=BoundingBox.empty)
 
     id: UUID | None = None
