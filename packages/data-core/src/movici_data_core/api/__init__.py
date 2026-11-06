@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import pathlib
+import traceback
 import typing as t
 from urllib.parse import urlsplit
 
@@ -84,7 +85,8 @@ def make_app(
     @app.exception_handler(MoviciDataError)
     async def movici_data_error_handler(request: Request, exc: MoviciDataError):
         if log_movici_data_errors:
-            logger.exception("An error occurred")
+            logger.error("An error occurred")
+            logger.error(traceback.format_exception(exc))
         return fastapi.responses.JSONResponse(
             {
                 "result": "error",
